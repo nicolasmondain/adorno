@@ -1,0 +1,13 @@
+{"data": {"search": {"nodes": [
+  {"number": 42, "title": "feat(api): add pagination", "url": "u42", "isDraft": false, "updatedAt": "2026-11-03T12:00:00Z",
+   "reviewDecision": "CHANGES_REQUESTED", "mergeable": "MERGEABLE", "repository": {"nameWithOwner": "acme/docs"},
+   "reviewRequests": {"nodes": []}, "reviewThreads": {"nodes": [{"isResolved": false}, {"isResolved": true}]},
+   "commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": "SUCCESS"}}}]}},
+  {"number": 7, "title": "fix: x", "url": "u7", "isDraft": false, "updatedAt": "2026-11-02T12:00:00Z",
+   "reviewDecision": "REVIEW_REQUIRED", "mergeable": "MERGEABLE", "repository": {"nameWithOwner": "acme/strict"},
+   "reviewRequests": {"nodes": [{"requestedReviewer": {"login": "carol"}}, {"requestedReviewer": {"slug": "core-team"}}]},
+   "reviewThreads": {"nodes": []}, "commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": "FAILURE"}}}]}},
+  {"number": 3, "title": "docs: y", "url": "u3", "isDraft": false, "updatedAt": "2026-11-01T12:00:00Z",
+   "reviewDecision": "APPROVED", "mergeable": "MERGEABLE", "repository": {"nameWithOwner": "someone/else"},
+   "reviewRequests": {"nodes": []}, "reviewThreads": {"nodes": []}, "commits": {"nodes": []}}
+]}}}

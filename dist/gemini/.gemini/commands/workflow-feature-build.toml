@@ -1,0 +1,19 @@
+description = "Mène une fonctionnalité de bout en bout — cadrage, routage, plan en tranches, construction par les agents feat, revue parallèle, PR, suivi jusqu'à prête à merger. Trois points de contrôle humains."
+prompt = '''
+Entrée : {{args}}
+
+1. **Cadrer** — sans spec validée, `workflow:spec:new` d'abord (point de contrôle 1).
+2. **Router** — `agent:core:router` lit `spec.md` et écrit `run-plan.yaml`. Si le routeur conclut qu'un seul
+   agent suffit, le plan n'a qu'une étape : c'est normal.
+3. **Planifier** — `agent:core:planner` écrit `plan.md` (tranches, agent `feat:*` de chaque tranche, tests
+   d'acceptation).
+4. **Construire et vérifier** — `agent:core:orchestrator` déroule `run-plan.yaml` sur la branche `<type>/<issue-id>-<slug>` :
+   tranches (boucle tests, trois tours ; QA `agent:test:e2e` avec captures et vidéo pour les tranches visibles),
+   puis relecteurs en parallèle (boucle de correction, deux tours).
+5. **Ouvrir** — `workflow:pr:open`, dont `agent:adorno` est la porte : il relit la branche comme toi, et la
+   description de PR part dans ta voix (point de contrôle 2 si prévu).
+6. **Suivre** — `workflow:pr:watch` jusqu'à ce que la PR soit prête (point de contrôle 3 : le merge, par l'utilisateur).
+
+À chaque arrêt (plafond, droit manquant, escalade vers la spec) : `status.md` dit où et pourquoi, et la commande
+pour reprendre.
+'''

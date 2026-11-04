@@ -1,0 +1,21 @@
+name: kit
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Validate sources and make sure dist/ is up to date
+        run: ./bin/kit check --dist
+      - name: Lint github-ops scripts
+        run: shellcheck -x -s bash -P src/skills/github-ops/scripts src/skills/github-ops/scripts/* tests/fake-gh tests/*.sh
+      - name: Test github-ops scripts against a fake gh
+        run: tests/github-ops.test.sh

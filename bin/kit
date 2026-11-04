@@ -1,0 +1,1372 @@
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["pyyaml>=6"]
+# ///
+"""kit — build and install a portable agent setup.
+
+One neutral source (src/ + vendor/) -> native layouts for Claude Code, Codex,
+Gemini CLI, Copilot, Cursor and any tool that reads Agent Skills (SKILL.md).
+
+  kit check [--dist]            validate sources (public, then with local/)
+  kit list                      show every skill, agent and workflow
+  kit conf [OWNER/REPO]         the settings a repo resolves to (no argument: the current repo, or the scopes)
+  kit new skill|agent|workflow NAME
+  kit import [NAME...] [--update]
+  kit build                     public build into dist/ (never includes local/)
+  kit install PATH|--global|--workspace NAME [--targets a,b] [--link] [--public-only] [--force] [--dry-run]
+  kit uninstall PATH|--global|--workspace NAME [--force]
+
+Personal layer: local/ (or $ADORNO_LOCAL), git-ignored, template in local.example/.
+  local/adorno.yaml   owner, defaults, presets, workspaces, repos (settings, permissions, voice, vision lines)
+  local/vision.md     your vision, laid over every agent and the instructions
+  local/src/          a private src/: files laid over the public ones (profile, voice, instructions, new items)
+Used by install, check, list and conf; never by build.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover
+    sys.exit("kit: PyYAML is missing. Install uv (`brew install uv`) or run `pip install pyyaml`.")
+
+ROOT = Path(__file__).resolve().parent.parent
+SRC, VENDOR, DIST = ROOT / "src", ROOT / "vendor", ROOT / "dist"
+LOCAL = Path(os.environ.get("ADORNO_LOCAL") or ROOT / "local").expanduser().resolve()
+LOCAL_CONF = LOCAL / "adorno.yaml"
+LOCAL_SRC = LOCAL / "src"
+VISION = LOCAL / "vision.md"
+LEGACY_LOCAL = ROOT / "repos.local.yaml"
+USE_LOCAL = False   # set per command: install/check/list/conf use local/, build never does
+RESOLVER = ROOT / "src" / "skills" / "github-ops" / "scripts" / "resolve.jq"
+LEVELS = ("L0", "L1", "L2", "L3", "L4")
+ACTIONS = ("push", "reply", "comment", "resolve", "rerequest", "review", "submit", "open_pr", "ci_rerun")
+CLAUDE_RULES = ("allow", "ask", "deny")
+VISION_MAX_LINES = 60
+LOCK = ROOT / "kit.lock"
+STATE = ".adorno/installed.json"
+NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+FM_RE = re.compile(r"\A---[ \t]*\n(.*?)\n---[ \t]*(?:\n|\Z)(.*)\Z", re.S)
+BEGIN = "<!-- adorno:begin (managed by kit — edits inside this block are overwritten) -->"
+END = "<!-- adorno:end -->"
+BLOCK_RE = re.compile(r"<!-- adorno:begin.*?-->.*?<!-- adorno:end -->\n?", re.S)
+KINDS = {"skill": "skills", "agent": "agents", "workflow": "workflows"}
+NEUTRAL_AGENT_KEYS = {"name", "description", "tools", "model", "targets"}
+ARGS_TOKEN = "{{args}}"
+
+
+# ───────────────────────────── helpers ─────────────────────────────
+
+def die(msg: str) -> None:
+    print(f"kit: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def warn(msg: str) -> None:
+    print(f"warning: {msg}", file=sys.stderr)
+
+
+def load_yaml(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+
+def parse_md(path: Path) -> tuple[dict, str]:
+    text = path.read_text(encoding="utf-8")
+    m = FM_RE.match(text)
+    if not m:
+        return {}, text
+    try:
+        meta = yaml.safe_load(m.group(1)) or {}
+    except yaml.YAMLError as e:
+        mark = getattr(e, "problem_mark", None)
+        where = f" (frontmatter line {mark.line + 1})" if mark else ""
+        die(f"{rel(path)}: invalid YAML{where}: {getattr(e, 'problem', e)} — quote values that contain ': '")
+    if not isinstance(meta, dict):
+        die(f"{path}: frontmatter must be a YAML mapping")
+    return meta, m.group(2)
+
+
+def dump_md(meta: dict, body: str) -> str:
+    body = body.strip() + "\n"
+    if not meta:
+        return body
+    fm = yaml.safe_dump(meta, sort_keys=False, allow_unicode=True, width=10_000).strip()
+    return f"---\n{fm}\n---\n\n{body}"
+
+
+def sha(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def first_line(text: str) -> str:
+    return " ".join(str(text).split())
+
+
+def as_list(value) -> list | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return [v.strip() for v in value.split(",") if v.strip()]
+    return list(value)
+
+
+def deep_merge(a: dict, b: dict) -> dict:
+    out = dict(a)
+    for k, v in (b or {}).items():
+        out[k] = deep_merge(out[k], v) if isinstance(out.get(k), dict) and isinstance(v, dict) else v
+    return out
+
+
+def local_on() -> bool:
+    return USE_LOCAL and LOCAL.is_dir()
+
+
+def local_conf() -> dict:
+    return load_yaml(LOCAL_CONF) if local_on() and LOCAL_CONF.exists() else {}
+
+
+GITHUB_RE = re.compile(r"(?:git@github\.com:|(?:ssh://git@|https?://)github\.com/)([\w.-]+/[\w.-]+?)(?:\.git)?/?$")
+
+
+def github_repo(path: Path) -> str | None:
+    """owner/repo of the git repository at `path` (its `origin` on GitHub), or None."""
+    res = subprocess.run(["git", "-C", str(path), "remote", "get-url", "origin"], capture_output=True, text=True)
+    m = GITHUB_RE.search(res.stdout.strip()) if res.returncode == 0 else None
+    return m.group(1) if m else None
+
+
+def workspace_dirs(ws: dict) -> dict[str, Path]:
+    """Local repositories under a workspace's `paths` (globs, `~` allowed), keyed by owner/repo."""
+    found: dict[str, Path] = {}
+    for pattern in ws.get("paths") or []:
+        expanded = os.path.expanduser(str(pattern))
+        base = Path(expanded)
+        roots = [Path(p) for p in sorted(__import__("glob").glob(expanded))] if any(c in expanded for c in "*?[") \
+            else ([base] if base.is_dir() else [])
+        for root in roots:
+            candidates = [root] if (root / ".git").exists() else \
+                [d.parent for d in sorted(root.glob("*/.git"))] + [d.parent for d in sorted(root.glob("*/*/.git"))]
+            for d in candidates:
+                repo = github_repo(d)
+                if repo:
+                    found.setdefault(repo, d)
+    return found
+
+
+def registry() -> dict:
+    """repos.yaml, with the personal layer (local/adorno.yaml) on top when it is active: `owner` and `defaults`
+    merged into the defaults, `presets`, `workspaces` (local `paths` turned into the repos found there), `repos`."""
+    data = load_yaml(ROOT / "repos.yaml")
+    loc = local_conf()
+    if loc:
+        defaults = dict(loc.get("defaults") or {})
+        if loc.get("owner"):
+            defaults["owner"] = loc["owner"]
+        data = deep_merge(data, {"defaults": defaults, "repos": loc.get("repos") or {}})
+        data["presets"] = loc.get("presets") or {}
+        workspaces = {}
+        for name, ws in (loc.get("workspaces") or {}).items():
+            ws = dict(ws or {})
+            ws["repos"] = list(dict.fromkeys(list(ws.get("repos") or []) + list(workspace_dirs(ws))))
+            workspaces[name] = ws
+        data["workspaces"] = workspaces
+    return data
+
+
+def resolve_repo(reg: dict, repo: str) -> dict | None:
+    """The settings `repo` resolves to, through the same resolver as the github-ops scripts (needs jq)."""
+    if not shutil.which("jq"):
+        die("jq is required to resolve repo settings (brew install jq)")
+    res = subprocess.run(["jq", "--arg", "r", repo, "-f", str(RESOLVER)], input=json.dumps(reg),
+                         capture_output=True, text=True)
+    if res.returncode != 0:
+        die(f"resolving {repo}: {res.stderr.strip()}")
+    return json.loads(res.stdout) if res.stdout.strip() else None
+
+
+def rel(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def git(*args: str, cwd: Path | None = None) -> str:
+    res = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+    if res.returncode != 0:
+        die(f"git {' '.join(args)} failed: {res.stderr.strip()}")
+    return res.stdout.strip()
+
+
+# ───────────────────────────── model ─────────────────────────────
+
+@dataclass
+class Item:
+    kind: str          # skill | agent | workflow
+    name: str          # file-safe name: agent-perf-mongodb
+    meta: dict
+    body: str
+    path: Path         # SKILL.md for skills, the .md file otherwise
+    origin: str        # "local" or the import name
+    id: str = ""       # logical id: agent:perf:mongodb (defaults to name)
+    expected: str = "" # name the file location implies
+    base_dirs: tuple = ()  # extra skill folders merged under this one (extends)
+    overlay_dirs: tuple = ()  # private skill folders laid over this one (local/src/skills/<name>/)
+
+    def __post_init__(self) -> None:
+        self.id = self.id or self.name
+        self.expected = self.expected or self.name
+
+    @property
+    def description(self) -> str:
+        return first_line(self.meta.get("description", ""))
+
+    def overrides(self, target: str) -> dict:
+        return dict((self.meta.get("targets") or {}).get(target) or {})
+
+
+class Config:
+    def __init__(self) -> None:
+        self.manifest = load_yaml(ROOT / "kit.yaml")
+        adapters = load_yaml(ROOT / "adapters" / "targets.yaml")
+        self.targets: dict = adapters.get("targets", {})
+        self.caps: list = adapters.get("capabilities", [])
+        self.tiers: list = adapters.get("model_tiers", [])
+        # native tool/model name -> neutral, used to normalise imported agents
+        self.tool_reverse: dict[str, str] = {}
+        self.model_reverse: dict[str, str] = {}
+        for t in self.targets.values():
+            for cap, names in (t.get("tools") or {}).items():
+                for n in names or []:
+                    self.tool_reverse.setdefault(n, cap)
+            for tier, model in (t.get("models") or {}).items():
+                self.model_reverse.setdefault(model, tier)
+
+    def target(self, name: str) -> dict:
+        if name not in self.targets:
+            die(f"unknown target '{name}' (known: {', '.join(self.targets)})")
+        return self.targets[name]
+
+    @property
+    def default_targets(self) -> list[str]:
+        return list(self.manifest.get("targets") or ["claude", "codex"])
+
+
+FAMILY_FILE = "_family.md"
+
+
+def load_item(kind: str, path: Path, origin: str) -> Item:
+    meta, body = parse_md(path)
+    if kind == "skill":
+        default = path.parent.name
+        return Item(kind, str(meta.get("name") or default), meta, body, path, origin, expected=default)
+    if kind == "agent" and path.parent.name == KINDS[kind] and origin in ("local", "private"):
+        # a top-level agent of ours: src/agents/adorno.md -> agent:adorno
+        meta.pop("name", None)
+        return Item(kind, f"agent-{path.stem}", meta, body, path, origin, id=f"agent:{path.stem}",
+                    expected=f"agent-{path.stem}")
+    if path.parent.name != KINDS[kind]:
+        # nested: src/agents/<family>/<specialty>.md -> agent:<family>:<specialty>
+        family, specialty = path.parent.name, path.stem
+        logical = f"{kind}:{family}:{specialty}"
+        name = f"{kind}-{family}-{specialty}"
+        given = meta.get("name")
+        base = path.parent / FAMILY_FILE
+        if not base.exists():  # a private agent in a public family: the public family file applies
+            base = SRC / KINDS[kind] / family / FAMILY_FILE
+        if base.exists():
+            fmeta, fbody = parse_md(base)
+            merged = {k: v for k, v in fmeta.items() if k not in ("name", "description")}
+            merged.update(meta)
+            fbody = fbody.replace("{{family}}", family).replace("{{specialty}}", specialty)
+            meta, body = merged, fbody.strip() + "\n\n" + body.strip()
+        item = Item(kind, name, meta, body, path, origin, id=logical, expected=name)
+        if given and given not in (logical, name):
+            item.expected = f"{name} (or {logical})"
+            item.name = str(given)
+        meta.pop("name", None)
+        return item
+    default = path.stem
+    return Item(kind, str(meta.get("name") or default), meta, body, path, origin, expected=default)
+
+
+def scan(base: Path, origin: str) -> list[Item]:
+    found = [load_item("skill", p, origin) for p in sorted((base / "skills").glob("*/SKILL.md"))]
+    for kind in ("agent", "workflow"):
+        root = base / KINDS[kind]
+        paths = sorted(root.glob("*.md")) + sorted(root.glob("*/*.md"))
+        found += [load_item(kind, p, origin) for p in paths if p.name != FAMILY_FILE]
+    return found
+
+
+def collect() -> dict[str, dict[str, Item]]:
+    items: dict[str, dict[str, Item]] = {k: {} for k in KINDS}
+    vendor_index: dict[tuple[str, str, str], Item] = {}
+    vendors = sorted(d for d in VENDOR.iterdir() if d.is_dir()) if VENDOR.exists() else []
+    for d in vendors:
+        for it in scan(d, d.name):
+            vendor_index[(it.kind, it.origin, it.name)] = it
+            prev = items[it.kind].get(it.name)
+            if prev:
+                die(f"{it.kind} '{it.name}' comes from both '{prev.origin}' and '{it.origin}'; "
+                    f"set a prefix on one import in kit.yaml")
+            items[it.kind][it.name] = it
+    for it in scan(SRC, "local"):
+        if it.meta.get("extends"):
+            apply_extends(it, vendor_index, items)
+        prev = items[it.kind].get(it.name)
+        if prev and prev.origin != "local":
+            warn(f"local {it.kind} '{it.name}' overrides the one imported from '{prev.origin}'")
+        items[it.kind][it.name] = it
+    if local_on():
+        overlay_private(items)
+        vision = vision_text()
+        if vision:
+            for it in items["agent"].values():
+                it.body = it.body.rstrip() + "\n\n" + vision_section(vision, agent=True)
+    return items
+
+
+def overlay_private(items: dict) -> None:
+    """local/src/: skill folders are laid over the public skill of the same name file by file (a SKILL.md there
+    replaces its meta and body); agents, workflows and new skills are added or replace the public ones."""
+    skills = LOCAL_SRC / "skills"
+    for d in sorted(skills.iterdir()) if skills.is_dir() else []:
+        if not d.is_dir():
+            continue
+        it = items["skill"].get(d.name)
+        if it:
+            it.overlay_dirs += (d,)
+            if (d / "SKILL.md").exists():
+                meta, body = parse_md(d / "SKILL.md")
+                it.meta = {**it.meta, **{k: v for k, v in meta.items() if k != "name"}}
+                it.body = body if body.strip() else it.body
+            continue
+        if not (d / "SKILL.md").exists():
+            die(f"{d}: lays over no known skill and has no SKILL.md")
+        new = load_item("skill", d / "SKILL.md", "private")
+        items["skill"][new.name] = new
+    for kind in ("agent", "workflow"):
+        root = LOCAL_SRC / KINDS[kind]
+        for p in sorted(root.glob("*.md")) + sorted(root.glob("*/*.md")):
+            if p.name != FAMILY_FILE:
+                it = load_item(kind, p, "private")
+                items[kind][it.name] = it
+
+
+def vision_text() -> str:
+    if not (local_on() and VISION.exists()):
+        return ""
+    text = re.sub(r"<!--.*?-->", "", VISION.read_text(encoding="utf-8"), flags=re.S).strip()
+    if text.count("\n") + 1 > VISION_MAX_LINES:
+        warn(f"{VISION}: {text.count(chr(10)) + 1} lines; it is copied into every agent, keep it under "
+             f"{VISION_MAX_LINES}")
+    return text
+
+
+def vision_section(text: str, agent: bool = False) -> str:
+    head = ("## The owner's vision (applies over this agent's defaults)" if agent
+            else "## La vision du propriétaire")
+    note = ("It overrides your own instructions, the profile and the imported skills; only the repo's rules "
+            "(CLAUDE.md, .claude/rules/) win on its code. A conflict with them: apply the repo's way and flag it."
+            if agent else
+            "Elle s'applique par-dessus tous les agents, skills et workflows ; seules les règles du repo "
+            "(`CLAUDE.md`, `.claude/rules/`) priment sur son code. Conflit avec elles : applique celles du repo et "
+            "signale-le. Les lignes `vision` du repo courant (`repo-conf`) s'y ajoutent.")
+    return f"{head}\n\n> {note}\n\n{text}\n"
+
+
+def apply_extends(it: Item, vendor_index: dict, items: dict) -> None:
+    """`extends: <import>/<name>`: the imported item's meta and body come first, ours on top."""
+    ref = str(it.meta.pop("extends"))
+    if "/" not in ref:
+        die(f"{rel(it.path)}: extends must be '<import>/<name>', got '{ref}'")
+    origin, name = ref.split("/", 1)
+    base = vendor_index.get((it.kind, origin, name))
+    if not base:
+        die(f"{rel(it.path)}: extends '{ref}' but no imported {it.kind} has that name (run `kit import`)")
+    meta = {k: v for k, v in base.meta.items() if k != "name"}
+    meta.update(it.meta)
+    it.meta = meta
+    it.body = base.body.strip() + "\n\n" + it.body.strip()
+    if it.kind == "skill":
+        it.base_dirs = (base.path.parent,)
+    if items[it.kind].get(base.name) is base:
+        del items[it.kind][base.name]  # consumed: only the extended version ships
+
+
+# ───────────────────────────── validation ─────────────────────────────
+
+def validate(cfg: Config, items: dict[str, dict[str, Item]]) -> list[str]:
+    errors: list[str] = []
+    owner: dict[str, str] = {}
+    for kind, group in items.items():
+        for name, it in sorted(group.items()):
+            where = rel(it.path)
+            if not NAME_RE.match(name) or len(name) > 64:
+                errors.append(f"{where}: invalid name '{name}' (lowercase letters, digits, hyphens; max 64)")
+            if name != it.expected:
+                errors.append(f"{where}: name '{name}' must match '{it.expected}'")
+            desc = it.meta.get("description")
+            if not isinstance(desc, str) or not desc.strip():
+                errors.append(f"{where}: missing description (it is what makes agents pick it)")
+            elif len(desc) > 1024:
+                errors.append(f"{where}: description longer than 1024 characters")
+            if not it.body.strip():
+                errors.append(f"{where}: empty body")
+            if name in owner and owner[name] != kind:
+                errors.append(f"{where}: '{name}' is also a {owner[name]} name; agents and workflows "
+                              f"become skills on some targets, so names must be unique across kinds")
+            owner.setdefault(name, kind)
+
+            if kind == "agent":
+                for tool in as_list(it.meta.get("tools")) or []:
+                    if tool not in cfg.caps and tool not in cfg.tool_reverse:
+                        warn(f"{where}: tool '{tool}' is not a known capability; passed through as-is")
+                model = it.meta.get("model")
+                if model is not None and model not in cfg.tiers:
+                    errors.append(f"{where}: model '{model}' must be one of {cfg.tiers} "
+                                  f"(put native model names under targets.<tool>.model)")
+            if kind == "workflow":
+                uses = it.meta.get("uses") or {}
+                for key in ("skills", "agents", "workflows"):
+                    known = {i.id for i in items[key[:-1]].values()} | set(items[key[:-1]])
+                    for ref in uses.get(key) or []:
+                        if ref not in known:
+                            errors.append(f"{where}: uses unknown {key[:-1]} '{ref}'")
+    for tgt in cfg.default_targets:
+        cfg.target(tgt)
+
+    errors += validate_registry(registry(), {i.id for i in items["agent"].values()} | set(items["agent"]))
+    return errors
+
+
+def validate_registry(reg: dict, agent_ids: set) -> list[str]:
+    """repos.yaml and the personal layer: references, levels, permissions, shapes."""
+    errors: list[str] = []
+    if USE_LOCAL and LEGACY_LOCAL.exists():
+        errors.append(f"{rel(LEGACY_LOCAL)} is replaced by local/adorno.yaml: move it there "
+                      f"(`owner` goes top-level; see local.example/)")
+    where = "local/adorno.yaml" if local_on() else "repos.yaml"
+    presets = reg.get("presets") or {}
+    scopes = [("defaults", reg.get("defaults") or {})]
+    scopes += [(f"presets.{n}", c or {}) for n, c in presets.items()]
+    scopes += [(f"workspaces.{n}", c or {}) for n, c in (reg.get("workspaces") or {}).items()]
+    scopes += [(f"repos.{r}", c or {}) for r, c in (reg.get("repos") or {}).items()]
+    for scope, conf in scopes:
+        if not isinstance(conf, dict):
+            errors.append(f"{where}: {scope} must be a mapping")
+            continue
+        for area, agents in (conf.get("area_reviewers") or {}).items():
+            for ref in agents or []:
+                if ref not in agent_ids:
+                    errors.append(f"{where}: {scope}.area_reviewers.{area} names unknown agent '{ref}'")
+        for ref in conf.get("use") or []:
+            if ref not in presets:
+                errors.append(f"{where}: {scope}.use names unknown preset '{ref}'")
+        if conf.get("max_level") is not None and conf["max_level"] not in LEVELS:
+            errors.append(f"{where}: {scope}.max_level must be one of {', '.join(LEVELS)}")
+        for key in ("context", "vision"):
+            if conf.get(key) is not None and not (isinstance(conf[key], list)
+                                                  and all(isinstance(x, str) for x in conf[key])):
+                errors.append(f"{where}: {scope}.{key} must be a list of lines")
+        if conf.get("voice") is not None and not isinstance(conf["voice"], dict):
+            errors.append(f"{where}: {scope}.voice must be a mapping")
+        perms = conf.get("permissions")
+        if perms is not None:
+            if not isinstance(perms, dict):
+                errors.append(f"{where}: {scope}.permissions must be a mapping")
+                continue
+            for a in perms.get("deny") or []:
+                if a not in ACTIONS:
+                    errors.append(f"{where}: {scope}.permissions.deny: unknown action '{a}' (known: {', '.join(ACTIONS)})")
+            for key in (perms.get("claude") or {}):
+                if key not in CLAUDE_RULES:
+                    errors.append(f"{where}: {scope}.permissions.claude.{key}: expected {', '.join(CLAUDE_RULES)}")
+        if scope.startswith("workspaces.") and not (conf.get("repos") or conf.get("paths")):
+            errors.append(f"{where}: {scope} needs `repos` (GitHub globs) or `paths` (local folders)")
+    # presets that use each other must not loop
+    def walk(name: str, seen: tuple) -> None:
+        if name in seen:
+            errors.append(f"{where}: presets loop: {' -> '.join((*seen, name))}")
+            return
+        for ref in (presets.get(name) or {}).get("use") or []:
+            if ref in presets:
+                walk(ref, (*seen, name))
+    for name in presets:
+        walk(name, ())
+    return list(dict.fromkeys(errors))
+
+
+# ───────────────────────────── rendering ─────────────────────────────
+
+FileMap = dict[str, tuple[bytes, bool]]   # relative path -> (content, executable)
+
+
+def map_tools(cfg: Config, tcfg: dict, tools) -> list[str] | None:
+    tools = as_list(tools)
+    if tools is None:
+        return None
+    native = tcfg.get("tools") or {}
+    out: list[str] = []
+    for tool in tools:
+        cap = tool if tool in cfg.caps else cfg.tool_reverse.get(tool)
+        mapped = native.get(cap) if cap and cap in native else [tool]
+        for m in mapped or []:
+            if m not in out:
+                out.append(m)
+    return out
+
+
+def map_model(tcfg: dict, model) -> str | None:
+    if model is None:
+        return None
+    return (tcfg.get("models") or {}).get(model)
+
+
+def clean_skill_meta(it: Item, target: str) -> dict:
+    meta = {k: v for k, v in it.meta.items() if k != "targets"}
+    meta.update(it.overrides(target))
+    return meta
+
+
+def skill_data(cfg: Config, it: Item) -> FileMap:
+    """kit.yaml `skill_data`: YAML files from the kit root shipped inside a skill as JSON."""
+    out: FileMap = {}
+    for dest, source in ((cfg.manifest.get("skill_data") or {}).get(it.name) or {}).items():
+        src = ROOT / source
+        if not src.exists():
+            die(f"kit.yaml skill_data: {source} not found")
+        data = registry() if source == "repos.yaml" else load_yaml(src)
+        out[dest] = (json.dumps(data, indent=2, ensure_ascii=False, default=str).encode() + b"\n", False)
+    return out
+
+
+def skill_tree(cfg: Config, it: Item, target: str) -> FileMap:
+    out: FileMap = {}
+    for base in (*it.base_dirs, it.path.parent, *it.overlay_dirs):  # imported, ours, then private on top
+        for f in sorted(base.rglob("*")):
+            if f.is_dir() or f.name == ".DS_Store":
+                continue
+            r = f.relative_to(base).as_posix()
+            if r != "SKILL.md":
+                out[r] = (f.read_bytes(), os.access(f, os.X_OK))
+    out["SKILL.md"] = (dump_md(clean_skill_meta(it, target), it.body).encode(), False)
+    out.update(skill_data(cfg, it))
+    return out
+
+
+def as_skill(it: Item, target: str) -> FileMap:
+    """Agents and workflows for tools that have no native equivalent."""
+    if it.kind == "agent":
+        desc = f"Rôle {it.id} — {it.description}"
+        body = (f"# Rôle : {it.id}\n\n"
+                f"Quand ce skill est invoqué, adopte le rôle ci-dessous pour la tâche en cours, "
+                f"puis reviens à ton comportement normal une fois le résultat rendu.\n\n{it.body.strip()}")
+    else:
+        desc = f"{it.id} — {it.description}"
+        body = (f"# {it.id}\n\n"
+                f"Entrée : la demande de l'utilisateur. Suis les étapes dans l'ordre.\n\n"
+                f"{it.body.strip().replace(ARGS_TOKEN, 'la demande de l’utilisateur')}")
+    meta = {"name": it.name, "description": desc[:1024]}
+    meta.update(it.overrides(target))
+    return {"SKILL.md": (dump_md(meta, body).encode(), False)}
+
+
+def agent_command(it: Item) -> Item:
+    """A command that hands its input to the agent, so every agent can also be called by hand."""
+    body = (f"Délègue la demande ci-dessous au sous-agent `{it.name}` ({it.id}) et rends son résultat "
+            f"tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier "
+            f"`{it.name}`) pour traiter la demande.\n\nDemande : {ARGS_TOKEN}")
+    meta = {"description": f"{it.id} — {it.description}"[:1024], "args": "<demande>"}
+    return Item("workflow", it.name, meta, body, it.path, it.origin, id=it.id)
+
+
+def render_agent(cfg: Config, it: Item, target: str, tcfg: dict, fmt: str) -> str:
+    meta: dict = {"name": it.name, "description": it.description}
+    tools = map_tools(cfg, tcfg, it.meta.get("tools"))
+    model = map_model(tcfg, it.meta.get("model"))
+    if fmt == "claude":
+        if tools:
+            meta["tools"] = ", ".join(tools)
+        if model:
+            meta["model"] = model
+        # keep Claude-specific keys from imported agents (color, permissionMode…)
+        meta.update({k: v for k, v in it.meta.items() if k not in NEUTRAL_AGENT_KEYS})
+    elif fmt == "gemini":
+        if tools:
+            meta["tools"] = tools
+        if model:
+            meta["model"] = model
+    elif fmt == "copilot":
+        if tools:
+            meta["tools"] = tools
+    else:
+        die(f"unknown agent format '{fmt}'")
+    meta.update(it.overrides(target))
+    return dump_md(meta, it.body)
+
+
+def toml_str(s: str) -> str:
+    if "'''" not in s:
+        return "'''\n" + s + "'''"
+    return json.dumps(s, ensure_ascii=False)
+
+
+def render_workflow(it: Item, target: str, fmt: str) -> str:
+    body = it.body.strip()
+    hint = it.meta.get("args")
+    over = it.overrides(target)
+    if fmt == "claude-command":
+        meta = {"description": it.description}
+        if hint:
+            meta["argument-hint"] = hint
+        meta.update(over)
+        return dump_md(meta, body.replace(ARGS_TOKEN, "$ARGUMENTS"))
+    if fmt == "gemini-command":
+        desc = over.get("description", it.description)
+        return f"description = {json.dumps(desc, ensure_ascii=False)}\nprompt = {toml_str(body + chr(10))}\n"
+    if fmt == "copilot-prompt":
+        meta = {"description": it.description, **over}
+        return dump_md(meta, body.replace(ARGS_TOKEN, "${input:args}"))
+    if fmt == "cursor-command":
+        return f"# {it.name}\n\n{it.description}\n\n" + \
+            body.replace(ARGS_TOKEN, "le texte saisi après la commande") + "\n"
+    die(f"unknown workflow format '{fmt}'")
+    return ""
+
+
+def render_instructions(cfg: Config, items: dict[str, dict[str, Item]]) -> str:
+    files = {p.name: p for p in (SRC / "instructions").glob("*.md")}
+    if local_on():
+        files.update({p.name: p for p in (LOCAL_SRC / "instructions").glob("*.md")})
+    parts = [files[n].read_text(encoding="utf-8").strip() for n in sorted(files)]
+    vision = vision_text()
+    if vision:
+        parts.append(vision_section(vision).strip())
+    if (cfg.manifest.get("instructions") or {}).get("catalog", True):
+        lines = ["## Catalogue adorno", "",
+                 "Sur les outils sans sous-agents ou commandes natifs, les agents et workflows "
+                 "ci-dessous sont disponibles sous forme de skills du même nom.", ""]
+        for kind, label in (("agent", "Agents"), ("workflow", "Workflows"), ("skill", "Skills")):
+            group = items[kind]
+            if group:
+                lines += [f"**{label}**", ""]
+                for it in sorted(group.values(), key=lambda i: i.id):
+                    shown = f"`{it.id}` (`{it.name}`)" if it.id != it.name else f"`{it.name}`"
+                    lines.append(f"- {shown} — {it.description}")
+                lines.append("")
+        parts.append("\n".join(lines).strip())
+    return "\n\n".join(p for p in parts if p) + "\n"
+
+
+def build_target(cfg: Config, target: str, items) -> FileMap:
+    tcfg = cfg.target(target)
+    files: FileMap = {}
+    skills_dir = tcfg["skills"]
+
+    def put_skill(name: str, tree: FileMap) -> None:
+        for r, v in tree.items():
+            files[f"{skills_dir}/{name}/{r}"] = v
+
+    for it in items["skill"].values():
+        put_skill(it.name, skill_tree(cfg, it, target))
+
+    for kind in ("agent", "workflow"):
+        spec = tcfg[KINDS[kind]]
+        fmt = spec["format"]
+        for it in items[kind].values():
+            if fmt == "skill":
+                put_skill(it.name, as_skill(it, target))
+                continue
+            path = f"{spec['dir']}/{it.name}{spec.get('ext', '.md')}"
+            text = (render_agent(cfg, it, target, tcfg, fmt) if kind == "agent"
+                    else render_workflow(it, target, fmt))
+            files[path] = (text.encode(), False)
+
+    # each native agent also gets a command, so it can be called by hand
+    wspec = tcfg["workflows"]
+    if tcfg["agents"]["format"] != "skill" and wspec["format"] != "skill" and tcfg.get("agent_commands", True):
+        for it in items["agent"].values():
+            path = f"{wspec['dir']}/{it.name}{wspec.get('ext', '.md')}"
+            files[path] = (render_workflow(agent_command(it), target, wspec["format"]).encode(), False)
+
+    extras = SRC / "extras" / target
+    if extras.is_dir():
+        for f in sorted(extras.rglob("*")):
+            if f.is_file() and f.name != ".DS_Store":
+                files[f.relative_to(extras).as_posix()] = (f.read_bytes(), os.access(f, os.X_OK))
+    return files
+
+
+def managed_files(cfg: Config, target: str, instructions: str, global_: bool) -> dict[str, str]:
+    """Files that get a managed block rather than being owned outright."""
+    tcfg = cfg.target(target)
+    if global_:
+        path = (tcfg.get("global") or {}).get("instructions")
+        return {path: instructions} if path else {}
+    out = {"AGENTS.md": instructions}
+    for path, kind in (tcfg.get("instructions") or {}).items():
+        out[path] = "@AGENTS.md" if kind == "shim" else instructions
+    return out
+
+
+def global_path(tcfg: dict, path: str) -> str | None:
+    """Where a project-relative file lives under ~ for this target (None = unsupported)."""
+    g = tcfg.get("global") or {}
+    if any(path == s or path.startswith(s + "/") for s in g.get("skip") or []):
+        return None
+    for src, dst in (g.get("map") or {}).items():
+        if path == src or path.startswith(src + "/"):
+            return dst + path[len(src):]
+    return path
+
+
+# ───────────────────────────── build ─────────────────────────────
+
+def claude_plugin(cfg: Config, files: FileMap) -> FileMap:
+    m = cfg.manifest
+    out: FileMap = {}
+    for path, v in files.items():
+        for src, dst in ((".claude/skills/", "skills/"), (".claude/agents/", "agents/"),
+                         (".claude/commands/", "commands/")):
+            if path.startswith(src):
+                out[dst + path[len(src):]] = v
+    extras = SRC / "extras" / "claude-plugin"
+    if extras.is_dir():
+        for f in sorted(extras.rglob("*")):
+            if f.is_file() and f.name != ".DS_Store":
+                out[f.relative_to(extras).as_posix()] = (f.read_bytes(), os.access(f, os.X_OK))
+    manifest = {"name": m["name"], "version": m.get("version", "0.0.0"),
+                "description": m.get("description", "")}
+    if m.get("author"):
+        manifest["author"] = m["author"]
+    out[".claude-plugin/plugin.json"] = (json.dumps(manifest, indent=2, ensure_ascii=False).encode() + b"\n", False)
+    return out
+
+
+def marketplace_json(cfg: Config) -> bytes:
+    m = cfg.manifest
+    data = {
+        "name": m["name"],
+        "owner": m.get("author") or {"name": m["name"]},
+        "plugins": [{"name": m["name"], "source": "./dist/claude-plugin",
+                     "description": m.get("description", ""), "version": m.get("version", "0.0.0")}],
+    }
+    return json.dumps(data, indent=2, ensure_ascii=False).encode() + b"\n"
+
+
+def write_tree(base: Path, files: FileMap) -> None:
+    for path, (data, exe) in files.items():
+        p = base / path
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(data)
+        if exe:
+            p.chmod(p.stat().st_mode | 0o111)
+
+
+def build_all(cfg: Config, items, out_root: Path) -> None:
+    if USE_LOCAL and out_root == ROOT:
+        die("refusing to write the personal layer (local/) into dist/ (dist/ is committed and public)")
+    dist = out_root / "dist"
+    if dist.exists():
+        shutil.rmtree(dist)
+    instructions = render_instructions(cfg, items)
+    write_tree(dist, {"AGENTS.md": (instructions.encode(), False)})
+    for target in cfg.default_targets:
+        files = build_target(cfg, target, items)
+        write_tree(dist / target, files)
+        if target == "claude":
+            write_tree(dist / "claude-plugin", claude_plugin(cfg, files))
+    if "claude" in cfg.default_targets:
+        write_tree(out_root, {".claude-plugin/marketplace.json": (marketplace_json(cfg), False)})
+
+
+def tree_digest(base: Path) -> dict[str, str]:
+    if not base.exists():
+        return {}
+    return {p.relative_to(base).as_posix(): sha(p.read_bytes())
+            for p in sorted(base.rglob("*")) if p.is_file()}
+
+
+# ───────────────────────────── commands ─────────────────────────────
+
+def load_valid() -> tuple[Config, dict]:
+    cfg = Config()
+    items = collect()
+    errors = validate(cfg, items)
+    if errors:
+        print("\n".join(f"error: {e}" for e in errors), file=sys.stderr)
+        die(f"{len(errors)} error(s); fix them before building")
+    return cfg, items
+
+
+def cmd_check(args) -> None:
+    global USE_LOCAL
+    USE_LOCAL = False
+    cfg, items = load_valid()
+    counts = ", ".join(f"{len(items[k])} {KINDS[k]}" for k in KINDS)
+    print(f"ok: public — {counts}")
+    if LOCAL.is_dir() or LEGACY_LOCAL.exists():
+        USE_LOCAL = True
+        _, private = load_valid()
+        loc = local_conf()
+        extra = sum(1 for k in private for i in private[k].values() if i.origin == "private" or i.overlay_dirs)
+        print(f"ok: with {rel(LOCAL)} — {len(loc.get('repos') or {})} repo entr(ies), "
+              f"{len(loc.get('workspaces') or {})} workspace(s), {len(loc.get('presets') or {})} preset(s), "
+              f"{extra} private or overlaid item(s)" + (", vision" if VISION.exists() else ""))
+        USE_LOCAL = False
+    if args.dist:
+        with tempfile.TemporaryDirectory() as tmp:
+            build_all(cfg, items, Path(tmp))
+            fresh = tree_digest(Path(tmp) / "dist")
+            fresh_mp = tree_digest(Path(tmp) / ".claude-plugin")
+        if fresh != tree_digest(DIST) or fresh_mp != tree_digest(ROOT / ".claude-plugin"):
+            die("dist/ is out of date — run `bin/kit build` and commit the result")
+        print("ok: dist/ is up to date")
+
+
+def cmd_conf(args) -> None:
+    global USE_LOCAL
+    USE_LOCAL = True
+    reg = registry()
+    repo = args.repo or github_repo(Path.cwd())
+    if not repo:
+        print("scopes (weakest first; `kit conf owner/repo` for one repo):")
+        print("  defaults")
+        for name, ws in (reg.get("workspaces") or {}).items():
+            print(f"  workspaces.{name}: {', '.join(ws.get('repos') or []) or '(no repo found)'}")
+        for key in reg.get("repos") or {}:
+            print(f"  repos.{key}")
+        for name in reg.get("presets") or {}:
+            print(f"  presets.{name} (used with `use:`)")
+        return
+    conf = resolve_repo(reg, repo)
+    if conf is None:
+        die(f"{repo} is not declared in {rel(LOCAL_CONF)} (repos, workspaces)")
+    print(json.dumps(conf, indent=2, ensure_ascii=False))
+
+
+def cmd_list(args) -> None:
+    global USE_LOCAL
+    USE_LOCAL = True
+    items = collect()
+    for kind in KINDS:
+        print(f"{KINDS[kind]}:")
+        for it in sorted(items[kind].values(), key=lambda i: i.id):
+            print(f"  {it.id:<34} [{it.origin}] {it.description[:60]}")
+
+
+def cmd_build(args) -> None:
+    cfg, items = load_valid()
+    build_all(cfg, items, ROOT)
+    print(f"built dist/ for {', '.join(cfg.default_targets)}")
+
+
+TEMPLATES = {
+    "skill": """---
+name: {name}
+description: Ce que fait ce skill et QUAND l'utiliser (c'est ce texte qui déclenche le skill).
+---
+
+# {title}
+
+## Quand l'utiliser
+
+## Étapes
+
+1.
+""",
+    "agent": """---
+name: {name}
+description: Spécialité de l'agent et QUAND lui déléguer une tâche.
+tools: [read, search]        # read, write, edit, search, shell, web, agent — omets pour tout autoriser
+model: inherit               # inherit, fast, balanced, deep
+---
+
+Tu es …
+
+## Méthode
+
+## Ce que tu rends
+""",
+    "workflow": """---
+name: {name}
+description: Ce que ce workflow accomplit de bout en bout.
+args: "<entrée attendue>"
+uses:
+  skills: []
+  agents: []
+---
+
+Entrée : {{{{args}}}}
+
+1.
+""",
+}
+
+
+def cmd_new(args) -> None:
+    """kit new skill <name> | kit new agent <family>:<specialty> | kit new workflow <domain>:<action>"""
+    parts = args.name.split(":")
+    if not all(NAME_RE.match(p) for p in parts) or len(parts) > 2 or (args.kind == "skill" and len(parts) > 1):
+        die("name: lowercase-with-hyphens, or <group>:<name> for agents and workflows")
+    base = SRC / KINDS[args.kind]
+    if args.kind == "skill":
+        path, name = base / args.name / "SKILL.md", args.name
+    elif len(parts) == 2:
+        path, name = base / parts[0] / f"{parts[1]}.md", f"{args.kind}-{parts[0]}-{parts[1]}"
+    else:
+        path, name = base / f"{args.name}.md", args.name
+    if path.exists():
+        die(f"{rel(path)} already exists")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = TEMPLATES[args.kind].format(name=name, title=name.replace("-", " ").capitalize())
+    if len(parts) == 2:
+        text = re.sub(r"^name: .*\n", "", text, count=1, flags=re.M)  # derived from the path
+    path.write_text(text, encoding="utf-8")
+    print(f"created {rel(path)}")
+
+
+# ── import ──
+
+def resolve_source(source: str) -> tuple[str, bool]:
+    if source.startswith("github:"):
+        return f"https://github.com/{source[len('github:'):]}.git", False
+    if re.match(r"^(https?|ssh|git)://|^git@", source):
+        return source, False
+    return str((ROOT / Path(source).expanduser()).resolve()), True
+
+
+def fetch(url: str, ref: str | None, dest: Path) -> str:
+    git("init", "-q", str(dest))
+    git("remote", "add", "origin", url, cwd=dest)
+    git("fetch", "-q", "--depth", "1", "origin", ref or "HEAD", cwd=dest)
+    git("checkout", "-q", "FETCH_HEAD", cwd=dest)
+    return git("rev-parse", "HEAD", cwd=dest)
+
+
+def normalise_agent(cfg: Config, meta: dict) -> dict:
+    meta = dict(meta)
+    tools = as_list(meta.get("tools"))
+    if tools is not None:
+        caps: list[str] = []
+        for t in tools:
+            c = cfg.tool_reverse.get(t, t)
+            if c not in caps:
+                caps.append(c)
+        meta["tools"] = caps
+    model = meta.get("model")
+    if model is not None and model not in cfg.tiers:
+        tier = cfg.model_reverse.get(model)
+        meta.pop("model")
+        if tier:
+            meta["model"] = tier
+        else:
+            meta.setdefault("targets", {}).setdefault("claude", {})["model"] = model
+    return meta
+
+
+def cmd_import(args) -> None:
+    cfg = Config()
+    imports = cfg.manifest.get("imports") or []
+    if args.names:
+        unknown = set(args.names) - {i["name"] for i in imports}
+        if unknown:
+            die(f"not in kit.yaml: {', '.join(sorted(unknown))}")
+        imports = [i for i in imports if i["name"] in args.names]
+    if not imports:
+        print("nothing to import (add entries under `imports:` in kit.yaml)")
+        return
+    lock = load_yaml(LOCK)
+    for imp in imports:
+        name = imp["name"]
+        if not NAME_RE.match(name):
+            die(f"import name '{name}' must be lowercase-with-hyphens")
+        url, local = resolve_source(imp["source"])
+        locked = (lock.get(name) or {})
+        pinned = None if args.update or locked.get("source") != imp["source"] else locked.get("commit")
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            if local:
+                shutil.copytree(url, repo, ignore=shutil.ignore_patterns(".git"))
+                commit = "local"
+            else:
+                commit = fetch(url, pinned or imp.get("ref"), repo)
+            pulled = import_items(cfg, imp, repo)
+            out = VENDOR / name
+            if out.exists():
+                shutil.rmtree(out)
+            for kind, entries in pulled.items():
+                for item_name, payload in entries.items():
+                    if kind == "skill":
+                        write_tree(out / "skills" / item_name, payload)
+                    else:
+                        write_tree(out / KINDS[kind], {f"{item_name}.md": payload})
+            out.mkdir(parents=True, exist_ok=True)
+            for lic in sorted(repo.glob("LICEN[CS]E*")) + sorted(repo.glob("COPYING*")):
+                shutil.copy2(lic, out / lic.name)
+        lock[name] = {
+            "source": imp["source"], "ref": imp.get("ref"), "commit": commit,
+            "fetched": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "items": sorted(f"{k}/{n}" for k, e in pulled.items() for n in e),
+        }
+        total = sum(len(e) for e in pulled.values())
+        scripts = [p for p in (VENDOR / name).rglob("*")
+                   if p.is_file() and p.suffix not in (".md", ".txt", "") and "LICEN" not in p.name]
+        print(f"{name}: {total} item(s) @ {commit[:12]}" + (f" — {len(scripts)} script/asset file(s), review them" if scripts else ""))
+    LOCK.write_text("# generated by `kit import` — commit it\n" +
+                    yaml.safe_dump(lock, sort_keys=True, allow_unicode=True), encoding="utf-8")
+
+
+def import_items(cfg: Config, imp: dict, repo: Path) -> dict:
+    prefix = imp.get("prefix", "")
+    md_kind = imp.get("type", "agent")
+    if md_kind not in ("agent", "workflow"):
+        die(f"{imp['name']}: type must be agent or workflow")
+    pulled: dict[str, dict] = {"skill": {}, "agent": {}, "workflow": {}}
+    skill_dirs: list[Path] = []
+    md_files: list[Path] = []
+    for pattern in imp.get("include") or ["**/SKILL.md"]:
+        matches = sorted(repo.glob(pattern))
+        if not matches:
+            warn(f"{imp['name']}: pattern '{pattern}' matched nothing")
+        for m in matches:
+            if ".git" in m.parts:
+                continue
+            if m.is_file() and m.name == "SKILL.md":
+                skill_dirs.append(m.parent)
+            elif m.is_dir() and (m / "SKILL.md").exists():
+                skill_dirs.append(m)
+            elif m.is_dir():
+                skill_dirs += [p.parent for p in sorted(m.glob("*/SKILL.md"))]
+            elif m.suffix == ".md":
+                md_files.append(m)
+    for d in dict.fromkeys(skill_dirs):
+        meta, body = parse_md(d / "SKILL.md")
+        new = prefix + str(meta.get("name") or d.name)
+        tree: FileMap = {}
+        for f in sorted(d.rglob("*")):
+            if f.is_file() and f.name != ".DS_Store":
+                tree[f.relative_to(d).as_posix()] = (f.read_bytes(), os.access(f, os.X_OK))
+        tree["SKILL.md"] = (dump_md({**meta, "name": new}, body).encode(), False)
+        pulled["skill"][new] = tree
+    for f in dict.fromkeys(md_files):
+        meta, body = parse_md(f)
+        if not meta.get("description"):
+            warn(f"{imp['name']}: skipped {f.relative_to(repo)} (no description in frontmatter)")
+            continue
+        new = prefix + str(meta.get("name") or f.stem)
+        if md_kind == "agent":
+            meta = normalise_agent(cfg, meta)
+        pulled[md_kind][new] = (dump_md({**meta, "name": new}, body).encode(), False)
+    return pulled
+
+
+# ── install ──
+
+def load_state(dest: Path) -> dict:
+    p = dest / STATE
+    return json.loads(p.read_text()) if p.exists() else {"files": {}, "managed": {}}
+
+
+def upsert_block(path: Path, text: str) -> None:
+    block = f"{BEGIN}\n{text.strip()}\n{END}\n"
+    if path.exists():
+        cur = path.read_text(encoding="utf-8")
+        new = BLOCK_RE.sub(lambda _: block, cur, count=1) if BLOCK_RE.search(cur) \
+            else cur.rstrip() + ("\n\n" if cur.strip() else "") + block
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        new = block
+    path.write_text(new, encoding="utf-8")
+
+
+def remove_block(path: Path, created: bool, root: Path) -> None:
+    if not path.exists():
+        return
+    rest = BLOCK_RE.sub("", path.read_text(encoding="utf-8")).rstrip()
+    if not rest and created:
+        path.unlink()
+        prune(path, root)
+    else:
+        path.write_text(rest + "\n" if rest else "", encoding="utf-8")
+
+
+def prune(path: Path, stop: Path) -> None:
+    d = path.parent
+    while d != stop and d.is_dir() and not any(d.iterdir()):
+        d.rmdir()
+        d = d.parent
+
+
+def remove_owned(dest: Path, path: str, digest: str, force: bool) -> bool:
+    p = dest / path
+    if p.is_symlink():
+        p.unlink()
+    elif p.exists():
+        if sha(p.read_bytes()) != digest and not force:
+            warn(f"kept {path}: modified since install (use --force to remove)")
+            return False
+        p.unlink()
+    prune(p, dest)
+    return True
+
+
+def install_dests(args) -> list[Path]:
+    """Where to (un)install: ~ (--global), every local repo of a workspace (--workspace), or PATH."""
+    if args.global_:
+        return [Path.home()]
+    if getattr(args, "workspace", None):
+        ws = (local_conf().get("workspaces") or {}).get(args.workspace)
+        if ws is None:
+            die(f"no workspace '{args.workspace}' in {rel(LOCAL_CONF)}")
+        dirs = list(workspace_dirs(ws).values())
+        if not dirs:
+            die(f"workspace '{args.workspace}': no git repository with a GitHub origin under its `paths`")
+        return dirs
+    return [Path(args.path).expanduser().resolve()]
+
+
+def cmd_install(args) -> None:
+    global USE_LOCAL
+    USE_LOCAL = not args.public_only
+    if args.link and local_on():
+        die("--link points to the public dist/, which has no local/: install by copy (or add --public-only)")
+    cfg, items = load_valid()
+    for dest in install_dests(args):
+        install_into(args, cfg, items, dest)
+
+
+def install_into(args, cfg: Config, items, dest: Path) -> None:
+    if not dest.is_dir():
+        die(f"{dest} is not a directory")
+    if dest == ROOT:
+        die("refusing to install the kit into itself")
+    targets = args.targets.split(",") if args.targets else cfg.default_targets
+    if args.link and set(targets) - set(cfg.default_targets):
+        die("--link needs every target listed in kit.yaml `targets` (it links to dist/)")
+    if args.link:
+        build_all(cfg, items, ROOT)
+    instructions = render_instructions(cfg, items)
+
+    plan: dict[str, tuple[bytes, bool, Path]] = {}
+    managed: dict[str, str] = {}
+    for target in targets:
+        tcfg = cfg.target(target)
+        for orig, (data, exe) in build_target(cfg, target, items).items():
+            path = global_path(tcfg, orig) if args.global_ else orig
+            if path is None:
+                continue
+            if path in plan and plan[path][0] != data:
+                die(f"targets disagree on {path}; adjust adapters/targets.yaml")
+            plan[path] = (data, exe, DIST / target / orig)
+        for path, text in managed_files(cfg, target, instructions, args.global_).items():
+            if path in managed and managed[path] != text:
+                managed[path] = instructions  # a full copy wins over a shim
+            else:
+                managed.setdefault(path, text)
+    managed = {p: t for p, t in managed.items() if p not in plan}
+
+    perms = claude_permissions(dest, targets, args.global_)
+    state = load_state(dest)
+    if args.dry_run:
+        for kind, rules in perms.items():
+            for r in rules:
+                print(f"  ! .claude/settings.local.json permissions.{kind}: {r}")
+        stale = sorted(set(state["files"]) - set(plan))
+        print(f"would install {len(plan)} file(s) into {dest} for {', '.join(targets)}")
+        for p in sorted(plan):
+            print(f"  + {p}")
+        for p in sorted(managed):
+            print(f"  ~ {p} (managed block)")
+        for p in stale:
+            print(f"  - {p}")
+        return
+
+    new_files: dict[str, str] = {}
+    for path, digest in state["files"].items():
+        if path not in plan and not remove_owned(dest, path, digest, args.force):
+            new_files[path] = digest
+    written = skipped = 0
+    for path, (data, exe, source) in sorted(plan.items()):
+        p = dest / path
+        ours = path in state["files"]
+        if p.exists() or p.is_symlink():
+            current = p.read_bytes() if p.exists() else b""
+            if not ours and current != data and not args.force:
+                warn(f"skipped {path}: exists and is not managed by kit (use --force)")
+                skipped += 1
+                continue
+            if ours and not p.is_symlink() and sha(current) != state["files"][path] and not args.force:
+                warn(f"skipped {path}: you modified it since install (use --force)")
+                new_files[path] = state["files"][path]
+                skipped += 1
+                continue
+            p.unlink()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        if args.link:
+            p.symlink_to(source)
+        else:
+            p.write_bytes(data)
+            if exe:
+                p.chmod(p.stat().st_mode | 0o111)
+        new_files[path] = sha(data)
+        written += 1
+
+    new_managed: dict[str, bool] = {}
+    for path in state["managed"]:
+        if path not in managed:
+            remove_block(dest / path, state["managed"][path], dest)
+    for path, text in managed.items():
+        created = state["managed"].get(path, not (dest / path).exists())
+        upsert_block(dest / path, text)
+        new_managed[path] = created
+
+    commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
+                            capture_output=True, text=True).stdout.strip() or None
+    state_path = dest / STATE
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps({
+        "kit": cfg.manifest.get("name"), "version": cfg.manifest.get("version"), "commit": commit,
+        "source": str(ROOT), "targets": targets, "mode": "link" if args.link else "copy",
+        "local": local_on(),
+        "installed": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "files": new_files, "managed": new_managed,
+        "permissions": apply_permissions(dest, perms, state.get("permissions") or {}),
+    }, indent=2) + "\n")
+    n_rules = sum(len(r) for r in perms.values())
+    print(f"installed {written} file(s) + {len(managed)} managed block(s) into {dest} "
+          f"for {', '.join(targets)}" + (f", {n_rules} permission rule(s)" if n_rules else "")
+          + (f" ({skipped} skipped)" if skipped else ""))
+
+
+
+
+def claude_permissions(dest: Path, targets: list[str], global_: bool) -> dict[str, list[str]]:
+    """`permissions.claude` of the repo at `dest`, to write into its .claude/settings.local.json."""
+    if global_ or "claude" not in targets or not local_on():
+        return {}
+    repo = github_repo(dest)
+    conf = resolve_repo(registry(), repo) if repo else None
+    rules = ((conf or {}).get("permissions") or {}).get("claude") or {}
+    return {k: [str(r) for r in rules.get(k) or []] for k in CLAUDE_RULES if rules.get(k)}
+
+
+def apply_permissions(dest: Path, wanted: dict[str, list[str]], previous: dict[str, list[str]]) -> dict:
+    """Merge our rules into .claude/settings.local.json (Claude Code's per-user project settings, git-ignored by
+    Claude Code), removing the ones a previous install added and no longer wants. Returns what we own now."""
+    path = dest / ".claude" / "settings.local.json"
+    if not wanted and not previous:
+        return {}
+    data = json.loads(path.read_text()) if path.exists() else {}
+    block = data.setdefault("permissions", {})
+    owned: dict[str, list[str]] = {}
+    for kind in CLAUDE_RULES:
+        cur = [r for r in block.get(kind) or [] if r not in (previous.get(kind) or [])]
+        add = [r for r in wanted.get(kind) or [] if r not in cur]
+        if cur or add:
+            block[kind] = cur + add
+        else:
+            block.pop(kind, None)
+        if add:
+            owned[kind] = add
+    if not block:
+        data.pop("permissions")
+    if data:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, indent=2) + "\n")
+    elif path.exists():
+        path.unlink()
+        prune(path, dest)
+    return owned
+
+
+def cmd_uninstall(args) -> None:
+    global USE_LOCAL
+    USE_LOCAL = True
+    for dest in install_dests(args):
+        uninstall_from(args, dest)
+
+
+def uninstall_from(args, dest: Path) -> None:
+    state = load_state(dest)
+    if not state["files"] and not state["managed"]:
+        die(f"nothing installed by kit in {dest}")
+    kept = {p: d for p, d in state["files"].items() if not remove_owned(dest, p, d, args.force)}
+    for path, created in state["managed"].items():
+        remove_block(dest / path, created, dest)
+    apply_permissions(dest, {}, state.get("permissions") or {})
+    sp = dest / STATE
+    if kept:
+        state.update(files=kept, managed={}, permissions={})
+        sp.write_text(json.dumps(state, indent=2) + "\n")
+    else:
+        sp.unlink()
+        prune(sp, dest)
+    print(f"uninstalled from {dest}" + (f" ({len(kept)} modified file(s) kept)" if kept else ""))
+
+
+# ───────────────────────────── cli ─────────────────────────────
+
+def main() -> None:
+    ap = argparse.ArgumentParser(prog="kit", description=__doc__.split("\n\n")[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("check", help="validate sources")
+    p.add_argument("--dist", action="store_true", help="also fail if dist/ is stale")
+    p.set_defaults(fn=cmd_check)
+
+    sub.add_parser("list", help="list skills, agents and workflows").set_defaults(fn=cmd_list)
+    p = sub.add_parser("conf", help="the settings a repo resolves to, with the scopes that matched")
+    p.add_argument("repo", nargs="?", help="owner/repo (default: the current directory's repo)")
+    p.set_defaults(fn=cmd_conf)
+    sub.add_parser("build", help="generate dist/ for every target").set_defaults(fn=cmd_build)
+
+    p = sub.add_parser("new", help="scaffold a skill, agent or workflow in src/")
+    p.add_argument("kind", choices=list(KINDS))
+    p.add_argument("name")
+    p.set_defaults(fn=cmd_new)
+
+
+    p = sub.add_parser("import", help="fetch imports declared in kit.yaml into vendor/")
+    p.add_argument("names", nargs="*")
+    p.add_argument("--update", action="store_true", help="move past the commits pinned in kit.lock")
+    p.set_defaults(fn=cmd_import)
+
+    for name, fn in (("install", cmd_install), ("uninstall", cmd_uninstall)):
+        p = sub.add_parser(name, help=f"{name} into a project (or ~ with --global)")
+        g = p.add_mutually_exclusive_group(required=True)
+        g.add_argument("path", nargs="?")
+        g.add_argument("--global", dest="global_", action="store_true")
+        g.add_argument("--workspace", help="every local repo of a workspace of local/adorno.yaml")
+        p.add_argument("--force", action="store_true", help="overwrite or remove files you modified")
+        if name == "install":
+            p.add_argument("--targets", help="comma-separated, default: kit.yaml targets")
+            p.add_argument("--link", action="store_true", help="symlink to dist/ instead of copying")
+            p.add_argument("--dry-run", action="store_true")
+            p.add_argument("--public-only", action="store_true", help="ignore local/ (your personal layer)")
+        p.set_defaults(fn=fn)
+
+    args = ap.parse_args()
+    args.fn(args)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,8 @@
+---
+description: agent:review:ponytail — Revue ponytail d'un diff — code en trop, dépendances évitables, tests manquants sur la logique à risque, ce qui a été sauté. À utiliser en complément de review:code sur chaque diff.
+argument-hint: <demande>
+---
+
+Délègue la demande ci-dessous au sous-agent `agent-review-ponytail` (agent:review:ponytail) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `agent-review-ponytail`) pour traiter la demande.
+
+Demande : $ARGUMENTS

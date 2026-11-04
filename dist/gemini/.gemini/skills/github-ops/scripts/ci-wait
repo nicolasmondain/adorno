@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Usage: ci-wait owner/repo#123 [timeout_seconds=1800]
+# Polls the PR's checks (only `required_checks` from repos.yaml when set) until none is pending.
+# Prints JSON {state: pass|fail|timeout, checks}. Exit 0 pass, 1 fail, 6 timeout.
+. "$(dirname "$0")/_lib.sh"
+
+parse_ref "${1:-}"
+timeout="${2:-1800}"; interval="${GH_OPS_POLL:-30}"
+required="$(conf_get "$REPO" required_checks)"
+
+snapshot() {
+  # gh exits non-zero while checks fail or are pending; the JSON is what matters
+  gh pr checks "$NUM" -R "$REPO" --json name,state,bucket,link,workflow 2>/dev/null || true
+}
+
+elapsed=0
+while :; do
+  checks="$(snapshot)"
+  [ -n "$checks" ] || checks='[]'
+  checks="$(jq --arg req "$required" '
+    ($req | split(",") | map(select(. != ""))) as $r
+    | if ($r | length) > 0 then map(select(.name as $n | $r | index($n))) else . end' <<<"$checks")"
+  pending="$(jq '[.[] | select(.bucket == "pending")] | length' <<<"$checks")"
+  failed="$(jq '[.[] | select(.bucket == "fail" or .bucket == "cancel")] | length' <<<"$checks")"
+  total="$(jq 'length' <<<"$checks")"
+  if [ "$failed" -gt 0 ]; then state=fail; break; fi
+  if [ "$total" -gt 0 ] && [ "$pending" -eq 0 ]; then state=pass; break; fi
+  if [ "$elapsed" -ge "$timeout" ]; then state=timeout; break; fi
+  sleep "$interval"; elapsed=$((elapsed + interval))
+done
+
+jq --arg s "$state" '{state: $s, checks: map({name, bucket, workflow, link})}' <<<"$checks"
+case "$state" in pass) exit 0;; fail) exit 1;; *) exit 6;; esac

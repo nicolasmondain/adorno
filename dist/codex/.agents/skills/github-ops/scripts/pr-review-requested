@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Usage: pr-review-requested [owner/repo]
+# Every open PR where your review is requested (directly or through a team), as a JSON array.
+# `reviewedHead: true` = you already reviewed the current head commit (nothing new to look at).
+# `pendingReview: true` = you have an unsubmitted review on it: leave it to you, never overwrite it.
+. "$(dirname "$0")/_lib.sh"
+
+filter="${1:-}"
+[ -z "$filter" ] || split_repo "$filter"
+me="$(viewer_login)"
+
+query='query($q:String!, $me:String!){ search(query:$q, type:ISSUE, first:50){ nodes{ ... on PullRequest{
+  number title url isDraft updatedAt additions deletions changedFiles headRefOid
+  author{ login } repository{ nameWithOwner }
+  reviewRequests(first:20){ nodes{ requestedReviewer{ ... on User{login} ... on Team{slug} } } }
+  reviews(last:1, author:$me, states:[APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED]){ nodes{ state submittedAt commit{ oid } } }
+  pending: reviews(first:1, author:$me, states:[PENDING]){ totalCount } } } } }'
+
+q="is:pr is:open review-requested:@me archived:false"
+[ -z "$filter" ] || q="$q repo:$filter"
+
+gh api graphql -f query="$query" -F q="$q" -F me="$me" \
+| jq --arg me "$me" --slurpfile reg "$REGISTRY" '
+  [ .data.search.nodes[]
+    | .repository.nameWithOwner as $repo
+    | [.reviewRequests.nodes[].requestedReviewer | (.login // .slug)] as $req
+    | (.reviews.nodes[0] // null) as $mine
+    | { repo: $repo, number, title, url, isDraft, updatedAt,
+        author: (.author.login // "ghost"),
+        size: {additions, deletions, files: .changedFiles},
+        direct: ($req | index($me) != null),
+        viaTeams: [$req[] | select(. != $me)],
+        myLastReview: (if $mine then {state: $mine.state, at: $mine.submittedAt} else null end),
+        reviewedHead: ($mine != null and $mine.commit.oid == .headRefOid),
+        pendingReview: ((.pending.totalCount // 0) > 0),
+        registered: ($reg[0].repos | has($repo)) } ]
+  | sort_by(.reviewedHead, .isDraft, .updatedAt)'

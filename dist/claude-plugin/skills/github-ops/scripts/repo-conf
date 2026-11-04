@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Usage: repo-conf [owner/repo]
+# The repo's resolved settings as JSON (resolve.jq): public defaults of repos.yaml, then your local/adorno.yaml —
+# defaults, matching workspaces, repo globs, the exact entry, each with its presets (reviewers, team, context,
+# vision, voice, permissions, skills, commands…). `scopes` lists the layers that matched. Without an argument: the repo of the current directory (its GitHub `origin`).
+# Fills `base` from GitHub when empty. Exit 3 if the repo is not registered.
+. "$(dirname "$0")/_lib.sh"
+
+split_repo "${1:-$(current_repo)}"
+conf="$(repo_conf "$REPO")"
+if [ "$(jq -r '.base // empty' <<<"$conf")" = "" ]; then
+  base="$(gh repo view "$REPO" --json defaultBranchRef --jq .defaultBranchRef.name)"
+  conf="$(jq --arg b "$base" '.base = $b' <<<"$conf")"
+fi
+printf '%s\n' "$conf"

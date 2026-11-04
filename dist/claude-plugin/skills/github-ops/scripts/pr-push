@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Usage: pr-push owner/repo#N
+# Pushes the commits made in the PR's workspace to the PR branch. Never forces: if the branch moved
+# on GitHub, the push is rejected and the workspace must be refreshed. Only for your own PRs, from the
+# same repository (not a fork). Needs L2. GH_OPS_DRY_RUN=1 only prints.
+. "$(dirname "$0")/_lib.sh"
+need git
+
+parse_ref "${1:-}"
+require_level "$REPO" L2 push
+
+info="$(gh pr view "$NUM" -R "$REPO" --json headRefName,baseRefName,isCrossRepository,author)"
+head="$(jq -r .headRefName <<<"$info")"
+[ "$(jq -r .author.login <<<"$info")" = "$(viewer_login)" ] || die "$REPO#$NUM is not your PR" "$E_POLICY"
+[ "$(jq -r .isCrossRepository <<<"$info")" = "false" ] || die "$REPO#$NUM comes from a fork; push there by hand" "$E_POLICY"
+[ "$head" != "$(jq -r .baseRefName <<<"$info")" ] || die "refusing to push to the base branch" "$E_POLICY"
+
+dir="$(workspace_dir)"
+[ -d "$dir" ] || die "no workspace for $REPO#$NUM; run pr-workspace first" "$E_USAGE"
+[ -z "$(git -C "$dir" status --porcelain)" ] || die "workspace has uncommitted changes; commit them first" "$E_POLICY"
+local_sha="$(git -C "$dir" rev-parse HEAD)"
+ahead="$(git -C "$dir" rev-list --count "refs/adorno/pr-$NUM..HEAD")"
+
+if [ "$ahead" = "0" ]; then
+  jq -n --arg sha "$local_sha" '{pushed: false, reason: "nothing new", sha: $sha}'
+  exit 0
+fi
+if dry_run; then
+  jq -n --arg head "$head" --arg sha "$local_sha" --argjson n "$ahead" \
+    '{dryRun: true, action: "push", branch: $head, sha: $sha, commits: $n}'
+  exit 0
+fi
+
+git -C "$dir" push --quiet origin "HEAD:refs/heads/$head" >&2 \
+  || die "push rejected (the branch moved on GitHub?): run pr-workspace again, then redo the commits" 1
+git -C "$dir" update-ref "refs/adorno/pr-$NUM" "$local_sha"
+jq -n --arg head "$head" --arg sha "$local_sha" --argjson n "$ahead" '{pushed: true, branch: $head, sha: $sha, commits: $n}'

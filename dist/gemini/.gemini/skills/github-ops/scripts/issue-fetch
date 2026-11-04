@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Usage: issue-fetch owner/repo#123
+# The issue with its comments, as JSON.
+. "$(dirname "$0")/_lib.sh"
+
+parse_ref "$@"
+repo_conf "$REPO" >/dev/null
+
+gh issue view "$NUM" -R "$REPO" --json number,title,body,url,state,labels,author,comments \
+| jq '{number, title, url, state, body, author: .author.login,
+       labels: [.labels[].name],
+       comments: [.comments[] | {author: .author.login, body, createdAt}]}'

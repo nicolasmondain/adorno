@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Usage: pr-open owner/repo HEAD_BRANCH "type(scope): title" BODY_FILE [--draft]
+# Opens a PR against the repo's base branch and requests the repo's reviewers. Needs L3.
+# The title must be a Conventional Commit header; the branch must match `branch_pattern` (repos.yaml).
+# Reviewers come from repos.yaml, minus the PR author (GitHub rejects the whole request otherwise).
+. "$(dirname "$0")/_lib.sh"
+
+split_repo "${1:-}"
+head="${2:-}"; title="${3:-}"; body="${4:-}"; draft="${5:-}"
+[ -n "$head" ] && [ -n "$title" ] && [ -n "$body" ] \
+  || die 'usage: pr-open owner/repo HEAD_BRANCH "type(scope): title" BODY_FILE [--draft]' "$E_USAGE"
+[ -s "$body" ] || die "empty PR body: $body" "$E_USAGE"
+require_level "$REPO" L3 open_pr
+
+type_re='^(feat|fix|perf|refactor|test|docs|style|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: .+'
+[[ "$title" =~ $type_re ]] || die "title is not a Conventional Commit header: $title" "$E_USAGE"
+
+pattern="$(conf_get "$REPO" branch_pattern)"
+[ -z "$pattern" ] || [[ "$head" =~ $pattern ]] || die "branch '$head' does not match branch_pattern ($pattern)" "$E_POLICY"
+
+base="$(conf_get "$REPO" base)"
+[ -n "$base" ] || base="$(gh repo view "$REPO" --json defaultBranchRef --jq .defaultBranchRef.name)"
+[ "$head" != "$base" ] || die "head and base are both '$base'" "$E_POLICY"
+me="$(viewer_login)"
+reviewers="$(repo_conf "$REPO" | jq -r --arg me "$me" '[.reviewers // [] | .[] | select(. != $me)] | join(",")')"
+
+args=(pr create -R "$REPO" --base "$base" --head "$head" --title "$title" --body-file "$body")
+[ "$draft" != "--draft" ] || args+=(--draft)
+[ -z "$reviewers" ] || args+=(--reviewer "$reviewers")
+
+if dry_run; then
+  jq -n --arg repo "$REPO" --arg base "$base" --arg head "$head" --arg title "$title" \
+    --arg reviewers "$reviewers" --arg draft "$draft" \
+    '{dryRun: true, action: "open-pr", repo: $repo, base: $base, head: $head, title: $title,
+      draft: ($draft == "--draft"), reviewers: ($reviewers | split(",") | map(select(. != "")))}'
+  exit 0
+fi
+url="$(gh "${args[@]}")"
+jq -n --arg url "$url" '{opened: true, url: $url}'

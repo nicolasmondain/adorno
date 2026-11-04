@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Usage: pr-rerequest owner/repo#123 [login ...]
+# Asks reviewers to look again. Without logins: everyone who already reviewed (bots excluded),
+# else the repo's `reviewers` from repos.yaml. Needs L3. GH_OPS_DRY_RUN=1 only prints.
+. "$(dirname "$0")/_lib.sh"
+
+parse_ref "${1:-}"
+shift || true
+require_level "$REPO" L3 rerequest
+
+logins=("$@")
+if [ ${#logins[@]} -eq 0 ]; then
+  me="$(viewer_login)"
+  list="$(gh api "repos/$REPO/pulls/$NUM/reviews" --paginate \
+    --jq "[.[] | select(.user.type == \"User\" and .user.login != \"$me\") | .user.login] | unique | .[]")"
+  [ -n "$list" ] || list="$(conf_get "$REPO" reviewers | tr ',' '\n')"
+  while IFS= read -r l; do [ -n "$l" ] && logins+=("$l"); done <<<"$list"
+fi
+[ ${#logins[@]} -gt 0 ] || die "no reviewer to request on $REPO#$NUM" "$E_USAGE"
+
+if dry_run; then
+  printf '%s\n' "${logins[@]}" | jq -R . | jq -s '{dryRun: true, action: "rerequest", reviewers: .}'
+  exit 0
+fi
+
+args=()
+for l in "${logins[@]}"; do args+=(-f "reviewers[]=$l"); done
+gh api -X POST "repos/$REPO/pulls/$NUM/requested_reviewers" "${args[@]}" \
+  --jq '{requested: [.requested_reviewers[].login]}'

@@ -1,0 +1,1 @@
+[{"name":"build","state":"SUCCESS","bucket":"pass","link":"l","workflow":"ci"},{"name":"lint","state":"SKIPPED","bucket":"skipping","link":"l","workflow":"ci"}]

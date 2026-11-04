@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Usage: pr-diff owner/repo#123
+# Saves the PR diff to a file and prints JSON: metadata, changed files with sizes, diff path.
+. "$(dirname "$0")/_lib.sh"
+
+parse_ref "$@"
+repo_conf "$REPO" >/dev/null
+
+out="$(work_dir)/$OWNER-$NAME-$NUM.diff"
+gh pr diff "$NUM" -R "$REPO" >"$out"
+gh pr view "$NUM" -R "$REPO" \
+  --json number,title,url,author,baseRefName,headRefName,body,additions,deletions,files \
+| jq --arg diff "$out" '{
+    number, title, url, author: .author.login, base: .baseRefName, head: .headRefName, body,
+    additions, deletions,
+    files: [.files[] | {path, additions, deletions}],
+    diffFile: $diff }'

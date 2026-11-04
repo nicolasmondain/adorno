@@ -1,0 +1,98 @@
+{
+ "data": {
+  "search": {
+   "nodes": [
+    {
+     "number": 10,
+     "title": "feat(ui): new modal",
+     "url": "u10",
+     "isDraft": false,
+     "updatedAt": "2026-11-03T09:00:00Z",
+     "additions": 120,
+     "deletions": 4,
+     "changedFiles": 5,
+     "headRefOid": "h10",
+     "author": {
+      "login": "alice"
+     },
+     "repository": {
+      "nameWithOwner": "acme/docs"
+     },
+     "reviewRequests": {
+      "nodes": [
+       {
+        "requestedReviewer": {
+         "login": "octocat"
+        }
+       }
+      ]
+     },
+     "reviews": {
+      "nodes": []
+     },
+     "pending": {
+      "totalCount": 1
+     }
+    },
+    {
+     "number": 11,
+     "title": "fix: retry",
+     "url": "u11",
+     "isDraft": false,
+     "updatedAt": "2026-11-02T09:00:00Z",
+     "additions": 3,
+     "deletions": 1,
+     "changedFiles": 1,
+     "headRefOid": "h11",
+     "author": {
+      "login": "bob"
+     },
+     "repository": {
+      "nameWithOwner": "acme/docs"
+     },
+     "reviewRequests": {
+      "nodes": [
+       {
+        "requestedReviewer": {
+         "slug": "backend"
+        }
+       }
+      ]
+     },
+     "reviews": {
+      "nodes": [
+       {
+        "state": "COMMENTED",
+        "submittedAt": "2026-11-02T10:00:00Z",
+        "commit": {
+         "oid": "h11"
+        }
+       }
+      ]
+     }
+    },
+    {
+     "number": 12,
+     "title": "chore: x",
+     "url": "u12",
+     "isDraft": true,
+     "updatedAt": "2026-11-01T09:00:00Z",
+     "additions": 1,
+     "deletions": 1,
+     "changedFiles": 1,
+     "headRefOid": "h12",
+     "author": null,
+     "repository": {
+      "nameWithOwner": "other/repo"
+     },
+     "reviewRequests": {
+      "nodes": []
+     },
+     "reviews": {
+      "nodes": []
+     }
+    }
+   ]
+  }
+ }
+}

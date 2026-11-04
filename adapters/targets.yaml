@@ -1,0 +1,88 @@
+# Comment chaque outil reçoit le contenu neutre de src/ et vendor/.
+#
+# skills     dossier où copier les skills (format Agent Skills, identique partout)
+# agents     format: natif (claude | gemini | copilot) ou `skill` = converti en skill de rôle
+# workflows  format: natif (claude-command | gemini-command | copilot-prompt | cursor-command) ou `skill`
+# instructions  fichiers à créer à côté d'AGENTS.md ; `shim` = bloc qui importe AGENTS.md
+# global     installation dans ~ (`kit install --global`) : fichier d'instructions,
+#            remappage de dossiers (map) et dossiers non supportés (skip)
+# tools      capacités neutres -> noms d'outils natifs
+# models     niveaux neutres (fast | balanced | deep | inherit) -> modèles natifs
+#
+# `verified: false` : chemins tirés de la doc publique, pas encore testés sur ta machine.
+
+capabilities: [read, write, edit, search, shell, web, agent]
+model_tiers: [inherit, fast, balanced, deep]
+
+targets:
+  claude:
+    label: Claude Code
+    skills: .claude/skills
+    agents: {format: claude, dir: .claude/agents}
+    workflows: {format: claude-command, dir: .claude/commands}
+    instructions: {CLAUDE.md: shim}
+    global:
+      instructions: .claude/CLAUDE.md
+    tools:
+      read: [Read]
+      write: [Write]
+      edit: [Edit]
+      search: [Grep, Glob]
+      shell: [Bash]
+      web: [WebFetch, WebSearch]
+      agent: [Agent]
+    models: {inherit: inherit, fast: haiku, balanced: sonnet, deep: opus}
+
+  codex:
+    label: OpenAI Codex
+    skills: .agents/skills          # chemin standard partagé (Codex, Amp, Kimi…)
+    agents: {format: skill}
+    workflows: {format: skill}
+    instructions: {}                # lit AGENTS.md nativement
+    global:
+      instructions: .codex/AGENTS.md
+
+  gemini:
+    label: Gemini CLI
+    skills: .gemini/skills
+    agents: {format: gemini, dir: .gemini/agents}
+    workflows: {format: gemini-command, dir: .gemini/commands, ext: .toml}
+    instructions: {GEMINI.md: shim}
+    global:
+      instructions: .gemini/GEMINI.md
+    tools:
+      read: [read_file, read_many_files]
+      write: [write_file]
+      edit: [replace]
+      search: [grep_search, glob, list_directory]
+      shell: [run_shell_command]
+      web: [web_fetch, google_web_search]
+      agent: []
+    models: {inherit: inherit}
+
+  copilot:
+    label: GitHub Copilot
+    verified: false
+    skills: .github/skills
+    agents: {format: copilot, dir: .github/agents, ext: .agent.md}
+    workflows: {format: copilot-prompt, dir: .github/prompts, ext: .prompt.md}
+    instructions: {}                # lit AGENTS.md nativement
+    global:
+      map: {.github/skills: .copilot/skills}
+      skip: [.github/agents, .github/prompts]
+    tools:
+      read: [read]
+      write: [edit]
+      edit: [edit]
+      search: [search]
+      shell: [execute]
+      web: [web]
+      agent: [agent]
+
+  cursor:
+    label: Cursor
+    verified: false
+    skills: .cursor/skills
+    agents: {format: skill}
+    workflows: {format: cursor-command, dir: .cursor/commands}
+    instructions: {}                # lit AGENTS.md nativement

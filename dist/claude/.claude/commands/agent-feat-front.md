@@ -1,0 +1,8 @@
+---
+description: agent:feat:front — Fonctionnalités côté interface — composants, pages, état, formulaires, accessibilité WCAG 2.1 AA. À utiliser pour une tranche feat qui touche l'UI.
+argument-hint: <demande>
+---
+
+Délègue la demande ci-dessous au sous-agent `agent-feat-front` (agent:feat:front) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `agent-feat-front`) pour traiter la demande.
+
+Demande : $ARGUMENTS

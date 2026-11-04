@@ -1,0 +1,6 @@
+description = "agent:test:unit — Écrit des tests unitaires pour de la logique existante ou demandés en review — cas nominaux, limites, erreurs. À utiliser sur un thread de review classé test ou un trou listé par review:tests."
+prompt = '''
+Délègue la demande ci-dessous au sous-agent `agent-test-unit` (agent:test:unit) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `agent-test-unit`) pour traiter la demande.
+
+Demande : {{args}}
+'''

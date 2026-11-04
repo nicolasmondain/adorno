@@ -1,0 +1,73 @@
+# Registre des repos sur lesquels les workflows ont le droit d'agir.
+# Un repo absent d'ici est signalé, jamais traité.
+# Livré en JSON dans le skill github-ops (kit.yaml > skill_data) pour les scripts.
+#
+#   path             clone local (vide = le workflow clone dans un worktree temporaire)
+#   base             branche par défaut (vide = lue sur GitHub)
+#   install/test/lint/typecheck  commandes ; vides = détectées par workflow:repo:onboard
+#   required_checks  checks CI à attendre (vide = tous)
+#   reviewers        relecteurs à relancer par défaut (vide = ceux qui ont déjà relu)
+#   resolve_threads  author | reviewer : qui résout un thread de review
+#   reply_language   langue des réponses publiées sur GitHub
+#   max_level        niveau de droits maximal (L0 lecture … L3 PR ; L4 merge n'est jamais automatique)
+#   ponytail         lite | full | ultra
+#   review_checks    dans le workspace d'une review : none | lint (lint + typecheck) | full (+ install et tests)
+#                    défaut none : un point qui demande une exécution est un ❓, la CI tranche (agent:adorno)
+#   allow_approve    une review automatique peut-elle APPROUVER ? (false : seuls COMMENT et REQUEST_CHANGES)
+#   max_inline       commentaires en ligne au plus par review ; le reste va dans le corps (agent:adorno : 8)
+#   branch_pattern   regex que doit suivre le nom de branche d'une PR (process.md : <type>/<issue-id>-kebab)
+#   max_parallel     PRs traitées en même temps par review:requested et review:received
+#   areas            zones de code : motifs de chemin (globs bash, `*` traverse les dossiers) et/ou
+#                    regex sur les lignes ajoutées ; une zone peut être surchargée par repo
+#   area_reviewers   agents relecteurs demandés selon les zones touchées (`always` = à chaque fois)
+
+defaults:
+  base: null
+  branch_pattern: '^(feat|fix|perf|refactor|test|docs|style|build|ci|chore|revert)/[a-z0-9]+(-[a-z0-9]+)*$'
+  resolve_threads: author
+  reply_language: en
+  max_level: L3
+  ponytail: full
+  review_checks: none
+  allow_approve: false
+  max_inline: 8
+  max_parallel: 3
+
+  areas:
+    front:
+      paths: ["*.tsx", "*.jsx", "*.vue", "*.svelte", "*.css", "*.scss", "*.less", "*.html",
+              "client/*", "*/client/*", "*/ui/*", "*/components/*", "*/pages/*"]
+    back:
+      paths: ["server/*", "*/server/*", "*/services/*", "*/jobs/*", "*/workers/*", "*/lib/*"]
+    mongodb:
+      paths: ["*/migrations/*", "*migration*", "*/collections/*", "*/models/*"]
+      content: '\.aggregate\(|\.createIndex\(|\.find(One)?\(|\.(update|delete|insert)(One|Many)?\(|\.bulkWrite\(|Mongo\.Collection|rawCollection\(|\$lookup|\$match|\$group'
+    api:
+      paths: ["*/api/*", "*/routes/*", "*/methods/*", "*openapi*", "*/api-reference/*"]
+    tests:
+      paths: ["*.test.*", "*.spec.*", "*/tests/*", "*/__tests__/*", "*/test/*"]
+    security:
+      paths: ["*/auth/*", "*/permissions/*", "*.env*"]
+      content: '(password|secret|token|api[_-]?key|jwt|bcrypt|crypto\.|permission|isAdmin|role)'
+    deps:
+      paths: ["package.json", "*/package.json", "*lock.json", "*.lock", "yarn.lock", "requirements*.txt", "go.mod"]
+    ci:
+      paths: [".github/*", "*Dockerfile*", "*docker-compose*"]
+    docs:
+      paths: ["*.md", "*.mdx", "docs/*"]
+
+  area_reviewers:
+    always: [agent:review:code, agent:review:ponytail]
+    front: [agent:review:front, agent:review:perf]
+    back: [agent:review:back, agent:review:tests]
+    mongodb: [agent:review:mongodb]
+    api: [agent:review:api]
+    tests: [agent:review:tests]
+    security: [agent:review:security]
+    deps: [agent:review:security]
+    ci: [agent:review:security]
+    docs: []
+
+# Tes repos réels (relecteurs, équipe, contexte, droits, voix, vision) vivent dans local/adorno.yaml, ignoré par git
+# et appliqué par `bin/kit install`. Modèle : local.example/adorno.yaml. Résultat pour un repo : `bin/kit conf`.
+repos: {}

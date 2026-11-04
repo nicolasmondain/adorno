@@ -1,0 +1,78 @@
+{
+  "defaults": {
+    "resolve_threads": "author",
+    "reply_language": "en",
+    "max_level": "L3",
+    "ponytail": "full",
+    "branch_pattern": "^(feat|fix|perf|refactor|test|docs|style|build|ci|chore|revert)/[a-z0-9]+(-[a-z0-9]+)*$"
+  },
+  "repos": {
+    "acme/docs": {
+      "base": "main",
+      "required_checks": [],
+      "reviewers": [
+        "alice",
+        "octocat"
+      ]
+    },
+    "acme/readonly": {
+      "max_level": "L0"
+    },
+    "acme/strict": {
+      "resolve_threads": "reviewer",
+      "required_checks": [
+        "build"
+      ]
+    },
+    "acme/docs-*": {
+      "vision": [
+        "docs glob vision"
+      ]
+    },
+    "acme/docs-public": {
+      "permissions": {
+        "deny": [
+          "reply",
+          "submit"
+        ]
+      },
+      "context": [
+        "exact line"
+      ]
+    },
+    "other/*": {
+      "max_level": "L1"
+    }
+  },
+  "presets": {
+    "team-x": {
+      "team": {
+        "name": "x"
+      },
+      "context": [
+        "preset line"
+      ],
+      "use": [
+        "base"
+      ]
+    },
+    "base": {
+      "reviewers": [
+        "carol"
+      ]
+    }
+  },
+  "workspaces": {
+    "acme-all": {
+      "repos": [
+        "acme/*"
+      ],
+      "use": [
+        "team-x"
+      ],
+      "context": [
+        "workspace line"
+      ]
+    }
+  }
+}

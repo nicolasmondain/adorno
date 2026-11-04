@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Usage: pr-reply owner/repo#123 THREAD_ID BODY_FILE   (BODY_FILE = - reads stdin)
+# Replies in a review thread. Needs L3. GH_OPS_DRY_RUN=1 prints the reply instead of posting it.
+. "$(dirname "$0")/_lib.sh"
+
+parse_ref "${1:-}"
+thread="${2:-}"; file="${3:-}"
+[ -n "$thread" ] && [ -n "$file" ] || die "usage: pr-reply owner/repo#N THREAD_ID BODY_FILE|-" "$E_USAGE"
+require_level "$REPO" L3 reply
+
+if [ "$file" = "-" ]; then
+  file="$(work_dir)/reply-$$.md"; cat >"$file"
+fi
+[ -s "$file" ] || die "empty reply body" "$E_USAGE"
+file="$(with_footer "$REPO" "$file")"
+
+if dry_run; then
+  jq -n --arg thread "$thread" --rawfile body "$file" '{dryRun: true, action: "reply", thread: $thread, body: $body}'
+  exit 0
+fi
+
+gh api graphql -f query='mutation($id:ID!,$body:String!){
+  addPullRequestReviewThreadReply(input:{pullRequestReviewThreadId:$id, body:$body}){ comment{ url } } }' \
+  -F id="$thread" -F body=@"$file" \
+  --jq '{posted: true, url: .data.addPullRequestReviewThreadReply.comment.url}'

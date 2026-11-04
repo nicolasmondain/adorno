@@ -1,0 +1,5 @@
+.DS_Store
+__pycache__/
+# your personal layer: identity, repos, permissions, voice, vision, private profile (never committed)
+/local/
+/repos.local.yaml

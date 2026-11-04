@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Usage: pr-status [owner/repo]
+# Every open PR you authored (optionally one repo), in one GraphQL call, as a JSON array:
+# review decision, CI state, unresolved threads, and the single thing blocking it.
+. "$(dirname "$0")/_lib.sh"
+
+filter="${1:-}"
+[ -z "$filter" ] || split_repo "$filter"
+
+query='query($q:String!){ search(query:$q, type:ISSUE, first:50){ nodes{ ... on PullRequest{
+  number title url isDraft updatedAt reviewDecision mergeable
+  repository{ nameWithOwner }
+  reviewRequests(first:20){ nodes{ requestedReviewer{ ... on User{login} ... on Team{slug} } } }
+  reviewThreads(first:100){ nodes{ isResolved } }
+  commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } } } } } }'
+
+q="is:pr is:open author:@me archived:false"
+[ -z "$filter" ] || q="$q repo:$filter"
+
+gh api graphql -f query="$query" -F q="$q" \
+| jq --slurpfile reg "$REGISTRY" '
+  [ .data.search.nodes[]
+    | (.commits.nodes[0].commit.statusCheckRollup.state // "NONE") as $ci
+    | ([.reviewThreads.nodes[] | select(.isResolved | not)] | length) as $open
+    | .repository.nameWithOwner as $repo
+    | {
+        repo: $repo, number, title, url, isDraft, updatedAt,
+        reviewDecision: (.reviewDecision // "NONE"), ci: $ci, mergeable,
+        unresolvedThreads: $open,
+        waitingOn: [.reviewRequests.nodes[].requestedReviewer | (.login // .slug)],
+        registered: ($reg[0].repos | has($repo)),
+        blocker: (
+          if .isDraft then "draft"
+          elif ($ci == "FAILURE" or $ci == "ERROR") then "ci-red"
+          elif .mergeable == "CONFLICTING" then "conflicts"
+          elif .reviewDecision == "CHANGES_REQUESTED" then "changes-requested"
+          elif $open > 0 then "unresolved-threads"
+          elif ($ci == "PENDING" or $ci == "EXPECTED") then "ci-running"
+          elif .reviewDecision == "REVIEW_REQUIRED" then "waiting-review"
+          else "ready" end)
+      } ]
+  | sort_by(.repo, .number)'

@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Usage: pr-review-submit owner/repo#N REVIEW_FILE
+# Creates a review written as JSON:
+#   {"event": "PENDING|COMMENT|REQUEST_CHANGES|APPROVE", "body": "...",
+#    "comments": [{"path": "src/a.ts", "line": 12, "side": "RIGHT", "body": "..."}]}
+# PENDING (the default when `event` is absent) leaves the review unsubmitted: visible to you only,
+# you edit and submit it on GitHub. APPROVE needs `allow_approve: true` in repos.yaml.
+# At most `max_inline` inline comments (repos.yaml, 8 by default): the rest go into the body, and so do
+# all of them if GitHub rejects one (line outside the diff). Refuses when you already have a pending
+# review on the PR. Needs L3. GH_OPS_DRY_RUN=1 prints the payload instead of posting it.
+. "$(dirname "$0")/_lib.sh"
+
+parse_ref "${1:-}"
+file="${2:-}"
+[ -s "$file" ] || die "usage: pr-review-submit owner/repo#N REVIEW_FILE" "$E_USAGE"
+require_level "$REPO" L3 review
+
+jq -e '
+  ((.event // "PENDING") | IN("PENDING", "COMMENT", "REQUEST_CHANGES", "APPROVE"))
+  and (.body | type == "string")
+  and ((.comments // []) | all(.path | type == "string") and all(.line | type == "number")
+                         and all(.body | type == "string" and length > 0))' "$file" >/dev/null \
+  || die "invalid review file: event, body and comments[].{path,line,body} are required" "$E_USAGE"
+
+event="$(jq -r '.event // "PENDING"' "$file")"
+[ "$event" = "PENDING" ] || require_level "$REPO" L3 submit
+if [ "$event" = "APPROVE" ] && [ "$(conf_get "$REPO" allow_approve)" != "true" ]; then
+  die "$REPO does not allow automatic approvals (allow_approve: false)" "$E_POLICY"
+fi
+info="$(gh pr view "$NUM" -R "$REPO" --json headRefOid,author)"
+me="$(viewer_login)"
+case "$event" in REQUEST_CHANGES|APPROVE)
+  [ "$(jq -r .author.login <<<"$info")" != "$me" ] || die "GitHub refuses $event on your own PR; use COMMENT or PENDING" "$E_POLICY" ;;
+esac
+pending="$(gh api "repos/$REPO/pulls/$NUM/reviews" --paginate \
+  --jq "[.[] | select(.state == \"PENDING\" and .user.login == \"$me\")] | length")"
+[ "${pending:-0}" = "0" ] || die "you already have a pending review on $REPO#$NUM; submit or delete it first" "$E_POLICY"
+max_inline="$(conf_get "$REPO" max_inline)"; max_inline="${max_inline:-8}"
+
+footer="$(conf_get "$REPO" reply_footer)"
+payload="$(work_dir)/review-$OWNER-$NAME-$NUM.json"
+jq --arg sha "$(jq -r .headRefOid <<<"$info")" --arg footer "$footer" --argjson max "$max_inline" '
+  def fold($cs): if ($cs | length) == 0 then "" else
+    "\n\n" + ([$cs[] | "- `\(.path):\(.line)`: \(.body)"] | join("\n")) end;
+  [(.comments // [])[] | {path, line, side: (.side // "RIGHT"), body}] as $all
+  | {commit_id: $sha}
+  + (if (.event // "PENDING") == "PENDING" then {} else {event} end)
+  + {body: (.body + fold($all[$max:]) + (if $footer == "" then "" else "\n\n" + $footer end)),
+     comments: $all[:$max]}' "$file" >"$payload"
+
+if dry_run; then
+  jq --arg e "$event" '{dryRun: true, action: "review", pending: ($e == "PENDING")} + .' "$payload"
+  exit 0
+fi
+
+post() { gh api -X POST "repos/$REPO/pulls/$NUM/reviews" --input "$1" --jq '{url: .html_url, state}' 2>"$(work_dir)/review-err"; }
+folded_count="$(jq --argjson max "$max_inline" '[(.comments // [])[]] | length - $max | if . < 0 then 0 else . end' "$file")"
+
+if out="$(post "$payload")"; then
+  jq --argjson n "$(jq '.comments | length' "$payload")" --argjson f "$folded_count" --arg e "$event" \
+    '{submitted: ($e != "PENDING"), pending: ($e == "PENDING"), inline: $n, inBody: $f, folded: false} + .' <<<"$out"
+  exit 0
+fi
+grep -q "HTTP 422" "$(work_dir)/review-err" || die "review rejected: $(cat "$(work_dir)/review-err")"
+
+log "GitHub rejected an inline comment; folding the comments into the review body"
+folded="$(work_dir)/review-$OWNER-$NAME-$NUM-folded.json"
+jq '.body += "\n\n" + ([.comments[] | "- `\(.path):\(.line)`: \(.body)"] | join("\n")) | .comments = []' \
+  "$payload" >"$folded"
+out="$(post "$folded")" || die "review rejected: $(cat "$(work_dir)/review-err")"
+jq --arg e "$event" '{submitted: ($e != "PENDING"), pending: ($e == "PENDING"), inline: 0, folded: true} + .' <<<"$out"

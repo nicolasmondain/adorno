@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Stand-in for `gh` in tests: serves fixtures by route, applies --jq like gh does, logs every call.
+# FAKE_ORIGIN = a local bare repo that plays GitHub for `repo clone`.
+set -euo pipefail
+FIX="${FAKE_FIX:?set FAKE_FIX to the fixtures folder}"
+printf '%s\n' "$*" >>"${FAKE_LOG:-/dev/null}"
+
+jq_expr=""; input=""; args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --jq) jq_expr="$2"; shift 2 ;;
+    --input) input="$2"; args+=("$1" "$2"); shift 2 ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+all="${args[*]}"
+
+respond() {
+  if [ -n "$jq_expr" ]; then jq -r "$jq_expr"; else cat; fi
+}
+
+pr_json() {
+  jq -n --arg author "${FAKE_PR_AUTHOR:-octocat}" --arg sha "${FAKE_HEAD_SHA:-abc123}" \
+    --arg state "${FAKE_PR_STATE:-OPEN}" --argjson cross "${FAKE_CROSS:-false}" \
+    '{author: {login: $author}, headRefOid: $sha, headRefName: "nm/pagination", baseRefName: "main",
+      isCrossRepository: $cross, state: $state}'
+}
+
+case "$all" in
+  "api user") echo '{"login":"octocat"}' | respond ;;
+  api\ graphql*resolveReviewThread*) echo '{"data":{"resolveReviewThread":{"thread":{"id":"T1","isResolved":true}}}}' | respond ;;
+  api\ graphql*addPullRequestReviewThreadReply*) echo '{"data":{"addPullRequestReviewThreadReply":{"comment":{"url":"https://github.com/x/y/pull/1#r1"}}}}' | respond ;;
+  api\ graphql*review-requested*) respond <"$FIX/review-requested.json" ;;
+  api\ graphql*search\(*) respond <"$FIX/status.json" ;;
+  api\ graphql*) respond <"$FIX/feedback.json" ;;
+  api\ repos/*/reviews\ *|api\ repos/*/reviews) respond <"${FAKE_REVIEWS:-$FIX/reviews.json}" ;;
+  api\ -X\ POST\ repos/*/pulls/*/reviews*)
+    cp "$input" "${FAKE_LAST_REVIEW:-/dev/null}"
+    if [ "${FAKE_REVIEW_422:-0}" = 1 ] && [ "$(jq '.comments | length' "$input")" -gt 0 ]; then
+      echo "gh: Validation Failed (HTTP 422)" >&2; exit 1
+    fi
+    jq '{html_url: "https://github.com/x/y/pull/1#review-1", state: (if .event == "COMMENT" then "COMMENTED" else .event end)}' "$input" | respond ;;
+  api\ -X\ POST\ repos/*/requested_reviewers*)
+    printf '%s\n' "${args[@]}" | sed -n 's/^reviewers\[\]=//p' | jq -R '{login: .}' | jq -s '{requested_reviewers: .}' | respond ;;
+  pr\ view*) pr_json | respond ;;
+  pr\ comment*) echo "https://github.com/x/y/pull/1#issuecomment-1" ;;
+  pr\ checks*) cat "${FAKE_CHECKS:-$FIX/checks-pass.json}"; [ "${FAKE_CHECKS_EXIT:-0}" = 0 ] || exit "$FAKE_CHECKS_EXIT" ;;
+  run\ view*attempt*) printf '{"attempt":%s}\n' "${FAKE_ATTEMPT:-1}" | respond ;;
+  run\ rerun*) echo "rerun requested" >&2 ;;
+  repo\ view*) echo '{"defaultBranchRef":{"name":"main"}}' | respond ;;
+  repo\ clone*)
+    dest="${args[3]}"
+    git clone --quiet --bare "${FAKE_ORIGIN:?}" "$dest" 2>/dev/null ;;
+  pr\ create*) echo "https://github.com/acme/docs/pull/99" ;;
+  *) echo "fake-gh: no route for: $all" >&2; exit 99 ;;
+esac

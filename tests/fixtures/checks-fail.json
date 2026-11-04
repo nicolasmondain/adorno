@@ -1,0 +1,1 @@
+[{"name":"build","state":"FAILURE","bucket":"fail","link":"l","workflow":"ci"},{"name":"other","state":"PENDING","bucket":"pending","link":"l","workflow":"ci"}]

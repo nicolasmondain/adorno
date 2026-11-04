@@ -1,0 +1,7 @@
+[
+  {"user": {"login": "alice", "type": "User"}, "state": "CHANGES_REQUESTED"},
+  {"user": {"login": "alice", "type": "User"}, "state": "COMMENTED"},
+  {"user": {"login": "copilot-bot", "type": "Bot"}, "state": "COMMENTED"},
+  {"user": {"login": "octocat", "type": "User"}, "state": "COMMENTED"},
+  {"user": {"login": "bob", "type": "User"}, "state": "APPROVED"}
+]

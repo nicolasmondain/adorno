@@ -1,0 +1,4 @@
+# GraphQL variables ($id, $owner…) are meant to stay literal in single quotes.
+disable=SC2016
+# `test && test || die` is safe here: die always exits.
+disable=SC2015

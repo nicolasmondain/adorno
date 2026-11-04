@@ -1,0 +1,8 @@
+---
+description: agent:core:router — Choisit le pattern de workflow (aucun, séquentiel, parallèle, évaluateur-optimiseur) d'après la spec validée et écrit run-plan.yaml. À utiliser juste après la validation d'une spec.
+argument-hint: <demande>
+---
+
+Délègue la demande ci-dessous au sous-agent `agent-core-router` (agent:core:router) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `agent-core-router`) pour traiter la demande.
+
+Demande : $ARGUMENTS

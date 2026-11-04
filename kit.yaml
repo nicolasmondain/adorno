@@ -1,0 +1,64 @@
+# adorno — manifeste
+# Source canonique dans src/, imports tiers dans vendor/ (via `kit import`),
+# sorties générées dans dist/ (via `kit build`). Ne jamais éditer dist/ ou vendor/ à la main.
+
+# Nom du plugin Claude Code : les commandes s'appellent /adorno:<nom>.
+name: adorno
+version: 0.2.0
+description: "Adorno, un agent qui travaille comme toi : il relit les PRs qu'on te demande, répond aux reviews que tu reçois et ouvre tes PRs, avec ton exigence et ta voix. Setup d'agents portable (Claude Code, Codex, Gemini CLI) sur addy/agent-skills et ponytail."
+
+# Cibles construites par `kit build` et installées par défaut par `kit install`.
+# Disponibles : claude, codex, gemini, copilot, cursor (voir adapters/targets.yaml).
+targets: [claude, codex, gemini]
+
+instructions:
+  # Ajoute à AGENTS.md un index des agents, workflows et skills disponibles.
+  catalog: true
+
+# Fichiers YAML de la racine livrés en JSON dans un skill (les scripts lisent du JSON avec jq).
+skill_data:
+  github-ops:
+    repos.json: repos.yaml
+
+# Agents, skills et workflows importés depuis d'autres dépôts.
+# `kit import` les récupère dans vendor/<name>/ et fige le commit dans kit.lock ;
+# `kit import --update` les remonte à la dernière version de `ref`.
+#
+#   source   github:owner/repo | URL git | chemin local
+#   ref      branche, tag ou commit (défaut : HEAD)
+#   include  motifs glob relatifs au dépôt (défaut : tous les dossiers contenant un SKILL.md)
+#   type     type des fichiers .md trouvés hors skills : agent (défaut) ou workflow
+#   prefix   préfixe ajouté aux noms pour éviter les collisions
+#
+# Un élément local peut étendre un élément importé sans le recopier :
+#   extends: addy/code-reviewer   (son corps est ajouté à la fin de l'original)
+imports:
+  # 24 skills par phase (Define → Ship) et 4 agents relecteurs. MIT.
+  - name: addy
+    source: github:addyosmani/agent-skills
+    ref: main
+    include: ["skills/*", "agents/*.md"]
+
+  # Discipline « le moins de code qui marche » + revue, audit, registre de dette. MIT.
+  - name: ponytail
+    source: github:DietrichGebert/ponytail
+    ref: main
+    include: [skills/ponytail, skills/ponytail-review, skills/ponytail-audit, skills/ponytail-debt]
+
+  # QA navigateur : captures, vidéo WebM, traces, génération de tests (CLI `@playwright/cli`). Apache-2.0.
+  - name: playwright
+    source: github:microsoft/playwright-cli
+    ref: main
+    include: [skills/playwright-cli]
+
+  # QA légère d'une app locale en Python Playwright : captures et logs console. Apache-2.0.
+  - name: anthropic
+    source: github:anthropics/skills
+    ref: main
+    include: [skills/webapp-testing]
+
+  # TypeScript avancé : types, garde-fous, tsconfig strict. MIT.
+  - name: jeffallan
+    source: github:Jeffallan/claude-skills
+    ref: main
+    include: [skills/typescript-pro]

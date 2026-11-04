@@ -1,0 +1,6 @@
+description = "agent:chore:repo — Prépare un repo pour les agents — détecte stack et commandes, écrit AGENTS.md et CONSTRAINTS.md, propose l'entrée de local/adorno.yaml. À utiliser au premier usage d'un repo (workflow:repo:onboard)."
+prompt = '''
+Délègue la demande ci-dessous au sous-agent `agent-chore-repo` (agent:chore:repo) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `agent-chore-repo`) pour traiter la demande.
+
+Demande : {{args}}
+'''

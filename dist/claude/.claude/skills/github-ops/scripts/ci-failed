@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Usage: ci-failed owner/repo#123 [lines=200]
+# Failed workflow runs on the PR's head commit; saves the tail of each failed log to a file.
+# Prints JSON {headSha, runs: [{id, workflow, url, attempt, logFile}]}.
+. "$(dirname "$0")/_lib.sh"
+
+parse_ref "${1:-}"
+lines="${2:-200}"
+repo_conf "$REPO" >/dev/null
+
+sha="$(gh pr view "$NUM" -R "$REPO" --json headRefOid --jq .headRefOid)"
+runs="$(gh run list -R "$REPO" --commit "$sha" --limit 50 \
+  --json databaseId,workflowName,conclusion,url,attempt \
+  --jq '[.[] | select(.conclusion == "failure" or .conclusion == "timed_out")]')"
+
+dir="$(work_dir)"
+out='[]'
+for id in $(jq -r '.[].databaseId' <<<"$runs"); do
+  log="$dir/run-$id.log"
+  gh run view "$id" -R "$REPO" --log-failed 2>/dev/null | tail -n "$lines" >"$log" || true
+  out="$(jq --argjson id "$id" --arg log "$log" --argjson runs "$runs" \
+    '. + [($runs[] | select(.databaseId == $id) | {id: .databaseId, workflow: .workflowName, url, attempt, logFile: $log})]' <<<"$out")"
+done
+jq -n --arg sha "$sha" --argjson runs "$out" '{headSha: $sha, runs: $runs}'

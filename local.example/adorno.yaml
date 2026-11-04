@@ -1,0 +1,73 @@
+# Modèle de local/adorno.yaml — copie le dossier : cp -r local.example local (local/ est ignoré par git).
+#
+# C'est ta couche personnelle : qui tu es, sur quels repos les agents agissent, avec quels droits, comment ton agent
+# écrit, et ta vision. `bin/kit install` la mêle aux défauts publics de repos.yaml ; `bin/kit build` ne la lit jamais.
+# Voir ce qu'un repo résout : `bin/kit conf owner/repo` (ou, dans le repo, `github-ops/scripts/repo-conf`).
+#
+# Résolution, du plus faible au plus fort (chaque couche développe d'abord ses `use: [preset…]`) :
+#   defaults publics (repos.yaml) → defaults ci-dessous → workspaces qui contiennent le repo (ordre du fichier)
+#   → clés `repos` avec `*` qui correspondent (la moins précise d'abord) → la clé exacte `owner/repo`.
+# Fusion : les objets se fusionnent clé par clé, listes et valeurs sont remplacées, sauf `context` et `vision` qui
+# s'additionnent d'une couche à l'autre.
+
+owner:                                 # toi : la personne que agent:adorno représente
+  name: Jane Doe
+  github: janedoe                      # ton login GitHub
+  language: fr                         # langue des échanges avec les agents (GitHub reste en anglais)
+
+defaults:                              # tes réglages pour tous les repos (par-dessus ceux de repos.yaml)
+  voice:                               # comment ton agent écrit (détail : skill adorno-voice)
+    tone: direct
+    length: short
+    emoji: never
+    avoid: ["em dash", "I hope this helps"]
+  vision:                              # lignes de vision valables partout (s'ajoutent à local/vision.md)
+    - "Prefer deleting code to adding it."
+
+presets:                               # blocs partagés, réutilisés par `use:` dans un workspace ou un repo
+  platform-team:
+    team:
+      name: platform
+      org: acme
+      github_team: acme/platform
+      slack: ["#platform"]
+    reviewers: [alice, bob]            # relecteurs par défaut, jamais l'auteur
+    context:                           # faits courts que tout agent doit savoir (une ligne chacun)
+      - "Priority order: a waiting customer > production errors > roadmap."
+
+  careful:                             # droits restreints, à appliquer où il faut
+    max_level: L2                      # L0 lecture · L1 local · L2 push sur une branche · L3 PR, réponses · L4 jamais auto
+    permissions:
+      deny: [submit, resolve]          # actions GitHub refusées par les scripts : push, reply, comment, resolve,
+                                       # rerequest, review (en attente), submit (soumettre), open_pr, ci_rerun
+      claude:                          # règles natives écrites dans <repo>/.claude/settings.local.json à l'install
+        deny: ["Bash(git push:*)"]
+        ask: ["Bash(npm publish:*)"]
+
+workspaces:                            # tout un ensemble de repos d'un coup
+  acme:
+    repos: ["acme/*"]                  # globs GitHub (`*` = un segment, `**` = tout)
+    paths: ["~/code/acme"]             # dossiers locaux : les repos git trouvés dessous (2 niveaux) sont ajoutés
+    use: [platform-team]
+    permissions:
+      claude:
+        allow: ["Bash(npm test:*)", "Bash(npm run lint:*)"]
+
+repos:                                 # un repo précis, ou un glob (`acme/docs-*`)
+  acme/app:
+    context:
+      - "Unit test coverage must stay >= 80%."
+    vision:
+      - "On this repo, correctness beats speed: no shortcut on migrations."
+    pr_skill: /acme-pr                 # skill du repo pour rédiger une PR, s'il y en a une
+    setup_skill: null                  # skill d'installation d'un worktree neuf
+    test: "npm test"
+    lint: "npm run lint"
+
+  acme/docs:
+    use: [careful]
+    voice: {formality: formal}         # documentation publique : registre plus soutenu
+    context:
+      - "Public documentation: examples use obvious placeholders only, never real data."
+    area_reviewers:                    # relecteurs par zone de code (zones : repos.yaml › areas)
+      docs: [agent:review:security]

@@ -1,0 +1,6 @@
+description = "agent:adorno — Adorno — the agent that speaks and decides as you. The last step of every workflow that acts in your name - final pass of the reviews you emit, gate of your own branch before a PR, ruling on and answering the feedback on your PRs - with your bar, your verification discipline, your severities, your vision and your voice (skills adorno-profile, adorno-voice and the current repo settings). Use at the end of workflow:pr:review, workflow:review:requested, workflow:review:received and in workflow:pr:open."
+prompt = '''
+Délègue la demande ci-dessous au sous-agent `agent-adorno` (agent:adorno) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `agent-adorno`) pour traiter la demande.
+
+Demande : {{args}}
+'''

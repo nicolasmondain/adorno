@@ -1,0 +1,174 @@
+{
+ "data": {
+  "viewer": {
+   "login": "octocat"
+  },
+  "repository": {
+   "pullRequest": {
+    "number": 42,
+    "title": "feat(api): add pagination",
+    "url": "https://github.com/acme/docs/pull/42",
+    "isDraft": false,
+    "reviewDecision": "CHANGES_REQUESTED",
+    "headRefName": "nm/pagination",
+    "headRefOid": "abc123",
+    "baseRefName": "main",
+    "author": {
+     "login": "octocat"
+    },
+    "reviews": {
+     "nodes": [
+      {
+       "author": {
+        "login": "alice",
+        "__typename": "User"
+       },
+       "state": "CHANGES_REQUESTED",
+       "submittedAt": "2026-11-03T10:00:00Z",
+       "body": "A few things",
+       "url": "r"
+      },
+      {
+       "author": {
+        "login": "octocat",
+        "__typename": "User"
+       },
+       "state": "COMMENTED",
+       "submittedAt": "2026-11-03T11:00:00Z",
+       "body": "self",
+       "url": "r"
+      },
+      {
+       "author": {
+        "login": "carol",
+        "__typename": "User"
+       },
+       "state": "COMMENTED",
+       "submittedAt": "2026-11-03T13:00:00Z",
+       "body": "Overall fine, one question on naming",
+       "url": "r3"
+      }
+     ]
+    },
+    "comments": {
+     "nodes": [
+      {
+       "author": {
+        "login": "bob",
+        "__typename": "User"
+       },
+       "body": "Can we ship this today?",
+       "url": "u1",
+       "createdAt": "2026-11-03T12:00:00Z"
+      },
+      {
+       "author": {
+        "login": "octocat",
+        "__typename": "User"
+       },
+       "body": "Yes, after the fixes",
+       "url": "u0",
+       "createdAt": "2026-11-03T12:02:00Z"
+      },
+      {
+       "author": null,
+       "body": "ghost comment",
+       "url": "u2",
+       "createdAt": "2026-11-03T12:05:00Z"
+      },
+      {
+       "author": {
+        "login": "ci-bot",
+        "__typename": "Bot"
+       },
+       "body": "Coverage 81%",
+       "url": "u3",
+       "createdAt": "2026-11-03T12:06:00Z"
+      }
+     ]
+    },
+    "reviewThreads": {
+     "pageInfo": {
+      "hasNextPage": false
+     },
+     "nodes": [
+      {
+       "id": "T1",
+       "isResolved": false,
+       "isOutdated": false,
+       "path": "api/users.mdx",
+       "line": 12,
+       "comments": {
+        "nodes": [
+         {
+          "id": "C1",
+          "author": {
+           "login": "alice",
+           "__typename": "User"
+          },
+          "body": "Null not handled",
+          "url": "c1",
+          "createdAt": "2026-11-03T10:01:00Z"
+         }
+        ]
+       }
+      },
+      {
+       "id": "T2",
+       "isResolved": false,
+       "isOutdated": true,
+       "path": "api/teams.mdx",
+       "line": 3,
+       "comments": {
+        "nodes": [
+         {
+          "id": "C2",
+          "author": {
+           "login": "alice",
+           "__typename": "User"
+          },
+          "body": "Typo",
+          "url": "c2",
+          "createdAt": "2026-11-03T10:02:00Z"
+         },
+         {
+          "id": "C3",
+          "author": {
+           "login": "octocat",
+           "__typename": "User"
+          },
+          "body": "Fixed in abc123",
+          "url": "c3",
+          "createdAt": "2026-11-03T11:02:00Z"
+         }
+        ]
+       }
+      },
+      {
+       "id": "T3",
+       "isResolved": true,
+       "isOutdated": false,
+       "path": "x",
+       "line": 1,
+       "comments": {
+        "nodes": []
+       }
+      }
+     ]
+    },
+    "commits": {
+     "nodes": [
+      {
+       "commit": {
+        "statusCheckRollup": {
+         "state": "FAILURE"
+        }
+       }
+      }
+     ]
+    },
+    "isCrossRepository": false
+   }
+  }
+ }
+}

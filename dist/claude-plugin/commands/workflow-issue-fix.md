@@ -1,0 +1,14 @@
+---
+description: Corrige un bug à partir d'une issue GitHub — enquête, test rouge, correctif minimal, revue, PR « Fixes
+argument-hint: <owner/repo#N>
+---
+
+Entrée : $ARGUMENTS
+
+1. `github-ops/scripts/issue-fetch $ARGUMENTS` → `issue.json` dans un nouveau dossier `.agent-run/`.
+2. `agent:fix:investigate` reproduit et écrit `diagnosis.md`. Pas de repro possible → commentaire-brouillon en
+   anglais demandant ce qui manque, rendu à l'utilisateur ; arrêt.
+3. **Point de contrôle 1** : diagnostic et niveau (L3 par défaut) validés par l'utilisateur.
+4. Branche `fix/<n>-<slug>` depuis la base ; `agent:fix:patch` : test rouge, correctif, suite verte.
+5. `agent:review:code` et `agent:review:tests` en parallèle ; un `blocker` → retour à `fix:patch` (deux tours).
+6. `workflow:pr:open` avec `Fixes #N` dans la description, puis `workflow:pr:watch`.

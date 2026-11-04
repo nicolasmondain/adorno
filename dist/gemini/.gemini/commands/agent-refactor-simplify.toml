@@ -1,0 +1,6 @@
+description = "agent:refactor:simplify — Simplifie du code sans changer son comportement — code mort, duplication, abstractions inutiles, conditions tordues, et les nits de review. À utiliser sur un retour de review classé nit ou sur du code jugé trop complexe."
+prompt = '''
+Délègue la demande ci-dessous au sous-agent `agent-refactor-simplify` (agent:refactor:simplify) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `agent-refactor-simplify`) pour traiter la demande.
+
+Demande : {{args}}
+'''

@@ -1,0 +1,14 @@
+{
+  "name": "adorno",
+  "owner": {
+    "name": "adorno"
+  },
+  "plugins": [
+    {
+      "name": "adorno",
+      "source": "./dist/claude-plugin",
+      "description": "Adorno, un agent qui travaille comme toi : il relit les PRs qu'on te demande, répond aux reviews que tu reçois et ouvre tes PRs, avec ton exigence et ta voix. Setup d'agents portable (Claude Code, Codex, Gemini CLI) sur addy/agent-skills et ponytail.",
+      "version": "0.2.0"
+    }
+  ]
+}

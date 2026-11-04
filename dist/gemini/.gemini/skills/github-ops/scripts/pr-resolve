@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Usage: pr-resolve owner/repo#123 THREAD_ID
+# Resolves a review thread — only when repos.yaml says the PR author resolves (resolve_threads: author)
+# and you are that author. Needs L3. Exit 4 when the policy says the reviewer resolves.
+. "$(dirname "$0")/_lib.sh"
+
+parse_ref "${1:-}"
+thread="${2:-}"
+[ -n "$thread" ] || die "usage: pr-resolve owner/repo#N THREAD_ID" "$E_USAGE"
+require_level "$REPO" L3 resolve
+
+policy="$(conf_get "$REPO" resolve_threads)"
+[ "$policy" = "author" ] || die "$REPO: threads are resolved by the reviewer (resolve_threads: ${policy:-unset})" "$E_POLICY"
+
+author="$(gh pr view "$NUM" -R "$REPO" --json author --jq .author.login)"
+me="$(viewer_login)"
+[ "$author" = "$me" ] || die "$REPO#$NUM is authored by $author, not $me" "$E_POLICY"
+
+if dry_run; then
+  jq -n --arg thread "$thread" '{dryRun: true, action: "resolve", thread: $thread}'
+  exit 0
+fi
+
+gh api graphql -f query='mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread{ id isResolved } } }' \
+  -F id="$thread" --jq '{resolved: .data.resolveReviewThread.thread.isResolved, thread: .data.resolveReviewThread.thread.id}'
