@@ -1,6 +1,7 @@
 ---
 description: Chaque fois que tu es mentionné sur Slack (sur tous les canaux ou une liste), analyse le problème de la conversation et t'envoie, à part, l'analyse complète avec le lien vers la conversation et un brouillon de réponse dans ta voix. Une seule fois par mention. Lecture seule sur Slack. À lancer à la main ou depuis ta propre planification.
 argument-hint: '[--since 24h] [--channels ''#a,#b''] [--dry-run] [--all]'
+model: sonnet
 ---
 
 Entrée : $ARGUMENTS. Réglages dans ta couche personnelle (`local/adorno.yaml` › `slack.mentions`) :

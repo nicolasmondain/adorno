@@ -1,6 +1,7 @@
 ---
 description: État de toutes tes PRs ouvertes (ou d'un repo) — review, CI, threads non résolus, et ce qui bloque chacune. Lecture seule.
 argument-hint: '[owner/repo]'
+model: haiku
 ---
 
 Entrée : $ARGUMENTS

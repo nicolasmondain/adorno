@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# Usage: llm-run --base-url URL --model MODEL [--key-env VAR] [--system FILE] [--max-tokens N] [--temperature T]
+#                [--timeout SECONDS] PROMPT_FILE|-
+# Sends one prompt to an OpenAI-compatible chat endpoint (OpenRouter, OpenAI, Google's OpenAI-compatible endpoint,
+# your own vLLM / Ollama / LiteLLM gateway…) and prints {route, model, content, finish_reason, usage} as JSON.
+# The key is read from the environment variable named by --key-env (default OPENROUTER_API_KEY), never from a file
+# or an argument. LLM_RUN_DRY_RUN=1 prints the request (without the key) instead of sending it.
+# Exit codes: 2 usage, 3 missing key, 4 refused (http on a non-local host), 6 the endpoint failed.
+set -euo pipefail
+SELF="$(basename "$0")"
+die() { printf '%s: %s\n' "$SELF" "$1" >&2; exit "${2:-1}"; }
+for dep in curl jq; do command -v "$dep" >/dev/null 2>&1 || die "missing dependency: $dep"; done
+
+base="" model="" key_env="OPENROUTER_API_KEY" system="" max_tokens="" temperature="" timeout=300 prompt=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --base-url) base="${2:-}"; shift 2 ;;
+    --model) model="${2:-}"; shift 2 ;;
+    --key-env) key_env="${2:-}"; shift 2 ;;
+    --system) system="${2:-}"; shift 2 ;;
+    --max-tokens) max_tokens="${2:-}"; shift 2 ;;
+    --temperature) temperature="${2:-}"; shift 2 ;;
+    --timeout) timeout="${2:-}"; shift 2 ;;
+    -*) [ "$1" = "-" ] && { prompt="-"; shift; continue; }; die "unknown option $1" 2 ;;
+    *) prompt="$1"; shift ;;
+  esac
+done
+[ -n "$base" ] && [ -n "$model" ] && [ -n "$prompt" ] || die "usage: llm-run --base-url URL --model MODEL [options] PROMPT_FILE|-" 2
+case "$base" in https://*|http://localhost*|http://127.0.0.1*) ;; *) die "refusing $base: https only (or localhost)" 4 ;; esac
+[[ "$key_env" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || die "--key-env must be a variable name" 2
+[ -z "$max_tokens" ] || [[ "$max_tokens" =~ ^[0-9]+$ ]] || die "--max-tokens must be a number" 2
+[[ "$timeout" =~ ^[0-9]+$ ]] || die "--timeout must be a number of seconds" 2
+[ -z "$system" ] || [ -f "$system" ] || die "system file not found: $system" 2
+
+tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+if [ "$prompt" = "-" ]; then cat >"$tmp/prompt"; else [ -f "$prompt" ] || die "prompt file not found: $prompt" 2; cp "$prompt" "$tmp/prompt"; fi
+[ -s "$tmp/prompt" ] || die "empty prompt" 2
+
+jq -n --arg model "$model" --rawfile user "$tmp/prompt" \
+  --arg system "$( [ -z "$system" ] || cat "$system")" \
+  --arg max "$max_tokens" --arg temp "$temperature" '
+  {model: $model,
+   messages: ((if $system == "" then [] else [{role: "system", content: $system}] end) + [{role: "user", content: $user}])}
+  + (if $max == "" then {} else {max_tokens: ($max | tonumber)} end)
+  + (if $temp == "" then {} else {temperature: ($temp | tonumber)} end)' >"$tmp/request.json"
+
+url="${base%/}/chat/completions"
+if [ "${LLM_RUN_DRY_RUN:-0}" = 1 ]; then
+  jq --arg url "$url" --arg key "$key_env" '{dryRun: true, url: $url, key_env: $key, request: .}' "$tmp/request.json"
+  exit 0
+fi
+key="${!key_env:-}"
+case "$base" in http://localhost*|http://127.0.0.1*) ;; *) [ -n "$key" ] || die "\$$key_env is not set (put the key in your shell profile)" 3 ;; esac
+
+printf 'header = "Authorization: Bearer %s"\n' "$key" >"$tmp/auth"
+code="$(curl -sS -o "$tmp/response.json" -w '%{http_code}' --max-time "$timeout" -X POST "$url" \
+  -K "$tmp/auth" -H 'Content-Type: application/json' -H 'X-Title: adorno' \
+  --data-binary @"$tmp/request.json")" || die "request to $url failed" 6
+case "$code" in 2*) ;; *) die "$url answered HTTP $code: $(jq -r '.error.message // .' "$tmp/response.json" 2>/dev/null | head -c 500)" 6 ;; esac
+
+jq --arg base "$base" '{
+  route: $base, model: (.model // null),
+  content: (.choices[0].message.content // ""), finish_reason: (.choices[0].finish_reason // null),
+  usage: (.usage // null)}' "$tmp/response.json"

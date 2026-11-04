@@ -3,6 +3,7 @@ description: État de toutes tes PRs ouvertes (ou d'un repo) — review, CI, thr
 args: "[owner/repo]"
 uses:
   skills: [github-ops]
+model: fast
 ---
 
 Entrée : {{args}}

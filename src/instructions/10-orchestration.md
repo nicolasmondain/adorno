@@ -33,6 +33,19 @@ Par repo, l'utilisateur borne aussi ce que les agents peuvent faire (`repo-conf`
 `resolve`, `rerequest`, `review`, `submit`, `open_pr`, `ci_rerun`) ; `permissions.claude` devient des règles natives de
 Claude Code dans le repo. Une action refusée (code 4 ou 5) n'est jamais contournée : arrête-toi et dis-le.
 
+## Modèles : chaque tâche au modèle qui suffit
+
+Chaque agent a un niveau (`fast`, `balanced`, `deep`) que l'installation traduit en modèle de l'outil, réglable par
+repo dans la couche personnelle (`models`). Pour que ce choix serve :
+
+- **Délègue** chaque étape d'un workflow à son agent (sous-agent), plutôt que de la faire dans la session qui
+  orchestre : c'est le seul moyen qu'elle tourne sur le modèle prévu. Le mécanique (lister, filtrer, publier) reste aux
+  scripts, qui ne coûtent aucun token.
+- **Contexte minimal** : un agent ne reçoit que le livrable de l'étape précédente et les fichiers de sa zone, jamais
+  tout l'historique.
+- Un agent dont le corps commence par « Rôle délégué au modèle » envoie son jugement à un modèle externe via le skill
+  `adorno-llm` : suis ses étapes, et ne fais le travail toi-même qu'en repli.
+
 ## Ordre d'autorité
 
 1. Les règles du repo (`CLAUDE.md`, `.claude/rules/`) sur son code.

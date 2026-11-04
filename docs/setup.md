@@ -176,6 +176,78 @@ le retrouver avec le connecteur. Modèle commenté : `local.example/adorno.yaml`
 Ces workflows se lancent à la main, ou depuis ta propre planification (une tâche planifiée qui lance
 `workflow:slack:mentions` toutes les heures, par exemple) : adorno ne planifie rien lui-même.
 
+## 9. Modèles et fournisseurs
+
+Un workflow enchaîne des agents ; chacun tourne sur le modèle qui suffit à sa tâche. Trier des commentaires ou choisir
+un pattern n'a pas besoin du même modèle que trancher une review en ton nom.
+
+```mermaid
+flowchart LR
+  W["workflow:review:received"] --> T["triage<br/>fast"]
+  W --> S["spécialistes<br/>balanced"]
+  W --> A(("Adorno<br/>deep"))
+  T -.->|"route externe"| O["OpenRouter<br/>ou tes modèles"]
+```
+
+**Trois niveaux neutres.** Chaque agent déclare `fast`, `balanced` ou `deep` (et `inherit` = le modèle de la
+session). L'installation les traduit pour chaque outil :
+
+| Outil | Par défaut | Réglable |
+| --- | --- | --- |
+| Claude Code | `haiku`, `sonnet`, `opus` (sous-agents et commandes de workflow) | `models.tiers.claude`, ou un identifiant précis par agent |
+| Gemini CLI | le modèle de la session (`inherit`) | `models.tiers.gemini` (ex. `gemini-2.5-flash` / `gemini-2.5-pro`) |
+| Codex | le modèle de la session : Codex n'a pas de sous-agents, les agents y sont des skills | le modèle de la session (`.codex/config.toml`) |
+
+Les défauts du dépôt : `triage`, `router` et `review:ponytail` en `fast` ; les spécialistes en `balanced` ;
+`adorno`, `intake`, `analyst`, `review:impact` et `perf:*` en `deep`.
+
+**Le régler**, à n'importe quel niveau de `local/adorno.yaml` (defaults, preset, workspace, repo) :
+
+```yaml
+defaults:
+  models:
+    tiers:
+      claude: {fast: haiku, balanced: sonnet, deep: opus}
+    agents:
+      agent:review:mongodb: deep                     # un autre niveau
+      agent:core:analyst: claude-opus-5-5            # un modèle précis
+      agent:core:triage: {route: openrouter-small}   # un modèle externe
+    workflows:
+      workflow:pr:status: fast                       # la session qui orchestre ce workflow
+    routes:
+      openrouter-small: {base_url: https://openrouter.ai/api/v1, model: qwen/qwen3-coder, api_key_env: OPENROUTER_API_KEY}
+      ours: {base_url: https://llm.acme.internal/v1, model: acme-coder, api_key_env: ACME_LLM_KEY}
+repos:
+  acme/payments:
+    models: {external: false, agents: {agent:review:security: deep}}
+```
+
+Le réglage d'un repo prend effet avec `bin/kit install <repo>` (ou `--workspace`) : les agents installés dans le repo
+priment sur ceux de `--global`. `bin/kit conf owner/repo` montre le résultat (`models`).
+
+**OpenRouter, OpenAI, Google, tes modèles : les routes.** Une route est un point d'accès compatible OpenAI. Un agent
+envoyé sur une route reste lancé par l'outil, en `fast`, mais devient un agent léger : il rassemble les entrées avec
+ses outils, envoie le jugement au modèle de la route (`adorno-llm/scripts/llm-run`), vérifie la réponse et écrit le
+livrable. Seuls les agents qui jugent sur des entrées rassemblées d'avance peuvent y aller (`delegable: true` :
+`triage`, `router`, les relecteurs `review:*` sauf `impact`) ; ceux qui doivent fouiller ou écrire du code restent
+dans l'outil. La clé reste dans ton profil shell (`export OPENROUTER_API_KEY=…`) : le fichier ne contient que le nom
+de la variable. `external: false` sur un repo : rien n'en sort, les routes y sont ignorées.
+
+**Tout Claude Code via une passerelle.** Pour faire tourner toute la session Claude Code sur OpenRouter, ses
+créneaux `haiku`, `sonnet` et `opus` pointant vers les modèles de ton choix, utilise `models.claude_env`, écrit dans
+`.claude/settings.local.json` du repo à l'install :
+
+```yaml
+models:
+  claude_env:
+    ANTHROPIC_BASE_URL: https://openrouter.ai/api
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: qwen/qwen3-coder
+```
+
+La clé va dans `ANTHROPIC_AUTH_TOKEN`, dans ton profil shell (le kit refuse toute variable de secret dans le fichier).
+Claude Code est optimisé pour les modèles d'Anthropic : avec d'autres, l'usage des outils peut se dégrader. Ne règle
+pas `CLAUDE_CODE_SUBAGENT_MODEL` : il écrase le modèle de chaque agent.
+
 ## Ajouter tes propres agents et skills
 
 `local/src/` est un `src/` privé, posé sur le public à l'install : un agent `local/src/agents/feat/billing.md`, un

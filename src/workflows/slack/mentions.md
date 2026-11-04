@@ -4,6 +4,7 @@ args: "[--since 24h] [--channels '#a,#b'] [--dry-run] [--all]"
 uses:
   skills: [adorno-watch, adorno-voice, github-ops]
   agents: [agent:core:analyst, agent:adorno]
+model: balanced
 ---
 
 Entrée : {{args}}. Réglages dans ta couche personnelle (`local/adorno.yaml` › `slack.mentions`) :

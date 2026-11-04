@@ -1,6 +1,7 @@
 ---
 tools: [read, search, shell]
 model: balanced
+delegable: true
 ---
 
 ## Règles de la famille `review`

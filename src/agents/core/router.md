@@ -1,6 +1,8 @@
 ---
 description: Choisit le pattern de workflow (aucun, séquentiel, parallèle, évaluateur-optimiseur) d'après la spec validée et écrit run-plan.yaml. À utiliser juste après la validation d'une spec.
 tools: [read, write, search]
+model: fast
+delegable: true
 ---
 
 ## Grille (s'arrêter à la première question qui tranche)

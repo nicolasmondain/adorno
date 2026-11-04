@@ -1,6 +1,7 @@
 ---
 description: Analyse l'impact des PRs que tu as mergées sur un repo — depuis leur déploiement, utilisation, erreurs, temps de réponse, performance et ressources comparés avant / après dans toutes les sources disponibles — et poste le rapport en commentaire de chaque PR. Une PR déjà rapportée est sautée, une trop récente attend. Modes report ou comment (défaut).
 argument-hint: <owner/repo> [--since 14d] [--pr N] [--mode report|comment] [--refresh]
+model: sonnet
 ---
 
 Entrée : $ARGUMENTS

@@ -14,6 +14,7 @@ adorno est un setup d'agents portable et réutilisable. On y écrit des agents, 
 | un savoir-faire à la demande | `src/skills/<nom>/SKILL.md` (+ `scripts/`, `references/`) |
 | un accès GitHub | un script dans `src/skills/github-ops/scripts/` + son test dans `tests/github-ops.test.sh` |
 | une surveillance Slack ou Notion | un workflow `src/workflows/slack/…` ou `src/workflows/notion/…` ; le déterministe dans `src/skills/adorno-watch/scripts/` + `tests/adorno-watch.test.sh` ; lecture via les connecteurs, seule écriture : le compte rendu à soi-même |
+| le modèle d'un agent | son niveau `model:` (`fast`, `balanced`, `deep`) ; `delegable: true` s'il peut juger sur des entrées rassemblées d'avance (route externe) ; le choix réel par outil et par repo est dans `local/` › `models` |
 | un repo, un workspace, des droits, une voix, une vision | `local/` (ignoré par git ; modèle : `local.example/`) — jamais dans le dépôt |
 | un réglage public par défaut | `repos.yaml` (+ sa validation dans `bin/kit` › `validate_registry`) |
 | une règle de résolution des réglages | `src/skills/github-ops/scripts/resolve.jq` (partagé par les scripts et `kit conf`) + ses tests |
@@ -42,7 +43,7 @@ adorno est un setup d'agents portable et réutilisable. On y écrit des agents, 
 ## Après chaque modification
 
 ```sh
-bin/kit check && bin/kit build && tests/github-ops.test.sh && tests/adorno-watch.test.sh
+bin/kit check && bin/kit build && tests/github-ops.test.sh && tests/adorno-watch.test.sh && tests/adorno-llm.test.sh
 ```
 
 Committe `src/`, `dist/`, `vendor/`, `kit.yaml`, `kit.lock` et `repos.yaml` ensemble : la CI refuse un `dist/`

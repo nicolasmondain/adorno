@@ -27,6 +27,7 @@ Used by install, check, list and conf; never by build.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -57,6 +58,8 @@ LEVELS = ("L0", "L1", "L2", "L3", "L4")
 ACTIONS = ("push", "reply", "comment", "resolve", "rerequest", "review", "submit", "open_pr", "ci_rerun")
 CLAUDE_RULES = ("allow", "ask", "deny")
 VISION_MAX_LINES = 60
+MODELS: dict = {}   # `models` of the repo being installed (local/adorno.yaml); empty for the public build
+SECRET_ENV_RE = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD)", re.I)
 LOCK = ROOT / "kit.lock"
 STATE = ".adorno/installed.json"
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -65,7 +68,7 @@ BEGIN = "<!-- adorno:begin (managed by kit — edits inside this block are overw
 END = "<!-- adorno:end -->"
 BLOCK_RE = re.compile(r"<!-- adorno:begin.*?-->.*?<!-- adorno:end -->\n?", re.S)
 KINDS = {"skill": "skills", "agent": "agents", "workflow": "workflows"}
-NEUTRAL_AGENT_KEYS = {"name", "description", "tools", "model", "targets"}
+NEUTRAL_AGENT_KEYS = {"name", "description", "tools", "model", "targets", "delegable"}
 ARGS_TOKEN = "{{args}}"
 
 
@@ -447,6 +450,8 @@ def validate(cfg: Config, items: dict[str, dict[str, Item]]) -> list[str]:
                     errors.append(f"{where}: model '{model}' must be one of {cfg.tiers} "
                                   f"(put native model names under targets.<tool>.model)")
             if kind == "workflow":
+                if it.meta.get("model") is not None and it.meta["model"] not in cfg.tiers:
+                    errors.append(f"{where}: model '{it.meta['model']}' must be one of {cfg.tiers}")
                 uses = it.meta.get("uses") or {}
                 for key in ("skills", "agents", "workflows"):
                     known = {i.id for i in items[key[:-1]].values()} | set(items[key[:-1]])
@@ -456,6 +461,8 @@ def validate(cfg: Config, items: dict[str, dict[str, Item]]) -> list[str]:
     for tgt in cfg.default_targets:
         cfg.target(tgt)
 
+    DELEGABLE.clear()
+    DELEGABLE.update(i.id for i in items["agent"].values() if i.meta.get("delegable"))
     errors += validate_registry(registry(), {i.id for i in items["agent"].values()} | set(items["agent"]))
     return errors
 
@@ -514,6 +521,52 @@ def validate_watches(reg: dict, where: str, agent_ids: set) -> list[str]:
     return errors
 
 
+TIERS = ("inherit", "fast", "balanced", "deep")
+DELEGABLE: set = set()   # agents allowed on an external route (filled by validate)
+
+
+def validate_models(m, where: str, agent_ids: set) -> list[str]:
+    """`models`: tiers per target, per-agent / per-workflow choice, external routes, Claude Code env."""
+    if m is None:
+        return []
+    if not isinstance(m, dict):
+        return [f"{where} must be a mapping"]
+    errors: list[str] = []
+    for target, tiers in (m.get("tiers") or {}).items():
+        for tier in (tiers or {}):
+            if tier not in TIERS:
+                errors.append(f"{where}.tiers.{target}.{tier}: tiers are {', '.join(TIERS)}")
+    routes = m.get("routes") or {}
+    for name, r in routes.items():
+        if not isinstance(r, dict) or not r.get("base_url") or not r.get("model"):
+            errors.append(f"{where}.routes.{name} needs `base_url` and `model`")
+        elif not str(r["base_url"]).startswith(("https://", "http://localhost", "http://127.0.0.1")):
+            errors.append(f"{where}.routes.{name}.base_url must be https (or localhost)")
+        if isinstance(r, dict) and r.get("api_key"):
+            errors.append(f"{where}.routes.{name}: never put a key here; use `api_key_env` (a variable name)")
+    for key in ("agents", "workflows"):
+        for ref, spec in (m.get(key) or {}).items():
+            if key == "agents" and ref not in agent_ids:
+                errors.append(f"{where}.agents names unknown agent '{ref}'")
+            if isinstance(spec, dict):
+                if spec.get("route") and key == "workflows":
+                    errors.append(f"{where}.workflows.{ref}: only agents can be sent to a route")
+                if spec.get("route") and key == "agents" and ref not in DELEGABLE:
+                    errors.append(f"{where}.agents.{ref}: not `delegable` (it needs tools while it thinks), "
+                                  f"it cannot go to a route")
+                if spec.get("route") and spec["route"] not in routes:
+                    # the route may come from another scope: checked again at install
+                    warn(f"{where}.{key}.{ref}: route '{spec['route']}' is not defined in this scope")
+            elif not isinstance(spec, str):
+                errors.append(f"{where}.{key}.{ref} must be a tier, a model id or {{route: …}}")
+    for k in (m.get("claude_env") or {}):
+        if SECRET_ENV_RE.search(str(k)):
+            errors.append(f"{where}.claude_env.{k}: secrets stay in your shell profile, never in this file")
+        if k == "CLAUDE_CODE_SUBAGENT_MODEL":
+            errors.append(f"{where}.claude_env.{k} would override every agent's model; set tiers instead")
+    return errors
+
+
 def validate_registry(reg: dict, agent_ids: set) -> list[str]:
     """repos.yaml and the personal layer: references, levels, permissions, shapes."""
     errors: list[str] = []
@@ -543,6 +596,7 @@ def validate_registry(reg: dict, agent_ids: set) -> list[str]:
             if conf.get(key) is not None and not (isinstance(conf[key], list)
                                                   and all(isinstance(x, str) for x in conf[key])):
                 errors.append(f"{where}: {scope}.{key} must be a list of lines")
+        errors += validate_models(conf.get("models"), f"{where}: {scope}.models", agent_ids)
         imp = conf.get("impact")
         if imp is not None:
             if not isinstance(imp, dict):
@@ -604,10 +658,17 @@ def map_tools(cfg: Config, tcfg: dict, tools) -> list[str] | None:
     return out
 
 
-def map_model(tcfg: dict, model) -> str | None:
+def map_model(tcfg: dict, model, target: str | None = None) -> str | None:
+    """A neutral tier -> the target's model: `models.tiers.<target>` of the personal layer first, then
+    adapters/targets.yaml. Anything else is a native model id, passed through as-is (personal layer only)."""
     if model is None:
         return None
-    return (tcfg.get("models") or {}).get(model)
+    mine = ((MODELS.get("tiers") or {}).get(target) or {}) if target else {}
+    if model in mine:
+        return str(mine[model])
+    if model in (tcfg.get("models") or {}):
+        return (tcfg.get("models") or {}).get(model)
+    return None if model in ("inherit", "fast", "balanced", "deep") else str(model)
 
 
 def clean_skill_meta(it: Item, target: str) -> dict:
@@ -671,7 +732,7 @@ def agent_command(it: Item) -> Item:
 def render_agent(cfg: Config, it: Item, target: str, tcfg: dict, fmt: str) -> str:
     meta: dict = {"name": it.name, "description": it.description}
     tools = map_tools(cfg, tcfg, it.meta.get("tools"))
-    model = map_model(tcfg, it.meta.get("model"))
+    model = map_model(tcfg, it.meta.get("model"), target)
     if fmt == "claude":
         if tools:
             meta["tools"] = ", ".join(tools)
@@ -699,7 +760,7 @@ def toml_str(s: str) -> str:
     return json.dumps(s, ensure_ascii=False)
 
 
-def render_workflow(it: Item, target: str, fmt: str) -> str:
+def render_workflow(it: Item, target: str, fmt: str, tcfg: dict | None = None) -> str:
     body = it.body.strip()
     hint = it.meta.get("args")
     over = it.overrides(target)
@@ -707,6 +768,9 @@ def render_workflow(it: Item, target: str, fmt: str) -> str:
         meta = {"description": it.description}
         if hint:
             meta["argument-hint"] = hint
+        model = map_model(tcfg or {}, it.meta.get("model"), target)
+        if model:
+            meta["model"] = model
         meta.update(over)
         return dump_md(meta, body.replace(ARGS_TOKEN, "$ARGUMENTS"))
     if fmt == "gemini-command":
@@ -767,7 +831,7 @@ def build_target(cfg: Config, target: str, items) -> FileMap:
                 continue
             path = f"{spec['dir']}/{it.name}{spec.get('ext', '.md')}"
             text = (render_agent(cfg, it, target, tcfg, fmt) if kind == "agent"
-                    else render_workflow(it, target, fmt))
+                    else render_workflow(it, target, fmt, tcfg))
             files[path] = (text.encode(), False)
 
     # each native agent also gets a command, so it can be called by hand
@@ -1199,6 +1263,78 @@ def remove_owned(dest: Path, path: str, digest: str, force: bool) -> bool:
     return True
 
 
+def models_for(dest: Path | None) -> dict:
+    """`models` the personal layer resolves for the repo at `dest` (its defaults for --global or a non-repo)."""
+    if not local_on():
+        return {}
+    reg = registry()
+    repo = github_repo(dest) if dest else None
+    conf = resolve_repo(reg, repo) if repo else None
+    if conf is None:
+        conf = reg.get("defaults") or {}
+    return dict(conf.get("models") or {})
+
+
+def route_spec(models: dict, item_id: str) -> tuple[str, dict] | None:
+    """The external route an agent is sent to, if any (and if the repo allows external models)."""
+    spec = (models.get("agents") or {}).get(item_id)
+    if not isinstance(spec, dict) or not spec.get("route") or models.get("external") is False:
+        return None
+    name = str(spec["route"])
+    route = (models.get("routes") or {}).get(name)
+    if not route:
+        die(f"models.agents.{item_id}: unknown route '{name}'")
+    return name, route
+
+
+def apply_models(items: dict, models: dict) -> dict:
+    """A copy of the items with the personal layer's model choices applied: tier or native model per agent and per
+    workflow, and agents sent to an external route rewritten as a thin host agent that delegates to it."""
+    if not models:
+        return items
+    out = copy.deepcopy(items)
+    for kind, key in (("agent", "agents"), ("workflow", "workflows")):
+        for it in out[kind].values():
+            spec = (models.get(key) or {}).get(it.id)
+            if isinstance(spec, str):
+                it.meta["model"] = spec
+            elif isinstance(spec, dict) and (spec.get("tier") or spec.get("model")):
+                it.meta["model"] = spec.get("model") or spec.get("tier")
+            if kind == "agent":
+                routed = route_spec(models, it.id)
+                if routed:
+                    delegate(it, *routed)
+    return out
+
+
+def delegate(it: Item, name: str, route: dict) -> None:
+    """Rewrite an agent so the host runs it cheaply and the judgment happens on an external model."""
+    if not it.meta.get("delegable"):
+        die(f"{it.id} cannot be sent to route '{name}': it is not `delegable` (it needs tools while it thinks)")
+    flags = (f"--base-url {route['base_url']} --model {route['model']} --key-env {route.get('api_key_env', 'OPENROUTER_API_KEY')}")
+    if route.get("max_tokens"):
+        flags += f" --max-tokens {route['max_tokens']}"
+    it.meta["model"] = route.get("host_tier", "fast")
+    it.meta["tools"] = sorted(set(as_list(it.meta.get("tools")) or []) | {"read", "write", "search", "shell"})
+    it.body = f"""## Rôle délégué au modèle `{route['model']}` (route `{name}`)
+
+Le jugement de ce rôle tourne sur un modèle externe, pas sur celui de cette session. Toi, tu prépares et tu vérifies,
+avec le skill `adorno-llm` :
+
+1. Rassemble les entrées que décrivent les consignes ci-dessous (fichiers, diff, sorties de scripts) avec tes outils,
+   sans juger toi-même. Rien de secret ni de personnel : une entrée qui en contient est réduite ou retirée.
+2. Écris `role.md` (la section « Consignes du rôle », en entier) et `prompt.md` (la tâche et les entrées).
+3. `adorno-llm/scripts/llm-run {flags} --system role.md prompt.md > reply.json`
+4. Vérifie `reply.json` › `.content` : format attendu respecté, chaque `file:line` cité existe. Sinon, une relance avec
+   l'erreur ; un second échec ou une route indisponible → fais le travail toi-même et signale-le.
+5. Écris le livrable attendu à partir de la réponse ; note `model` et `usage` dans le compte rendu.
+
+## Consignes du rôle
+
+{it.body.strip()}
+"""
+
+
 def install_dests(args) -> list[Path]:
     """Where to (un)install: ~ (--global), every local repo of a workspace (--workspace), or PATH."""
     if args.global_:
@@ -1234,6 +1370,9 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
         die("--link needs every target listed in kit.yaml `targets` (it links to dist/)")
     if args.link:
         build_all(cfg, items, ROOT)
+    global MODELS
+    MODELS = models_for(None if args.global_ else dest)
+    items = apply_models(items, MODELS)
     instructions = render_instructions(cfg, items)
 
     plan: dict[str, tuple[bytes, bool, Path]] = {}
@@ -1255,8 +1394,12 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
     managed = {p: t for p, t in managed.items() if p not in plan}
 
     perms = claude_permissions(dest, targets, args.global_)
+    env = {str(k): str(v) for k, v in (MODELS.get("claude_env") or {}).items()} \
+        if "claude" in targets and not args.global_ else {}
     state = load_state(dest)
     if args.dry_run:
+        for k, v in env.items():
+            print(f"  ! .claude/settings.local.json env.{k}={v}")
         for kind, rules in perms.items():
             for r in rules:
                 print(f"  ! .claude/settings.local.json permissions.{kind}: {r}")
@@ -1320,6 +1463,7 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
         "installed": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "files": new_files, "managed": new_managed,
         "permissions": apply_permissions(dest, perms, state.get("permissions") or {}),
+        "env": apply_env(dest, env, state.get("env") or {}),
     }, indent=2) + "\n")
     n_rules = sum(len(r) for r in perms.values())
     print(f"installed {written} file(s) + {len(managed)} managed block(s) into {dest} "
@@ -1368,6 +1512,35 @@ def apply_permissions(dest: Path, wanted: dict[str, list[str]], previous: dict[s
     return owned
 
 
+def apply_env(dest: Path, wanted: dict[str, str], previous: dict[str, str]) -> dict:
+    """`models.claude_env` into .claude/settings.local.json › env (model slots, gateway URL): set ours, remove the
+    ones a previous install set and no longer wants, never touch a variable we did not set. Returns what we own."""
+    path = dest / ".claude" / "settings.local.json"
+    if not wanted and not previous:
+        return {}
+    data = json.loads(path.read_text()) if path.exists() else {}
+    block = data.setdefault("env", {})
+    for k, v in previous.items():
+        if block.get(k) == v and k not in wanted:
+            block.pop(k)
+    owned = {}
+    for k, v in wanted.items():
+        if k in block and block[k] != v and k not in previous:
+            warn(f"{path}: env.{k} is already set by you; kept yours")
+            continue
+        block[k] = v
+        owned[k] = v
+    if not block:
+        data.pop("env")
+    if data:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, indent=2) + "\n")
+    elif path.exists():
+        path.unlink()
+        prune(path, dest)
+    return owned
+
+
 def cmd_uninstall(args) -> None:
     global USE_LOCAL
     USE_LOCAL = True
@@ -1383,9 +1556,10 @@ def uninstall_from(args, dest: Path) -> None:
     for path, created in state["managed"].items():
         remove_block(dest / path, created, dest)
     apply_permissions(dest, {}, state.get("permissions") or {})
+    apply_env(dest, {}, state.get("env") or {})
     sp = dest / STATE
     if kept:
-        state.update(files=kept, managed={}, permissions={})
+        state.update(files=kept, managed={}, permissions={}, env={})
         sp.write_text(json.dumps(state, indent=2) + "\n")
     else:
         sp.unlink()

@@ -1,6 +1,7 @@
 ---
 description: Passe sur toutes tes PRs ouvertes (ou une seule) — chaque commentaire, thread ou résumé de review sans réponse est vérifié par le spécialiste du sujet dans un workspace dédié, corrigé si besoin, puis ton agent répond dans ta voix et résout. Modes report, draft (défaut), auto.
 argument-hint: '[owner/repo#N | owner/repo] [--mode report|draft|auto]'
+model: sonnet
 ---
 
 Entrée : $ARGUMENTS — sans argument : **toutes** tes PRs ouvertes dans les repos enregistrés.

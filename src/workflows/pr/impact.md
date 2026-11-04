@@ -4,6 +4,7 @@ args: "<owner/repo> [--since 14d] [--pr N] [--mode report|comment] [--refresh]"
 uses:
   skills: [github-ops, adorno-voice]
   agents: [agent:review:impact, agent:adorno]
+model: balanced
 ---
 
 Entrée : {{args}}

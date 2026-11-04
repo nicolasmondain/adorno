@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Stand-in for curl in adorno-llm tests: records the request, answers $FAKE_CURL_CODE with $FAKE_CURL_BODY.
+set -euo pipefail
+out="" data="" cfg="" url=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o) out="$2"; shift 2 ;;
+    --data-binary) data="${2#@}"; shift 2 ;;
+    -K) cfg="$2"; shift 2 ;;
+    -w|-X|-H|--max-time) shift 2 ;;
+    -*) shift ;;
+    *) url="$1"; shift ;;
+  esac
+done
+d="${FAKE_CURL_DIR:?}"
+cp "$data" "$d/request.json"; cp "$cfg" "$d/auth"; printf '%s\n' "$url" >"$d/url"
+default='{"model":"m-x","choices":[{"message":{"content":"hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":12,"completion_tokens":3}}'
+printf '%s' "${FAKE_CURL_BODY:-$default}" >"$out"
+printf '%s' "${FAKE_CURL_CODE:-200}"

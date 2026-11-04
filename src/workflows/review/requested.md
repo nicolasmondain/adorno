@@ -4,6 +4,7 @@ args: "[owner/repo] [--mode report|pending|auto] [--include-reviewed] [--direct-
 uses:
   skills: [github-ops]
   workflows: [workflow:pr:review]
+model: balanced
 ---
 
 Entrée : {{args}}

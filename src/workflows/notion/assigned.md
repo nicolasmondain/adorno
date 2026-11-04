@@ -5,6 +5,7 @@ uses:
   skills: [adorno-watch, github-ops]
   agents: [agent:core:analyst, agent:core:router, agent:adorno]
   workflows: [workflow:spec:new, workflow:issue:fix]
+model: balanced
 ---
 
 Entrée : {{args}}. Réglages dans ta couche personnelle (`local/adorno.yaml` › `notion.assigned`) :

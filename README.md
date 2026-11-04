@@ -98,6 +98,9 @@ local/
 - **Voix** : ta charte d'écriture par canal, et des réglages par repo (ton, formalité, longueur, emoji…).
 - **Vision** : quelques principes qui priment sur tous les agents ; seules les règles d'un repo priment sur son code.
 - **Slack et Notion** : tes règles de surveillance, les canaux où tes mentions comptent, les bases Notion suivies.
+- **Modèles** : chaque agent sur le modèle qui suffit à sa tâche (`fast`, `balanced`, `deep`, traduits pour Claude
+  Code et Gemini), un modèle précis par agent, ou une route vers OpenRouter, OpenAI, Google ou tes propres modèles ;
+  par repo si besoin.
 - `bin/kit conf owner/repo` montre ce qu'un repo résout et d'où vient chaque réglage.
 
 Le dépôt public ne contient aucun profil : seulement des modèles, dans `local.example/`.
@@ -136,7 +139,7 @@ Le dépôt public ne contient aucun profil : seulement des modèles, dans `local
 | `workflow:notion:assigned` | les documents Notion qui te sont assignés, et l'agent qui convient à chacun |
 
 **Skills** : `adorno-setup`, `adorno-profile`, `adorno-voice`, `adorno-watch` (réglages et mémoire des
-surveillances Slack et Notion), `github-ops` (scripts `gh` testés sans réseau),
+surveillances Slack et Notion), `adorno-llm` (une tâche envoyée à un modèle compatible OpenAI), `github-ops` (scripts `gh` testés sans réseau),
 `commit-message`, et les skills importés tels quels : [addy/agent-skills](https://skills.addy.ie/) (méthode, de la spec
 au déploiement), [ponytail](https://ponytail.dev/) (le moins de code qui marche),
 [playwright-cli](https://github.com/microsoft/playwright-cli) et
@@ -175,6 +178,7 @@ bin/kit install PATH|--global|--workspace NOM [--targets claude,codex] [--public
 bin/kit uninstall PATH|--global|--workspace NOM
 tests/github-ops.test.sh     # tests des scripts GitHub, sans réseau
 tests/adorno-watch.test.sh   # tests des scripts de surveillance, sans connecteur
+tests/adorno-llm.test.sh     # tests de l'envoi à un modèle externe, sans réseau
 ```
 
 `kit install` est idempotent, retire ce qui a disparu du kit et ne touche ni tes fichiers ni ceux que tu as modifiés.

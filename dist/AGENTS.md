@@ -66,6 +66,19 @@ Par repo, l'utilisateur borne aussi ce que les agents peuvent faire (`repo-conf`
 `resolve`, `rerequest`, `review`, `submit`, `open_pr`, `ci_rerun`) ; `permissions.claude` devient des règles natives de
 Claude Code dans le repo. Une action refusée (code 4 ou 5) n'est jamais contournée : arrête-toi et dis-le.
 
+## Modèles : chaque tâche au modèle qui suffit
+
+Chaque agent a un niveau (`fast`, `balanced`, `deep`) que l'installation traduit en modèle de l'outil, réglable par
+repo dans la couche personnelle (`models`). Pour que ce choix serve :
+
+- **Délègue** chaque étape d'un workflow à son agent (sous-agent), plutôt que de la faire dans la session qui
+  orchestre : c'est le seul moyen qu'elle tourne sur le modèle prévu. Le mécanique (lister, filtrer, publier) reste aux
+  scripts, qui ne coûtent aucun token.
+- **Contexte minimal** : un agent ne reçoit que le livrable de l'étape précédente et les fichiers de sa zone, jamais
+  tout l'historique.
+- Un agent dont le corps commence par « Rôle délégué au modèle » envoie son jugement à un modèle externe via le skill
+  `adorno-llm` : suis ses étapes, et ne fais le travail toi-même qu'en repli.
+
 ## Ordre d'autorité
 
 1. Les règles du repo (`CLAUDE.md`, `.claude/rules/`) sur son code.
@@ -163,6 +176,7 @@ Sur les outils sans sous-agents ou commandes natifs, les agents et workflows ci-
 
 **Skills**
 
+- `adorno-llm` — Send a well-delimited task (triage, routing, a review of a given diff…) to another model through any OpenAI-compatible endpoint - OpenRouter, OpenAI, Google, your own models - and get the answer back as JSON. Used by agents that the owner routed to an external model (models.agents.<id>.route in their personal layer); also usable by hand for a cheap one-shot task.
 - `adorno-profile` — How the owner designs, delivers and reviews code — types and single source of truth, scalability and zero issue, method, git and PR discipline, review discipline, the SBI charter. Load before any review, reply, decision or code written on their behalf (agent:adorno and every agent that acts as them).
 - `adorno-setup` — Set up adorno for its owner — mode `profile` writes who you are, how you work, how you write and your vision into your personal layer (local/, git-ignored); mode `repo` declares the current repo (or a whole workspace) with its reviewers, team, context, permissions and voice. Use on first use of adorno, when an agent reports that the profile or the voice is not set up, when a repo is "not registered", or when the owner asks to change their profile, voice, vision or a repo's settings.
 - `adorno-voice` — Write as the owner — their voice charter per channel (GitHub reviews, PR descriptions, Slack, long-form), mined from their real writing. Load before drafting any outward-facing text on their behalf - review comment, thread reply, PR description, issue comment, Slack message.

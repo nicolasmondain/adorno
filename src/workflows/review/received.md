@@ -5,6 +5,7 @@ uses:
   skills: [github-ops, adorno-profile, adorno-voice]
   agents: [agent:core:triage, agent:adorno, agent:review:code, agent:review:ponytail, agent:review:front, agent:review:perf, agent:review:back, agent:review:mongodb, agent:review:api, agent:review:security, agent:review:tests, agent:fix:patch, agent:refactor:simplify, agent:test:unit]
   workflows: [workflow:ci:red]
+model: balanced
 ---
 
 Entrée : {{args}} — sans argument : **toutes** tes PRs ouvertes dans les repos enregistrés.

@@ -1,6 +1,7 @@
 ---
 description: Analyse toutes les PRs où ta review est demandée — un workspace dédié par PR, des relecteurs spécialisés choisis selon le code touché, puis ton agent qui tranche et rédige. Par défaut, une review en attente par PR, que tu relis et soumets toi-même.
 argument-hint: '[owner/repo] [--mode report|pending|auto] [--include-reviewed] [--direct-only]'
+model: sonnet
 ---
 
 Entrée : $ARGUMENTS
