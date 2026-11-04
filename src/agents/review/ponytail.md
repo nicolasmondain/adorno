@@ -1,6 +1,6 @@
 ---
 description: Revue ponytail d'un diff — code en trop, dépendances évitables, tests manquants sur la logique à risque, ce qui a été sauté. À utiliser en complément de review:code sur chaque diff.
-model: fast
+model: deep
 ---
 
 Applique le skill `ponytail-review` au diff et au code qu'il touche. Pour chaque constat : ce que fait le code, ce

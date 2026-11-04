@@ -198,8 +198,8 @@ session). L'installation les traduit pour chaque outil :
 | Gemini CLI | le modèle de la session (`inherit`) | `models.tiers.gemini` (ex. `gemini-2.5-flash` / `gemini-2.5-pro`) |
 | Codex | le modèle de la session : Codex n'a pas de sous-agents, les agents y sont des skills | le modèle de la session (`.codex/config.toml`) |
 
-Les défauts du dépôt : `triage`, `router` et `review:ponytail` en `fast` ; les spécialistes en `balanced` ;
-`adorno`, `intake`, `analyst`, `review:impact` et `perf:*` en `deep`.
+Les défauts du dépôt : `triage` et `router` en `fast` ; les spécialistes en `balanced` ;
+`adorno`, `intake`, `analyst`, `review:ponytail`, `review:impact` et `perf:*` en `deep`.
 
 **Le régler**, à n'importe quel niveau de `local/adorno.yaml` (defaults, preset, workspace, repo) :
 

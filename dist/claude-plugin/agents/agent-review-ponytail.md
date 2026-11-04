@@ -2,7 +2,7 @@
 name: agent-review-ponytail
 description: Revue ponytail d'un diff — code en trop, dépendances évitables, tests manquants sur la logique à risque, ce qui a été sauté. À utiliser en complément de review:code sur chaque diff.
 tools: Read, Grep, Glob, Bash
-model: haiku
+model: opus
 ---
 
 ## Règles de la famille `review`
