@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Usage: watch-match NAME [MESSAGES_FILE|-] [--all]
+# Filters Slack messages for the watch NAME: newer than `since`, text matching `includes` (any word, case-insensitive
+# unless case_sensitive) OR `regex`, at most `max_messages` scanned (newest first), and not processed before (state
+# key slack-watch-NAME; --all ignores it). Input: a JSON array of normalised messages
+#   {id, channel, ts, user, text, permalink?, thread_ts?}   (ts = Slack timestamp, seconds since epoch)
+# Output: {watch, scanned, matched: [...], already_seen}.
+. "$(dirname "$0")/_lib.sh"
+
+name="${1:-}"; [ -n "$name" ] || die "usage: watch-match NAME [MESSAGES_FILE|-] [--all]" "$E_USAGE"
+src="-"; all=0
+for a in "${@:2}"; do
+  if [ "$a" = "--all" ]; then all=1; else src="$a"; fi
+done
+conf="$("$WATCH_DIR/watch-conf" slack-watch "$name")"
+since="$(since_epoch "$(jq -r .since <<<"$conf")")"
+seen="{}"; f="$(state_dir)/slack-watch-$name.json"
+[ "$all" = 1 ] || [ ! -f "$f" ] || seen="$(jq '.seen // {}' "$f")"
+msgs="$(if [ "$src" = "-" ]; then cat; else cat "$src"; fi)"
+jq -e 'type == "array" and all(.[]; (.id | type) == "string" and (.text | type) == "string" and .ts != null)' \
+  >/dev/null <<<"$msgs" || die "input must be a JSON array of {id, channel, ts, user, text}" "$E_USAGE"
+
+jq --argjson c "$conf" --argjson since "$since" --argjson seen "$seen" '
+  ($c.case_sensitive | if . then "" else "i" end) as $flags
+  | def hit: . as $t
+      | (any($c.includes[]; . as $w | if $c.case_sensitive then ($t | contains($w))
+                                      else ($t | ascii_downcase | contains($w | ascii_downcase)) end))
+        or ($c.regex != null and ($t | test($c.regex; $flags)));
+    [ .[] | select((.ts | tonumber) >= $since) ] | sort_by(.ts | tonumber) | reverse | .[:$c.max_messages] as $scan
+  | { watch: $c.name, since: ($since | todate), scanned: ($scan | length),
+      matched: [ $scan[] | select(.text | hit) | select($seen[.id] == null) ],
+      already_seen: [ $scan[] | select(.text | hit) | select($seen[.id] != null) | .id ] }' <<<"$msgs"

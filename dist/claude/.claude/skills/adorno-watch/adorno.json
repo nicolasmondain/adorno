@@ -1,0 +1,137 @@
+{
+  "defaults": {
+    "base": null,
+    "branch_pattern": "^(feat|fix|perf|refactor|test|docs|style|build|ci|chore|revert)/[a-z0-9]+(-[a-z0-9]+)*$",
+    "resolve_threads": "author",
+    "reply_language": "en",
+    "max_level": "L3",
+    "ponytail": "full",
+    "review_checks": "none",
+    "allow_approve": false,
+    "max_inline": 8,
+    "max_parallel": 3,
+    "areas": {
+      "front": {
+        "paths": [
+          "*.tsx",
+          "*.jsx",
+          "*.vue",
+          "*.svelte",
+          "*.css",
+          "*.scss",
+          "*.less",
+          "*.html",
+          "client/*",
+          "*/client/*",
+          "*/ui/*",
+          "*/components/*",
+          "*/pages/*"
+        ]
+      },
+      "back": {
+        "paths": [
+          "server/*",
+          "*/server/*",
+          "*/services/*",
+          "*/jobs/*",
+          "*/workers/*",
+          "*/lib/*"
+        ]
+      },
+      "mongodb": {
+        "paths": [
+          "*/migrations/*",
+          "*migration*",
+          "*/collections/*",
+          "*/models/*"
+        ],
+        "content": "\\.aggregate\\(|\\.createIndex\\(|\\.find(One)?\\(|\\.(update|delete|insert)(One|Many)?\\(|\\.bulkWrite\\(|Mongo\\.Collection|rawCollection\\(|\\$lookup|\\$match|\\$group"
+      },
+      "api": {
+        "paths": [
+          "*/api/*",
+          "*/routes/*",
+          "*/methods/*",
+          "*openapi*",
+          "*/api-reference/*"
+        ]
+      },
+      "tests": {
+        "paths": [
+          "*.test.*",
+          "*.spec.*",
+          "*/tests/*",
+          "*/__tests__/*",
+          "*/test/*"
+        ]
+      },
+      "security": {
+        "paths": [
+          "*/auth/*",
+          "*/permissions/*",
+          "*.env*"
+        ],
+        "content": "(password|secret|token|api[_-]?key|jwt|bcrypt|crypto\\.|permission|isAdmin|role)"
+      },
+      "deps": {
+        "paths": [
+          "package.json",
+          "*/package.json",
+          "*lock.json",
+          "*.lock",
+          "yarn.lock",
+          "requirements*.txt",
+          "go.mod"
+        ]
+      },
+      "ci": {
+        "paths": [
+          ".github/*",
+          "*Dockerfile*",
+          "*docker-compose*"
+        ]
+      },
+      "docs": {
+        "paths": [
+          "*.md",
+          "*.mdx",
+          "docs/*"
+        ]
+      }
+    },
+    "area_reviewers": {
+      "always": [
+        "agent:review:code",
+        "agent:review:ponytail"
+      ],
+      "front": [
+        "agent:review:front",
+        "agent:review:perf"
+      ],
+      "back": [
+        "agent:review:back",
+        "agent:review:tests"
+      ],
+      "mongodb": [
+        "agent:review:mongodb"
+      ],
+      "api": [
+        "agent:review:api"
+      ],
+      "tests": [
+        "agent:review:tests"
+      ],
+      "security": [
+        "agent:review:security"
+      ],
+      "deps": [
+        "agent:review:security"
+      ],
+      "ci": [
+        "agent:review:security"
+      ],
+      "docs": []
+    }
+  },
+  "repos": {}
+}

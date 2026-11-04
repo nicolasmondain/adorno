@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Usage: watch-conf slack-watch NAME | slack-mentions | notion-assigned | channel-repos CHANNEL | list
+# The settings of one watch from your personal layer (local/adorno.yaml › slack, notion), defaults filled in, as JSON.
+# channel-repos: the repos whose `team.slack` lists CHANNEL (to find the code behind a conversation).
+# Exit 3 when the section is not configured.
+. "$(dirname "$0")/_lib.sh"
+
+case "${1:-}" in
+  list)
+    jq '{slack_watches: ((.slack.watches // {}) | keys), slack_mentions: (.slack.mentions != null),
+         notion_assigned: (.notion.assigned != null)}' "$CONF" ;;
+  slack-watch)
+    [ -n "${2:-}" ] || die "usage: watch-conf slack-watch NAME" "$E_USAGE"
+    jq -e --arg n "$2" '
+      .slack as $s | ($s.watches // {})[$n] // empty
+      | {name: $n, user_id: $s.user_id, since: "24h", max_messages: 200, case_sensitive: false,
+         includes: [], regex: null, threads: false, notify: ($s.notify // "dm"), action: null}
+        + . | .action = ((.action // {}) | {level: "L0"} + .)' "$CONF" \
+      || die "no slack watch '$2' in your personal layer (local/adorno.yaml › slack.watches)" "$E_UNCONFIGURED" ;;
+  slack-mentions)
+    jq -e '.slack as $s | ($s.mentions // empty)
+      | {user_id: $s.user_id, channels: [], groups: [], since: "24h", max_messages: 50, include_threads: true,
+         notify: ($s.notify // "dm"), agent: "agent:core:analyst"} + .' "$CONF" \
+      || die "slack.mentions is not configured in your personal layer (local/adorno.yaml)" "$E_UNCONFIGURED" ;;
+  notion-assigned)
+    jq -e '.notion as $n | ($n.assigned // empty)
+      | {user_id: $n.user_id, properties: ["Assignee"], databases: [], exclude_status: ["Done"],
+         since: "30d", max_messages: 20, agents: {}, mode: "report", level: "L0",
+         notify: ($n.notify // .notify // "dm")} + .' "$CONF" \
+      || die "notion.assigned is not configured in your personal layer (local/adorno.yaml)" "$E_UNCONFIGURED" ;;
+  channel-repos)
+    [ -n "${2:-}" ] || die "usage: watch-conf channel-repos CHANNEL" "$E_USAGE"
+    jq --arg c "${2#\#}" '[(.repos // {}) | to_entries[]
+      | select(any((.value.team.slack // [])[]; ltrimstr("#") == $c)) | .key]' "$CONF" ;;
+  *) die "usage: watch-conf slack-watch NAME | slack-mentions | notion-assigned | channel-repos CHANNEL | list" "$E_USAGE" ;;
+esac

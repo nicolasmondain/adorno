@@ -71,3 +71,37 @@ repos:                                 # un repo précis, ou un glob (`acme/docs
       - "Public documentation: examples use obvious placeholders only, never real data."
     area_reviewers:                    # relecteurs par zone de code (zones : repos.yaml › areas)
       docs: [agent:review:security]
+
+slack:                                 # workflow:slack:watch et workflow:slack:mentions (connecteur Slack, lecture seule)
+  user_id: U0123ABCD                   # ton identifiant Slack : destinataire des comptes rendus, cible des mentions
+  notify: dm                           # dm (message à toi-même) | draft (brouillon, non envoyé) | none
+  watches:                             # règles nommées : workflow:slack:watch <nom>
+    prod-timeouts:
+      channels: ["#platform-alerts"]
+      includes: ["Timeout", "ETIMEDOUT"]   # au moins un mot (insensible à la casse, sauf case_sensitive: true)…
+      regex: 'took (\d{4,})ms'             # …ou cette regex
+      since: 24h                           # 90m, 24h, 7d ou une date
+      max_messages: 200                    # messages lus au plus, les plus récents d'abord
+      threads: false                       # lire aussi les réponses dans les fils
+      action:                              # lancé sur chaque message qui correspond, une seule fois
+        agent: agent:core:analyst          # ou workflow: workflow:issue:fix
+        prompt: "Rattache l'erreur à un module et dis si elle est nouvelle."
+        level: L0                          # droits de l'action
+  mentions:                            # workflow:slack:mentions : chaque mention → analyse + brouillon de réponse, à toi seul
+    channels: ["#platform", "#product-bug"]   # vide = tous les canaux
+    groups: ["@platform-devs"]                # groupes dont la mention compte aussi
+    since: 24h
+    max_messages: 50
+
+notion:                                # workflow:notion:assigned (connecteur Notion, lecture seule)
+  assigned:
+    properties: ["Assignee", "Owner"]  # propriétés « personne » qui valent assignation
+    databases: []                      # liens ou noms des bases suivies ; vide = tout l'espace
+    exclude_status: ["Done", "Archived"]
+    since: 30d
+    max_messages: 20                   # documents traités au plus par exécution
+    agents:                            # quoi lancer selon la base ; sinon agent:core:router choisit
+      "Roadmap": workflow:spec:new
+      "Bugs": workflow:issue:fix
+    mode: report                       # report : analyse et plan · run : lance l'agent ou le workflow
+    level: L0                          # droits en mode run

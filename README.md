@@ -27,6 +27,9 @@ flowchart LR
 | `workflow:review:received` | toutes tes PRs : chaque commentaire vérifié par le spécialiste du sujet, corrigé si besoin, puis Adorno tranche et répond | rien en `draft` (défaut) ; tout en `auto` |
 | `workflow:pr:open` | la porte de revue sur ta branche (aucun 🔴 ni 🟠 non réglé), puis la PR décrite dans ta voix | la PR |
 | `workflow:feature:build` | de la demande à la PR prête : spec, plan en tranches, agents par type de commit, QA avec captures, revue, PR, suivi | la PR, que tu merges |
+| `workflow:slack:mentions` | chaque fois que tu es mentionné : l'analyse du problème et un brouillon de réponse dans ta voix | rien : un message **à toi seul**, avec le lien vers la conversation |
+| `workflow:slack:watch <règle>` | les messages d'un canal qui correspondent à une règle (mots ou regex, période, maximum) déclenchent l'action que tu as choisie | rien : un compte rendu à toi seul |
+| `workflow:notion:assigned` | les documents Notion qui te sont assignés : l'agent ou le workflow adapté à chacun | rien sur Notion : un compte rendu à toi seul |
 
 Adorno est **la dernière étape** de chaque workflow qui produit quelque chose en ton nom.
 
@@ -93,6 +96,7 @@ local/
   de Claude Code (`permissions.claude`, écrites dans le repo à l'install).
 - **Voix** : ta charte d'écriture par canal, et des réglages par repo (ton, formalité, longueur, emoji…).
 - **Vision** : quelques principes qui priment sur tous les agents ; seules les règles d'un repo priment sur son code.
+- **Slack et Notion** : tes règles de surveillance, les canaux où tes mentions comptent, les bases Notion suivies.
 - `bin/kit conf owner/repo` montre ce qu'un repo résout et d'où vient chaque réglage.
 
 Le dépôt public ne contient aucun profil : seulement des modèles, dans `local.example/`.
@@ -102,7 +106,7 @@ Le dépôt public ne contient aucun profil : seulement des modèles, dans `local
 | Famille | Agents | Commits |
 | --- | --- | --- |
 | — | `agent:adorno` : parle et décide en ton nom, dernière étape des workflows | aucun |
-| `core` | `intake`, `router`, `planner`, `orchestrator`, `triage` | aucun |
+| `core` | `intake`, `router`, `planner`, `orchestrator`, `triage`, `analyst` (analyse d'une conversation ou d'un document) | aucun |
 | `review` | `code`, `security`, `tests`, `perf` (étendent les agents d'addy), `ponytail`, et par zone : `front`, `back`, `mongodb`, `api` | aucun, lecture seule |
 | `feat` | `front`, `back`, `api` | `feat` |
 | `fix` | `investigate` (lecture seule), `patch` | `fix` |
@@ -125,8 +129,12 @@ Le dépôt public ne contient aucun profil : seulement des modèles, dans `local
 | `workflow:pr:status` | l'état de toutes tes PRs |
 | `workflow:ci:red` | diagnostic d'une CI rouge, une relance si flaky, sinon correction |
 | `workflow:repo:onboard` | prépare un repo pour les agents, puis le déclare avec `adorno-setup` |
+| `workflow:slack:mentions` | tes mentions Slack : analyse et brouillon de réponse, envoyés à toi seul |
+| `workflow:slack:watch` | une règle de surveillance d'un canal Slack, et son action sur chaque message qui correspond |
+| `workflow:notion:assigned` | les documents Notion qui te sont assignés, et l'agent qui convient à chacun |
 
-**Skills** : `adorno-setup`, `adorno-profile`, `adorno-voice`, `github-ops` (scripts `gh` testés sans réseau),
+**Skills** : `adorno-setup`, `adorno-profile`, `adorno-voice`, `adorno-watch` (réglages et mémoire des
+surveillances Slack et Notion), `github-ops` (scripts `gh` testés sans réseau),
 `commit-message`, et les skills importés tels quels : [addy/agent-skills](https://skills.addy.ie/) (méthode, de la spec
 au déploiement), [ponytail](https://ponytail.dev/) (le moins de code qui marche),
 [playwright-cli](https://github.com/microsoft/playwright-cli) et
@@ -163,7 +171,8 @@ bin/kit new agent fix:flaky  # ou: new workflow ci:flaky, new skill <nom>
 bin/kit import [--update]    # skills et agents importés (commits figés dans kit.lock)
 bin/kit install PATH|--global|--workspace NOM [--targets claude,codex] [--public-only] [--dry-run]
 bin/kit uninstall PATH|--global|--workspace NOM
-tests/github-ops.test.sh     # tests des scripts, sans réseau
+tests/github-ops.test.sh     # tests des scripts GitHub, sans réseau
+tests/adorno-watch.test.sh   # tests des scripts de surveillance, sans connecteur
 ```
 
 `kit install` est idempotent, retire ce qui a disparu du kit et ne touche ni tes fichiers ni ceux que tu as modifiés.

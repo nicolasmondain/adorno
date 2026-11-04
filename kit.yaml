@@ -19,6 +19,8 @@ instructions:
 skill_data:
   github-ops:
     repos.json: repos.yaml
+  adorno-watch:
+    adorno.json: repos.yaml
 
 # Agents, skills et workflows importés depuis d'autres dépôts.
 # `kit import` les récupère dans vendor/<name>/ et fige le commit dans kit.lock ;

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Usage: watch-seen list KEY | mark KEY ID... | filter KEY [FILE|-] | last KEY | touch KEY
+# Remembers what a watch already processed, under ~/.adorno/state/KEY.json, so a run never handles an item twice.
+#   list    the processed ids          mark    record ids as processed (keeps the 5000 most recent)
+#   filter  drop processed items from a JSON array of {id, …}
+#   last    time of the last run (null if never)    touch   record this run's time
+. "$(dirname "$0")/_lib.sh"
+
+cmd="${1:-}"; key="${2:-}"
+[ -n "$cmd" ] && [ -n "$key" ] || die "usage: watch-seen list|mark|filter|last|touch KEY …" "$E_USAGE"
+valid_key "$key"
+f="$(state_dir)/$key.json"
+[ -f "$f" ] || printf '{"last_run": null, "seen": {}}\n' >"$f"
+shift 2
+case "$cmd" in
+  list)  jq '.seen | keys' "$f" ;;
+  last)  jq '.last_run' "$f" ;;
+  touch)
+    jq --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.last_run = $t' "$f" >"$f.tmp" && mv "$f.tmp" "$f"
+    jq '{last_run}' "$f" ;;
+  mark)
+    [ $# -gt 0 ] || die "usage: watch-seen mark KEY ID..." "$E_USAGE"
+    jq --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --args '
+      reduce $ARGS.positional[] as $id (.; .seen[$id] = $t)
+      | .seen |= (to_entries | sort_by(.value) | .[-5000:] | from_entries)' "$@" <"$f" >"$f.tmp" && mv "$f.tmp" "$f"
+    jq -n --args '{marked: $ARGS.positional}' "$@" ;;
+  filter)
+    src="${1:--}"
+    jq --slurpfile st "$f" '[.[] | select($st[0].seen[.id] == null)]' "$src" ;;
+  *) die "unknown command '$cmd'" "$E_USAGE" ;;
+esac

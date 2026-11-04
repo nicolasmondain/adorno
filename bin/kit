@@ -186,6 +186,9 @@ def registry() -> dict:
             ws["repos"] = list(dict.fromkeys(list(ws.get("repos") or []) + list(workspace_dirs(ws))))
             workspaces[name] = ws
         data["workspaces"] = workspaces
+        for key in ("slack", "notion"):  # owner-level watches (workflow:slack:*, workflow:notion:*)
+            if loc.get(key):
+                data[key] = loc[key]
     return data
 
 
@@ -457,6 +460,60 @@ def validate(cfg: Config, items: dict[str, dict[str, Item]]) -> list[str]:
     return errors
 
 
+WATCH_NOTIFY = ("dm", "draft", "none")
+SINCE_RE = re.compile(r"^(\d+[mhd]|\d{4}-\d{2}-\d{2}(T[\d:]+Z?)?)$")
+
+
+def validate_watches(reg: dict, where: str, agent_ids: set) -> list[str]:
+    """`slack` and `notion` sections of the personal layer (workflow:slack:*, workflow:notion:*)."""
+    errors: list[str] = []
+
+    def common(scope: str, conf: dict) -> None:
+        if conf.get("since") is not None and not SINCE_RE.match(str(conf["since"])):
+            errors.append(f"{where}: {scope}.since must look like 90m, 24h, 7d or 2026-11-01")
+        if conf.get("max_messages") is not None and not (isinstance(conf["max_messages"], int)
+                                                         and conf["max_messages"] > 0):
+            errors.append(f"{where}: {scope}.max_messages must be a positive integer")
+        if conf.get("notify") is not None and conf["notify"] not in WATCH_NOTIFY:
+            errors.append(f"{where}: {scope}.notify must be one of {', '.join(WATCH_NOTIFY)}")
+        lvl = (conf.get("action") or {}).get("level", conf.get("level"))
+        if lvl is not None and lvl not in LEVELS:
+            errors.append(f"{where}: {scope} level must be one of {', '.join(LEVELS)}")
+
+    slack = reg.get("slack") or {}
+    if slack:
+        common("slack", slack)
+        for name, w in (slack.get("watches") or {}).items():
+            scope = f"slack.watches.{name}"
+            if not isinstance(w, dict):
+                errors.append(f"{where}: {scope} must be a mapping")
+                continue
+            common(scope, w)
+            if not w.get("channels"):
+                errors.append(f"{where}: {scope} needs `channels`")
+            if not (w.get("includes") or w.get("regex")):
+                errors.append(f"{where}: {scope} needs `includes` (words) or `regex`")
+            if w.get("regex"):
+                try:
+                    re.compile(str(w["regex"]))
+                except re.error as e:
+                    errors.append(f"{where}: {scope}.regex is invalid: {e}")
+            action = w.get("action") or {}
+            if action.get("agent") and action["agent"] not in agent_ids:
+                errors.append(f"{where}: {scope}.action.agent names unknown agent '{action['agent']}'")
+            if action and not (action.get("agent") or action.get("workflow") or action.get("prompt")):
+                errors.append(f"{where}: {scope}.action needs `agent`, `workflow` or `prompt`")
+        if slack.get("mentions") is not None:
+            common("slack.mentions", slack["mentions"] or {})
+    notion = reg.get("notion") or {}
+    if notion.get("assigned") is not None:
+        a = notion["assigned"] or {}
+        common("notion.assigned", a)
+        if a.get("mode") is not None and a["mode"] not in ("report", "run"):
+            errors.append(f"{where}: notion.assigned.mode must be report or run")
+    return errors
+
+
 def validate_registry(reg: dict, agent_ids: set) -> list[str]:
     """repos.yaml and the personal layer: references, levels, permissions, shapes."""
     errors: list[str] = []
@@ -501,6 +558,7 @@ def validate_registry(reg: dict, agent_ids: set) -> list[str]:
                     errors.append(f"{where}: {scope}.permissions.claude.{key}: expected {', '.join(CLAUDE_RULES)}")
         if scope.startswith("workspaces.") and not (conf.get("repos") or conf.get("paths")):
             errors.append(f"{where}: {scope} needs `repos` (GitHub globs) or `paths` (local folders)")
+    errors += validate_watches(reg, where, agent_ids)
     # presets that use each other must not loop
     def walk(name: str, seen: tuple) -> None:
         if name in seen:

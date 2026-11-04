@@ -1,0 +1,18 @@
+{
+  "defaults": {"max_level": "L3"},
+  "repos": {
+    "acme/app": {"team": {"slack": ["#team-app", "#app-errors"]}},
+    "acme/docs": {"team": {"slack": ["#docs"]}}
+  },
+  "slack": {
+    "user_id": "U0SELF",
+    "notify": "draft",
+    "watches": {
+      "timeouts": {"channels": ["#app-errors"], "includes": ["Timeout"], "regex": "took [0-9]{4,}ms",
+                   "since": "2d", "max_messages": 3, "action": {"agent": "agent:core:analyst"}},
+      "exact": {"channels": ["#x"], "includes": ["ERR"], "case_sensitive": true, "since": "2d"}
+    },
+    "mentions": {"channels": ["#team-app"]}
+  },
+  "notion": {"assigned": {"properties": ["Owner"], "mode": "run"}}
+}

@@ -124,6 +124,30 @@ importés.
 
 Dans Claude Code via le plugin, les commandes s'appellent `/adorno:workflow-review-requested`, etc.
 
+## 7. Slack et Notion
+
+Trois workflows lisent Slack et Notion à travers leurs connecteurs (dans Claude : connecte Slack et Notion). Ils ne
+postent rien, ne réagissent à rien et ne modifient aucune page : leur seule écriture est le compte rendu qu'ils
+**t'envoient à toi**, selon `notify` (`dm` message à toi-même, `draft` brouillon non envoyé, `none` rien). Chacun
+retient ce qu'il a déjà traité (`~/.adorno/state/`) : relancé toutes les heures, il ne traite que le nouveau.
+
+```mermaid
+flowchart LR
+  S["Slack / Notion<br/>lecture seule"] --> F["filtre<br/>règle, période, déjà vu"] --> A["agent ou workflow<br/>analyse, action"] --> D(("Adorno")) --> M["message<br/>à toi seul"]
+```
+
+| Workflow | Réglages (`local/adorno.yaml`) | Ce que tu reçois |
+| --- | --- | --- |
+| `workflow:slack:mentions` | `slack.user_id`, `slack.mentions` : canaux (vide = tous), groupes, période | par mention : le lien vers la conversation, l'analyse complète, un brouillon de réponse dans ta voix |
+| `workflow:slack:watch <règle>` | `slack.watches.<règle>` : canaux, `includes` (mots) ou `regex`, `since`, `max_messages`, `action` (agent, workflow ou consigne, avec son niveau) | le compte rendu des messages qui correspondent et du résultat de l'action |
+| `workflow:notion:assigned` | `notion.assigned` : propriétés « personne », bases, statuts exclus, agent par base, `mode` report ou run | par document : l'action choisie, son résultat, ce qui attend ta décision |
+
+Ton identifiant Slack : ton profil Slack › ⋮ › « Copier l'identifiant de membre ». Le skill `adorno-setup` peut aussi
+le retrouver avec le connecteur. Modèle commenté : `local.example/adorno.yaml`.
+
+Ces workflows se lancent à la main, ou depuis ta propre planification (une tâche planifiée qui lance
+`workflow:slack:mentions` toutes les heures, par exemple) : adorno ne planifie rien lui-même.
+
 ## Ajouter tes propres agents et skills
 
 `local/src/` est un `src/` privé, posé sur le public à l'install : un agent `local/src/agents/feat/billing.md`, un
