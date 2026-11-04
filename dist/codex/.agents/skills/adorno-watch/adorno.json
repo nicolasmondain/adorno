@@ -10,6 +10,13 @@
     "allow_approve": false,
     "max_inline": 8,
     "max_parallel": 3,
+    "impact": {
+      "window": "7d",
+      "min_age": "3d",
+      "environment": "production",
+      "post": "comment",
+      "sources": []
+    },
     "areas": {
       "front": {
         "paths": [

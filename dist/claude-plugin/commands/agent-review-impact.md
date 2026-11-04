@@ -1,0 +1,8 @@
+---
+description: agent:review:impact — Mesure l'impact réel d'une PR mergée en production — utilisation, erreurs, temps de réponse, débit, ressources, base de données, alertes — en comparant avant et après son déploiement dans toutes les sources disponibles (logs, métriques, traces, erreurs, analytics, canaux d'alerte). Lecture seule, chaque chiffre avec sa source. À utiliser dans workflow:pr:impact.
+argument-hint: <demande>
+---
+
+Délègue la demande ci-dessous au sous-agent `agent-review-impact` (agent:review:impact) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `agent-review-impact`) pour traiter la demande.
+
+Demande : $ARGUMENTS

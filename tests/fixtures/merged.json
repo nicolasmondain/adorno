@@ -1,0 +1,12 @@
+[
+  {"number": 40, "title": "perf(api): cache team settings", "url": "https://github.com/acme/docs/pull/40",
+   "author": {"login": "octocat"}, "mergedAt": "2026-11-01T10:00:00Z", "mergeCommit": {"oid": "m40"},
+   "additions": 30, "deletions": 5, "baseRefName": "main",
+   "files": [{"path": "api/teams.ts"}], "labels": [{"name": "perf"}],
+   "comments": [{"author": {"login": "octocat"}, "body": "<!-- adorno:impact -->\n## Impact"}]},
+  {"number": 42, "title": "feat(api): add pagination", "url": "https://github.com/acme/docs/pull/42",
+   "author": {"login": "octocat"}, "mergedAt": "2026-11-03T09:00:00Z", "mergeCommit": {"oid": "m42"},
+   "additions": 120, "deletions": 10, "baseRefName": "main",
+   "files": [{"path": "api/users.ts"}, {"path": "client/list.tsx"}], "labels": [],
+   "comments": [{"author": {"login": "alice"}, "body": "<!-- adorno:impact --> copied by someone else"}]}
+]

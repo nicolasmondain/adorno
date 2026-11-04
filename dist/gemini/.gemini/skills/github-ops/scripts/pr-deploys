@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Usage: pr-deploys owner/repo#N
+# When the merge commit of a merged PR reached each environment, from GitHub deployments: for every environment, the
+# first successful deployment created after the merge whose commit contains the merge commit. JSON:
+#   {mergedAt, mergeCommit, environments: [{environment, deployedAt, sha, url}], source}
+# No GitHub deployment in this repo → environments is [] and source is "none": fall back to the merge time, release
+# tags or the team's deploy channel, and say so.
+. "$(dirname "$0")/_lib.sh"
+
+parse_ref "${1:-}"
+repo_conf "$REPO" >/dev/null
+info="$(gh pr view "$NUM" -R "$REPO" --json state,mergedAt,mergeCommit)"
+[ "$(jq -r .state <<<"$info")" = "MERGED" ] || die "$REPO#$NUM is not merged" "$E_POLICY"
+merged="$(jq -r .mergedAt <<<"$info")"; sha="$(jq -r .mergeCommit.oid <<<"$info")"
+
+deps="$(gh api "repos/$REPO/deployments?per_page=100" \
+         --jq "[.[] | select(.created_at >= \"$merged\") | {id, environment, sha, created_at}] | sort_by(.created_at)")"
+
+out="[]"; done_envs=" "
+while IFS=$'\t' read -r id env dsha created; do
+  [ -n "$id" ] || continue
+  case "$done_envs" in *" $env "*) continue ;; esac
+  rel="$(gh api "repos/$REPO/compare/$sha...$dsha" --jq .status 2>/dev/null || echo unknown)"
+  case "$rel" in ahead|identical) ;; *) continue ;; esac
+  state="$(gh api "repos/$REPO/deployments/$id/statuses?per_page=1" --jq '.[0] | [.state, (.environment_url // .target_url // "")] | @tsv' 2>/dev/null || true)"
+  [ "${state%%	*}" = "success" ] || continue
+  out="$(jq --arg e "$env" --arg t "$created" --arg s "$dsha" --arg u "${state#*	}" \
+          '. + [{environment: $e, deployedAt: $t, sha: $s, url: (if $u == "" then null else $u end)}]' <<<"$out")"
+  done_envs="$done_envs$env "
+done < <(jq -r '.[] | [.id, .environment, .sha, .created_at] | @tsv' <<<"$deps")
+
+jq -n --arg m "$merged" --arg c "$sha" --argjson e "$out" \
+  '{mergedAt: $m, mergeCommit: $c, environments: $e, source: (if ($e | length) > 0 then "github-deployments" else "none" end)}'

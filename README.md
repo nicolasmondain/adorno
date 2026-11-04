@@ -27,6 +27,7 @@ flowchart LR
 | `workflow:review:received` | toutes tes PRs : chaque commentaire vérifié par le spécialiste du sujet, corrigé si besoin, puis Adorno tranche et répond | rien en `draft` (défaut) ; tout en `auto` |
 | `workflow:pr:open` | la porte de revue sur ta branche (aucun 🔴 ni 🟠 non réglé), puis la PR décrite dans ta voix | la PR |
 | `workflow:feature:build` | de la demande à la PR prête : spec, plan en tranches, agents par type de commit, QA avec captures, revue, PR, suivi | la PR, que tu merges |
+| `workflow:pr:impact <repo>` | les PRs que tu as mergées : depuis leur déploiement, utilisation, erreurs, temps de réponse et ressources comparés avant / après dans toutes les sources disponibles | un rapport d'impact en commentaire de chaque PR |
 | `workflow:slack:mentions` | chaque fois que tu es mentionné : l'analyse du problème et un brouillon de réponse dans ta voix | rien : un message **à toi seul**, avec le lien vers la conversation |
 | `workflow:slack:watch <règle>` | les messages d'un canal qui correspondent à une règle (mots ou regex, période, maximum) déclenchent l'action que tu as choisie | rien : un compte rendu à toi seul |
 | `workflow:notion:assigned` | les documents Notion qui te sont assignés : l'agent ou le workflow adapté à chacun | rien sur Notion : un compte rendu à toi seul |
@@ -107,7 +108,7 @@ Le dépôt public ne contient aucun profil : seulement des modèles, dans `local
 | --- | --- | --- |
 | — | `agent:adorno` : parle et décide en ton nom, dernière étape des workflows | aucun |
 | `core` | `intake`, `router`, `planner`, `orchestrator`, `triage`, `analyst` (analyse d'une conversation ou d'un document) | aucun |
-| `review` | `code`, `security`, `tests`, `perf` (étendent les agents d'addy), `ponytail`, et par zone : `front`, `back`, `mongodb`, `api` | aucun, lecture seule |
+| `review` | `code`, `security`, `tests`, `perf` (étendent les agents d'addy), `ponytail`, par zone : `front`, `back`, `mongodb`, `api`, et après merge : `impact` | aucun, lecture seule |
 | `feat` | `front`, `back`, `api` | `feat` |
 | `fix` | `investigate` (lecture seule), `patch` | `fix` |
 | `perf` | `mongodb`, `nodejs` | `perf`, mesures avant/après |
@@ -127,6 +128,7 @@ Le dépôt public ne contient aucun profil : seulement des modèles, dans `local
 | `workflow:review:received` | toutes les reviews reçues sur tes PRs ; `report`, `draft`, `auto` |
 | `workflow:pr:watch` | CI rouge et nouveaux commentaires en boucle, jusqu'à « prête à merger » |
 | `workflow:pr:status` | l'état de toutes tes PRs |
+| `workflow:pr:impact` | l'impact en production des PRs que tu as mergées, en commentaire de chacune ; `report`, `comment` |
 | `workflow:ci:red` | diagnostic d'une CI rouge, une relance si flaky, sinon correction |
 | `workflow:repo:onboard` | prépare un repo pour les agents, puis le déclare avec `adorno-setup` |
 | `workflow:slack:mentions` | tes mentions Slack : analyse et brouillon de réponse, envoyés à toi seul |

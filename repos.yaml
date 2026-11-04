@@ -20,6 +20,9 @@
 #   areas            zones de code : motifs de chemin (globs bash, `*` traverse les dossiers) et/ou
 #                    regex sur les lignes ajoutées ; une zone peut être surchargée par repo
 #   area_reviewers   agents relecteurs demandés selon les zones touchées (`always` = à chaque fois)
+#   impact           analyse d'impact des PRs mergées (workflow:pr:impact) : fenêtre comparée avant / après le
+#                    déploiement, délai minimal avant d'analyser, sources à interroger (connecteurs et repères :
+#                    dashboards, services, projets, canaux d'alerte), publication en commentaire ou non
 
 defaults:
   base: null
@@ -32,6 +35,13 @@ defaults:
   allow_approve: false
   max_inline: 8
   max_parallel: 3
+
+  impact:
+    window: 7d            # même durée comparée avant et après le déploiement
+    min_age: 3d           # pas d'analyse tant que la PR n'est pas en production depuis ce délai
+    environment: production
+    post: comment         # comment : le rapport part en commentaire de la PR · none : rapport local seulement
+    sources: []           # tes repères par repo, dans local/adorno.yaml (voir local.example/)
 
   areas:
     front:

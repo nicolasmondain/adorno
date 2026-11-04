@@ -543,6 +543,18 @@ def validate_registry(reg: dict, agent_ids: set) -> list[str]:
             if conf.get(key) is not None and not (isinstance(conf[key], list)
                                                   and all(isinstance(x, str) for x in conf[key])):
                 errors.append(f"{where}: {scope}.{key} must be a list of lines")
+        imp = conf.get("impact")
+        if imp is not None:
+            if not isinstance(imp, dict):
+                errors.append(f"{where}: {scope}.impact must be a mapping")
+            else:
+                for k in ("window", "min_age"):
+                    if imp.get(k) is not None and not re.match(r"^\d+[hd]$", str(imp[k])):
+                        errors.append(f"{where}: {scope}.impact.{k} must look like 48h or 7d")
+                if imp.get("post") is not None and imp["post"] not in ("comment", "none"):
+                    errors.append(f"{where}: {scope}.impact.post must be comment or none")
+                if imp.get("sources") is not None and not isinstance(imp["sources"], list):
+                    errors.append(f"{where}: {scope}.impact.sources must be a list")
         if conf.get("voice") is not None and not isinstance(conf["voice"], dict):
             errors.append(f"{where}: {scope}.voice must be a mapping")
         perms = conf.get("permissions")

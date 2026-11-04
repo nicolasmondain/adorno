@@ -22,6 +22,8 @@ et rendent du JSON sur stdout ; les messages vont sur stderr. Prérequis : `gh` 
 | `pr-areas owner/repo FICHIER_DIFF` | zones de code touchées (front, back, mongodb…) et relecteurs à appeler | L0 |
 | `pr-diff owner/repo#N` | métadonnées + diff sauvegardé dans un fichier | L0 |
 | `issue-fetch owner/repo#N` | issue + commentaires | L0 |
+| `pr-merged owner/repo [--since 14d] [--author LOGIN] [--pr N]` | PRs mergées (les tiennes par défaut) : commit de merge, fichiers, rapport d'impact déjà posté ou non | L0 |
+| `pr-deploys owner/repo#N` | quand le merge a atteint chaque environnement (déploiements GitHub) ; `source: none` sans déploiements | L0 |
 | `ci-wait owner/repo#N [secondes]` | attend la fin des checks (requis seulement si configurés) | L0 |
 | `ci-failed owner/repo#N [lignes]` | runs en échec sur le dernier commit + fin des logs dans des fichiers | L0 |
 | `ci-rerun owner/repo RUN_ID` | relance les jobs en échec, une seule fois par run | L2 |

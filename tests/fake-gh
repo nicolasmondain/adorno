@@ -42,7 +42,18 @@ case "$all" in
     jq '{html_url: "https://github.com/x/y/pull/1#review-1", state: (if .event == "COMMENT" then "COMMENTED" else .event end)}' "$input" | respond ;;
   api\ -X\ POST\ repos/*/requested_reviewers*)
     printf '%s\n' "${args[@]}" | sed -n 's/^reviewers\[\]=//p' | jq -R '{login: .}' | jq -s '{requested_reviewers: .}' | respond ;;
+  pr\ view*mergedAt*) respond <"${FAKE_MERGED_VIEW:-$FIX/merged-view.json}" ;;
   pr\ view*) pr_json | respond ;;
+  pr\ list*--state\ merged*) respond <"$FIX/merged.json" ;;
+  api\ repos/*/deployments/*/statuses*)
+    id="${all#*deployments/}"; id="${id%%/*}"
+    case "$id" in 2) st=failure ;; *) st=success ;; esac
+    printf '[{"state":"%s","environment_url":"https://env/%s"}]\n' "$st" "$id" | respond ;;
+  api\ repos/*/deployments*) respond <"$FIX/deployments.json" ;;
+  api\ repos/*/compare/*)
+    head="${all##*...}"; head="${head%% *}"
+    case "$head" in p1|p2|s1|s2) st=ahead ;; *) st=behind ;; esac
+    printf '{"status":"%s"}\n' "$st" | respond ;;
   pr\ comment*) echo "https://github.com/x/y/pull/1#issuecomment-1" ;;
   pr\ checks*) cat "${FAKE_CHECKS:-$FIX/checks-pass.json}"; [ "${FAKE_CHECKS_EXIT:-0}" = 0 ] || exit "$FAKE_CHECKS_EXIT" ;;
   run\ view*attempt*) printf '{"attempt":%s}\n' "${FAKE_ATTEMPT:-1}" | respond ;;

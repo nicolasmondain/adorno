@@ -1,0 +1,3 @@
+{"number": 42, "title": "feat(api): add pagination", "url": "https://github.com/acme/docs/pull/42",
+ "author": {"login": "octocat"}, "state": "MERGED", "mergedAt": "2026-11-03T09:00:00Z", "mergeCommit": {"oid": "m42"},
+ "additions": 120, "deletions": 10, "baseRefName": "main", "files": [{"path": "api/users.ts"}], "labels": [], "comments": []}

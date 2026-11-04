@@ -178,6 +178,21 @@ GH_OPS_DRY_RUN=1 expect_exit 0 "dry-run comment" -- "$S/pr-comment" acme/docs#42
 expect_jq "body shown" '.dryRun and .body == "Fixed in abc123.\n"'
 expect_exit 5 "comment needs L3" -- env ADORNO_LEVEL=L2 "$S/pr-comment" acme/docs#42 "$TMP/body.md"
 
+echo "pr-merged and pr-deploys (impact reports)"
+expect_exit 0 "merged PRs" -- "$S/pr-merged" acme/docs --since 2026-10-01
+expect_jq "newest first, impact marker only counts when it is yours" \
+  '[.[].number] == [42, 40] and .[0].impactReported == false and .[1].impactReported == true and .[0].files == ["api/users.ts", "client/list.tsx"] and .[0].mergeCommit == "m42"'
+expect_exit 0 "relative period" -- "$S/pr-merged" acme/docs --since 30d
+expect_exit 2 "bad period" -- "$S/pr-merged" acme/docs --since yesterday
+expect_exit 3 "unregistered repo" -- "$S/pr-merged" nobody/repo
+expect_exit 0 "one PR" -- "$S/pr-merged" acme/docs --pr 42
+expect_jq "one PR as a list" 'length == 1 and .[0].number == 42'
+expect_exit 0 "deployments after the merge that contain it" -- "$S/pr-deploys" acme/docs#42
+expect_jq "first successful containing deploy per environment" \
+  '.source == "github-deployments" and (.environments | map({environment, sha})) == [{"environment": "staging", "sha": "s1"}, {"environment": "production", "sha": "p2"}]'
+expect_exit 0 "comment carries the impact report (dry run)" -- \
+  env GH_OPS_DRY_RUN=1 "$S/pr-comment" acme/docs#42 "$TMP/body.md"
+
 echo "pr-workspace and pr-push (local git plays GitHub)"
 W="$TMP/upstream"; O="$TMP/origin.git"
 git init -q -b main "$W"; git -C "$W" config user.email t@t; git -C "$W" config user.name t

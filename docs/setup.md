@@ -124,7 +124,35 @@ importés.
 
 Dans Claude Code via le plugin, les commandes s'appellent `/adorno:workflow-review-requested`, etc.
 
-## 7. Slack et Notion
+## 7. L'impact des PRs mergées
+
+`workflow:pr:impact owner/repo` reprend les PRs que tu as mergées (14 derniers jours par défaut), attend qu'elles
+soient en production depuis `min_age`, puis compare `window` avant et après leur déploiement : utilisation, erreurs,
+temps de réponse (p50, p95, p99), débit, durée des jobs, requêtes lentes, ressources. Il interroge toutes les sources
+disponibles (connecteurs de métriques, logs, erreurs, analytics, canaux d'alerte) et poste un rapport en commentaire de
+chaque PR, avec un verdict et la source de chaque chiffre. Une PR déjà rapportée n'est pas reprise (`--refresh` pour
+une mise à jour).
+
+```yaml
+defaults:                    # ou par repo, preset ou workspace
+  impact:
+    window: 7d               # comparé avant / après
+    min_age: 3d              # délai en production avant d'analyser
+    environment: production
+    post: comment            # comment | none
+repos:
+  acme/app:
+    impact:
+      sources:               # repères ; tout autre connecteur présent est aussi interrogé
+        - {tool: grafana, dashboard: "API latency", service: "app-api"}
+        - {tool: sentry, project: "app"}
+```
+
+Le moment du déploiement vient des déploiements GitHub du repo ; sans eux, de la release qui contient le commit, du
+canal de déploiement de l'équipe, ou à défaut de l'heure du merge, et le rapport le dit. Les rapports ne contiennent
+que des agrégats : aucune donnée personnelle ne finit sur une PR.
+
+## 8. Slack et Notion
 
 Trois workflows lisent Slack et Notion à travers leurs connecteurs (dans Claude : connecte Slack et Notion). Ils ne
 postent rien, ne réagissent à rien et ne modifient aucune page : leur seule écriture est le compte rendu qu'ils

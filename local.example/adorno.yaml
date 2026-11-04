@@ -57,6 +57,13 @@ repos:                                 # un repo précis, ou un glob (`acme/docs
   acme/app:
     context:
       - "Unit test coverage must stay >= 80%."
+    impact:                            # workflow:pr:impact : où mesurer l'effet des PRs mergées
+      window: 7d
+      sources:                         # repères pour l'agent ; il interroge aussi tout autre connecteur présent
+        - {tool: grafana, dashboard: "API latency", service: "app-api"}
+        - {tool: sentry, project: "app"}
+        - {tool: slack, channels: ["#platform-alerts"]}
+        - {tool: posthog, events: ["team_settings_viewed"]}
     vision:
       - "On this repo, correctness beats speed: no shortcut on migrations."
     pr_skill: /acme-pr                 # skill du repo pour rédiger une PR, s'il y en a une

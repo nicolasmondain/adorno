@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Usage: pr-merged owner/repo [--since 14d|YYYY-MM-DD] [--author LOGIN] [--limit 20] [--pr N]
+# PRs merged in a registered repo (yours by default), newest first, as a JSON array: merge time and commit, size,
+# files, labels, and whether an impact report was already posted (a comment of yours carrying the
+# `<!-- adorno:impact -->` marker; `impactReports` = how many). --pr N: that PR only (any author).
+. "$(dirname "$0")/_lib.sh"
+
+split_repo "${1:-}"; shift || true
+since="14d" author="@me" limit=20 pr=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --since) since="${2:-}"; shift 2 ;;
+    --author) author="${2:-}"; shift 2 ;;
+    --limit) limit="${2:-}"; shift 2 ;;
+    --pr) pr="${2:-}"; shift 2 ;;
+    *) die "unknown option $1" "$E_USAGE" ;;
+  esac
+done
+repo_conf "$REPO" >/dev/null
+[[ "$limit" =~ ^[0-9]+$ ]] || die "--limit must be a number" "$E_USAGE"
+
+case "$since" in
+  *[mhd]) [[ "$since" =~ ^[0-9]+[mhd]$ ]] || die "--since: expected 14d, 48h or a date" "$E_USAGE"
+          from="$(jq -nr --arg s "$since" 'now - (($s[:-1] | tonumber) * ({"m":60,"h":3600,"d":86400}[$s[-1:]])) | strftime("%Y-%m-%d")')" ;;
+  [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) from="$since" ;;
+  *) die "--since: expected 14d, 48h or a date" "$E_USAGE" ;;
+esac
+
+me="$(viewer_login)"
+fields="number,title,url,author,mergedAt,mergeCommit,additions,deletions,files,labels,comments,baseRefName"
+if [ -n "$pr" ]; then
+  [[ "$pr" =~ ^[0-9]+$ ]] || die "--pr must be a number" "$E_USAGE"
+  raw="$(gh pr view "$pr" -R "$REPO" --json "$fields,state" | jq '[select(.state == "MERGED")]')"
+  [ "$(jq length <<<"$raw")" = 1 ] || die "$REPO#$pr is not merged" "$E_POLICY"
+else
+  raw="$(gh pr list -R "$REPO" --state merged --author "$author" --search "merged:>=$from" \
+          --limit "$limit" --json "$fields")"
+fi
+
+jq --arg me "$me" --arg repo "$REPO" '
+  [ .[]
+    | ([.comments[]? | select(.author.login == $me and (.body | contains("<!-- adorno:impact -->")))] | length) as $n
+    | { repo: $repo, number, title, url, author: .author.login, mergedAt, base: .baseRefName,
+        mergeCommit: .mergeCommit.oid, additions, deletions,
+        files: [.files[]?.path], labels: [.labels[]?.name],
+        impactReported: ($n > 0), impactReports: $n } ]
+  | sort_by(.mergedAt) | reverse' <<<"$raw"
