@@ -134,21 +134,24 @@ Le dépôt public ne contient aucun profil : seulement des modèles, dans `local
 | `workflow:pr:impact` | l'impact en production des PRs que tu as mergées, en commentaire de chacune ; `report`, `comment` |
 | `workflow:ci:red` | diagnostic d'une CI rouge, une relance si flaky, sinon correction |
 | `workflow:repo:onboard` | prépare un repo pour les agents, puis le déclare avec `adorno-setup` |
+| `workflow:profile:learn` | les ajustements de ton profil relevés pendant le travail (tech, produit, code, méthode, voix), un par un, avec leurs preuves ; n'écrit que ce que tu valides |
 | `workflow:slack:mentions` | tes mentions Slack : analyse et brouillon de réponse, envoyés à toi seul |
 | `workflow:slack:watch` | une règle de surveillance d'un canal Slack, et son action sur chaque message qui correspond |
 | `workflow:notion:assigned` | les documents Notion qui te sont assignés, et l'agent qui convient à chacun |
 
-**Skills** : `adorno-setup`, `adorno-profile`, `adorno-voice`, `adorno-watch` (réglages et mémoire des
-surveillances Slack et Notion), `adorno-llm` (une tâche envoyée à un modèle compatible OpenAI), `github-ops` (scripts `gh` testés sans réseau),
-`commit-message`, et les skills importés tels quels : [addy/agent-skills](https://skills.addy.ie/) (méthode, de la spec
+**Skills** : `adorno-setup`, `adorno-profile`, `adorno-voice`, `adorno-learn` (le profil qui apprend de tes
+corrections), `adorno-watch` (réglages et mémoire des
+surveillances Slack et Notion), `adorno-llm` (une tâche envoyée à un modèle compatible OpenAI), `adorno-github` (scripts `gh` testés sans réseau),
+`adorno-commit`, et les skills importés tels quels : [addy/agent-skills](https://skills.addy.ie/) (méthode, de la spec
 au déploiement), [ponytail](https://ponytail.dev/) (le moins de code qui marche),
 [playwright-cli](https://github.com/microsoft/playwright-cli) et
 [webapp-testing](https://github.com/anthropics/skills) (QA navigateur),
 [typescript-pro](https://github.com/Jeffallan/claude-skills) (TypeScript avancé).
 
 **Nommage** : `agent:<type>:<spécialité>` (un type de Conventional Commit par famille) et
-`workflow:<domaine>:<action>`. Les fichiers générés remplacent `:` par `-` ; dans Claude Code via le plugin :
-`/adorno:workflow-review-requested`. Chaque agent est un sous-agent et une commande.
+`workflow:<domaine>:<action>`. Tout ce qui est installé commence par `adorno` : `workflow:review:requested` →
+`/adorno-review-requested`, `agent:review:code` → `/adorno-agent-review-code` (sous-agent et commande), `agent:adorno`
+→ `/adorno`, et les skills `adorno-*`. Les skills importés (addy, ponytail, Playwright…) gardent leur nom d'origine.
 
 ```
 src/
@@ -156,13 +159,13 @@ src/
   agents/adorno.md      → agent:adorno
   agents/<famille>/     _family.md + <spécialité>.md → agent:<famille>:<spécialité>
   workflows/<domaine>/  <action>.md → workflow:<domaine>:<action>
-  skills/               adorno-setup, adorno-profile, adorno-voice, github-ops, commit-message
+  skills/               adorno-setup, adorno-profile, adorno-voice, adorno-github, adorno-commit
 repos.yaml              réglages publics par défaut (zones de code, relecteurs par zone, droits)
 local.example/          modèle de ta couche personnelle
 vendor/                 skills et agents importés (kit import), figés dans kit.lock
 dist/                   sorties générées (kit build), plugin Claude Code compris
 docs/                   guides
-tests/                  tests des scripts github-ops contre un faux gh
+tests/                  tests des scripts adorno-github contre un faux gh
 ```
 
 ## Commandes du kit
@@ -176,7 +179,7 @@ bin/kit new agent fix:flaky  # ou: new workflow ci:flaky, new skill <nom>
 bin/kit import [--update]    # skills et agents importés (commits figés dans kit.lock)
 bin/kit install PATH|--global|--workspace NOM [--targets claude,codex] [--public-only] [--dry-run]
 bin/kit uninstall PATH|--global|--workspace NOM
-tests/github-ops.test.sh     # tests des scripts GitHub, sans réseau
+tests/adorno-github.test.sh     # tests des scripts GitHub, sans réseau
 tests/adorno-watch.test.sh   # tests des scripts de surveillance, sans connecteur
 tests/adorno-llm.test.sh     # tests de l'envoi à un modèle externe, sans réseau
 ```

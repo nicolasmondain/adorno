@@ -17,7 +17,7 @@ instructions:
 
 # Fichiers YAML de la racine livrés en JSON dans un skill (les scripts lisent du JSON avec jq).
 skill_data:
-  github-ops:
+  adorno-github:
     repos.json: repos.yaml
   adorno-watch:
     adorno.json: repos.yaml

@@ -8,7 +8,7 @@ description: Write as the owner — their voice charter per channel (GitHub revi
 1. **Read `references/voice.md` in full**, every time: it is the owner's charter, installed from their personal
    layer (`local/src/skills/adorno-voice/`, git-ignored). Missing → the voice is not set up: say so, point to the
    `adorno-setup` skill, and write plainly and briefly in the meantime. Never write from memory of a previous session.
-   Then the repo's `voice` knobs: `github-ops/scripts/repo-conf` › `.voice`. For this repo they **win over the
+   Then the repo's `voice` knobs: `adorno-github/scripts/repo-conf` › `.voice`. For this repo they **win over the
    charter** (see « Voice knobs » below).
 2. **Pick the register** before drafting: channel (GitHub review comment, thread reply, PR description, Slack DM or
    channel, Notion) and audience. Not obvious from the task → ask.

@@ -2,7 +2,7 @@
 description: Analyse l'impact des PRs que tu as mergées sur un repo — depuis leur déploiement, utilisation, erreurs, temps de réponse, performance et ressources comparés avant / après dans toutes les sources disponibles — et poste le rapport en commentaire de chaque PR. Une PR déjà rapportée est sautée, une trop récente attend. Modes report ou comment (défaut).
 args: "<owner/repo> [--since 14d] [--pr N] [--mode report|comment] [--refresh]"
 uses:
-  skills: [github-ops, adorno-voice]
+  skills: [adorno-github, adorno-voice]
   agents: [agent:review:impact, agent:adorno]
 model: balanced
 ---
@@ -14,7 +14,7 @@ Entrée : {{args}}
 | `report` | les rapports dans le dossier d'exécution, rien sur GitHub | L0 |
 | `comment` (défaut) | + un commentaire par PR analysée | L3 (action `comment`) |
 
-Réglages du repo : `github-ops/scripts/repo-conf owner/repo` › `impact` (`window`, `min_age`, `environment`, `post`,
+Réglages du repo : `adorno-github/scripts/repo-conf owner/repo` › `impact` (`window`, `min_age`, `environment`, `post`,
 `sources`). `post: none` force le mode `report`. Dossier d'exécution : `~/.adorno/runs/pr-impact-<repo>-<date>/`.
 
 1. **Lister** — `pr-merged owner/repo --since <période>` (14 jours par défaut ; `--pr N` pour une seule PR). Écarte, en

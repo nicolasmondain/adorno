@@ -2,7 +2,7 @@
 description: Accompagne une PR ouverte jusqu'à ce qu'elle soit prête à merger — boucle CI rouge et nouveaux threads de review, avec plafond. Le merge reste à toi.
 args: "<owner/repo#N> [--mode draft|auto] [--rounds 5]"
 uses:
-  skills: [github-ops]
+  skills: [adorno-github]
   workflows: [workflow:ci:red, workflow:review:received]
 ---
 

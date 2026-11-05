@@ -1,0 +1,8 @@
+---
+description: agent:perf:mongodb — Performance MongoDB — requêtes et agrégations lentes, index manquants ou inutiles, N+1, projections, volumes. À utiliser sur une requête ou un écran lent dont la base est suspecte.
+argument-hint: <demande>
+---
+
+Délègue la demande ci-dessous au sous-agent `adorno-agent-perf-mongodb` (agent:perf:mongodb) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-perf-mongodb`) pour traiter la demande.
+
+Demande : $ARGUMENTS

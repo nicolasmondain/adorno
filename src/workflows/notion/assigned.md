@@ -2,7 +2,7 @@
 description: Trouve les documents Notion qui te sont assignés (propriétés « personne » des bases suivies, statut encore ouvert) et lance sur chaque nouveau document l'agent ou le workflow qui convient — choisi par base dans ta config, sinon par le routeur. Lecture seule sur Notion ; compte rendu envoyé à toi seul. Modes report (défaut) ou run.
 args: "[--mode report|run] [--since 30d] [--dry-run] [--all]"
 uses:
-  skills: [adorno-watch, github-ops]
+  skills: [adorno-watch, adorno-github]
   agents: [agent:core:analyst, agent:core:router, agent:adorno]
   workflows: [workflow:spec:new, workflow:issue:fix]
 model: balanced

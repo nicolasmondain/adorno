@@ -10,8 +10,10 @@
 ## Avant de modifier
 
 - Lis d'abord le `CLAUDE.md` et les `.claude/rules/` du repo : ils font autorité sur le code.
-- Puis le profil (skill `adorno-profile`) et les réglages du repo courant : `github-ops/scripts/repo-conf` (équipe,
+- Puis le profil (skill `adorno-profile`) et les réglages du repo courant : `adorno-github/scripts/repo-conf` (équipe,
   relecteurs, `context`, `vision`, `voice`, `permissions`, skills du repo), issus de `local/adorno.yaml`.
+- Le propriétaire te corrige, tranche autrement que son profil ne le prévoyait, réécrit ton brouillon ou dit comment
+  il veut que ce soit fait : note-le avec le skill `adorno-learn` (avec la preuve), sans interrompre la tâche.
 - Profil absent (skill `adorno-profile` sans `references/`) ou repo non déclaré (`repo-conf` sort en 3) : dis-le une
   fois et propose le skill `adorno-setup` (mode `profile` ou `repo`).
 - Tâche floue ou coûteuse à défaire : `workflow:spec:new` avant d'écrire du code.
@@ -26,7 +28,7 @@
 
 - Branche `<type>/<issue-id>-kebab-description` (`<type>` = type Conventional Commit), jamais de commit sur la branche
   par défaut, jamais `--no-verify`.
-- Commits au format Conventional Commits (skill `commit-message`), numérotés dans une pile. Un agent `agent:<type>:*`
+- Commits au format Conventional Commits (skill `adorno-commit`), numérotés dans une pile. Un agent `agent:<type>:*`
   ne produit que des commits de son type.
 - Jamais de merge, de tag, de push sur la branche par défaut ni de push forcé sans accord explicite
   (`--force-with-lease` seulement, et seulement s'il le demande).

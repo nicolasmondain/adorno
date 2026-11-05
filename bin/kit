@@ -53,7 +53,7 @@ LOCAL_SRC = LOCAL / "src"
 VISION = LOCAL / "vision.md"
 LEGACY_LOCAL = ROOT / "repos.local.yaml"
 USE_LOCAL = False   # set per command: install/check/list/conf use local/, build never does
-RESOLVER = ROOT / "src" / "skills" / "github-ops" / "scripts" / "resolve.jq"
+RESOLVER = ROOT / "src" / "skills" / "adorno-github" / "scripts" / "resolve.jq"
 LEVELS = ("L0", "L1", "L2", "L3", "L4")
 ACTIONS = ("push", "reply", "comment", "resolve", "rerequest", "review", "submit", "open_pr", "ci_rerun")
 CLAUDE_RULES = ("allow", "ask", "deny")
@@ -196,7 +196,7 @@ def registry() -> dict:
 
 
 def resolve_repo(reg: dict, repo: str) -> dict | None:
-    """The settings `repo` resolves to, through the same resolver as the github-ops scripts (needs jq)."""
+    """The settings `repo` resolves to, through the same resolver as the adorno-github scripts (needs jq)."""
     if not shutil.which("jq"):
         die("jq is required to resolve repo settings (brew install jq)")
     res = subprocess.run(["jq", "--arg", "r", repo, "-f", str(RESOLVER)], input=json.dumps(reg),
@@ -225,7 +225,7 @@ def git(*args: str, cwd: Path | None = None) -> str:
 @dataclass
 class Item:
     kind: str          # skill | agent | workflow
-    name: str          # file-safe name: agent-perf-mongodb
+    name: str          # file-safe name: adorno-agent-perf-mongodb, adorno-pr-status
     meta: dict
     body: str
     path: Path         # SKILL.md for skills, the .md file otherwise
@@ -285,13 +285,13 @@ def load_item(kind: str, path: Path, origin: str) -> Item:
     if kind == "agent" and path.parent.name == KINDS[kind] and origin in ("local", "private"):
         # a top-level agent of ours: src/agents/adorno.md -> agent:adorno
         meta.pop("name", None)
-        return Item(kind, f"agent-{path.stem}", meta, body, path, origin, id=f"agent:{path.stem}",
-                    expected=f"agent-{path.stem}")
+        return Item(kind, path.stem, meta, body, path, origin, id=f"agent:{path.stem}", expected=path.stem)
     if path.parent.name != KINDS[kind]:
         # nested: src/agents/<family>/<specialty>.md -> agent:<family>:<specialty>
         family, specialty = path.parent.name, path.stem
         logical = f"{kind}:{family}:{specialty}"
-        name = f"{kind}-{family}-{specialty}"
+        # file names all start with `adorno-`: workflows are the commands you type, agents carry `agent-`
+        name = f"adorno-{family}-{specialty}" if kind == "workflow" else f"adorno-agent-{family}-{specialty}"
         given = meta.get("name")
         base = path.parent / FAMILY_FILE
         if not base.exists():  # a private agent in a public family: the public family file applies

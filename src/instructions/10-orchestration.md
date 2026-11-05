@@ -7,8 +7,9 @@
 - `agent:adorno`, hors famille : il parle et décide au nom du propriétaire du setup, avec ses skills `adorno-*`. C'est
   la dernière étape de chaque workflow qui produit quelque chose en son nom (review, réponse, PR).
 - Workflows : `workflow:<domaine>:<action>`.
-- Fichier et nom d'appel : les `:` deviennent des `-` (`agent:perf:mongodb` → `agent-perf-mongodb`).
-  Dans Claude Code, via le plugin : `/adorno:agent-perf-mongodb`.
+- Fichier et nom d'appel : tout commence par `adorno` — `workflow:pr:status` → `adorno-pr-status`,
+  `agent:perf:mongodb` → `adorno-agent-perf-mongodb`, `agent:adorno` → `adorno`, skills `adorno-*`. Une commande
+  s'appelle par ce nom (`/adorno-pr-status`) ; via le plugin, elle est en plus préfixée `adorno:`.
 - Déléguer à un agent : sous-agent du même nom quand l'outil en a ; sinon, applique le skill du même nom dans un
   passage séparé, en ne lui donnant que son entrée.
 
@@ -63,11 +64,11 @@ Un conflit se règle au niveau le plus haut et se signale.
 - Les agents ne se parlent pas : chacun lit le livrable de l'étape précédente et écrit le sien.
 - Toute boucle a un plafond (3 tours de construction, 2 tours de correction après revue) ; au-delà, arrêt et
   compte rendu dans `status.md`.
-- GitHub uniquement via le skill `github-ops` (scripts) ; un repo que ta config locale ne déclare pas (`repos`, `workspaces`) n'est jamais traité.
+- GitHub uniquement via le skill `adorno-github` (scripts) ; un repo que ta config locale ne déclare pas (`repos`, `workspaces`) n'est jamais traité.
 
 ## Workspaces et Adorno
 
-- Toute analyse d'une PR se fait dans son workspace (`github-ops/scripts/pr-workspace`) : les agents y lisent le code
+- Toute analyse d'une PR se fait dans son workspace (`adorno-github/scripts/pr-workspace`) : les agents y lisent le code
   complet, y lancent les commandes du repo, et les correctifs sur les PRs de l'utilisateur y sont commités puis poussés par
   `pr-push`.
 - Les relecteurs à appeler dépendent des zones touchées : `pr-areas` + `area_reviewers` du repo.

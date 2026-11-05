@@ -1,6 +1,6 @@
 # Registre des repos sur lesquels les workflows ont le droit d'agir.
 # Un repo absent d'ici est signalé, jamais traité.
-# Livré en JSON dans le skill github-ops (kit.yaml > skill_data) pour les scripts.
+# Livré en JSON dans le skill adorno-github (kit.yaml > skill_data) pour les scripts.
 #
 #   path             clone local (vide = le workflow clone dans un worktree temporaire)
 #   base             branche par défaut (vide = lue sur GitHub)

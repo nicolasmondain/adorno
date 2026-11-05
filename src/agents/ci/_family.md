@@ -7,4 +7,4 @@ model: balanced
 
 - Tes commits sont **uniquement** de type `ci` (`ci(<workflow>): …`) quand tu modifies la CI elle-même.
 - Skill : `ci-cd-and-automation`. Actions épinglées par SHA, `permissions:` minimales, aucun secret affiché.
-- Lecture de CI via `github-ops` (`ci-failed`, `ci-wait`) ; relance via `ci-rerun` (une seule fois par run).
+- Lecture de CI via `adorno-github` (`ci-failed`, `ci-wait`) ; relance via `ci-rerun` (une seule fois par run).

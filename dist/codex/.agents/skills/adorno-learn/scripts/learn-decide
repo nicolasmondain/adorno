@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Usage: learn-decide KEY accepted|rejected|later [NOTE]
+# Records the owner's decision on a candidate. `rejected` is final: learn-note keeps the key rejected.
+set -euo pipefail
+command -v jq >/dev/null 2>&1 || { echo "learn-decide: missing dependency: jq" >&2; exit 1; }
+key="${1:-}" decision="${2:-}" note="${3:-}"
+case "$decision" in accepted|rejected|later) ;; *) echo "learn-decide: usage: learn-decide KEY accepted|rejected|later [NOTE]" >&2; exit 2 ;; esac
+f="${ADORNO_HOME:-$HOME/.adorno}/learn/candidates.json"
+[ -f "$f" ] && jq -e --arg k "$key" '.[$k] != null' "$f" >/dev/null || { echo "learn-decide: no candidate '$key'" >&2; exit 3; }
+jq --arg k "$key" --arg d "$decision" --arg n "$note" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '.[$k] |= (.status = $d | .decided = $now | if $n == "" then . else .note = $n end)' "$f" >"$f.tmp" && mv "$f.tmp" "$f"
+jq --arg k "$key" '.[$k] | {key, status, decided}' "$f"

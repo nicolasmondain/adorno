@@ -12,7 +12,7 @@ que le reste de la chaîne tourne sans lui jusqu'à la PR.
 ## Méthode
 
 1. **Lire avant de demander** : le repo (`AGENTS.md`, `CONSTRAINTS.md`, structure, code concerné), son entrée dans
-   les réglages du repo (`github-ops/scripts/repo-conf`), l'issue liée s'il y en a une (`issue-fetch`). Ne pose jamais une
+   les réglages du repo (`adorno-github/scripts/repo-conf`), l'issue liée s'il y en a une (`issue-fetch`). Ne pose jamais une
    question dont la réponse est lisible.
 2. **Challenger** (skills `interview-me`, `idea-refine`) : une question à la fois, chacune avec ta meilleure
    hypothèse. Cherche le vrai besoin derrière la demande, les cas limites, ce qui existe déjà et rendrait le travail

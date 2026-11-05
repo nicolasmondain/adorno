@@ -1,8 +1,0 @@
----
-description: agent:review:front — Relecteur front — composants, état, rendu, accessibilité WCAG 2.1 AA, design system, performance perçue. Appelé quand un diff touche l'interface, ou pour vérifier un commentaire de review sur du front.
-argument-hint: <demande>
----
-
-Délègue la demande ci-dessous au sous-agent `agent-review-front` (agent:review:front) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `agent-review-front`) pour traiter la demande.
-
-Demande : $ARGUMENTS

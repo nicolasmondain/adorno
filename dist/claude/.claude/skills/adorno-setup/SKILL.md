@@ -1,6 +1,6 @@
 ---
 name: adorno-setup
-description: Set up adorno for its owner — mode `profile` writes who you are, how you work, how you write and your vision into your personal layer (local/, git-ignored); mode `repo` declares the current repo (or a whole workspace) with its reviewers, team, context, permissions and voice. Use on first use of adorno, when an agent reports that the profile or the voice is not set up, when a repo is "not registered", or when the owner asks to change their profile, voice, vision or a repo's settings.
+description: Set up adorno for its owner — mode `profile` builds a fine-grained profile from a corpus of your own writing (GitHub reviews and diffs, Slack messages, Notion pages, any files you point to) and writes who you are, how you work on tech, product and code, how you write and your vision into your personal layer (local/, git-ignored); mode `repo` declares the current repo (or a whole workspace) with its reviewers, team, context, permissions and voice. Use on first use of adorno, when an agent reports that the profile or the voice is not set up, when a repo is "not registered", or when the owner asks to change their profile, voice, vision or a repo's settings.
 ---
 
 # Set up adorno
@@ -21,16 +21,25 @@ the owner's real words beat any template.
 
 1. **Identity** → `local/adorno.yaml` › `owner`: `name`, GitHub login (`gh api user --jq .login`), `language` of the
    exchanges with the agents.
-2. **Voice** — offer to mine it from real samples: `scripts/voice-samples 20` (their own review comments, review
-   summaries and PR descriptions on GitHub; read-only). Ask for 5-10 Slack or chat messages too if they want that
-   channel covered. Derive, per channel (GitHub reviews, thread replies, PR descriptions, chat): length, tone,
-   recurring phrases, badges, what they never do. Quote real patterns, don't invent a persona. Then the knobs
-   (`defaults.voice`: `tone`, `formality`, `length`, `emoji`, `badges`, `phrases`, `avoid`; see the `adorno-voice`
-   skill). → `local/src/skills/adorno-voice/references/voice.md` + `defaults.voice`.
-3. **Profile** — for each file of `local.example/src/skills/adorno-profile/references/` (`personality`,
-   `engineering-types`, `engineering-scale`, `process`), walk the template's sections and ask what they would change,
-   add or remove; a real example from their past reviews (step 2's samples) is worth more than a principle.
-   → `local/src/skills/adorno-profile/references/<file>.md`.
+2. **Corpus** — the finer the sources, the finer the profile. Offer each source, take only those the owner agrees
+   to, and keep **only their own words** (other people's messages serve as context, never stored or quoted):
+   - **GitHub** — `scripts/voice-samples 30`: their review comments, review summaries and PR descriptions; plus the
+     diffs of 5-10 of their merged PRs (`gh pr list --author @me --state merged`) for how they actually write code.
+   - **Slack** — through the Slack connector: their own messages over the last 90 days (search `from:<@their id>`),
+     300 at most, in the channels they name or all; threads where they decided or explained something first.
+   - **Notion** — pages they wrote (specs, ADRs, post-mortems) through the Notion connector.
+   - **Files** — anything they point to: notes, docs, exported conversations, a folder of past write-ups.
+   Work in the run folder (`~/.adorno/runs/adorno-setup-<date>/`); nothing from the corpus is kept after the run,
+   only what goes into the profile.
+3. **Analyse** — per dimension, with evidence: **tech** (architecture, scale, tooling), **code** (types, naming,
+   structure, tests, what they always ask to change), **product** (priorities, scope, user impact, ship vs polish),
+   **process** (method, PR and review discipline), **communication** (feedback, conflict, how they address people),
+   **voice** per channel (length, tone, recurring phrases, badges, what they never do). A trait needs at least two
+   samples; quote short excerpts (no names of third parties) with their links; show contradictions instead of
+   smoothing them. Present it as a table per dimension: trait, evidence, confidence.
+   Then the files, each section confronted with the analysis, the owner correcting what doesn't sound like them:
+   `local/src/skills/adorno-profile/references/{personality,engineering-types,engineering-scale,product,process}.md`,
+   `local/src/skills/adorno-voice/references/voice.md`, and the voice knobs (`defaults.voice`).
 4. **Summary** — 15-30 lines always loaded, distilled from step 3 (hard limits included).
    → `local/src/instructions/20-owner.md`.
 5. **Vision** — the few principles that must win over every agent (60 lines at most, usually 3-10).
@@ -68,6 +77,12 @@ Goal: the workflows know this repo — or a whole set of repos — and act withi
 7. **Apply** — `<source>/bin/kit check`, `<source>/bin/kit conf owner/repo` to show the result, then offer
    `<source>/bin/kit install <repo path>` (or `--workspace <name>`) so the native permissions land in the repo.
    Preparing the repo itself (`AGENTS.md`, `CONSTRAINTS.md`, verified commands) is `workflow:repo:onboard`.
+
+## Afterwards
+
+The profile keeps learning: the `adorno-learn` skill records what the owner's corrections and choices reveal, and
+`workflow:profile:learn` (`/adorno-profile-learn`) proposes the updates. Running this mode again on a fresh corpus
+is the deep refresh.
 
 ## Rules
 

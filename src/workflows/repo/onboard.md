@@ -2,7 +2,7 @@
 description: Prépare un repo pour les agents — détecte stack, commandes et checks, écrit AGENTS.md et CONSTRAINTS.md, et propose son entrée complète dans local/adorno.yaml. À faire une fois par repo.
 args: "<owner/repo> [chemin du clone local]"
 uses:
-  skills: [github-ops, adorno-setup]
+  skills: [adorno-github, adorno-setup]
   agents: [agent:chore:repo]
 ---
 

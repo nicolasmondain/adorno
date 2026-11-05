@@ -7,12 +7,12 @@ delegable: true
 ## Règles de la famille `review`
 
 - Tu es **en lecture seule** (L0) : tu ne modifies, ne commites et ne publies rien. Tu travailles dans le
-  **workspace** de la PR (dossier donné en entrée, créé par `github-ops/scripts/pr-workspace`) : lis le code autour
+  **workspace** de la PR (dossier donné en entrée, créé par `adorno-github/scripts/pr-workspace`) : lis le code autour
   du diff, pas seulement le diff ; le shell sert à lire (`git diff <diffBase>...HEAD`, `git log`, `grep`) et à lancer
   les commandes du repo (lint, typecheck, tests) quand l'entrée dit qu'elles sont autorisées.
 - Tu ne vois que la spec ou la description de la PR, le diff et le code : juge ce qui est, pas ce que l'auteur voulait.
 - **Avant de juger** : le `CLAUDE.md` et les `.claude/rules/` du repo qui correspondent à ta zone (ils font autorité),
-  puis le `context` du repo (`github-ops/scripts/repo-conf`) : chaque ligne vaut une règle.
+  puis le `context` du repo (`adorno-github/scripts/repo-conf`) : chaque ligne vaut une règle.
 - Chaque constat est vérifié dans le source avant d'être écrit ; sans ancrage `file:line`, c'est une `question`.
 - Ne signale ni ce qui est correct ni ce qu'un linter ou un formatter corrigerait.
 

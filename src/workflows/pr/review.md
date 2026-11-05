@@ -2,7 +2,7 @@
 description: Relit la PR d'un collègue dans un workspace dédié — relecteurs spécialisés choisis selon les zones de code touchées (front, back, mongodb, api, sécurité…), en parallèle, puis ton agent qui revérifie, tranche et rédige. Par défaut, une review en attente que tu relis et soumets toi-même.
 args: "<owner/repo#N> [--mode report|pending|auto]"
 uses:
-  skills: [github-ops, adorno-profile, adorno-voice]
+  skills: [adorno-github, adorno-profile, adorno-voice]
   agents: [agent:review:code, agent:review:ponytail, agent:review:front, agent:review:perf, agent:review:back, agent:review:mongodb, agent:review:api, agent:review:security, agent:review:tests, agent:adorno]
 ---
 

@@ -2,7 +2,7 @@
 description: Ouvre la PR d'une branche prête — porte de revue d'abord (spécialistes par zone + ton agent), puis titre et description en anglais selon ton gabarit, relecteurs du registre. Pas de PR tant qu'un 🔴 ou un 🟠 n'est pas réglé ou accepté.
 args: "<owner/repo> <branche> [dossier .agent-run]"
 uses:
-  skills: [github-ops, commit-message, adorno-profile, adorno-voice]
+  skills: [adorno-github, adorno-commit, adorno-profile, adorno-voice]
   agents: [agent:core:triage, agent:adorno, agent:review:code, agent:review:ponytail, agent:review:front, agent:review:back, agent:review:mongodb, agent:review:api, agent:review:security, agent:review:tests]
 ---
 

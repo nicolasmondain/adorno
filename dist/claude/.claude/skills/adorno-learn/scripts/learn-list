@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Usage: learn-list [--ready] [--all]
+# Candidate adjustments of the owner's profile, most supported first. Default: pending ones.
+#   --ready  only those worth proposing now: said explicitly by the owner, or seen at least twice
+#   --all    every candidate, decided ones included
+set -euo pipefail
+command -v jq >/dev/null 2>&1 || { echo "learn-list: missing dependency: jq" >&2; exit 1; }
+f="${ADORNO_HOME:-$HOME/.adorno}/learn/candidates.json"
+[ -f "$f" ] || { echo "[]"; exit 0; }
+mode="${1:-}"
+case "$mode" in ""|--ready|--all) ;; *) echo "learn-list: usage: learn-list [--ready|--all]" >&2; exit 2 ;; esac
+jq --arg m "$mode" '[.[]
+  | select($m == "--all" or .status == "pending" or .status == "later")
+  | select($m != "--ready" or ((.status == "pending") and (.strength == "explicit" or .seen >= 2)))]
+  | sort_by([(if .strength == "explicit" then 0 else 1 end), -(.seen)])' "$f"

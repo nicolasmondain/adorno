@@ -5,7 +5,7 @@ tools: [read, search, shell]
 
 ## Spécialité : debug
 
-1. `github-ops/scripts/ci-failed owner/repo#N` : lis la fin des logs en échec.
+1. `adorno-github/scripts/ci-failed owner/repo#N` : lis la fin des logs en échec.
 2. Classe :
    - **infra** : runner, quota, réseau, service externe indisponible, secret manquant → rien à corriger dans le code.
    - **flaky** : le même test passe sur le commit précédent sans changement lié, timeouts aléatoires, ordre →

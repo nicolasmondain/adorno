@@ -2,7 +2,7 @@
 #
 # C'est ta couche personnelle : qui tu es, sur quels repos les agents agissent, avec quels droits, comment ton agent
 # écrit, et ta vision. `bin/kit install` la mêle aux défauts publics de repos.yaml ; `bin/kit build` ne la lit jamais.
-# Voir ce qu'un repo résout : `bin/kit conf owner/repo` (ou, dans le repo, `github-ops/scripts/repo-conf`).
+# Voir ce qu'un repo résout : `bin/kit conf owner/repo` (ou, dans le repo, `adorno-github/scripts/repo-conf`).
 #
 # Résolution, du plus faible au plus fort (chaque couche développe d'abord ses `use: [preset…]`) :
 #   defaults publics (repos.yaml) → defaults ci-dessous → workspaces qui contiennent le repo (ordre du fichier)

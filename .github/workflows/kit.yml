@@ -15,7 +15,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - name: Validate sources and make sure dist/ is up to date
         run: ./bin/kit check --dist
-      - name: Lint github-ops scripts
-        run: shellcheck -x -s bash -P src/skills/github-ops/scripts src/skills/github-ops/scripts/* tests/fake-gh tests/*.sh
-      - name: Test github-ops scripts against a fake gh
-        run: tests/github-ops.test.sh
+      - name: Lint the scripts
+        run: shellcheck -x -s bash -P SCRIPTDIR $(find src/skills -path '*/scripts/*' -type f ! -name '*.jq') tests/fake-gh tests/fake-curl tests/*.sh
+      - name: Test the scripts (fake gh, fake curl, fixtures)
+        run: for t in tests/*.test.sh; do $t; done

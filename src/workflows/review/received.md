@@ -2,7 +2,7 @@
 description: Passe sur toutes tes PRs ouvertes (ou une seule) — chaque commentaire, thread ou résumé de review sans réponse est vérifié par le spécialiste du sujet dans un workspace dédié, corrigé si besoin, puis ton agent répond dans ta voix et résout. Modes report, draft (défaut), auto.
 args: "[owner/repo#N | owner/repo] [--mode report|draft|auto]"
 uses:
-  skills: [github-ops, adorno-profile, adorno-voice]
+  skills: [adorno-github, adorno-profile, adorno-voice]
   agents: [agent:core:triage, agent:adorno, agent:review:code, agent:review:ponytail, agent:review:front, agent:review:perf, agent:review:back, agent:review:mongodb, agent:review:api, agent:review:security, agent:review:tests, agent:fix:patch, agent:refactor:simplify, agent:test:unit]
   workflows: [workflow:ci:red]
 model: balanced

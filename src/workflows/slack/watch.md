@@ -2,7 +2,7 @@
 description: Surveille un ou plusieurs canaux Slack selon une règle nommée — mots inclus ou regex, sur une période, au plus N messages — et lance l'action configurée (agent, workflow ou consigne) sur chaque message qui correspond, une seule fois par message. Lecture seule sur Slack ; compte rendu envoyé à toi seul. À lancer à la main ou depuis ta propre planification.
 args: "<nom de la règle> [--since 24h] [--max 200] [--dry-run] [--all]"
 uses:
-  skills: [adorno-watch, github-ops]
+  skills: [adorno-watch, adorno-github]
   agents: [agent:core:analyst, agent:adorno]
 model: fast
 ---

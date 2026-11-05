@@ -2,13 +2,13 @@
 description: État de toutes tes PRs ouvertes (ou d'un repo) — review, CI, threads non résolus, et ce qui bloque chacune. Lecture seule.
 args: "[owner/repo]"
 uses:
-  skills: [github-ops]
+  skills: [adorno-github]
 model: fast
 ---
 
 Entrée : {{args}}
 
-1. `export ADORNO_LEVEL=L0`, puis `github-ops/scripts/pr-status {{args}}`.
+1. `export ADORNO_LEVEL=L0`, puis `adorno-github/scripts/pr-status {{args}}`.
 2. Rends un tableau trié par urgence — `ci-red`, `changes-requested`, `unresolved-threads`, `conflicts`,
    `waiting-review`, `ci-running`, `draft`, `ready` — avec : PR (lien), titre, blocage, qui attend qui
    (`waitingOn`), dernière mise à jour.

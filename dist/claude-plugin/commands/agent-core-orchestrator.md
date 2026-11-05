@@ -1,8 +1,0 @@
----
-description: agent:core:orchestrator — Exécute un run-plan.yaml — délègue chaque étape à son agent, applique plafonds, fusions et escalades, tient status.md. À utiliser pour dérouler un workflow après validation de la spec.
-argument-hint: <demande>
----
-
-Délègue la demande ci-dessous au sous-agent `agent-core-orchestrator` (agent:core:orchestrator) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `agent-core-orchestrator`) pour traiter la demande.
-
-Demande : $ARGUMENTS

@@ -41,6 +41,20 @@ Tu peux aussi tout écrire à la main à partir des modèles de `local.example/`
 Tant que le profil n'existe pas, les agents le disent et travaillent avec les instructions et les réglages du repo
 seulement.
 
+### Un profil fin, puis qui apprend
+
+Le mode `profile` est d'autant plus juste qu'il lit tes vraies traces. Il te propose chaque source, une par une : tes
+reviews, descriptions et diffs de PR sur GitHub, tes messages Slack (90 jours, les tiens seulement), tes pages Notion,
+et tous les fichiers que tu lui indiques. Il en tire, dimension par dimension (tech, code, produit, méthode,
+communication, voix), des traits appuyés chacun par au moins deux extraits, puis confronte chaque fichier du profil à
+cette analyse. Rien du corpus n'est gardé après la session : seulement ce que tu valides dans le profil.
+
+Ensuite, le profil s'ajuste en continu. Quand tu corriges Adorno, que tu tranches autrement que lui, que tu réécris un
+de ses brouillons ou que tu dis comment tu veux les choses, le skill `adorno-learn` le note avec sa preuve
+(`~/.adorno/learn/`). Un point dit explicitement, ou vu deux fois, devient « prêt ». Adorno le signale en une ligne à
+la fin de son compte rendu, et `/adorno-profile-learn` te les présente un par un : la phrase proposée, le fichier, les
+preuves ; tu acceptes, reformules, reportes ou rejettes. Un point rejeté ne revient pas.
+
 ## 3. Tes repos
 
 Un workflow n'agit que sur un repo **déclaré**. Dans le repo, demande : **« lance le skill adorno-setup, mode repo »**.
@@ -79,7 +93,7 @@ De gauche à droite, chaque niveau l'emporte sur le précédent ; chacun dévelo
 fusionnent clé par clé ; listes et valeurs sont remplacées, sauf `context` et `vision` qui s'additionnent.
 
 `bin/kit conf acme/app` affiche le résultat, avec `scopes` : la liste des niveaux qui ont joué. Les agents lisent la
-même chose avec `github-ops/scripts/repo-conf`.
+même chose avec `adorno-github/scripts/repo-conf`.
 
 ## 4. Les droits
 
@@ -122,7 +136,8 @@ importés.
 | ouvrir la PR de ta branche | `workflow:pr:open` |
 | voir où en sont tes PRs | `workflow:pr:status` |
 
-Dans Claude Code via le plugin, les commandes s'appellent `/adorno:workflow-review-requested`, etc.
+Chaque workflow est une commande au nom en `adorno-` : `workflow:review:requested` → `/adorno-review-requested`,
+`workflow:pr:status` → `/adorno-pr-status`. Via le plugin Claude Code, le même nom est préfixé `adorno:`.
 
 ## 7. L'impact des PRs mergées
 

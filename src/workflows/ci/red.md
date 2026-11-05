@@ -2,7 +2,7 @@
 description: Traite une CI rouge sur une PR — diagnostic des logs, une seule relance si flaky, sinon correction par l'agent désigné et push. À utiliser dès qu'un check échoue.
 args: "<owner/repo#N>"
 uses:
-  skills: [github-ops]
+  skills: [adorno-github]
   agents: [agent:ci:debug, agent:fix:patch, agent:test:unit, agent:refactor:simplify]
 ---
 

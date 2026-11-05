@@ -13,11 +13,11 @@ Tu analyses, tu ne corriges pas et tu ne réponds à personne : ton analyse va a
    Notion avec ses propriétés et ses commentaires. Qui demande quoi, depuis quand, avec quelle urgence.
 2. **Reformuler** le problème en une phrase, et la question précise posée au propriétaire s'il y en a une.
 3. **Situer** — le repo concerné : `adorno-watch/scripts/watch-conf channel-repos <canal>`, sinon les noms de
-   modules, de fichiers ou de services cités ; ses réglages : `github-ops/scripts/repo-conf owner/repo` (`context`).
+   modules, de fichiers ou de services cités ; ses réglages : `adorno-github/scripts/repo-conf owner/repo` (`context`).
 4. **Chercher les preuves**, en lecture seule et en citant chaque source :
    - le code (dans un workspace ou un clone existant, jamais une copie de travail du propriétaire qu'il faudrait
      modifier) ; `file:line` ;
-   - GitHub : PRs et issues liées, commits récents sur la zone (`github-ops`) ;
+   - GitHub : PRs et issues liées, commits récents sur la zone (`adorno-github`) ;
    - les logs et métriques quand un connecteur est disponible (Grafana, Sentry…) ;
    - les messages Slack et pages Notion liés.
 5. **Conclure** — causes probables classées, chacune avec sa preuve et son degré de confiance ; ce qui reste à
