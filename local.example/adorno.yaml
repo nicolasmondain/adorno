@@ -82,7 +82,8 @@ repos:                                 # a specific repo, or a glob (`acme/docs-
         - {tool: posthog, events: ["team_settings_viewed"]}
     vision:
       - "On this repo, correctness beats speed: no shortcut on migrations."
-    pr_skill: /acme-pr                 # the repo's skill for writing a PR, if there is one
+    commit_skill: /acme-commit         # the repo's skill that commits (default: adorno-commit)
+    pr_skill: /acme-pr                 # the repo's skill that opens or updates the PR (default: adorno-pr-open)
     setup_skill: null                  # skill that sets up a fresh worktree
     test: "npm test"
     lint: "npm run lint"

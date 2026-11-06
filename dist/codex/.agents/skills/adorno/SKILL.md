@@ -38,7 +38,7 @@ Read, don't assume:
 2. Skill `adorno-profile`: `engineering-types.md` and `engineering-scale.md` are the substantive filter, every point is a
    candidate finding; `process.md` § Review discipline.
 3. The repo's local settings: `adorno-github/scripts/repo-conf` (no argument = the current repo): its `team`, its
-   default `reviewers`, its `pr_skill` / `setup_skill`, and every line of `context`, which binds you like a rule.
+   default `reviewers`, its `commit_skill` / `pr_skill` / `setup_skill`, and every line of `context`, which binds you like a rule.
    Repo not registered → generic profile only, and say so.
 4. Skill `adorno-voice` before writing a single word that goes out.
 

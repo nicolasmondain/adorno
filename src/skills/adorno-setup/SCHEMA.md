@@ -33,7 +33,7 @@ flowchart TD
   WH --> WS{"Sibling repos sharing team and rules?"}
   WS -->|"yes"| WK["Propose a workspaces entry with presets"]
   WS -->|"no"| DT
-  WK --> DT["Detect then ask: test, lint, typecheck, base, reviewers, team, context, pr_skill, setup_skill"]
+  WK --> DT["Detect then ask: test, lint, typecheck, base, reviewers, team, context, commit_skill, pr_skill, setup_skill"]
   DT --> RG["Rights: max_level, permissions.deny, permissions.claude"]
   RG --> VO["Voice and vision lines that differ for this repo"]
   VO --> SH["Show the YAML block, merge by hand into local/adorno.yaml once validated"]

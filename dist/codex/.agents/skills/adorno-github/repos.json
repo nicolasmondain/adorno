@@ -10,6 +10,8 @@
     "allow_approve": false,
     "max_inline": 8,
     "max_parallel": 3,
+    "commit_skill": "adorno-commit",
+    "pr_skill": "adorno-pr-open",
     "permissions": {
       "deny": [],
       "claude": {
