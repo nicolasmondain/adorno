@@ -36,7 +36,8 @@ GH_WRITES = {
     "workflow": {"run", "enable", "disable"}, "run": {"rerun", "cancel", "delete"},
     "label": None, "secret": None, "variable": None, "gist": None, "ruleset": None,
 }
-ADORNO_STATE = re.compile(r"\.adorno/(registry\.json|runs(/|$))")
+# the grants (runs/active) and the runs folder itself; a run's own folder (runs/<slug>-<id>, from run-begin) is its workspace
+ADORNO_STATE = re.compile(r"\.adorno/(registry\.json|runs/?$|runs/active(/|$))")
 OPS = {";", "&&", "||", "|", "&", "(", ")", "|&", ";;", "\n"}
 
 MESSAGES = {
@@ -163,7 +164,7 @@ CODE_WRITES = [
     (re.compile(r"\bgh\b[^\n;|&]*\brelease\b[^\n;|&]*\b(create|upload|edit|delete)\b"), "gh"),
     (re.compile(r"\bgh\b[^\n;|&]*\bapi\b[^\n;|&]*(\s-[fFX]|\s--(field|raw-field|input|method)\b)"), "api"),
     (re.compile(r"api\.github\.com"), "curl"),
-    (re.compile(r"\.adorno/(registry\.json|runs/)"), "state"),
+    (re.compile(r"\.adorno/(registry\.json|runs/active\b)"), "state"),
 ]
 MESSAGES.update({
     "script": "this script would push or publish on GitHub itself: use the adorno-github scripts",
