@@ -5,18 +5,25 @@
 . "$(dirname "$0")/_lib.sh"
 
 parse_ref "${1:-}"
-timeout="${2:-1800}"; interval="${GH_OPS_POLL:-30}"
+timeout="${2:-1800}"; interval="${ADORNO_POLL:-30}"
 required="$(conf_get "$REPO" required_checks)"
 
 snapshot() {
   # gh exits non-zero while checks fail or are pending; the JSON is what matters
-  gh pr checks "$NUM" -R "$REPO" --json name,state,bucket,link,workflow 2>/dev/null || true
+  gh pr checks "$NUM" -R "$REPO" --json name,state,bucket,link,workflow 2>"$(work_dir)/checks-err" || true
 }
 
-elapsed=0
+elapsed=0 errors=0
 while :; do
   checks="$(snapshot)"
-  [ -n "$checks" ] || checks='[]'
+  if ! jq -e 'type == "array"' >/dev/null 2>&1 <<<"$checks"; then
+    # no JSON at all: gh itself failed (auth, network, unknown PR); three in a row is an error, not a wait
+    errors=$((errors + 1))
+    [ "$errors" -lt 3 ] || die "gh pr checks keeps failing: $(head -c 300 "$(work_dir)/checks-err")"
+    checks='[]'
+  else
+    errors=0
+  fi
   checks="$(jq --arg req "$required" '
     ($req | split(",") | map(select(. != ""))) as $r
     | if ($r | length) > 0 then map(select(.name as $n | $r | index($n))) else . end' <<<"$checks")"

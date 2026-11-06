@@ -1,5 +1,5 @@
 ---
-description: agent:review:perf — Relecteur performance web — Core Web Vitals, poids du bundle, rendu, chargement des ressources, régressions mesurables d'un diff front. Appelé quand un diff touche le front et peut peser sur le chargement ou le rendu.
+description: agent:review:perf — Relecteur performance web d'un diff front — Core Web Vitals, poids du bundle, rendu, chargement des ressources, régressions mesurables. Appelé quand un diff touche le front et peut peser sur le chargement ou le rendu.
 argument-hint: <demande>
 ---
 

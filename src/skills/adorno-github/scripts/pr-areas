@@ -12,15 +12,26 @@ diff="${2:-}"
 conf="$(repo_conf "$REPO")"
 
 tmp="$(work_dir)/areas-$$"; mkdir -p "$tmp"; trap 'rm -rf "$tmp"' EXIT
-: >"$tmp/files"; : >"$tmp/added"; : >"$tmp/hits"
+: >"$tmp/raw"; : >"$tmp/files"; : >"$tmp/added"; : >"$tmp/hits"
 
-# file list from `diff --git a/x b/y` (b/ side, so renames count under their new name), and
-# `path<TAB>added line` for every added line
-awk -v files="$tmp/files" -v added="$tmp/added" '
-  /^diff --git / { i = index($0, " b/"); f = substr($0, i + 3); print f > files; next }
-  /^\+\+\+ /     { next }
-  /^\+/          { if (f != "") print f "\t" substr($0, 2) > added }
+# file list from the `--- a/x` / `+++ b/y` headers (new name for renames, old name for deletions; git quotes
+# names with spaces or non-ASCII characters and escapes them in octal), and `path<TAB>added line` per added line
+awk -v files="$tmp/raw" -v added="$tmp/added" '
+  function unq(p) { if (p ~ /^".*"$/) { p = substr(p, 2, length(p) - 2) } return p }
+  /^diff --git / { old = ""; f = ""; inhdr = 1; next }
+  inhdr && /^--- / { old = unq(substr($0, 5)); sub(/^a\//, "", old); next }
+  inhdr && /^\+\+\+ / {
+    f = unq(substr($0, 5)); sub(/^b\//, "", f)
+    if (f == "/dev/null") f = old
+    print f > files; inhdr = 0; next
+  }
+  /^\+/ { if (f != "") print f "\t" substr($0, 2) > added }
 ' "$diff"
+# decode git's octal escapes (\303\251 -> é)
+while IFS= read -r f; do
+  case "$f" in *\\[0-7][0-7][0-7]*) f="$(printf '%b' "$(printf '%s' "$f" | sed 's/\\\([0-7][0-7][0-7]\)/\\0\1/g')")" ;; esac
+  printf '%s\n' "$f"
+done <"$tmp/raw" >"$tmp/files"
 
 areas="$(jq -r '.areas // {} | keys[]' <<<"$conf")"
 for area in $areas; do

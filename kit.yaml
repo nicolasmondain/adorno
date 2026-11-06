@@ -12,15 +12,13 @@ description: "Adorno, un agent qui travaille comme toi : il relit les PRs qu'on 
 targets: [claude, codex, gemini]
 
 instructions:
-  # Ajoute à AGENTS.md un index des agents, workflows et skills disponibles.
+  # Ajoute à AGENTS.md un index d'une ligne par workflow (agents et skills sont découverts nativement).
   catalog: true
 
 # Fichiers YAML de la racine livrés en JSON dans un skill (les scripts lisent du JSON avec jq).
 skill_data:
   adorno-github:
     repos.json: repos.yaml
-  adorno-watch:
-    adorno.json: repos.yaml
 
 # Agents, skills et workflows importés depuis d'autres dépôts.
 # `kit import` les récupère dans vendor/<name>/ et fige le commit dans kit.lock ;
@@ -35,11 +33,11 @@ skill_data:
 # Un élément local peut étendre un élément importé sans le recopier :
 #   extends: addy/code-reviewer   (son corps est ajouté à la fin de l'original)
 imports:
-  # 24 skills par phase (Define → Ship) et 4 agents relecteurs. MIT.
+  # 24 skills par phase (Define → Ship) et 3 agents relecteurs (code, sécurité, tests). MIT.
   - name: addy
     source: github:addyosmani/agent-skills
     ref: main
-    include: ["skills/*", "agents/*.md"]
+    include: ["skills/*", "agents/code-reviewer.md", "agents/security-auditor.md", "agents/test-engineer.md"]
 
   # Discipline « le moins de code qui marche » + revue, audit, registre de dette. MIT.
   - name: ponytail

@@ -1,0 +1,3 @@
+{"number": 7, "title": "Pagination breaks on empty pages", "body": "Steps…", "url": "https://github.com/acme/docs/issues/7",
+ "state": "OPEN", "labels": [{"name": "bug"}], "author": {"login": "alice"},
+ "comments": [{"author": {"login": "bob"}, "body": "Repro on staging", "createdAt": "2026-11-01T10:00:00Z"}]}

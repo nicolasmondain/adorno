@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Usage: review-merge REVIEWS_DIR
+# Merges the specialists' reviews (REVIEWS_DIR/*.json, format of the instructions: {agent, verdict, findings}) the
+# same way every time, so the session that orchestrates never has to read them all: one finding per file, line and
+# title (case and spacing ignored), the highest severity kept, the agents that raised it listed; the global verdict is
+# the most severe of the declared verdicts and of the one the findings imply (a blocker → block, a major → fix). Prints {verdict, counts, findings, agents, invalid} — `invalid` lists files that are not
+# valid reviews (they are skipped, never guessed).
+set -euo pipefail
+SELF="$(basename "$0")"
+die() { printf '%s: %s\n' "$SELF" "$1" >&2; exit "${2:-1}"; }
+command -v jq >/dev/null 2>&1 || die "missing dependency: jq"
+dir="${1:-}"
+[ -d "$dir" ] || die "usage: review-merge REVIEWS_DIR" 2
+
+ok="[]" bad="[]"
+for f in "$dir"/*.json; do
+  [ -e "$f" ] || continue
+  if jq -e '(.agent | type) == "string" and (.verdict | IN("pass", "fix", "block")) and (.findings | type) == "array"
+            and all(.findings[]; (.severity | IN("blocker", "major", "minor", "question")) and (.title | type) == "string")' \
+       "$f" >/dev/null 2>&1; then
+    ok="$(jq --slurpfile r "$f" '. + $r' <<<"$ok")"
+  else
+    bad="$(jq --arg f "$(basename "$f")" '. + [$f]' <<<"$bad")"
+  fi
+done
+
+jq --argjson bad "$bad" '
+  def rank: {"blocker": 3, "major": 2, "minor": 1, "question": 0}[.];
+  def vrank: {"block": 2, "fix": 1, "pass": 0}[.];
+  def implied: if .severity == "blocker" then "block" elif .severity == "major" then "fix" else "pass" end;
+  def key: [(.file // ""), ((.line // 0) | tostring), (.title | ascii_downcase | gsub("\\s+"; " ") | ltrimstr(" ") | rtrimstr(" "))];
+  [ .[] | .agent as $a | .findings[] | . + {agent: $a} ] as $all
+  | ($all | group_by(key) | map(
+      (max_by(.severity | rank)) + {agents: (map(.agent) | unique)}
+      | del(.agent))) as $merged
+  | { verdict: ((map(.verdict) + ($merged | map(implied)) + ["pass"]) | max_by(vrank)),
+      counts: ($merged | group_by(.severity) | map({(.[0].severity): length}) | add // {}),
+      findings: ($merged | sort_by([-(.severity | rank), (.file // ""), (.line // 0)])),
+      agents: map(.agent),
+      invalid: $bad }' <<<"$ok"

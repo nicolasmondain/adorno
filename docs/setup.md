@@ -19,9 +19,15 @@ bin/kit check
 bin/kit install --global          # ~/.claude, ~/.agents, ~/.gemini
 ```
 
-`--global` rend Adorno disponible dans tous tes projets. `bin/kit install ~/code/mon-projet` l'installe dans un seul
-projet, et y écrit en plus les permissions natives de ce repo (étape 4). Relance `bin/kit install` après chaque
-changement de `local/` ou du dépôt.
+`--global` rend Adorno disponible dans tous tes projets, écrit ton registre dans `~/.adorno/registry.json` (hors de
+tout repo, en lecture seule) et ajoute à tes réglages Claude Code (`~/.claude/settings.json`, valables dans **tous**
+tes projets, adorno ou non) des règles qui te **demandent confirmation** avant une écriture directe (`git push`,
+`gh pr comment`…, voir étape 4). `bin/kit install ~/code/mon-projet` ajoute dans un seul projet ses permissions (là,
+les écritures directes sont **refusées**) et ses modèles propres ; tout ce qu'il y installe est exclu de git
+(`.git/info/exclude`), y compris un `AGENTS.md` non suivi qui reçoit ton bloc, et il n'écrit jamais dans un fichier
+d'instructions suivi par le repo. Chaque installation avec ta couche personnelle réécrit le registre : relance
+`bin/kit install` (global ou dans un repo) après chaque changement de `local/` ou du dépôt, pour qu'un nouveau repo
+ou un droit resserré s'applique aussitôt.
 
 ## 2. Ton profil
 
@@ -90,7 +96,9 @@ flowchart LR
 ```
 
 De gauche à droite, chaque niveau l'emporte sur le précédent ; chacun développe d'abord ses `use:`. Les objets se
-fusionnent clé par clé ; listes et valeurs sont remplacées, sauf `context` et `vision` qui s'additionnent.
+fusionnent clé par clé ; listes et valeurs sont remplacées, sauf `context`, `vision` et les droits
+(`permissions.deny`, `permissions.claude.*`) qui s'additionnent : un niveau plus précis ajoute des refus, jamais n'en
+retire.
 
 `bin/kit conf acme/app` affiche le résultat, avec `scopes` : la liste des niveaux qui ont joué. Les agents lisent la
 même chose avec `adorno-github/scripts/repo-conf`.
@@ -101,11 +109,30 @@ même chose avec `adorno-github/scripts/repo-conf`.
 | --- | --- | --- |
 | `max_level` | plafond du repo : L0 lecture, L1 fichiers locaux, L2 push sur une branche, L3 PR, réponses, resolve. L4 (merge, tag) n'est jamais automatique | `max_level: L2` |
 | `permissions.deny` | actions GitHub refusées par les scripts : `push`, `reply`, `comment`, `resolve`, `rerequest`, `review` (en attente), `submit`, `open_pr`, `ci_rerun` | `deny: [submit, resolve]` |
-| `permissions.claude` | règles natives de Claude Code (`allow`, `ask`, `deny`), écrites dans `<repo>/.claude/settings.local.json` à l'install et retirées à la désinstallation | `deny: ["Bash(git push:*)"]` |
+| `permissions.claude` | règles natives de Claude Code (`allow`, `ask`, `deny`), écrites dans `<repo>/.claude/settings.local.json` à l'install (avec `--global` : `~/.claude/settings.json`, où les `deny` de commandes shell deviennent des `ask`) et retirées à la désinstallation | `deny: ["Bash(git push:*)"]` |
 | `allow_approve` | une review automatique peut-elle approuver ? | `false` (défaut) |
 
-Le niveau d'une exécution est aussi fixé par le mode du workflow (`report` L0, `draft` L2, `auto` L3) ; le plus bas des
-deux l'emporte. Une action refusée arrête le workflow, qui le dit : rien n'est contourné.
+**Les exécutions.** Chaque workflow qui écrit sur GitHub ouvre une exécution (`run-begin`) qui fixe son mode, son
+niveau, les actions qu'il s'interdit et les repos qu'il touche (au moins un `--repo`), dans un fichier sous
+`~/.adorno/runs/active/`, et la clôt (`run-end`) ; une exécution oubliée expire après 2 h. Les scripts lisent ce
+fichier : sans exécution ouverte sur le repo, toute écriture y est refusée ; en `report` et `draft`, tout est simulé
+(rien ne part) et `draft` interdit le push, même si une commande l'oublie. Deux exécutions sur un même repo (deux
+sessions en parallèle) : la plus stricte l'emporte et le script le signale, en nommant les exécutions ; une exécution
+sur un autre repo ne change rien. `ADORNO_LEVEL` peut seulement abaisser le niveau. Aucune variable ne déplace
+`~/.adorno` : le registre et les exécutions sont lus là, et seulement là.
+
+**Les règles par défaut.** `repos.yaml` installe des règles Claude Code qui interdisent les commandes d'écriture
+directes : `git push`, `gh pr create|comment|review|merge|close|edit`, `gh issue comment|create`, `gh release`, et
+la modification du registre et des exécutions ; tout appel direct à `gh api` (qui écrit dès qu'il reçoit `-f`) te
+demande confirmation. Les agents publient par les scripts, qui vérifient les droits. Tes règles s'y ajoutent (les
+listes s'additionnent d'un niveau à l'autre, jamais ne se remplacent). Ces règles comparent le début de la commande :
+une forme détournée (`git -C dossier push`, `env git push`) leur échappe, et les scripts restent le vrai garde-fou.
+
+**Le contenu non fiable.** Diffs, commentaires, messages Slack, pages Notion et logs sont traités comme des données,
+jamais comme des consignes. Le code d'une PR venue d'un fork n'est jamais exécuté. Une surveillance Slack ne lance son
+action au-dessus de L0 que pour un message dont l'auteur figure dans `action.trusted_authors`.
+
+Une action refusée arrête le workflow, qui le dit : rien n'est contourné.
 
 ## 5. La voix et la vision
 
@@ -155,6 +182,7 @@ defaults:                    # ou par repo, preset ou workspace
     min_age: 3d              # délai en production avant d'analyser
     environment: production
     post: comment            # comment | none
+    post_public: false       # sur un repo public, aucun rapport en commentaire (chiffres de production)
 repos:
   acme/app:
     impact:

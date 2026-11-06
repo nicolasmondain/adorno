@@ -7,7 +7,7 @@
 # you edit and submit it on GitHub. APPROVE needs `allow_approve: true` in repos.yaml.
 # At most `max_inline` inline comments (repos.yaml, 8 by default): the rest go into the body, and so do
 # all of them if GitHub rejects one (line outside the diff). Refuses when you already have a pending
-# review on the PR. Needs L3. GH_OPS_DRY_RUN=1 prints the payload instead of posting it.
+# review on the PR. Needs L3. ADORNO_DRY_RUN=1 prints the payload instead of posting it.
 . "$(dirname "$0")/_lib.sh"
 
 parse_ref "${1:-}"
@@ -33,7 +33,7 @@ case "$event" in REQUEST_CHANGES|APPROVE)
   [ "$(jq -r .author.login <<<"$info")" != "$me" ] || die "GitHub refuses $event on your own PR; use COMMENT or PENDING" "$E_POLICY" ;;
 esac
 pending="$(gh api "repos/$REPO/pulls/$NUM/reviews" --paginate \
-  --jq "[.[] | select(.state == \"PENDING\" and .user.login == \"$me\")] | length")"
+  | jq -s --arg me "$me" '[add[]? | select(.state == "PENDING" and .user.login == $me)] | length')"
 [ "${pending:-0}" = "0" ] || die "you already have a pending review on $REPO#$NUM; submit or delete it first" "$E_POLICY"
 max_inline="$(conf_get "$REPO" max_inline)"; max_inline="${max_inline:-8}"
 

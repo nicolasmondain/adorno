@@ -1,8 +1,7 @@
-# Registre des repos sur lesquels les workflows ont le droit d'agir.
-# Un repo absent d'ici est signalé, jamais traité.
-# Livré en JSON dans le skill adorno-github (kit.yaml > skill_data) pour les scripts.
+# Réglages publics par défaut, valables pour tout repo. Tes repos, presets et workspaces vivent dans
+# local/adorno.yaml (ignoré par git) ; `bin/kit install` écrit le registre complet dans ~/.adorno/registry.json, hors
+# de tout repo, que les scripts lisent. Un repo déclaré nulle part est signalé, jamais traité.
 #
-#   path             clone local (vide = le workflow clone dans un worktree temporaire)
 #   base             branche par défaut (vide = lue sur GitHub)
 #   install/test/lint/typecheck  commandes ; vides = détectées par workflow:repo:onboard
 #   required_checks  checks CI à attendre (vide = tous)
@@ -36,11 +35,37 @@ defaults:
   max_inline: 8
   max_parallel: 3
 
+  # Native Claude Code rules installed everywhere (your user settings with --global, the repo's local settings with a
+  # repo install). Agents publish through the adorno-github scripts, which check levels and permissions; these rules
+  # stop the direct commands that would skip them. Add your own in local/adorno.yaml: lists accumulate.
+  permissions:
+    deny: []
+    claude:
+      deny:
+        - "Bash(git push:*)"
+        - "Bash(gh pr create:*)"
+        - "Bash(gh pr comment:*)"
+        - "Bash(gh pr review:*)"
+        - "Bash(gh pr merge:*)"
+        - "Bash(gh pr close:*)"
+        - "Bash(gh pr edit:*)"
+        - "Bash(gh issue comment:*)"
+        - "Bash(gh issue create:*)"
+        - "Bash(gh release:*)"
+        - "Edit(~/.adorno/registry.json)"
+        - "Write(~/.adorno/registry.json)"
+        - "Edit(~/.adorno/runs/active/**)"
+        - "Write(~/.adorno/runs/active/**)"
+      ask:
+        # `gh api` writes as soon as it gets -f, -F or --input (no -X needed): every direct call asks you first
+        - "Bash(gh api:*)"
+
   impact:
     window: 7d            # même durée comparée avant et après le déploiement
     min_age: 3d           # pas d'analyse tant que la PR n'est pas en production depuis ce délai
     environment: production
     post: comment         # comment : le rapport part en commentaire de la PR · none : rapport local seulement
+    post_public: false    # sur un repo public, jamais de chiffres de production en commentaire, sauf true
     sources: []           # tes repères par repo, dans local/adorno.yaml (voir local.example/)
 
   areas:

@@ -2,7 +2,7 @@
 # Usage: pr-push owner/repo#N
 # Pushes the commits made in the PR's workspace to the PR branch. Never forces: if the branch moved
 # on GitHub, the push is rejected and the workspace must be refreshed. Only for your own PRs, from the
-# same repository (not a fork). Needs L2. GH_OPS_DRY_RUN=1 only prints.
+# same repository (not a fork). Needs L2. ADORNO_DRY_RUN=1 only prints.
 . "$(dirname "$0")/_lib.sh"
 need git
 

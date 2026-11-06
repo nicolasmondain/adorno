@@ -13,8 +13,18 @@ info="$(gh pr view "$NUM" -R "$REPO" --json state,mergedAt,mergeCommit)"
 [ "$(jq -r .state <<<"$info")" = "MERGED" ] || die "$REPO#$NUM is not merged" "$E_POLICY"
 merged="$(jq -r .mergedAt <<<"$info")"; sha="$(jq -r .mergeCommit.oid <<<"$info")"
 
-deps="$(gh api "repos/$REPO/deployments?per_page=100" \
-         --jq "[.[] | select(.created_at >= \"$merged\") | {id, environment, sha, created_at}] | sort_by(.created_at)")"
+# Deployments come newest first: read pages until one ends before the merge (10 pages, 1000 deployments, at most).
+deps="[]"; page=1
+while [ "$page" -le 10 ]; do
+  chunk="$(gh api "repos/$REPO/deployments?per_page=100&page=$page")"
+  # both documents on stdin: a page of deployments is too big for one command-line argument on Linux
+  deps="$(printf '%s\n%s\n' "$deps" "$chunk" | jq -s --arg m "$merged" \
+    '.[0] + [.[1][] | select(.created_at >= $m) | {id, environment, sha, created_at}]')"
+  [ "$(jq 'length' <<<"$chunk")" = 100 ] || break
+  [ "$(jq --arg m "$merged" '.[-1].created_at >= $m' <<<"$chunk")" = true ] || break
+  page=$((page + 1))
+done
+deps="$(jq 'sort_by(.created_at)' <<<"$deps")"
 
 out="[]"; done_envs=" "
 while IFS=$'\t' read -r id env dsha created; do

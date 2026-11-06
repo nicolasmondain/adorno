@@ -5,29 +5,53 @@ set -euo pipefail
 FIX="${FAKE_FIX:?set FAKE_FIX to the fixtures folder}"
 printf '%s\n' "$*" >>"${FAKE_LOG:-/dev/null}"
 
-jq_expr=""; input=""; args=()
+jq_expr=""; input=""; args=(); paginate=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --jq) jq_expr="$2"; shift 2 ;;
+    --paginate) paginate=1; args+=("$1"); shift ;;
     --input) input="$2"; args+=("$1" "$2"); shift 2 ;;
     *) args+=("$1"); shift ;;
   esac
 done
 all="${args[*]}"
 
+# Like gh: with --paginate, an array response comes as several pages (2 items each here), one JSON document per
+# page, and --jq runs on each page separately.
 respond() {
-  if [ -n "$jq_expr" ]; then jq -r "$jq_expr"; else cat; fi
+  local body; body="$(cat)"
+  if [ "$paginate" = 1 ] && [ "$(jq -r 'type' <<<"$body")" = array ]; then
+    jq -c '[_nwise(2)] | if length == 0 then [[]] else . end | .[]' <<<"$body" | while IFS= read -r page; do
+      if [ -n "$jq_expr" ]; then jq -r "$jq_expr" <<<"$page"; else printf '%s\n' "$page"; fi
+    done
+  elif [ -n "$jq_expr" ]; then jq -r "$jq_expr" <<<"$body"
+  else printf '%s\n' "$body"; fi
 }
 
+# Like gh: `pr view --json a,b` returns those fields only; a field this fake does not know fails loudly, so a test
+# never passes on data the real gh would have given differently.
 pr_json() {
+  local fields
+  fields="$(printf '%s\n' "${args[@]}" | awk 'p { print; exit } $0 == "--json" { p = 1 }')"
   jq -n --arg author "${FAKE_PR_AUTHOR:-octocat}" --arg sha "${FAKE_HEAD_SHA:-abc123}" \
-    --arg state "${FAKE_PR_STATE:-OPEN}" --argjson cross "${FAKE_CROSS:-false}" \
-    '{author: {login: $author}, headRefOid: $sha, headRefName: "nm/pagination", baseRefName: "main",
-      isCrossRepository: $cross, state: $state}'
+    --arg state "${FAKE_PR_STATE:-OPEN}" --argjson cross "${FAKE_CROSS:-false}" --arg fields "$fields" '
+    {author: {login: $author}, headRefOid: $sha, headRefName: "nm/pagination", baseRefName: "main",
+     isCrossRepository: $cross, state: $state, number: 42, title: "feat(api): add pagination",
+     url: "https://github.com/acme/docs/pull/42", body: "Adds pagination.", additions: 10, deletions: 2,
+     files: [{path: "api/users.ts", additions: 8, deletions: 1}, {path: "client/list.tsx", additions: 2, deletions: 1}]}
+    | . as $all
+    | if $fields == "" then . else
+        ($fields | split(",")) as $want
+        | if any($want[]; $all[.] == null) then error("fake-gh: pr view field not faked: \($want - ($all | keys))")
+          else with_entries(select(.key as $k | $want | index($k))) end
+      end'
 }
 
 case "$all" in
   "api user") echo '{"login":"octocat"}' | respond ;;
+  api\ graphql*PullRequestReviewThread\ \{*)
+    printf '{"data":{"node":{"pullRequest":{"number":%s,"repository":{"nameWithOwner":"%s"}}}}}\n' \
+      "${FAKE_THREAD_NUM:-42}" "${FAKE_THREAD_REPO:-acme/docs}" | respond ;;
   api\ graphql*resolveReviewThread*) echo '{"data":{"resolveReviewThread":{"thread":{"id":"T1","isResolved":true}}}}' | respond ;;
   api\ graphql*addPullRequestReviewThreadReply*) echo '{"data":{"addPullRequestReviewThreadReply":{"comment":{"url":"https://github.com/x/y/pull/1#r1"}}}}' | respond ;;
   api\ graphql*review-requested*) respond <"$FIX/review-requested.json" ;;
@@ -56,12 +80,20 @@ case "$all" in
     printf '{"status":"%s"}\n' "$st" | respond ;;
   pr\ comment*) echo "https://github.com/x/y/pull/1#issuecomment-1" ;;
   pr\ checks*) cat "${FAKE_CHECKS:-$FIX/checks-pass.json}"; [ "${FAKE_CHECKS_EXIT:-0}" = 0 ] || exit "$FAKE_CHECKS_EXIT" ;;
+  run\ list*) respond <"$FIX/runs.json" ;;
+  run\ view*--log-failed*)
+    case "$all" in *"view 2 "*) echo "fake-gh: no log" >&2; exit 1 ;; esac
+    printf 'step 1\nstep 2\nError: expected 2, got 3\n' ;;
+  issue\ view*) respond <"$FIX/issue.json" ;;
+  pr\ diff*) cat "$FIX/sample.diff" ;;
   run\ view*attempt*) printf '{"attempt":%s}\n' "${FAKE_ATTEMPT:-1}" | respond ;;
   run\ rerun*) echo "rerun requested" >&2 ;;
-  repo\ view*) echo '{"defaultBranchRef":{"name":"main"}}' | respond ;;
+  repo\ view*) jq -n --argjson p "${FAKE_PRIVATE:-true}" '{defaultBranchRef: {name: "main"}, isPrivate: $p}' | respond ;;
   repo\ clone*)
     dest="${args[3]}"
     git clone --quiet --bare "${FAKE_ORIGIN:?}" "$dest" 2>/dev/null ;;
+  search\ prs*) respond <"$FIX/search-prs.json" ;;
+  api\ repos/*/pulls/*/comments*) respond <"$FIX/pr-comments.json" ;;
   pr\ create*) echo "https://github.com/acme/docs/pull/99" ;;
   *) echo "fake-gh: no route for: $all" >&2; exit 99 ;;
 esac

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage: pr-comment owner/repo#N BODY_FILE   (BODY_FILE = - reads stdin)
 # Posts a comment on the PR conversation (to answer a general comment or a review summary).
-# Needs L3. GH_OPS_DRY_RUN=1 prints the comment instead of posting it.
+# Needs L3. ADORNO_DRY_RUN=1 prints the comment instead of posting it.
 . "$(dirname "$0")/_lib.sh"
 
 parse_ref "${1:-}"
@@ -11,6 +11,13 @@ require_level "$REPO" L3 comment
 
 if [ "$file" = "-" ]; then file="$(work_dir)/comment-$$.md"; cat >"$file"; fi
 [ -s "$file" ] || die "empty comment body" "$E_USAGE"
+# an impact report carries production numbers: never on a public repo unless the owner said so
+if grep -q '<!-- adorno:impact -->' "$file"; then
+  private="$(gh repo view "$REPO" --json isPrivate --jq .isPrivate)"
+  if [ "$private" != "true" ] && [ "$(repo_conf "$REPO" | jq -r '.impact.post_public // false')" != "true" ]; then
+    die "$REPO is public: impact reports are not posted there unless impact.post_public is true" "$E_POLICY"
+  fi
+fi
 file="$(with_footer "$REPO" "$file")"
 
 if dry_run; then

@@ -28,8 +28,16 @@ case "$strength" in explicit|inferred) ;; *) die "--strength: explicit (the owne
 [ -n "$target" ] && [ -n "$obs" ] && [ -n "$prop" ] || die "--target, --observation and --proposal are required" 2
 [ ${#ev[@]} -gt 0 ] || die "at least one --evidence (a link or file:line): no candidate without proof" 2
 
-dir="${ADORNO_HOME:-$HOME/.adorno}/learn"; mkdir -p "$dir"; f="$dir/candidates.json"
+dir="$HOME/.adorno/learn"; mkdir -p "$dir"; f="$dir/candidates.json"
 [ -f "$f" ] || printf '{}\n' >"$f"
+# serialise read-modify-write: parallel runs must not lose each other's notes
+lock="$f.lock"; tries=0
+until mkdir "$lock" 2>/dev/null; do
+  if [ -n "$(find "$lock" -maxdepth 0 -mmin +5 2>/dev/null)" ]; then rm -rf "$lock"; continue; fi
+  tries=$((tries + 1)); [ "$tries" -lt 300 ] || die "timed out waiting for $lock"
+  sleep 0.1
+done
+trap 'rm -rf "$lock" "$f.$$.tmp"' EXIT
 now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 jq --arg k "$key" --arg kind "$kind" --arg t "$target" --arg o "$obs" --arg p "$prop" --arg s "$strength" \
    --arg now "$now" --args '
@@ -40,5 +48,5 @@ jq --arg k "$key" --arg kind "$kind" --arg t "$target" --arg o "$obs" --arg p "$
     else
       .[$k] |= (.seen += 1 | .last = $now | .evidence = ((.evidence + $ev) | unique)
                 | if $s == "explicit" then .strength = "explicit" | .proposal = $p else . end)
-    end' "${ev[@]}" <"$f" >"$f.tmp" && mv "$f.tmp" "$f"
+    end' "${ev[@]}" <"$f" >"$f.$$.tmp" && mv "$f.$$.tmp" "$f"
 jq --arg k "$key" '.[$k]' "$f"

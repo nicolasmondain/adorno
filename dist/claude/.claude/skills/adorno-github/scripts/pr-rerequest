@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Usage: pr-rerequest owner/repo#123 [login ...]
-# Asks reviewers to look again. Without logins: everyone who already reviewed (bots excluded),
-# else the repo's `reviewers` from repos.yaml. Needs L3. GH_OPS_DRY_RUN=1 only prints.
+# Usage: pr-rerequest owner/repo#123 [login|org/team ...]
+# Asks reviewers to look again. Without names: everyone who already reviewed (bots excluded), else the repo's
+# `reviewers`. A name with a slash (org/team) is requested as a team. Needs L3. ADORNO_DRY_RUN=1 only prints.
 . "$(dirname "$0")/_lib.sh"
 
 parse_ref "${1:-}"
@@ -12,18 +12,24 @@ logins=("$@")
 if [ ${#logins[@]} -eq 0 ]; then
   me="$(viewer_login)"
   list="$(gh api "repos/$REPO/pulls/$NUM/reviews" --paginate \
-    --jq "[.[] | select(.user.type == \"User\" and .user.login != \"$me\") | .user.login] | unique | .[]")"
+    | jq -rs --arg me "$me" '[add[]? | select(.user.type == "User" and .user.login != $me) | .user.login] | unique | .[]')"
   [ -n "$list" ] || list="$(conf_get "$REPO" reviewers | tr ',' '\n')"
   while IFS= read -r l; do [ -n "$l" ] && logins+=("$l"); done <<<"$list"
 fi
 [ ${#logins[@]} -gt 0 ] || die "no reviewer to request on $REPO#$NUM" "$E_USAGE"
 
+for l in "${logins[@]}"; do
+  [[ "$l" =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$ ]] || die "invalid reviewer '$l'" "$E_USAGE"
+done
 if dry_run; then
-  printf '%s\n' "${logins[@]}" | jq -R . | jq -s '{dryRun: true, action: "rerequest", reviewers: .}'
+  printf '%s\n' "${logins[@]}" | jq -R . | jq -s '{dryRun: true, action: "rerequest",
+    reviewers: map(select(contains("/") | not)), teams: map(select(contains("/")) | split("/")[1])}'
   exit 0
 fi
 
 args=()
-for l in "${logins[@]}"; do args+=(-f "reviewers[]=$l"); done
+for l in "${logins[@]}"; do
+  case "$l" in */*) args+=(-f "team_reviewers[]=${l#*/}") ;; *) args+=(-f "reviewers[]=$l") ;; esac
+done
 gh api -X POST "repos/$REPO/pulls/$NUM/requested_reviewers" "${args[@]}" \
-  --jq '{requested: [.requested_reviewers[].login]}'
+  --jq '{requested: [.requested_reviewers[].login], teams: [.requested_teams[]?.slug]}'

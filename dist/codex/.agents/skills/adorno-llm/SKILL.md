@@ -1,6 +1,6 @@
 ---
 name: adorno-llm
-description: Send a well-delimited task (triage, routing, a review of a given diff…) to another model through any OpenAI-compatible endpoint - OpenRouter, OpenAI, Google, your own models - and get the answer back as JSON. Used by agents that the owner routed to an external model (models.agents.<id>.route in their personal layer); also usable by hand for a cheap one-shot task.
+description: Envoie une tâche bien délimitée (tri, routage, revue d'un diff fourni…) à un autre modèle par n'importe quel point d'accès compatible OpenAI — OpenRouter, OpenAI, Google, tes propres modèles — et rend la réponse en JSON. Utilisé par les agents que le propriétaire a routés vers un modèle externe (models.agents.<id>.route) ; utilisable à la main pour une tâche ponctuelle peu coûteuse.
 ---
 
 # adorno-llm
@@ -22,7 +22,9 @@ scripts/llm-run --base-url https://openrouter.ai/api/v1 --model qwen/qwen3-coder
 | `--system FILE` | the role's instructions |
 | `--max-tokens`, `--temperature`, `--timeout` | optional |
 
-`LLM_RUN_DRY_RUN=1` prints the request without sending it. Exit codes: 2 usage, 3 key missing, 4 refused URL, 6 the
+A non-local `--base-url` must be one of your routes (`models.routes` in `local/adorno.yaml`, installed into `~/.adorno/registry.json`), with that route's own `api_key_env`: a key only ever goes to the host it was declared for. `localhost` endpoints need no route.
+
+`ADORNO_DRY_RUN=1` prints the request without sending it. Exit codes: 2 usage, 3 key missing, 4 refused URL or undeclared route, 6 the
 endpoint failed.
 
 ## Rules

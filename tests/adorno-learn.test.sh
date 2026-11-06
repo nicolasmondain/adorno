@@ -4,7 +4,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 S="$ROOT/src/skills/adorno-learn/scripts"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-export ADORNO_HOME="$TMP/home"
+export HOME="$TMP/home"; mkdir -p "$HOME"
 pass=0 fail=0
 ok() { pass=$((pass + 1)); printf '  ok   %s\n' "$1"; }
 ko() { fail=$((fail + 1)); printf '  FAIL %s\n' "$1"; [ -z "${2:-}" ] || printf '       %s\n' "$2"; }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage: ci-rerun owner/repo RUN_ID
 # Re-runs only the failed jobs of a run, once: refuses when the run is already past attempt 1,
-# so a flaky diagnosis never hides a real failure. Needs L2. GH_OPS_DRY_RUN=1 only prints.
+# so a flaky diagnosis never hides a real failure. Needs L2. ADORNO_DRY_RUN=1 only prints.
 . "$(dirname "$0")/_lib.sh"
 
 split_repo "${1:-}"
@@ -10,6 +10,7 @@ run="${2:-}"
 require_level "$REPO" L2 ci_rerun
 
 attempt="$(gh run view "$run" -R "$REPO" --json attempt --jq .attempt)"
+[[ "$attempt" =~ ^[0-9]+$ ]] || die "could not read the attempt of run $run"
 [ "$attempt" -le 1 ] || die "run $run is already at attempt $attempt; investigate instead of re-running" "$E_POLICY"
 
 if dry_run; then

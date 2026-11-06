@@ -27,6 +27,9 @@ et rendent du JSON sur stdout ; les messages vont sur stderr. Prérequis : `gh` 
 | `ci-wait owner/repo#N [secondes]` | attend la fin des checks (requis seulement si configurés) | L0 |
 | `ci-failed owner/repo#N [lignes]` | runs en échec sur le dernier commit + fin des logs dans des fichiers | L0 |
 | `ci-rerun owner/repo RUN_ID` | relance les jobs en échec, une seule fois par run | L2 |
+| `run-begin --workflow ID --mode report\|draft\|pending\|comment\|auto --level Lx --repo owner/repo… [--deny a,b] [--ttl 2h]` | ouvre une exécution pour les repos nommés : ce qu'elle a le droit d'écrire, son dossier ; `report`/`draft` forcent la simulation | — |
+| `run-end ID` | clôt l'exécution (à faire toujours, même après un échec) | — |
+| `git-push owner/repo [BRANCHE] [--dir CHEMIN]` | pousse une branche sans PR : jamais en force, jamais la base, nom conforme à `branch_pattern` | L2 |
 | `pr-push owner/repo#N` | pousse les commits du workspace sur la branche de ta PR, jamais en force | L2 |
 | `pr-reply owner/repo#N THREAD_ID FICHIER` | répond dans un thread (`-` = stdin) | L3 |
 | `pr-resolve owner/repo#N THREAD_ID` | résout un thread si `resolve_threads: author` et que tu es l'auteur | L3 |
@@ -35,17 +38,20 @@ et rendent du JSON sur stdout ; les messages vont sur stderr. Prérequis : `gh` 
 | `pr-rerequest owner/repo#N [login…]` | redemande une review (défaut : ceux qui ont déjà relu) | L3 |
 | `pr-open owner/repo BRANCHE "type(scope): titre" FICHIER [--draft]` | ouvre la PR, demande les relecteurs du registre | L3 |
 
-\* Écrit seulement sous `~/.adorno` (`ADORNO_HOME`), jamais dans tes copies de travail ni sur GitHub.
+\* Écrit seulement sous `~/.adorno` (aucune variable ne le déplace), jamais dans tes copies de travail ni sur GitHub.
 
 ## Règles
 
-- **Droits** : chaque script d'écriture vérifie le `max_level` du repo et, si elle est définie, la variable
-  `ADORNO_LEVEL` (niveau accordé à l'exécution). Exporte-la au début d'un workflow : `export ADORNO_LEVEL=L2`.
-- **Brouillon** : `GH_OPS_DRY_RUN=1` fait afficher aux scripts d'écriture ce qu'ils publieraient, sans rien publier.
-  C'est le mode `draft` des workflows.
+- **Droits** : chaque script d'écriture vérifie le `max_level` du repo, ses `permissions.deny`, et l'exécution
+  active (`run-begin` : niveau, actions refusées, repos couverts). Sans exécution active : L0, toute écriture est
+  refusée. Une exécution ne vaut que pour les repos qu'elle nomme ; deux exécutions sur un même repo (deux sessions) :
+  la plus stricte s'applique, et le script le signale. `ADORNO_LEVEL` peut seulement **abaisser** le niveau.
+- **Simulation** : une exécution en mode `report` ou `draft`, ou `ADORNO_DRY_RUN=1`, fait afficher aux scripts
+  d'écriture ce qu'ils publieraient, sans rien publier.
+- **Pousser** : `git-push owner/repo <branche>` (sans PR) ou `pr-push owner/repo#N` ; jamais `git push` direct.
 - **Langue** : les textes publiés sur GitHub (réponses, descriptions de PR) sont dans `reply_language` du repo
   (`en` par défaut), quelle que soit la langue de la conversation.
-- **Fichiers de travail** : diffs et logs vont dans `$AGENT_RUN_DIR` (sinon `$TMPDIR/adorno-github`).
+- **Fichiers de travail** : chaque script a son propre dossier temporaire, lisible par toi seul (`~/.adorno/tmp/<pid>`, purgé après un jour) ; les livrables vont dans le dossier d'exécution que rend `run-begin`.
 - **Workspaces** : un par PR, `~/.adorno/workspaces/<owner>__<repo>/pr-<N>`, détaché au commit de tête. `.agent-run/`
   y est exclu de git. `pr-workspace` refuse de déplacer un workspace qui contient du travail non poussé.
 - **Signature** : si `reply_footer` est défini pour le repo, il est ajouté à tout texte publié.

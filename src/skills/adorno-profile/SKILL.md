@@ -1,6 +1,6 @@
 ---
 name: adorno-profile
-description: How the owner designs, delivers and reviews code — types and single source of truth, scalability and zero issue, method, git and PR discipline, review discipline, the SBI charter. Load before any review, reply, decision or code written on their behalf (agent:adorno and every agent that acts as them).
+description: Comment le propriétaire conçoit, livre et relit du code — types et source unique de vérité, échelle et zéro incident, méthode, discipline de git, de PR et de review, charte SBI. À charger avant toute review, réponse, décision ou code écrit en son nom (agent:adorno et tout agent qui agit comme lui).
 ---
 
 # The owner's profile

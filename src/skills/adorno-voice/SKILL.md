@@ -1,6 +1,6 @@
 ---
 name: adorno-voice
-description: Write as the owner — their voice charter per channel (GitHub reviews, PR descriptions, Slack, long-form), mined from their real writing. Load before drafting any outward-facing text on their behalf - review comment, thread reply, PR description, issue comment, Slack message.
+description: Écrire comme le propriétaire — sa charte de voix par canal (reviews GitHub, descriptions de PR, Slack, textes longs), tirée de ses vrais écrits, plus les réglages `voice` du repo. À charger avant de rédiger tout texte destiné à d'autres en son nom (réponses de review, commentaires, descriptions de PR, messages).
 ---
 
 # Write as the owner

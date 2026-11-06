@@ -7,7 +7,7 @@
 filter="${1:-}"
 [ -z "$filter" ] || split_repo "$filter"
 
-query='query($q:String!){ search(query:$q, type:ISSUE, first:50){ nodes{ ... on PullRequest{
+query='query($q:String!){ search(query:$q, type:ISSUE, first:100){ issueCount nodes{ ... on PullRequest{
   number title url isDraft updatedAt reviewDecision mergeable
   repository{ nameWithOwner }
   reviewRequests(first:20){ nodes{ requestedReviewer{ ... on User{login} ... on Team{slug} } } }
@@ -17,8 +17,11 @@ query='query($q:String!){ search(query:$q, type:ISSUE, first:50){ nodes{ ... on 
 q="is:pr is:open author:@me archived:false"
 [ -z "$filter" ] || q="$q repo:$filter"
 
-gh api graphql -f query="$query" -F q="$q" \
-| jq --slurpfile reg "$REGISTRY" '
+raw="$(gh api graphql -f query="$query" -F q="$q")"
+reg="$(jq -r '.data.search.nodes[].repository.nameWithOwner' <<<"$raw" | sort -u | registered_map)"
+total="$(jq '.data.search.issueCount // 0' <<<"$raw")"
+[ "$total" -le 100 ] || log "warning: $total PRs match, only the first 100 are listed (narrow with owner/repo)"
+jq --argjson reg "$reg" '
   [ .data.search.nodes[]
     | (.commits.nodes[0].commit.statusCheckRollup.state // "NONE") as $ci
     | ([.reviewThreads.nodes[] | select(.isResolved | not)] | length) as $open
@@ -28,7 +31,7 @@ gh api graphql -f query="$query" -F q="$q" \
         reviewDecision: (.reviewDecision // "NONE"), ci: $ci, mergeable,
         unresolvedThreads: $open,
         waitingOn: [.reviewRequests.nodes[].requestedReviewer | (.login // .slug)],
-        registered: ($reg[0].repos | has($repo)),
+        registered: ($reg[$repo] // false),
         blocker: (
           if .isDraft then "draft"
           elif ($ci == "FAILURE" or $ci == "ERROR") then "ci-red"
@@ -39,4 +42,4 @@ gh api graphql -f query="$query" -F q="$q" \
           elif .reviewDecision == "REVIEW_REQUIRED" then "waiting-review"
           else "ready" end)
       } ]
-  | sort_by(.repo, .number)'
+  | sort_by(.repo, .number)' <<<"$raw"

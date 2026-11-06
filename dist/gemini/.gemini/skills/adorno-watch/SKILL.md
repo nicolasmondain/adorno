@@ -1,12 +1,12 @@
 ---
 name: adorno-watch
-description: Watches on Slack and Notion for the owner — the settings of each watch (channels, pattern, period, max messages, action, notification), deterministic matching of Slack messages, and the memory of what was already processed so nothing is handled twice. Reading goes through the Slack and Notion connectors (read-only); the only write is the report sent to the owner themself. Use in workflow:slack:watch, workflow:slack:mentions and workflow:notion:assigned.
+description: Surveillances Slack et Notion du propriétaire — réglages de chaque surveillance (canaux, motif, période, maximum de messages, action, notification), filtrage déterministe des messages Slack, et mémoire de ce qui est déjà traité pour ne rien traiter deux fois. La lecture passe par les connecteurs Slack et Notion (lecture seule) ; la seule écriture est le compte rendu envoyé au propriétaire lui-même. À utiliser dans workflow:slack:watch, workflow:slack:mentions et workflow:notion:assigned.
 ---
 
 # adorno-watch
 
-Settings come from the owner's personal layer (`local/adorno.yaml` › `slack`, `notion`, git-ignored), shipped here as
-`adorno.json`. The scripts of `scripts/` (relative to this file) do everything deterministic and print JSON; the
+Settings come from the owner's personal layer (`local/adorno.yaml` › `slack`, `notion`, git-ignored), installed by
+`bin/kit install` in `~/.adorno/registry.json`, outside every repo. The scripts of `scripts/` (relative to this file) do everything deterministic and print JSON; the
 workflow's agent does the reading through the connectors and the judgment.
 
 ## Connectors
@@ -17,7 +17,8 @@ client, e.g. `slack_search_public_and_private`, `slack_read_channel`, `slack_rea
 never scrape, never ask for a token.
 
 - **Read-only** on Slack and Notion: never post in a channel or a thread, never react, never edit a Notion page.
-- **One write**: the report to the owner themself, as their `notify` setting says:
+- **One write**: the report to the owner themself, as their `notify` setting says — check the recipient before
+  sending: it is exactly `slack.user_id` (their own DM); any doubt → a draft instead:
   - `dm` (default) — a direct message to themself (their own Slack user, `slack.user_id`);
   - `draft` — a Slack draft in their DM to themself, not sent;
   - `none` — the report stays in the run folder and in the answer.

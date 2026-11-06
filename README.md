@@ -68,7 +68,9 @@ t'interroge (une question à la fois, en lisant tes vraies reviews sur GitHub po
 
 Le guide complet, de l'installation aux droits par repo : **[docs/setup.md](docs/setup.md)**.
 
-Sans couche personnelle, le plugin public suffit pour les agents et workflows :
+Le plugin public donne les agents, les skills et les commandes, sans les instructions ni ta couche personnelle :
+les workflows GitHub y refusent tout repo (aucun n'est déclaré). Il sert à essayer ; pour travailler, installe avec
+`bin/kit install --global` :
 
 ```
 /plugin marketplace add <owner>/adorno
@@ -110,8 +112,8 @@ Le dépôt public ne contient aucun profil : seulement des modèles, dans `local
 | Famille | Agents | Commits |
 | --- | --- | --- |
 | — | `agent:adorno` : parle et décide en ton nom, dernière étape des workflows | aucun |
-| `core` | `intake`, `router`, `planner`, `orchestrator`, `triage`, `analyst` (analyse d'une conversation ou d'un document) | aucun |
-| `review` | `code`, `security`, `tests`, `perf` (étendent les agents d'addy), `ponytail`, par zone : `front`, `back`, `mongodb`, `api`, et après merge : `impact` | aucun, lecture seule |
+| `core` | `intake`, `router`, `planner`, `triage`, `analyst` (analyse d'une conversation ou d'un document) | aucun |
+| `review` | `code`, `security`, `tests` (étendent les agents d'addy), `perf`, `ponytail`, par zone : `front`, `back`, `mongodb`, `api`, et après merge : `impact` | aucun, lecture seule |
 | `feat` | `front`, `back`, `api` | `feat` |
 | `fix` | `investigate` (lecture seule), `patch` | `fix` |
 | `perf` | `mongodb`, `nodejs` | `perf`, mesures avant/après |
@@ -140,9 +142,9 @@ Le dépôt public ne contient aucun profil : seulement des modèles, dans `local
 | `workflow:notion:assigned` | les documents Notion qui te sont assignés, et l'agent qui convient à chacun |
 
 **Skills** : `adorno-setup`, `adorno-profile`, `adorno-voice`, `adorno-learn` (le profil qui apprend de tes
-corrections), `adorno-watch` (réglages et mémoire des
-surveillances Slack et Notion), `adorno-llm` (une tâche envoyée à un modèle compatible OpenAI), `adorno-github` (scripts `gh` testés sans réseau),
-`adorno-commit`, et les skills importés tels quels : [addy/agent-skills](https://skills.addy.ie/) (méthode, de la spec
+corrections), `adorno-github` (scripts `gh` testés sans réseau, exécutions et droits), `adorno-watch` (réglages et
+mémoire des surveillances Slack et Notion), `adorno-llm` (une tâche envoyée à un modèle compatible OpenAI),
+`adorno-run-plan` (dérouler un plan depuis la session), `adorno-commit`, et les skills importés tels quels : [addy/agent-skills](https://skills.addy.ie/) (méthode, de la spec
 au déploiement), [ponytail](https://ponytail.dev/) (le moins de code qui marche),
 [playwright-cli](https://github.com/microsoft/playwright-cli) et
 [webapp-testing](https://github.com/anthropics/skills) (QA navigateur),
@@ -159,7 +161,7 @@ src/
   agents/adorno.md      → agent:adorno
   agents/<famille>/     _family.md + <spécialité>.md → agent:<famille>:<spécialité>
   workflows/<domaine>/  <action>.md → workflow:<domaine>:<action>
-  skills/               adorno-setup, adorno-profile, adorno-voice, adorno-github, adorno-commit
+  skills/               adorno-* (setup, profile, voice, learn, github, watch, llm, run-plan, commit)
 repos.yaml              réglages publics par défaut (zones de code, relecteurs par zone, droits)
 local.example/          modèle de ta couche personnelle
 vendor/                 skills et agents importés (kit import), figés dans kit.lock
@@ -182,9 +184,19 @@ bin/kit uninstall PATH|--global|--workspace NOM
 tests/adorno-github.test.sh     # tests des scripts GitHub, sans réseau
 tests/adorno-watch.test.sh   # tests des scripts de surveillance, sans connecteur
 tests/adorno-llm.test.sh     # tests de l'envoi à un modèle externe, sans réseau
+tests/kit.test.sh            # tests de bin/kit : validation, installation, désinstallation
+tests/adorno-setup.test.sh   # tests du setup (source d'adorno, échantillons de voix)
+tests/adorno-learn.test.sh   # tests du profil qui apprend
 ```
 
 `kit install` est idempotent, retire ce qui a disparu du kit et ne touche ni tes fichiers ni ceux que tu as modifiés.
+Dans un repo, tout ce qu'il installe est ajouté à `.git/info/exclude` (rien ne peut être committé par erreur), il
+n'écrit jamais dans un `CLAUDE.md` ou `AGENTS.md` suivi par le repo (Claude reçoit alors `.claude/rules/adorno.md`),
+et à côté d'une installation globale (avec ta couche personnelle) il laisse les instructions à celle-ci pour Claude,
+Codex et Gemini. Ton registre complet vit dans `~/.adorno/registry.json`, hors de tout repo, en lecture seule ; chaque
+installation avec ta couche le réécrit. Avec `--global`, les écritures directes (`git push`, `gh pr …`) te demandent
+confirmation dans tous tes projets ; dans un repo installé, elles sont refusées. Un fichier de réglages Claude Code invalide arrête
+l'installation avant toute écriture.
 
 | | Skills | Agents | Workflows | Instructions |
 | --- | --- | --- | --- | --- |

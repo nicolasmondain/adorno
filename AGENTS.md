@@ -37,7 +37,7 @@ adorno est un setup d'agents portable et réutilisable. On y écrit des agents, 
 - `uses:` d'un workflow : identifiants logiques (`agent:fix:patch`, `workflow:ci:red`, `adorno-github`), vérifiés par
   `kit check`.
 - Scripts : bash compatible macOS 3.2, `set -euo pipefail`, JSON sur stdout, codes de sortie de `adorno-github/SKILL.md`,
-  écriture GitHub seulement après `require_level`, mode `GH_OPS_DRY_RUN`.
+  écriture GitHub seulement après `require_level`, mode `ADORNO_DRY_RUN`.
 - Ne modifie jamais `dist/` ni `vendor/` à la main.
 
 ## Après chaque modification

@@ -5,7 +5,7 @@
 #   --all    every candidate, decided ones included
 set -euo pipefail
 command -v jq >/dev/null 2>&1 || { echo "learn-list: missing dependency: jq" >&2; exit 1; }
-f="${ADORNO_HOME:-$HOME/.adorno}/learn/candidates.json"
+f="$HOME/.adorno/learn/candidates.json"
 [ -f "$f" ] || { echo "[]"; exit 0; }
 mode="${1:-}"
 case "$mode" in ""|--ready|--all) ;; *) echo "learn-list: usage: learn-list [--ready|--all]" >&2; exit 2 ;; esac

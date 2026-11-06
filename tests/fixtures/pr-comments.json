@@ -1,0 +1,3 @@
+[{"user": {"login": "octocat"}, "html_url": "c1", "body": "nit: name it `pageSize`"},
+ {"user": {"login": "alice"}, "html_url": "c2", "body": "not mine"},
+ {"user": {"login": "octocat"}, "html_url": "c3", "body": "Why a loop here?"}]

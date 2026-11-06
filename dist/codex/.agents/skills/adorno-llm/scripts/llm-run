@@ -4,8 +4,9 @@
 # Sends one prompt to an OpenAI-compatible chat endpoint (OpenRouter, OpenAI, Google's OpenAI-compatible endpoint,
 # your own vLLM / Ollama / LiteLLM gateway…) and prints {route, model, content, finish_reason, usage} as JSON.
 # The key is read from the environment variable named by --key-env (default OPENROUTER_API_KEY), never from a file
-# or an argument. LLM_RUN_DRY_RUN=1 prints the request (without the key) instead of sending it.
-# Exit codes: 2 usage, 3 missing key, 4 refused (http on a non-local host), 6 the endpoint failed.
+# or an argument, and only to a route declared in your local config (models.routes, in ~/.adorno/registry.json) with
+# that same key variable: an agent cannot send a key to a host of its choosing. ADORNO_DRY_RUN=1 prints the request (without the key) instead of sending it.
+# Exit codes: 2 usage, 3 missing key, 4 refused (http on a non-local host, undeclared route), 6 the endpoint failed.
 set -euo pipefail
 SELF="$(basename "$0")"
 die() { printf '%s: %s\n' "$SELF" "$1" >&2; exit "${2:-1}"; }
@@ -26,8 +27,24 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$base" ] && [ -n "$model" ] && [ -n "$prompt" ] || die "usage: llm-run --base-url URL --model MODEL [options] PROMPT_FILE|-" 2
-case "$base" in https://*|http://localhost*|http://127.0.0.1*) ;; *) die "refusing $base: https only (or localhost)" 4 ;; esac
-[[ "$key_env" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || die "--key-env must be a variable name" 2
+# scheme://host[:port][/path], no user info: `http://127.0.0.1@evil.example` must not pass for localhost
+[[ "$base" =~ ^(https?)://([A-Za-z0-9.-]+|\[::1\])(:[0-9]{1,5})?(/[^@[:space:]]*)?$ ]] \
+  || die "refusing $base: expected https://host[:port]/path (no user info)" 4
+scheme="${BASH_REMATCH[1]}"; host="${BASH_REMATCH[2]}"
+local_host=0
+case "$host" in localhost|127.0.0.1|"[::1]") local_host=1 ;; esac
+[ "$scheme" = https ] || [ "$local_host" = 1 ] || die "refusing $base: https only (plain http for localhost only)" 4
+# only a model provider's key: never GH_TOKEN, AWS_*, … even if a route says so
+[[ "$key_env" =~ ^[A-Z][A-Z0-9_]*_(API_KEY|LLM_KEY)$ ]] || die "--key-env must name a model key variable (…_API_KEY or …_LLM_KEY)" 2
+# a non-local endpoint must be one of your declared routes, with its own key variable
+if [ "$local_host" = 0 ]; then
+  reg="$HOME/.adorno/registry.json"
+  jq -e --arg b "${base%/}" --arg k "$key_env" \
+    '[.. | objects | select((.base_url | type) == "string")
+         | select((.base_url | rtrimstr("/")) == $b and (.api_key_env // "OPENROUTER_API_KEY") == $k)] | length > 0' \
+    "$reg" >/dev/null 2>&1 \
+    || die "refusing $base with \$$key_env: not a route of your local config (models.routes, then bin/kit install)" 4
+fi
 [ -z "$max_tokens" ] || [[ "$max_tokens" =~ ^[0-9]+$ ]] || die "--max-tokens must be a number" 2
 [[ "$timeout" =~ ^[0-9]+$ ]] || die "--timeout must be a number of seconds" 2
 [ -z "$system" ] || [ -f "$system" ] || die "system file not found: $system" 2
@@ -36,8 +53,8 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 if [ "$prompt" = "-" ]; then cat >"$tmp/prompt"; else [ -f "$prompt" ] || die "prompt file not found: $prompt" 2; cp "$prompt" "$tmp/prompt"; fi
 [ -s "$tmp/prompt" ] || die "empty prompt" 2
 
-jq -n --arg model "$model" --rawfile user "$tmp/prompt" \
-  --arg system "$( [ -z "$system" ] || cat "$system")" \
+if [ -n "$system" ]; then cp "$system" "$tmp/system"; else : >"$tmp/system"; fi
+jq -n --arg model "$model" --rawfile user "$tmp/prompt" --rawfile system "$tmp/system" \
   --arg max "$max_tokens" --arg temp "$temperature" '
   {model: $model,
    messages: ((if $system == "" then [] else [{role: "system", content: $system}] end) + [{role: "user", content: $user}])}
@@ -45,14 +62,15 @@ jq -n --arg model "$model" --rawfile user "$tmp/prompt" \
   + (if $temp == "" then {} else {temperature: ($temp | tonumber)} end)' >"$tmp/request.json"
 
 url="${base%/}/chat/completions"
-if [ "${LLM_RUN_DRY_RUN:-0}" = 1 ]; then
+if [ "${ADORNO_DRY_RUN:-0}" = 1 ]; then
   jq --arg url "$url" --arg key "$key_env" '{dryRun: true, url: $url, key_env: $key, request: .}' "$tmp/request.json"
   exit 0
 fi
 key="${!key_env:-}"
-case "$base" in http://localhost*|http://127.0.0.1*) ;; *) [ -n "$key" ] || die "\$$key_env is not set (put the key in your shell profile)" 3 ;; esac
+[ "$local_host" = 1 ] || [ -n "$key" ] || die "\$$key_env is not set (put the key in your shell profile)" 3
+case "$key" in *[\"\\]*|*$'\n'*) die "\$$key_env contains characters a key cannot have" 3 ;; esac
 
-printf 'header = "Authorization: Bearer %s"\n' "$key" >"$tmp/auth"
+( umask 077; printf 'header = "Authorization: Bearer %s"\n' "$key" >"$tmp/auth" )
 code="$(curl -sS -o "$tmp/response.json" -w '%{http_code}' --max-time "$timeout" -X POST "$url" \
   -K "$tmp/auth" -H 'Content-Type: application/json' -H 'X-Title: adorno' \
   --data-binary @"$tmp/request.json")" || die "request to $url failed" 6

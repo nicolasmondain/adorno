@@ -5,7 +5,7 @@ argument-hint: <owner/repo> [chemin du clone local]
 
 Entrée : $ARGUMENTS
 
-1. `export ADORNO_LEVEL=L1`. Clone local : le chemin donné, sinon `path` du repo (`repo-conf`), sinon un clone dans
+1. Clone local (rien n'est publié : aucune exécution à ouvrir) : le chemin donné, sinon un clone dans
    un dossier temporaire.
 2. `agent:chore:repo` détecte, vérifie chaque commande en la lançant, et écrit `AGENTS.md` et `CONSTRAINTS.md`
    dans une branche `chore/agents-onboarding` (sans les committer : l'utilisateur relit d'abord).

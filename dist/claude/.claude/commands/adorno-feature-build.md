@@ -5,12 +5,14 @@ argument-hint: <la demande, ou le dossier .agent-run d'une spec déjà validée>
 
 Entrée : $ARGUMENTS
 
+**Exécution** — avant toute chose : `adorno-github/scripts/run-begin --workflow workflow:feature:build --mode auto --level <niveau de la spec> --repo owner/repo` ; garde `id` et `dir` (le dossier d'exécution). Appelé par un autre workflow qui a déjà ouvert la sienne : réutilise-la. Toujours, même après un échec : `run-end <id>`. Sans exécution ouverte, les scripts refusent toute écriture.
+
 1. **Cadrer** — sans spec validée, `workflow:spec:new` d'abord (point de contrôle 1).
 2. **Router** — `agent:core:router` lit `spec.md` et écrit `run-plan.yaml`. Si le routeur conclut qu'un seul
    agent suffit, le plan n'a qu'une étape : c'est normal.
 3. **Planifier** — `agent:core:planner` écrit `plan.md` (tranches, agent `feat:*` de chaque tranche, tests
    d'acceptation).
-4. **Construire et vérifier** — `agent:core:orchestrator` déroule `run-plan.yaml` sur la branche `<type>/<issue-id>-<slug>` :
+4. **Construire et vérifier** — tu déroules toi-même `run-plan.yaml` (skill `adorno-run-plan` : un sous-agent ne peut pas en lancer d'autres) sur la branche `<type>/<issue-id>-<slug>` :
    tranches (boucle tests, trois tours ; QA `agent:test:e2e` avec captures et vidéo pour les tranches visibles),
    puis relecteurs en parallèle (boucle de correction, deux tours).
 5. **Ouvrir** — `workflow:pr:open`, dont `agent:adorno` est la porte : il relit la branche comme toi, et la

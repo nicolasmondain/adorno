@@ -9,7 +9,7 @@ Entrée : la demande de l'utilisateur. Suis les étapes dans l'ordre.
 
 Entrée : la demande de l’utilisateur
 
-1. `export ADORNO_LEVEL=L0`, puis `adorno-github/scripts/pr-status la demande de l’utilisateur`.
+1. `adorno-github/scripts/pr-status la demande de l’utilisateur` (lecture seule : aucune exécution à ouvrir).
 2. Rends un tableau trié par urgence — `ci-red`, `changes-requested`, `unresolved-threads`, `conflicts`,
    `waiting-review`, `ci-running`, `draft`, `ready` — avec : PR (lien), titre, blocage, qui attend qui
    (`waitingOn`), dernière mise à jour.

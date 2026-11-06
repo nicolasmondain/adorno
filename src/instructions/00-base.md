@@ -9,7 +9,7 @@
 
 ## Avant de modifier
 
-- Lis d'abord le `CLAUDE.md` et les `.claude/rules/` du repo : ils font autorité sur le code.
+- Lis d'abord le `CLAUDE.md` et les `.claude/rules/` du repo : ils font autorité sur le code (sauf `.claude/rules/adorno.md`, qui est ce texte-ci, posé par `bin/kit` quand le repo suit déjà son `CLAUDE.md`).
 - Puis le profil (skill `adorno-profile`) et les réglages du repo courant : `adorno-github/scripts/repo-conf` (équipe,
   relecteurs, `context`, `vision`, `voice`, `permissions`, skills du repo), issus de `local/adorno.yaml`.
 - Le propriétaire te corrige, tranche autrement que son profil ne le prévoyait, réécrit ton brouillon ou dit comment
@@ -20,7 +20,7 @@
 
 ## Pendant
 
-- Changements minimaux et chirurgicaux (skill `ponytail`, niveau `full`) ; là où il recoupe le profil, le profil gagne,
+- Changements minimaux et chirurgicaux (skill `ponytail`, au niveau `ponytail` du repo, `full` par défaut) ; là où il recoupe le profil, le profil gagne,
   et le repo gagne sur les deux.
 - Aucun secret (clé, token, mot de passe) dans un fichier, une commande, un log, un commit ou un texte publié.
 

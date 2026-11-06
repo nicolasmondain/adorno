@@ -2,10 +2,11 @@
 # Usage: pr-workspace owner/repo#N        create or refresh the PR's dedicated workspace
 #        pr-workspace --clean             remove workspaces of closed or merged PRs
 #
-# A workspace is a git worktree of a dedicated clone under ~/.adorno (ADORNO_HOME), checked out
+# A workspace is a git worktree of a dedicated clone under ~/.adorno, checked out
 # detached at the PR head. It never touches your own working copies, so agents can read, build and
 # test the PR in isolation. Prints JSON: dir, head and base, diffBase (merge-base), the repo's
-# commands, whether the PR is yours. Refuses to move a workspace that has unpushed work.
+# commands, whether the PR is yours. Refuses to move a workspace that has unpushed work. A PR from a fork is
+# `untrusted`: its code is read, never run (review_checks forced to none).
 . "$(dirname "$0")/_lib.sh"
 need git
 
@@ -19,7 +20,7 @@ if [ "${1:-}" = "--clean" ]; then
     if [ -n "$(git -C "$dir" status --porcelain 2>/dev/null)" ]; then
       kept="$(jq --arg d "$dir" '. + [{dir: $d, why: "uncommitted changes"}]' <<<"$kept")"; continue
     fi
-    git -C "$(cache_dir)" worktree remove --force "$dir"
+    with_lock "cache-${OWNER}__${NAME}" git -C "$(cache_dir)" worktree remove --force "$dir"
     removed="$(jq --arg d "$dir" --arg s "$state" '. + [{dir: $d, state: $s}]' <<<"$removed")"
   done
   jq -n --argjson r "$removed" --argjson k "$kept" '{removed: $r, kept: $k}'
@@ -35,23 +36,27 @@ author="$(jq -r .author.login <<<"$info")"
 me="$(viewer_login)"
 
 cache="$(cache_dir)"; dir="$(workspace_dir)"; ref="refs/adorno/pr-$NUM"
-if [ ! -d "$cache" ]; then
-  mkdir -p "$(dirname "$cache")"
-  log "cloning $REPO into $cache (once)"
-  gh repo clone "$REPO" "$cache" -- --bare --filter=blob:none --quiet >&2
-fi
-
 if [ -d "$dir" ]; then workspace_clean_state "$dir" "$ref"; fi
-git -C "$cache" fetch --quiet origin "+refs/pull/$NUM/head:$ref" "+refs/heads/$base:refs/heads/$base" >&2
+
+# Parallel runs share the clone: clone, fetch and worktree changes happen under one lock per repo.
+sync_workspace() {
+  if [ ! -d "$cache" ]; then
+    mkdir -p "$(dirname "$cache")" || return 1
+    log "cloning $REPO into $cache (once)"
+    gh repo clone "$REPO" "$cache" -- --bare --filter=blob:none --quiet >&2 || return 1
+  fi
+  git -C "$cache" fetch --quiet origin "+refs/pull/$NUM/head:$ref" "+refs/heads/$base:refs/heads/$base" >&2 \
+    || { log "fetch failed: the workspace was not refreshed"; return 1; }
+  if [ -d "$dir" ]; then
+    git -C "$dir" checkout --quiet --detach "$ref" || return 1
+  else
+    mkdir -p "$(dirname "$dir")" || return 1
+    git -C "$cache" worktree add --quiet --detach "$dir" "$ref" >&2 || return 1
+  fi
+}
+with_lock "cache-${OWNER}__${NAME}" sync_workspace
 fetched="$(git -C "$cache" rev-parse "$ref")"
 [ "$fetched" = "$sha" ] || log "warning: GitHub reports head $sha, fetched $fetched (a push just landed?)"
-
-if [ -d "$dir" ]; then
-  git -C "$dir" checkout --quiet --detach "$ref"
-else
-  mkdir -p "$(dirname "$dir")"
-  git -C "$cache" worktree add --quiet --detach "$dir" "$ref" >&2
-fi
 
 # run artefacts live in the workspace but are never part of the PR
 common="$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir)"
@@ -69,5 +74,7 @@ jq -n --arg repo "$REPO" --argjson num "$NUM" --arg dir "$dir" --arg sha "$fetch
     diffCommand: ("git diff " + $diffbase + "...HEAD"),
     changedFiles: $changed, author: $author, mine: ($author == $me),
     crossRepository: $info.isCrossRepository, state: $info.state,
-    commands: ($conf | {install, test, lint, typecheck, review_checks})
+    untrusted: $info.isCrossRepository,
+    commands: ($conf | {install, test, lint, typecheck, review_checks}
+      | if $info.isCrossRepository then .review_checks = "none" else . end)
   }'

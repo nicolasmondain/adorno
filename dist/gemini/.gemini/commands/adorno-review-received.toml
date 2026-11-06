@@ -2,19 +2,22 @@ description = "Passe sur toutes tes PRs ouvertes (ou une seule) — chaque comme
 prompt = '''
 Entrée : {{args}} — sans argument : **toutes** tes PRs ouvertes dans les repos enregistrés.
 
+**Exécution** — avant toute écriture : `adorno-github/scripts/run-begin --workflow workflow:review:received --mode <mode> --level L3 --repo owner/repo [--repo …]` — une fois la liste des PRs connue, un `--repo` par repo à traiter (une exécution ne vaut que pour les repos qu'elle nomme) ; garde `id` et `dir` (le dossier d'exécution). Appelé par un autre workflow qui a déjà ouvert la sienne : réutilise-la. Toujours, même après un échec : `run-end <id>`. Sans exécution ouverte, les scripts refusent toute écriture.
+
 | Mode | Fait | Niveau | Publie |
 | --- | --- | --- | --- |
 | `report` | étapes 1 à 4 et 9 : ce qui attend une réponse, avec l'avis vérifié des spécialistes | L0 | rien |
-| `draft` (défaut) | + corrections commitées dans le workspace, réponses rédigées (`GH_OPS_DRY_RUN=1`) | L2, sans push | rien : les commits restent dans le workspace |
+| `draft` (défaut) | + corrections commitées dans le workspace, réponses rédigées | L3, push interdit et simulation (forcés par `run-begin --mode draft`) | rien : les commits restent dans le workspace |
 | `auto` | tout : push, réponses, résolutions, relance des relecteurs | L3 | oui, sauf ce que `adorno-profile` range dans « à valider » |
 
-Exporte `ADORNO_LEVEL` selon le mode ; un `max_level` plus bas du repo l'emporte.
+Un `max_level` plus bas du repo l'emporte toujours.
 
 1. **Cibler** — sans argument : `pr-status`, puis `pr-feedback-fetch` sur chaque PR `registered` ; garde celles dont
-   `needsReplyCount > 0` ou dont la CI est rouge. Les PRs sont indépendantes : traite-les **en parallèle**, par lots de
-   `max_parallel`.
+   `needsReplyCount > 0` ou dont la CI est rouge. Les PRs sont indépendantes : par lots de `max_parallel`, lance dans le même
+   tour les agents de toutes les PRs du lot (c'est toi qui délègues : un agent ne lance pas d'agent) ; de chaque PR ne
+   garde en contexte que les livrables (`triage.json`, verdicts), jamais les échanges bruts.
 2. **Workspace** — `pr-workspace owner/repo#N` (refusé s'il reste du travail non poussé d'un passage précédent :
-   termine-le ou jette-le d'abord). Dossier d'exécution : `<workspace>/.agent-run/feedback-<date>/`, avec
+   termine-le ou jette-le d'abord). Dossier d'exécution : `<workspace>/.agent-run/feedback-<date>/` (un par PR, sous l'exécution ouverte), avec
    `feedback.json`.
 3. **Trier** — `agent:core:triage` classe chaque élément où `needsReply` est vrai (thread, commentaire général,
    résumé de review) : catégorie (`fix`, `nit`, `test`, `question`, `disagree`, `scope`, `done`), **zone** (déduite
@@ -32,7 +35,7 @@ Exporte `ADORNO_LEVEL` selon le mode ; un `max_level` plus bas du repo l'emporte
    le commentaire, tests et lint du repo verts, trois tours au plus. Puis `review:code` et `review:ponytail` sur les
    seuls nouveaux commits ; un `blocker` → retour à la correction, deux fois au plus.
 7. **Publier** (mode `auto`) — `pr-push owner/repo#N` (jamais forcé). Puis `agent:adorno` écrit chaque réponse
-   en anglais dans ta voix, avec le SHA du commit, et publie : `pr-reply` (thread) ou `pr-comment` (commentaire
+   dans la langue du repo (`reply_language`, anglais par défaut) et dans ta voix, avec le SHA du commit, et publie : `pr-reply` (thread) ou `pr-comment` (commentaire
    général, résumé de review). Il résout (`pr-resolve`) les threads réglés ; il laisse ouverts ceux où il pose une
    question ou conteste, et garde en brouillon tout ce qui est « à valider ».
 8. **Relancer** — `pr-rerequest owner/repo#N` pour chaque relecteur dont tous les points sont traités ;

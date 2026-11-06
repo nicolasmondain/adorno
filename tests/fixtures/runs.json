@@ -1,0 +1,5 @@
+[
+  {"databaseId": 1, "workflowName": "test", "conclusion": "failure", "url": "https://github.com/acme/docs/actions/runs/1", "attempt": 1},
+  {"databaseId": 2, "workflowName": "lint", "conclusion": "timed_out", "url": "https://github.com/acme/docs/actions/runs/2", "attempt": 2},
+  {"databaseId": 3, "workflowName": "build", "conclusion": "success", "url": "https://github.com/acme/docs/actions/runs/3", "attempt": 1}
+]

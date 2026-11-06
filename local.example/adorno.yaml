@@ -7,8 +7,9 @@
 # Résolution, du plus faible au plus fort (chaque couche développe d'abord ses `use: [preset…]`) :
 #   defaults publics (repos.yaml) → defaults ci-dessous → workspaces qui contiennent le repo (ordre du fichier)
 #   → clés `repos` avec `*` qui correspondent (la moins précise d'abord) → la clé exacte `owner/repo`.
-# Fusion : les objets se fusionnent clé par clé, listes et valeurs sont remplacées, sauf `context` et `vision` qui
-# s'additionnent d'une couche à l'autre.
+# Fusion : les objets se fusionnent clé par clé, listes et valeurs sont remplacées, sauf `context`, `vision` et les
+# droits (`permissions.deny`, `permissions.claude.*`) qui s'additionnent d'une couche à l'autre : une couche plus
+# précise peut ajouter un refus, jamais en retirer un.
 
 owner:                                 # toi : la personne que agent:adorno représente
   name: Jane Doe
@@ -29,7 +30,7 @@ defaults:                              # tes réglages pour tous les repos (par-
       gemini: {fast: gemini-2.5-flash, balanced: gemini-2.5-pro, deep: gemini-2.5-pro}
     agents:                            # un agent sur un autre niveau, un modèle précis, ou une route externe
       agent:review:mongodb: deep
-      agent:core:triage: {route: openrouter-small}
+      # agent:core:triage: {route: openrouter-small}   # envoie le tri à OpenRouter : seulement si tu le veux
     workflows:                         # le modèle de la session qui orchestre un workflow (Claude Code)
       workflow:pr:status: fast
     routes:                            # points d'accès compatibles OpenAI : OpenRouter, OpenAI, Google, tes modèles
@@ -111,7 +112,8 @@ slack:                                 # workflow:slack:watch et workflow:slack:
       action:                              # lancé sur chaque message qui correspond, une seule fois
         agent: agent:core:analyst          # ou workflow: workflow:issue:fix
         prompt: "Rattache l'erreur à un module et dis si elle est nouvelle."
-        level: L0                          # droits de l'action
+        level: L0                          # droits de l'action, pour les auteurs de confiance seulement
+        trusted_authors: [U0456EFGH]       # identifiants Slack ; tout autre auteur : l'action tourne en L0
   mentions:                            # workflow:slack:mentions : chaque mention → analyse + brouillon de réponse, à toi seul
     channels: ["#platform", "#product-bug"]   # vide = tous les canaux
     groups: ["@platform-devs"]                # groupes dont la mention compte aussi

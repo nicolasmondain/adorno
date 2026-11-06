@@ -12,14 +12,14 @@ reviewed="$(gh search prs --reviewed-by "$me" --limit "$limit" --sort updated --
 authored="$(gh search prs --author "$me" --limit "$limit" --sort updated --json repository,number,url,title,body)"
 
 comments="[]"
-while IFS=$'\t' read -r repo num url; do
+while IFS=$'\t' read -r repo num; do
   [ -n "$repo" ] || continue
-  c="$(gh api "repos/$repo/pulls/$num/comments" --paginate \
-        --jq "[.[] | select(.user.login == \"$me\") | {kind: \"inline\", url: .html_url, body}]" 2>/dev/null || echo '[]')"
-  r="$(gh api "repos/$repo/pulls/$num/reviews" --paginate \
-        --jq "[.[] | select(.user.login == \"$me\" and (.body // \"\") != \"\") | {kind: \"review\", url: .html_url, body}]" 2>/dev/null || echo '[]')"
-  comments="$(jq -s 'add' <(printf '%s' "$comments") <(printf '%s' "$c" | jq -s 'add // []') <(printf '%s' "$r" | jq -s 'add // []'))"
-done < <(jq -r '.[] | [.repository.nameWithOwner, (.number|tostring), .url] | @tsv' <<<"$reviewed")
+  c="$( (gh api "repos/$repo/pulls/$num/comments" --paginate 2>/dev/null || echo '[]') \
+        | jq -s --arg me "$me" '[add[]? | select(.user.login == $me) | {kind: "inline", url: .html_url, body}]')"
+  r="$( (gh api "repos/$repo/pulls/$num/reviews" --paginate 2>/dev/null || echo '[]') \
+        | jq -s --arg me "$me" '[add[]? | select(.user.login == $me and (.body // "") != "") | {kind: "review", url: .html_url, body}]')"
+  comments="$(jq -n --argjson a "$comments" --argjson b "$c" --argjson d "$r" '$a + $b + $d')"
+done < <(jq -r '.[] | [.repository.nameWithOwner, (.number|tostring)] | @tsv' <<<"$reviewed")
 
 jq -n --arg me "$me" --argjson c "$comments" --argjson a "$authored" '{
   login: $me,

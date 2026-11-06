@@ -4,29 +4,39 @@
 # unless case_sensitive) OR `regex`, at most `max_messages` scanned (newest first), and not processed before (state
 # key slack-watch-NAME; --all ignores it). Input: a JSON array of normalised messages
 #   {id, channel, ts, user, text, permalink?, thread_ts?}   (ts = Slack timestamp, seconds since epoch)
-# Output: {watch, scanned, matched: [...], already_seen}.
+# Output: {watch, scanned, matched: [... + trusted, action_level], already_seen}. A message is untrusted text: its
+# action runs at L0 unless its author is listed in the watch's `action.trusted_authors`.
 . "$(dirname "$0")/_lib.sh"
 
 name="${1:-}"; [ -n "$name" ] || die "usage: watch-match NAME [MESSAGES_FILE|-] [--all]" "$E_USAGE"
+valid_key "$name"
 src="-"; all=0
 for a in "${@:2}"; do
   if [ "$a" = "--all" ]; then all=1; else src="$a"; fi
 done
 conf="$("$WATCH_DIR/watch-conf" slack-watch "$name")"
 since="$(since_epoch "$(jq -r .since <<<"$conf")")"
-seen="{}"; f="$(state_dir)/slack-watch-$name.json"
-[ "$all" = 1 ] || [ ! -f "$f" ] || seen="$(jq '.seen // {}' "$f")"
-msgs="$(if [ "$src" = "-" ]; then cat; else cat "$src"; fi)"
-jq -e 'type == "array" and all(.[]; (.id | type) == "string" and (.text | type) == "string" and .ts != null)' \
-  >/dev/null <<<"$msgs" || die "input must be a JSON array of {id, channel, ts, user, text}" "$E_USAGE"
 
-jq --argjson c "$conf" --argjson since "$since" --argjson seen "$seen" '
-  ($c.case_sensitive | if . then "" else "i" end) as $flags
+tmp="${TMPDIR:-/tmp}/adorno-watch-$$"; mkdir -p "$tmp"; trap 'rm -rf "$tmp"' EXIT
+f="$(state_dir)/slack-watch-$name.json"
+if [ "$all" = 1 ] || [ ! -f "$f" ]; then echo '{}' >"$tmp/seen.json"; else jq '.seen // {}' "$f" >"$tmp/seen.json"; fi
+if [ "$src" = "-" ]; then cat >"$tmp/msgs.json"; else cp "$src" "$tmp/msgs.json"; fi
+printf '%s' "$conf" >"$tmp/conf.json"
+jq -e 'type == "array" and all(.[]; (.id | type) == "string" and (.text | type) == "string" and .ts != null)' \
+  "$tmp/msgs.json" >/dev/null 2>&1 || die "input must be a JSON array of {id, channel, ts, user, text}" "$E_USAGE"
+
+# Files, not arguments: thousands of processed ids would overflow the command line.
+jq --slurpfile cc "$tmp/conf.json" --argjson since "$since" --slurpfile ss "$tmp/seen.json" '
+  $cc[0] as $c | $ss[0] as $seen
+  | ($c.action.trusted_authors // []) as $trusted
+  | ($c.case_sensitive | if . then "" else "i" end) as $flags
   | def hit: . as $t
       | (any($c.includes[]; . as $w | if $c.case_sensitive then ($t | contains($w))
                                       else ($t | ascii_downcase | contains($w | ascii_downcase)) end))
         or ($c.regex != null and ($t | test($c.regex; $flags)));
+    def trusted: (.user // "") as $u | ($trusted | index([$u])) != null;
     [ .[] | select((.ts | tonumber) >= $since) ] | sort_by(.ts | tonumber) | reverse | .[:$c.max_messages] as $scan
   | { watch: $c.name, since: ($since | todate), scanned: ($scan | length),
-      matched: [ $scan[] | select(.text | hit) | select($seen[.id] == null) ],
-      already_seen: [ $scan[] | select(.text | hit) | select($seen[.id] != null) | .id ] }' <<<"$msgs"
+      matched: [ $scan[] | select(.text | hit) | select($seen[.id] == null)
+                 | . + {trusted: trusted, action_level: (if trusted then $c.action.level else "L0" end)} ],
+      already_seen: [ $scan[] | select(.text | hit) | select($seen[.id] != null) | .id ] }' "$tmp/msgs.json"

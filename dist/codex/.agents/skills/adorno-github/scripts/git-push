@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Usage: git-push owner/repo [BRANCH] [--dir PATH]
+# How agents push a branch that has no PR yet (workflow:pr:open, workflow:ci:red, family agents): pushes BRANCH
+# (default: the current one) of the git repository at PATH (default: .) to `origin`, which must be owner/repo. Never
+# forced, never the base or a default branch, never a name outside `branch_pattern`. Needs L2 and the `push` action.
+# ADORNO_DRY_RUN=1 or a dry-run run only prints. Pushing to the branch of an existing PR: pr-push.
+. "$(dirname "$0")/_lib.sh"
+
+split_repo "${1:-}"; shift || true
+branch="" dir="."
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dir) dir="${2:-}"; shift 2 ;;
+    -*) die "unknown option $1" "$E_USAGE" ;;
+    *) branch="$1"; shift ;;
+  esac
+done
+[ -d "$dir" ] || die "no such directory: $dir" "$E_USAGE"
+origin="$(cd "$dir" && current_repo)"
+lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+[ "$(lower "$origin")" = "$(lower "$REPO")" ] || die "the origin of $dir is $origin, not $REPO" "$E_POLICY"
+pushes_to="$(push_repo "$dir")"
+[ "$(lower "$pushes_to")" = "$(lower "$REPO")" ] || die "origin of $dir pushes to $pushes_to (pushurl), not $REPO" "$E_POLICY"
+if [ -z "$branch" ]; then
+  branch="$(git -C "$dir" symbolic-ref --short HEAD 2>/dev/null)" || die "detached HEAD: pass BRANCH" "$E_USAGE"
+fi
+git check-ref-format --branch "$branch" >/dev/null 2>&1 || die "invalid branch name '$branch'" "$E_USAGE"
+git -C "$dir" rev-parse --verify --quiet "refs/heads/$branch" >/dev/null || die "no local branch $branch" "$E_USAGE"
+
+conf="$(repo_conf "$REPO")"
+base="$(jq -r '.base // empty' <<<"$conf")"
+[ -n "$base" ] || base="$(gh repo view "$REPO" --json defaultBranchRef --jq .defaultBranchRef.name)"
+case "$branch" in
+  "$base"|main|master|develop|production|staging) die "refusing to push $branch: a base or shared branch" "$E_POLICY" ;;
+esac
+pattern="$(jq -r '.branch_pattern // empty' <<<"$conf")"
+if [ -n "$pattern" ] && ! jq -en --arg b "$branch" --arg p "$pattern" '$b | test($p)' >/dev/null; then
+  die "branch $branch does not match the repo's branch_pattern ($pattern)" "$E_POLICY"
+fi
+require_level "$REPO" L2 push
+
+sha="$(git -C "$dir" rev-parse "refs/heads/$branch")"
+if dry_run; then
+  jq -n --arg r "$REPO" --arg b "$branch" --arg s "$sha" '{dryRun: true, repo: $r, branch: $b, sha: $s}'
+  exit 0
+fi
+git -C "$dir" push --quiet -u origin "refs/heads/$branch:refs/heads/$branch" >&2
+jq -n --arg r "$REPO" --arg b "$branch" --arg s "$sha" '{pushed: true, repo: $r, branch: $b, sha: $s}'

@@ -7,9 +7,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 S="$ROOT/src/skills/adorno-github/scripts"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/bin"; ln -s "$ROOT/tests/fake-gh" "$TMP/bin/gh"
-export PATH="$TMP/bin:$PATH" ADORNO_REPOS="$ROOT/tests/fixtures/repos.json"
-export FAKE_FIX="$ROOT/tests/fixtures" AGENT_RUN_DIR="$TMP/run" FAKE_LOG="$TMP/gh.log" GH_OPS_POLL=0
-unset ADORNO_LEVEL GH_OPS_DRY_RUN
+# a throwaway home: the scripts read the registry and the runs from ~/.adorno only
+export HOME="$TMP/home" PATH="$TMP/bin:$PATH"
+KH="$HOME/.adorno"; mkdir -p "$KH"
+reg() { rm -f "$KH/registry.json"; cp "$1" "$KH/registry.json"; chmod 400 "$KH/registry.json"; }  # reg FILE: use FILE as the registry
+reg "$ROOT/tests/fixtures/repos.json"
+git config --global user.email t@t; git config --global user.name t
+export FAKE_FIX="$ROOT/tests/fixtures" FAKE_LOG="$TMP/gh.log" ADORNO_POLL=0
+unset ADORNO_LEVEL ADORNO_DRY_RUN
 
 pass=0 fail=0
 ok()   { pass=$((pass + 1)); printf '  ok   %s\n' "$1"; }
@@ -24,6 +29,46 @@ expect_jq() {  # expect_jq NAME FILTER (evaluated on $out, must be true)
   if jq -e "$2" >/dev/null 2>&1 <<<"$out"; then ok "$1"; else ko "$1" "$2 on: $out"; fi
 }
 
+echo "runs: no run, no write"
+printf 'Thanks\n' >"$TMP/norun.md"
+expect_exit 5 "no active run: a write is refused (fail closed)" -- "$S/pr-reply" acme/docs#42 T1 "$TMP/norun.md"
+grep -q "run-begin" "$TMP/err" && ok "the refusal says how to start a run" || ko "the refusal says how to start a run"
+ADORNO_LEVEL=L3 expect_exit 5 "ADORNO_LEVEL alone cannot grant a write" -- "$S/pr-reply" acme/docs#42 T1 "$TMP/norun.md"
+expect_exit 5 "L4 is never granted" -- "$S/run-begin" --workflow workflow:x:y --mode auto --level L4
+expect_exit 2 "a run names its repos" -- "$S/run-begin" --workflow workflow:x:y --mode auto --level L3
+expect_exit 2 "an unknown mode is refused (no silent L3 for a typo)" -- "$S/run-begin" --workflow workflow:x:y --mode drafty --level L3 --repo acme/docs
+expect_exit 0 "draft run" -- "$S/run-begin" --workflow workflow:review:received --mode draft --level L3 --repo acme/docs
+expect_jq "draft: push denied, dry run, run folder" '.deny == ["push"] and .dry_run == true and (.dir | test("/runs/review-received-"))'
+DRAFT="$(jq -r .id <<<"$out")"
+expect_exit 0 "a reply in a draft run is only printed (dry run from the run file)" -- \
+  sh -c "ADORNO_LEVEL= \"$S/pr-reply\" acme/docs#42 T1 \"$TMP/norun.md\""
+expect_jq "dry run" '.dryRun == true'
+expect_exit 0 "end the draft run" -- "$S/run-end" "$DRAFT"
+expect_exit 2 "ending twice is an error" -- "$S/run-end" "$DRAFT"
+expect_exit 0 "report run" -- "$S/run-begin" --workflow workflow:pr:review --mode report --level L3 --repo acme/docs
+expect_jq "report: forced to L0" '.level == "L0" and .dry_run == true'
+REPORT="$(jq -r .id <<<"$out")"
+expect_exit 0 "an auto run on the same repo" -- "$S/run-begin" --workflow workflow:pr:review --mode auto --level L3 --repo acme/docs
+AUTO="$(jq -r .id <<<"$out")"
+expect_exit 5 "the strictest active run wins (report L0 alongside auto L3)" -- "$S/pr-comment" acme/docs#42 "$TMP/norun.md"
+grep -q "several runs cover acme/docs" "$TMP/err" && ok "... and the script names the runs" || ko "... and the script names the runs" "$(cat "$TMP/err")"
+"$S/run-end" "$REPORT" >/dev/null; "$S/run-end" "$AUTO" >/dev/null
+expect_exit 0 "a run scoped to one repo" -- "$S/run-begin" --workflow workflow:pr:review --mode auto --level L3 --repo acme/strict
+SCOPED="$(jq -r .id <<<"$out")"
+expect_exit 5 "a run scoped to another repo does not apply here" -- "$S/pr-comment" acme/docs#42 "$TMP/norun.md"
+expect_exit 0 "a draft run on another repo" -- "$S/run-begin" --workflow workflow:review:received --mode draft --level L3 --repo acme/docs
+OTHER="$(jq -r .id <<<"$out")"
+DRY_OUT="$("$S/pr-comment" acme/strict#7 "$TMP/norun.md" 2>/dev/null </dev/null)"
+case "$DRY_OUT" in *dryRun*) ko "a draft run on another repo leaves this one alone" "$DRY_OUT" ;; *) ok "a draft run on another repo leaves this one alone" ;; esac
+"$S/run-end" "$SCOPED" >/dev/null; "$S/run-end" "$OTHER" >/dev/null
+printf '{ half' >"$KH/runs/active/20990101T000000-1-1.json"
+expect_exit 5 "a half-written run file is ignored..." -- "$S/pr-comment" acme/docs#42 "$TMP/norun.md"
+[ -f "$KH/runs/active/20990101T000000-1-1.json" ] && ok "... and not deleted while it may be in progress" || ko "... and not deleted"
+rm -f "$KH/runs/active/20990101T000000-1-1.json"
+# the rest of the suite runs inside one auto run at L3
+"$S/run-begin" --workflow workflow:test:suite --mode auto --level L3 \
+  --repo acme/docs --repo acme/strict --repo acme/app --repo acme/docs-public --repo acme/readonly --repo other/thing >/dev/null
+
 echo "registry and usage"
 expect_exit 3 "unregistered repo is refused" -- "$S/pr-feedback-fetch" foo/bar#1
 expect_exit 2 "missing PR number is a usage error" -- "$S/pr-feedback-fetch" acme/docs
@@ -31,7 +76,8 @@ expect_exit 0 "repo-conf merges defaults" -- "$S/repo-conf" acme/strict
 expect_jq "repo-conf: repo value wins, base filled from GitHub" \
   '.resolve_threads == "reviewer" and .reply_language == "en" and .base == "main"'
 
-for url in git@github.com:acme/strict.git https://github.com/acme/strict ssh://git@github.com/acme/strict.git; do
+for url in git@github.com:acme/strict.git https://github.com/acme/strict ssh://git@github.com/acme/strict.git \
+    https://someone@github.com/acme/strict.git ssh://git@github.com:22/acme/strict.git; do
   d="$TMP/cur-$RANDOM"; git init -q "$d"; git -C "$d" remote add origin "$url"
   out="$(cd "$d" && "$S/repo-conf" 2>"$TMP/err")"; got=$?
   if [ "$got" = 0 ] && jq -e '.repo == "acme/strict"' >/dev/null <<<"$out"; then ok "current repo from $url"; else ko "current repo from $url" "exit $got: $(cat "$TMP/err")"; fi
@@ -84,7 +130,7 @@ echo "writes: levels, dry run, policy"
 printf 'Fixed in abc123.\n' >"$TMP/body.md"
 expect_exit 5 "repo max_level L0 blocks a reply" -- "$S/pr-reply" acme/readonly#1 T1 "$TMP/body.md"
 ADORNO_LEVEL=L2 expect_exit 5 "run granted L2 cannot reply (L3)" -- "$S/pr-reply" acme/docs#42 T1 "$TMP/body.md"
-GH_OPS_DRY_RUN=1 expect_exit 0 "dry-run reply" -- "$S/pr-reply" acme/docs#42 T1 "$TMP/body.md"
+ADORNO_DRY_RUN=1 expect_exit 0 "dry-run reply" -- "$S/pr-reply" acme/docs#42 T1 "$TMP/body.md"
 expect_jq "dry-run shows the body, posts nothing" '.dryRun and .body == "Fixed in abc123.\n"'
 grep -q addPullRequestReviewThreadReply "$FAKE_LOG" && ko "dry-run must not call the mutation" || ok "dry-run did not call the mutation"
 expect_exit 0 "real reply" -- "$S/pr-reply" acme/docs#42 T1 "$TMP/body.md"
@@ -97,15 +143,18 @@ FAKE_PR_AUTHOR=alice expect_exit 4 "resolve refused on someone else's PR" -- "$S
 expect_exit 0 "resolve as author" -- "$S/pr-resolve" acme/docs#42 T1
 expect_jq "thread resolved" '.resolved == true'
 
-GH_OPS_DRY_RUN=1 expect_exit 0 "rerequest defaults to past human reviewers" -- "$S/pr-rerequest" acme/docs#42
+ADORNO_DRY_RUN=1 expect_exit 0 "rerequest defaults to past human reviewers" -- "$S/pr-rerequest" acme/docs#42
 expect_jq "bots and myself excluded, deduplicated" '.reviewers == ["alice","bob"]'
 expect_exit 0 "rerequest named reviewer" -- "$S/pr-rerequest" acme/docs#42 carol
 expect_jq "requested carol" '.requested == ["carol"]'
 
+FAKE_THREAD_REPO=acme/strict expect_exit 4 "a thread of another repo is refused" -- "$S/pr-reply" acme/docs#42 T1 "$TMP/body.md"
+FAKE_THREAD_NUM=7 expect_exit 4 "a thread of another PR is refused" -- "$S/pr-resolve" acme/docs#42 T1
+expect_exit 2 "a malformed thread id is refused" -- "$S/pr-reply" acme/docs#42 'T1;x' "$TMP/body.md"
 echo "pr-open"
 expect_exit 2 "non-conventional title refused" -- "$S/pr-open" acme/docs feat/lem-1-x "Add stuff" "$TMP/body.md"
 expect_exit 4 "branch outside branch_pattern refused" -- "$S/pr-open" acme/docs nm/lem-1-x "feat: add stuff" "$TMP/body.md"
-GH_OPS_DRY_RUN=1 expect_exit 0 "dry-run open" -- "$S/pr-open" acme/docs feat/lem-123-pagination "feat(api)!: add stuff" "$TMP/body.md" --draft
+ADORNO_DRY_RUN=1 expect_exit 0 "dry-run open" -- "$S/pr-open" acme/docs feat/lem-123-pagination "feat(api)!: add stuff" "$TMP/body.md" --draft
 expect_jq "targets the base, as draft" '.base == "main" and .draft and .head == "feat/lem-123-pagination"'
 expect_jq "the author is never requested as reviewer" '.reviewers == ["alice"]'
 expect_exit 0 "open" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" "$TMP/body.md"
@@ -118,7 +167,7 @@ FAKE_CHECKS="$ROOT/tests/fixtures/checks-fail.json" FAKE_CHECKS_EXIT=1 expect_ex
 FAKE_CHECKS="$ROOT/tests/fixtures/checks-required-pass.json" FAKE_CHECKS_EXIT=8 expect_exit 0 "only required checks are awaited" -- "$S/ci-wait" acme/strict#7 0
 FAKE_CHECKS="$ROOT/tests/fixtures/checks-required-pass.json" FAKE_CHECKS_EXIT=8 expect_exit 6 "pending past timeout" -- "$S/ci-wait" acme/docs#42 0
 FAKE_ATTEMPT=2 expect_exit 4 "no second rerun of the same run" -- "$S/ci-rerun" acme/docs 123
-GH_OPS_DRY_RUN=1 expect_exit 0 "first rerun allowed" -- "$S/ci-rerun" acme/docs 123
+ADORNO_DRY_RUN=1 expect_exit 0 "first rerun allowed" -- "$S/ci-rerun" acme/docs 123
 
 echo "pr-review-requested"
 expect_exit 0 "lists review requests" -- "$S/pr-review-requested"
@@ -132,23 +181,25 @@ echo "pr-areas (public default rules from repos.yaml)"
 REAL="$ROOT/dist/claude/.claude/skills/adorno-github/repos.json"
 if [ -f "$REAL" ]; then
   jq '.repos = {"acme/app": {}, "acme/docs": {"area_reviewers": {"docs": ["agent:review:security"]}}}' "$REAL" >"$TMP/areas-repos.json"
-  ADORNO_REPOS="$TMP/areas-repos.json" expect_exit 0 "classifies a diff" -- "$S/pr-areas" acme/app "$ROOT/tests/fixtures/sample.diff"
+  reg "$TMP/areas-repos.json"
+  expect_exit 0 "classifies a diff" -- "$S/pr-areas" acme/app "$ROOT/tests/fixtures/sample.diff"
   expect_jq "front by extension" '.areas.front == ["client/app.tsx"]'
   expect_jq "mongodb by added-line content" '.areas.mongodb == ["server/users.js"] and .areas.back == ["server/users.js"]'
   expect_jq "deps and docs" '.areas.deps == ["package.json"] and .areas.docs == ["README.md"]'
   expect_jq "unmatched files land in other" '.other == ["notes/weird.txt"]'
   expect_jq "reviewers: always + per area, deduplicated" \
     '(.reviewers | sort) == (["agent:review:code","agent:review:ponytail","agent:review:front","agent:review:perf","agent:review:back","agent:review:tests","agent:review:mongodb","agent:review:security"] | sort)'
-  ADORNO_REPOS="$TMP/areas-repos.json" expect_exit 0 "per-repo override" -- "$S/pr-areas" acme/docs "$ROOT/tests/fixtures/sample.diff"
+  expect_exit 0 "per-repo override" -- "$S/pr-areas" acme/docs "$ROOT/tests/fixtures/sample.diff"
   expect_jq "override merges with default areas" '.areas.front == ["client/app.tsx"] and (.reviewers | index("agent:review:security"))'
   jq -e '.repos == {}' "$REAL" >/dev/null && ok "public registry has no repos" || ko "public registry has no repos"
+  reg "$ROOT/tests/fixtures/repos.json"
 else
   ko "pr-areas tests need dist/ — run bin/kit build first"
 fi
 
 echo "pr-review-submit"
 printf '%s' '{"event":"COMMENT","body":"Looks good overall.","comments":[{"path":"a.ts","line":3,"body":"Null check?"}]}' >"$TMP/review.json"
-FAKE_PR_AUTHOR=alice GH_OPS_DRY_RUN=1 expect_exit 0 "dry-run review" -- "$S/pr-review-submit" acme/docs#10 "$TMP/review.json"
+FAKE_PR_AUTHOR=alice ADORNO_DRY_RUN=1 expect_exit 0 "dry-run review" -- "$S/pr-review-submit" acme/docs#10 "$TMP/review.json"
 expect_jq "payload pinned to the head commit, side defaulted" '.commit_id == "abc123" and .comments[0].side == "RIGHT"'
 jq '.event = "APPROVE"' "$TMP/review.json" >"$TMP/approve.json"
 FAKE_PR_AUTHOR=alice expect_exit 4 "automatic approval refused by default" -- "$S/pr-review-submit" acme/docs#10 "$TMP/approve.json"
@@ -163,18 +214,20 @@ printf '{"event":"LGTM","body":""}' >"$TMP/bad.json"
 expect_exit 2 "invalid review refused" -- "$S/pr-review-submit" acme/docs#10 "$TMP/bad.json"
 
 printf '%s' '{"body":"","comments":[{"path":"a.ts","line":3,"body":"issue (blocking): null check?"}]}' >"$TMP/pending.json"
-FAKE_PR_AUTHOR=alice GH_OPS_DRY_RUN=1 expect_exit 0 "no event means a pending review" -- "$S/pr-review-submit" acme/docs#10 "$TMP/pending.json"
+FAKE_PR_AUTHOR=alice ADORNO_DRY_RUN=1 expect_exit 0 "no event means a pending review" -- "$S/pr-review-submit" acme/docs#10 "$TMP/pending.json"
 expect_jq "pending payload carries no event" '.pending and (has("event") | not)'
 FAKE_PR_AUTHOR=alice expect_exit 0 "pending review created" -- "$S/pr-review-submit" acme/docs#10 "$TMP/pending.json"
 expect_jq "reported as pending, not submitted" '.pending and (.submitted | not)'
 FAKE_REVIEWS="$ROOT/tests/fixtures/reviews-pending.json" FAKE_PR_AUTHOR=alice expect_exit 4 "refused when I already have a pending review" -- "$S/pr-review-submit" acme/docs#10 "$TMP/pending.json"
 jq '.comments = [range(10) as $i | {path: "a.ts", line: ($i + 1), body: "point \($i)"}]' "$TMP/pending.json" >"$TMP/many.json"
-FAKE_PR_AUTHOR=alice GH_OPS_DRY_RUN=1 expect_exit 0 "more than max_inline comments" -- "$S/pr-review-submit" acme/docs#10 "$TMP/many.json"
+FAKE_PR_AUTHOR=alice ADORNO_DRY_RUN=1 expect_exit 0 "more than max_inline comments" -- "$S/pr-review-submit" acme/docs#10 "$TMP/many.json"
 expect_jq "8 inline, the rest moved to the body" '(.comments | length) == 8 and (.body | test("a.ts:9`: point 8")) and (.body | test("a.ts:10`: point 9"))'
-expect_exit 0 "pending allowed on my own PR" -- env GH_OPS_DRY_RUN=1 "$S/pr-review-submit" acme/docs#42 "$TMP/pending.json"
+expect_exit 0 "pending allowed on my own PR" -- env ADORNO_DRY_RUN=1 "$S/pr-review-submit" acme/docs#42 "$TMP/pending.json"
 
+FAKE_PR_AUTHOR=alice FAKE_REVIEWS="$FAKE_FIX/reviews-pending.json" expect_exit 4 \
+  "a pending review on a later page is found (pagination)" -- "$S/pr-review-submit" acme/docs#10 "$TMP/pending.json"
 echo "pr-comment"
-GH_OPS_DRY_RUN=1 expect_exit 0 "dry-run comment" -- "$S/pr-comment" acme/docs#42 "$TMP/body.md"
+ADORNO_DRY_RUN=1 expect_exit 0 "dry-run comment" -- "$S/pr-comment" acme/docs#42 "$TMP/body.md"
 expect_jq "body shown" '.dryRun and .body == "Fixed in abc123.\n"'
 expect_exit 5 "comment needs L3" -- env ADORNO_LEVEL=L2 "$S/pr-comment" acme/docs#42 "$TMP/body.md"
 
@@ -191,7 +244,46 @@ expect_exit 0 "deployments after the merge that contain it" -- "$S/pr-deploys" a
 expect_jq "first successful containing deploy per environment" \
   '.source == "github-deployments" and (.environments | map({environment, sha})) == [{"environment": "staging", "sha": "s1"}, {"environment": "production", "sha": "p2"}]'
 expect_exit 0 "comment carries the impact report (dry run)" -- \
-  env GH_OPS_DRY_RUN=1 "$S/pr-comment" acme/docs#42 "$TMP/body.md"
+  env ADORNO_DRY_RUN=1 "$S/pr-comment" acme/docs#42 "$TMP/body.md"
+
+printf '<!-- adorno:impact -->\n## Impact\n' >"$TMP/impact.md"
+FAKE_PRIVATE=false expect_exit 4 "no impact report on a public repo" -- "$S/pr-comment" acme/docs#42 "$TMP/impact.md"
+FAKE_PRIVATE=true ADORNO_DRY_RUN=1 expect_exit 0 "impact report on a private repo" -- "$S/pr-comment" acme/docs#42 "$TMP/impact.md"
+
+echo "ci-failed, issue-fetch, pr-diff, review-merge"
+expect_exit 0 "failed runs and their logs" -- "$S/ci-failed" acme/docs#42 50
+expect_jq "failure and timeout kept, success dropped" '[.runs[].id] == [1, 2] and .headSha == "abc123"'
+grep -q "expected 2, got 3" "$(jq -r '.runs[0].logFile' <<<"$out")" && ok "log tail saved" || ko "log tail saved"
+[ ! -s "$(jq -r '.runs[1].logFile' <<<"$out")" ] && ok "a run without log gives an empty file, not an error" || ko "empty log"
+expect_exit 2 "lines must be a number" -- "$S/ci-failed" acme/docs#42 lots
+expect_exit 0 "issue" -- "$S/issue-fetch" acme/docs#7
+expect_jq "issue flattened" '.author == "alice" and .labels == ["bug"] and .comments[0].author == "bob"'
+expect_exit 0 "pr-diff" -- "$S/pr-diff" acme/docs#42
+expect_jq "diff saved, files listed" '(.diffFile | test("\\.diff$")) and (.files | length) == 2 and .author == "octocat"'
+mkdir -p "$TMP/reviews"
+printf '{"agent":"agent:review:code","verdict":"fix","findings":[{"severity":"minor","file":"a.ts","line":3,"title":"Null not handled"}]}' >"$TMP/reviews/code.json"
+printf '{"agent":"agent:review:back","verdict":"block","findings":[{"severity":"blocker","file":"a.ts","line":3,"title":" null  NOT handled"}]}' >"$TMP/reviews/back.json"
+printf '{"nope":true}' >"$TMP/reviews/broken.json"
+expect_exit 0 "review-merge" -- "$S/review-merge" "$TMP/reviews"
+expect_jq "same finding merged, highest severity, both agents, broken file reported" \
+  '.verdict == "block" and (.findings | length) == 1 and .findings[0].severity == "blocker" and .findings[0].agents == ["agent:review:back", "agent:review:code"] and .invalid == ["broken.json"]'
+mkdir -p "$TMP/reviews2"
+printf '{"agent":"agent:review:code","verdict":"pass","findings":[{"severity":"blocker","title":"Data loss"}]}' >"$TMP/reviews2/a.json"
+printf '{"agent":"agent:review:back","verdict":"BLOCK","findings":[]}' >"$TMP/reviews2/b.json"
+printf '{"agent":"agent:review:tests","findings":[]}' >"$TMP/reviews2/c.json"
+expect_exit 0 "review-merge, inconsistent reviews" -- "$S/review-merge" "$TMP/reviews2"
+expect_jq "a blocker forces block; unknown or missing verdicts are invalid, not pass" \
+  '.verdict == "block" and .invalid == ["b.json", "c.json"]'
+
+echo "pr-areas: tricky paths"
+printf 'diff --git "a/client/\\303\\251 x.tsx" "b/client/\\303\\251 x.tsx"\n--- "a/client/\\303\\251 x.tsx"\n+++ "b/client/\\303\\251 x.tsx"\n@@ -1 +1 @@\n+const a = 1\ndiff --git a/server/old.ts b/server/old.ts\ndeleted file mode 100644\n--- a/server/old.ts\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\n' >"$TMP/tricky.diff"
+if [ -f "$REAL" ]; then
+  jq '.repos["acme/app"] = {}' "$REAL" >"$TMP/areas2.json"
+  reg "$TMP/areas2.json"
+  expect_exit 0 "quoted, non-ASCII and deleted paths" -- "$S/pr-areas" acme/app "$TMP/tricky.diff"
+  expect_jq "decoded paths in the right areas" '.areas.front == ["client/é x.tsx"] and .areas.back == ["server/old.ts"]'
+  reg "$ROOT/tests/fixtures/repos.json"
+fi
 
 echo "pr-workspace and pr-push (local git plays GitHub)"
 W="$TMP/upstream"; O="$TMP/origin.git"
@@ -201,14 +293,14 @@ basesha="$(git -C "$W" rev-parse HEAD)"
 git -C "$W" checkout -qb nm/pagination; echo two >>"$W/a.txt"; git -C "$W" commit -qam "feat: two"
 headsha="$(git -C "$W" rev-parse HEAD)"
 git clone -q --bare "$W" "$O"; git -C "$O" update-ref refs/pull/42/head "$headsha"
-export FAKE_ORIGIN="$O" FAKE_HEAD_SHA="$headsha" ADORNO_HOME="$TMP/kit-home"
+export FAKE_ORIGIN="$O" FAKE_HEAD_SHA="$headsha"
 
 expect_exit 0 "creates the workspace" -- "$S/pr-workspace" acme/docs#42
 expect_jq "detached at the PR head, diff base = merge-base" \
   ".headSha == \"$headsha\" and .diffBase == \"$basesha\" and .changedFiles == 1 and .mine"
 ws="$(jq -r .dir <<<"$out")"
 [ "$(git -C "$ws" rev-parse HEAD)" = "$headsha" ] && ok "workspace HEAD is the PR head" || ko "workspace HEAD is the PR head"
-case "$ws" in "$TMP/kit-home/workspaces/acme__docs/pr-42") ok "lives under the kit home" ;; *) ko "lives under the kit home" "$ws" ;; esac
+case "$ws" in "$KH/workspaces/acme__docs/pr-42") ok "lives under the kit home" ;; *) ko "lives under the kit home" "$ws" ;; esac
 
 git -C "$ws" config user.email t@t; git -C "$ws" config user.name t
 mkdir -p "$ws/.agent-run/x"; echo notes >"$ws/.agent-run/x/status.md"
@@ -222,6 +314,44 @@ FAKE_CROSS=true expect_exit 4 "push refused from a fork" -- "$S/pr-push" acme/do
 expect_exit 5 "push needs L2" -- env ADORNO_LEVEL=L1 "$S/pr-push" acme/docs#42
 expect_exit 0 "pushes to the PR branch" -- "$S/pr-push" acme/docs#42
 expect_jq "one commit pushed" '.pushed and .commits == 1'
+
+echo "with_lock"
+cat >"$TMP/lock-test" <<EOF
+#!/usr/bin/env bash
+. "$S/_lib.sh"
+mkdir -p "\$(kit_home)/locks/dead.lock"; echo 999999 >"\$(kit_home)/locks/dead.lock/pid"
+with_lock dead true; echo "took over a dead holder's lock"
+steps() { false; echo "continued after a failing step"; }
+with_lock t steps
+echo "returned 0"
+EOF
+chmod +x "$TMP/lock-test"
+out="$("$TMP/lock-test" 2>&1)"; got=$?
+case "$out" in *continued*|*"returned 0"*) ko "a failing step fails the locked command" "$out" ;; *) [ "$got" = 1 ] && ok "a failing step fails the locked command" || ko "a failing step fails the locked command" "exit $got" ;; esac
+grep -q "took over" <<<"$out" && ok "a lock whose holder died is taken over at once" || ko "a lock whose holder died is taken over at once" "$out"
+[ ! -e "$KH/locks/t.lock" ] && ok "the lock is released" || ko "the lock is released"
+
+echo "git-push (a branch without PR)"
+C="$TMP/clone"; git clone -q "$O" "$C"; git -C "$C" config user.email t@t; git -C "$C" config user.name t
+git -C "$C" config "url.file://$O.insteadOf" "git@github.com:acme/docs.git"
+git -C "$C" remote set-url origin "git@github.com:acme/docs.git"
+git -C "$C" checkout -qb feat/lem-7-empty-pages; echo x >"$C/b.txt"; git -C "$C" add b.txt; git -C "$C" commit -qm "feat: b"
+expect_exit 0 "pushes a conforming branch" -- "$S/git-push" acme/docs feat/lem-7-empty-pages --dir "$C"
+expect_jq "pushed" '.pushed and .branch == "feat/lem-7-empty-pages"'
+[ "$(git -C "$O" rev-parse feat/lem-7-empty-pages)" = "$(git -C "$C" rev-parse HEAD)" ] && ok "branch on origin" || ko "branch on origin"
+git -C "$C" checkout -q main
+expect_exit 4 "never the base branch" -- "$S/git-push" acme/docs main --dir "$C"
+git -C "$C" checkout -qb wip; git -C "$C" commit -q --allow-empty -m "wip"
+expect_exit 4 "a name outside branch_pattern is refused" -- "$S/git-push" acme/docs wip --dir "$C"
+expect_exit 4 "the origin must be the repo named" -- "$S/git-push" acme/strict wip --dir "$C"
+git -C "$C" config remote.origin.pushurl "git@github.com:evil/docs.git"
+expect_exit 4 "a pushurl to another repo is refused" -- "$S/git-push" acme/docs fix/lem-8-x --dir "$C"
+git -C "$C" config --unset remote.origin.pushurl
+git -C "$C" checkout -qb fix/lem-8-x
+expect_exit 5 "needs L2" -- env ADORNO_LEVEL=L1 "$S/git-push" acme/docs --dir "$C"
+ADORNO_DRY_RUN=1 expect_exit 0 "dry run only prints" -- "$S/git-push" acme/docs --dir "$C"
+expect_jq "dry run" '.dryRun and .branch == "fix/lem-8-x"'
+
 [ "$(git -C "$O" rev-parse nm/pagination)" = "$(git -C "$ws" rev-parse HEAD)" ] && ok "origin branch moved" || ko "origin branch moved"
 expect_exit 0 "nothing new to push" -- "$S/pr-push" acme/docs#42
 expect_jq "reported as nothing new" '(.pushed | not)'

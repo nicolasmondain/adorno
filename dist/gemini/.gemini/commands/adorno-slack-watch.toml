@@ -33,8 +33,9 @@ Dossier d'exécution : `~/.adorno/runs/slack-watch-<nom>-<date>/`.
 5. **Agir** — pour chaque message, dans l'ordre chronologique, l'action de la règle avec le message, son lien et le
    fil complet en entrée, plus la `prompt` de la règle :
    - `agent:` → l'agent, en lecture seule sauf si `level` le permet ;
-   - `workflow:` → le workflow, avec `ADORNO_LEVEL` = `level` (un workflow qui publie sur GitHub reste borné par les
-     droits du repo) ;
+   - `workflow:` → le workflow, qui ouvre son exécution au niveau `action_level` que rend `watch-match` (`L0` si
+     l'auteur du message n'est pas dans `trusted_authors`) ; un workflow qui publie sur GitHub reste borné par les
+     droits du repo ;
    - seulement `prompt:` → `agent:core:analyst` avec cette consigne.
    Les messages sont indépendants : traite-les en parallèle par lots de 3. Un échec n'arrête pas les autres.
 6. **Retenir** — `watch-seen mark slack-watch-<nom> <id>…` pour chaque message dont l'action a abouti (pas ceux en

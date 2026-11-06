@@ -10,11 +10,36 @@
     "allow_approve": false,
     "max_inline": 8,
     "max_parallel": 3,
+    "permissions": {
+      "deny": [],
+      "claude": {
+        "deny": [
+          "Bash(git push:*)",
+          "Bash(gh pr create:*)",
+          "Bash(gh pr comment:*)",
+          "Bash(gh pr review:*)",
+          "Bash(gh pr merge:*)",
+          "Bash(gh pr close:*)",
+          "Bash(gh pr edit:*)",
+          "Bash(gh issue comment:*)",
+          "Bash(gh issue create:*)",
+          "Bash(gh release:*)",
+          "Edit(~/.adorno/registry.json)",
+          "Write(~/.adorno/registry.json)",
+          "Edit(~/.adorno/runs/active/**)",
+          "Write(~/.adorno/runs/active/**)"
+        ],
+        "ask": [
+          "Bash(gh api:*)"
+        ]
+      }
+    },
     "impact": {
       "window": "7d",
       "min_age": "3d",
       "environment": "production",
       "post": "comment",
+      "post_public": false,
       "sources": []
     },
     "areas": {

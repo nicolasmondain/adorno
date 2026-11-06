@@ -6,7 +6,11 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 S="$ROOT/src/skills/adorno-watch/scripts"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-export ADORNO_CONF="$ROOT/tests/fixtures/watch/adorno.json" ADORNO_HOME="$TMP/home"
+# a throwaway home: the scripts read your settings from ~/.adorno/registry.json only
+export HOME="$TMP/home"; mkdir -p "$HOME/.adorno"
+FIX="$ROOT/tests/fixtures/watch/adorno.json"
+conf() { rm -f "$HOME/.adorno/registry.json"; [ -z "${1:-}" ] || cp "$1" "$HOME/.adorno/registry.json"; }  # conf [FILE]
+conf "$FIX"
 
 pass=0 fail=0
 ok() { pass=$((pass + 1)); printf '  ok   %s\n' "$1"; }
@@ -41,7 +45,7 @@ expect_jq "notion" '.properties == ["Owner"] and .mode == "run" and .exclude_sta
 expect_exit 0 "channel to repos" -- "$S/watch-conf" channel-repos "#app-errors"
 expect_jq "channel-repos" '. == ["acme/app"]'
 expect_exit 2 "usage" -- "$S/watch-conf" bogus
-ADORNO_CONF="$TMP/none.json" expect_exit 3 "no config" -- "$S/watch-conf" list
+conf; expect_exit 3 "no config" -- "$S/watch-conf" list; conf "$FIX"
 
 echo "watch-match"
 expect_exit 0 "match" -- "$S/watch-match" timeouts "$TMP/msgs.json"
@@ -53,6 +57,24 @@ printf '[{"text": "x"}]' >"$TMP/bad.json"
 expect_exit 2 "malformed input refused" -- "$S/watch-match" timeouts "$TMP/bad.json"
 expect_exit 0 "stdin input" -- sh -c "\"$S/watch-match\" timeouts < \"$TMP/msgs.json\""
 expect_jq "stdin works" '(.matched | length) == 2'
+
+echo "trust and scale"
+jq '.slack.watches.timeouts.action.trusted_authors = ["U1"] | .slack.watches.timeouts.action.level = "L2"' \
+  "$FIX" >"$TMP/trusted.json"
+conf "$TMP/trusted.json"
+expect_exit 0 "trusted author keeps the action level" -- "$S/watch-match" timeouts "$TMP/msgs.json" --all
+expect_jq "trusted" 'all(.matched[]; .trusted and .action_level == "L2")'
+conf "$FIX"
+expect_exit 0 "untrusted author drops to L0" -- "$S/watch-match" timeouts "$TMP/msgs.json" --all
+expect_jq "untrusted" 'all(.matched[]; (.trusted | not) and .action_level == "L0")'
+expect_exit 2 "a watch name cannot be a path" -- "$S/watch-match" "../x" "$TMP/msgs.json"
+ids="$(seq 1 6000 | sed 's/^/C9:/' | tr '\n' ' ')"
+# shellcheck disable=SC2086  # one id per word on purpose
+"$S/watch-seen" mark slack-watch-timeouts $ids >/dev/null
+expect_exit 0 "thousands of processed ids do not overflow the command line" -- "$S/watch-match" timeouts "$TMP/msgs.json"
+for i in 1 2 3 4 5 6 7 8; do "$S/watch-seen" mark slack-watch-par "P$i" >/dev/null & done; wait
+out="$("$S/watch-seen" list slack-watch-par)"
+expect_jq "parallel marks are all kept (locked updates)" 'length == 8'
 
 echo "watch-seen"
 expect_exit 0 "mark" -- "$S/watch-seen" mark slack-watch-timeouts C1:1

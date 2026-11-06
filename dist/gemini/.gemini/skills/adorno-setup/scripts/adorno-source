@@ -1,25 +1,18 @@
 #!/usr/bin/env bash
 # Usage: adorno-source
-# Prints {"source": "<adorno repo>", "local": "<personal layer>", "localExists": bool, "installedIn": "<dir>"}.
-# Looks for the install record (.adorno/installed.json) from the current directory up, then in ~; $ADORNO_SOURCE wins.
+# Prints {"source": "<adorno repo>", "local": "<personal layer>", "localExists": bool}.
+# The adorno repo comes from $ADORNO_SOURCE, else from the record of your global install (~/.adorno/installed.json).
+# A record found inside a project is never trusted: a cloned repo could ship one pointing at its own bin/kit.
 set -euo pipefail
 command -v jq >/dev/null || { echo "adorno-source: missing dependency: jq" >&2; exit 1; }
 
-record=""
-d="$PWD"
-while [ "$d" != "/" ]; do
-  if [ -f "$d/.adorno/installed.json" ]; then record="$d/.adorno/installed.json"; break; fi
-  d="$(dirname "$d")"
-done
-[ -n "$record" ] || [ ! -f "$HOME/.adorno/installed.json" ] || record="$HOME/.adorno/installed.json"
-
 src="${ADORNO_SOURCE:-}"
-[ -n "$src" ] || [ -z "$record" ] || src="$(jq -r '.source // empty' "$record")"
-[ -n "$src" ] && [ -x "$src/bin/kit" ] || {
-  echo "adorno-source: adorno repo not found; set ADORNO_SOURCE=/path/to/adorno (or install it with bin/kit install)" >&2
+record="$HOME/.adorno/installed.json"
+if [ -z "$src" ] && [ -f "$record" ]; then src="$(jq -r '.source // empty' "$record")"; fi
+if [ -z "$src" ] || [ ! -x "$src/bin/kit" ] || ! grep -q '^name: adorno$' "$src/kit.yaml" 2>/dev/null; then
+  echo "adorno-source: adorno repo not found; run bin/kit install --global from it, or set ADORNO_SOURCE" >&2
   exit 3
-}
+fi
 local_dir="${ADORNO_LOCAL:-$src/local}"
-jq -n --arg s "$src" --arg l "$local_dir" --arg i "${record%/.adorno/installed.json}" \
-  --argjson e "$([ -d "$local_dir" ] && echo true || echo false)" \
-  '{source: $s, local: $l, localExists: $e, installedIn: (if $i == "" then null else $i end)}'
+jq -n --arg s "$src" --arg l "$local_dir" --argjson e "$([ -d "$local_dir" ] && echo true || echo false)" \
+  '{source: $s, local: $l, localExists: $e}'

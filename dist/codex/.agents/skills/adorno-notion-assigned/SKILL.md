@@ -41,7 +41,7 @@ Dossier d'exécution : `~/.adorno/runs/notion-assigned-<date>/`.
 5. **Agir** —
    - `report` (défaut) : `agent:core:analyst` rend l'analyse et ce que l'action choisie ferait (plan, repo visé,
      droits nécessaires), sans rien lancer ;
-   - `run` : l'action choisie, avec `ADORNO_LEVEL` = `level` et les droits du repo visé. Les étapes qui demandent ta
+   - `run` : l'action choisie, qui ouvre sa propre exécution au niveau `level` (`run-begin --level <level>`), bornée par les droits du repo visé. Les étapes qui demandent ta
      validation (spec, ouverture de PR) restent des points d'arrêt.
    Les documents sont indépendants : en parallèle par lots de 3.
 6. **Retenir** — `watch-seen mark notion-assigned <id>…` pour chaque document traité, puis

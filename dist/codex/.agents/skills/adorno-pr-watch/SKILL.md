@@ -9,6 +9,8 @@ Entrée : la demande de l'utilisateur. Suis les étapes dans l'ordre.
 
 Entrée : la demande de l’utilisateur
 
+**Exécution** — avant toute chose : `adorno-github/scripts/run-begin --workflow workflow:pr:watch --mode <mode> --level L3 --repo owner/repo` ; garde `id` et `dir` (le dossier d'exécution). Appelé par un autre workflow qui a déjà ouvert la sienne : réutilise-la. Toujours, même après un échec : `run-end <id>`. Sans exécution ouverte, les scripts refusent toute écriture.
+
 Mode par défaut : `auto` si la spec l'a validé, sinon `draft`. Plafond par défaut : 5 tours.
 
 À chaque tour :

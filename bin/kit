@@ -27,6 +27,7 @@ Used by install, check, list and conf; never by build.
 from __future__ import annotations
 
 import argparse
+import glob
 import copy
 import hashlib
 import json
@@ -58,6 +59,7 @@ LEVELS = ("L0", "L1", "L2", "L3", "L4")
 ACTIONS = ("push", "reply", "comment", "resolve", "rerequest", "review", "submit", "open_pr", "ci_rerun")
 CLAUDE_RULES = ("allow", "ask", "deny")
 VISION_MAX_LINES = 60
+TIERS = ("inherit", "fast", "balanced", "deep")   # neutral model tiers (adapters/targets.yaml maps them per tool)
 MODELS: dict = {}   # `models` of the repo being installed (local/adorno.yaml); empty for the public build
 SECRET_ENV_RE = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD)", re.I)
 LOCK = ROOT / "kit.lock"
@@ -144,12 +146,13 @@ def local_conf() -> dict:
     return load_yaml(LOCAL_CONF) if local_on() and LOCAL_CONF.exists() else {}
 
 
-GITHUB_RE = re.compile(r"(?:git@github\.com:|(?:ssh://git@|https?://)github\.com/)([\w.-]+/[\w.-]+?)(?:\.git)?/?$")
+GITHUB_RE = re.compile(r"(?:git@github\.com:|ssh://git@github\.com(?::\d+)?/|https?://(?:[^@/]+@)?github\.com/)"
+                       r"([\w.-]+/[\w.-]+?)(?:\.git)?/?$")
 
 
 def github_repo(path: Path) -> str | None:
     """owner/repo of the git repository at `path` (its `origin` on GitHub), or None."""
-    res = subprocess.run(["git", "-C", str(path), "remote", "get-url", "origin"], capture_output=True, text=True)
+    res = subprocess.run(["git", "-C", str(path), "config", "--get", "remote.origin.url"], capture_output=True, text=True)
     m = GITHUB_RE.search(res.stdout.strip()) if res.returncode == 0 else None
     return m.group(1) if m else None
 
@@ -160,7 +163,7 @@ def workspace_dirs(ws: dict) -> dict[str, Path]:
     for pattern in ws.get("paths") or []:
         expanded = os.path.expanduser(str(pattern))
         base = Path(expanded)
-        roots = [Path(p) for p in sorted(__import__("glob").glob(expanded))] if any(c in expanded for c in "*?[") \
+        roots = [Path(p) for p in sorted(glob.glob(expanded))] if any(c in expanded for c in "*?[") \
             else ([base] if base.is_dir() else [])
         for root in roots:
             candidates = [root] if (root / ".git").exists() else \
@@ -172,7 +175,18 @@ def workspace_dirs(ws: dict) -> dict[str, Path]:
     return found
 
 
+_REGISTRY_CACHE: dict = {}
+
+
 def registry() -> dict:
+    """Cached per layer state (it scans workspace folders): see _registry."""
+    key = "local" if local_on() else "public"
+    if key not in _REGISTRY_CACHE:
+        _REGISTRY_CACHE[key] = _registry()
+    return copy.deepcopy(_REGISTRY_CACHE[key])
+
+
+def _registry() -> dict:
     """repos.yaml, with the personal layer (local/adorno.yaml) on top when it is active: `owner` and `defaults`
     merged into the defaults, `presets`, `workspaces` (local `paths` turned into the repos found there), `repos`."""
     data = load_yaml(ROOT / "repos.yaml")
@@ -461,9 +475,8 @@ def validate(cfg: Config, items: dict[str, dict[str, Item]]) -> list[str]:
     for tgt in cfg.default_targets:
         cfg.target(tgt)
 
-    DELEGABLE.clear()
-    DELEGABLE.update(i.id for i in items["agent"].values() if i.meta.get("delegable"))
-    errors += validate_registry(registry(), {i.id for i in items["agent"].values()} | set(items["agent"]))
+    delegable = {i.id for i in items["agent"].values() if i.meta.get("delegable")}
+    errors += validate_registry(registry(), {i.id for i in items["agent"].values()} | set(items["agent"]), delegable)
     return errors
 
 
@@ -501,10 +514,17 @@ def validate_watches(reg: dict, where: str, agent_ids: set) -> list[str]:
             if not (w.get("includes") or w.get("regex")):
                 errors.append(f"{where}: {scope} needs `includes` (words) or `regex`")
             if w.get("regex"):
-                try:
-                    re.compile(str(w["regex"]))
-                except re.error as e:
-                    errors.append(f"{where}: {scope}.regex is invalid: {e}")
+                # the scripts match with jq (Oniguruma): validate with the same engine when it is here
+                if shutil.which("jq"):
+                    res = subprocess.run(["jq", "-n", "--arg", "r", str(w["regex"]), '"" | test($r)'],
+                                         capture_output=True, text=True)
+                    if res.returncode != 0:
+                        errors.append(f"{where}: {scope}.regex is invalid: {res.stderr.strip()[:200]}")
+                else:
+                    try:
+                        re.compile(str(w["regex"]))
+                    except re.error as e:
+                        errors.append(f"{where}: {scope}.regex is invalid: {e}")
             action = w.get("action") or {}
             if action.get("agent") and action["agent"] not in agent_ids:
                 errors.append(f"{where}: {scope}.action.agent names unknown agent '{action['agent']}'")
@@ -521,11 +541,9 @@ def validate_watches(reg: dict, where: str, agent_ids: set) -> list[str]:
     return errors
 
 
-TIERS = ("inherit", "fast", "balanced", "deep")
-DELEGABLE: set = set()   # agents allowed on an external route (filled by validate)
 
 
-def validate_models(m, where: str, agent_ids: set) -> list[str]:
+def validate_models(m, where: str, agent_ids: set, delegable: set) -> list[str]:
     """`models`: tiers per target, per-agent / per-workflow choice, external routes, Claude Code env."""
     if m is None:
         return []
@@ -540,8 +558,11 @@ def validate_models(m, where: str, agent_ids: set) -> list[str]:
     for name, r in routes.items():
         if not isinstance(r, dict) or not r.get("base_url") or not r.get("model"):
             errors.append(f"{where}.routes.{name} needs `base_url` and `model`")
-        elif not str(r["base_url"]).startswith(("https://", "http://localhost", "http://127.0.0.1")):
-            errors.append(f"{where}.routes.{name}.base_url must be https (or localhost)")
+        elif not re.match(r"^(https://[A-Za-z0-9.-]+|http://(localhost|127\.0\.0\.1))(:\d{1,5})?(/[^@\s]*)?$",
+                          str(r["base_url"])):
+            errors.append(f"{where}.routes.{name}.base_url must be https://host[/path] (plain http for localhost only)")
+        elif r.get("api_key_env") and not re.match(r"^[A-Z][A-Z0-9_]*_(API_KEY|LLM_KEY)$", str(r["api_key_env"])):
+            errors.append(f"{where}.routes.{name}.api_key_env must name a model key variable (…_API_KEY or …_LLM_KEY)")
         if isinstance(r, dict) and r.get("api_key"):
             errors.append(f"{where}.routes.{name}: never put a key here; use `api_key_env` (a variable name)")
     for key in ("agents", "workflows"):
@@ -551,7 +572,7 @@ def validate_models(m, where: str, agent_ids: set) -> list[str]:
             if isinstance(spec, dict):
                 if spec.get("route") and key == "workflows":
                     errors.append(f"{where}.workflows.{ref}: only agents can be sent to a route")
-                if spec.get("route") and key == "agents" and ref not in DELEGABLE:
+                if spec.get("route") and key == "agents" and ref not in delegable:
                     errors.append(f"{where}.agents.{ref}: not `delegable` (it needs tools while it thinks), "
                                   f"it cannot go to a route")
                 if spec.get("route") and spec["route"] not in routes:
@@ -567,7 +588,7 @@ def validate_models(m, where: str, agent_ids: set) -> list[str]:
     return errors
 
 
-def validate_registry(reg: dict, agent_ids: set) -> list[str]:
+def validate_registry(reg: dict, agent_ids: set, delegable: set) -> list[str]:
     """repos.yaml and the personal layer: references, levels, permissions, shapes."""
     errors: list[str] = []
     if USE_LOCAL and LEGACY_LOCAL.exists():
@@ -596,7 +617,7 @@ def validate_registry(reg: dict, agent_ids: set) -> list[str]:
             if conf.get(key) is not None and not (isinstance(conf[key], list)
                                                   and all(isinstance(x, str) for x in conf[key])):
                 errors.append(f"{where}: {scope}.{key} must be a list of lines")
-        errors += validate_models(conf.get("models"), f"{where}: {scope}.models", agent_ids)
+        errors += validate_models(conf.get("models"), f"{where}: {scope}.models", agent_ids, delegable)
         imp = conf.get("impact")
         if imp is not None:
             if not isinstance(imp, dict):
@@ -668,7 +689,7 @@ def map_model(tcfg: dict, model, target: str | None = None) -> str | None:
         return str(mine[model])
     if model in (tcfg.get("models") or {}):
         return (tcfg.get("models") or {}).get(model)
-    return None if model in ("inherit", "fast", "balanced", "deep") else str(model)
+    return None if model in TIERS else str(model)
 
 
 def clean_skill_meta(it: Item, target: str) -> dict:
@@ -684,7 +705,8 @@ def skill_data(cfg: Config, it: Item) -> FileMap:
         src = ROOT / source
         if not src.exists():
             die(f"kit.yaml skill_data: {source} not found")
-        data = registry() if source == "repos.yaml" else load_yaml(src)
+        # the public registry only: the personal one never lands in a project tree (see write_registry)
+        data = load_yaml(ROOT / "repos.yaml") if source == "repos.yaml" else load_yaml(src)
         out[dest] = (json.dumps(data, indent=2, ensure_ascii=False, default=str).encode() + b"\n", False)
     return out
 
@@ -795,17 +817,13 @@ def render_instructions(cfg: Config, items: dict[str, dict[str, Item]]) -> str:
     if vision:
         parts.append(vision_section(vision).strip())
     if (cfg.manifest.get("instructions") or {}).get("catalog", True):
-        lines = ["## Catalogue adorno", "",
-                 "Sur les outils sans sous-agents ou commandes natifs, les agents et workflows "
-                 "ci-dessous sont disponibles sous forme de skills du même nom.", ""]
-        for kind, label in (("agent", "Agents"), ("workflow", "Workflows"), ("skill", "Skills")):
-            group = items[kind]
-            if group:
-                lines += [f"**{label}**", ""]
-                for it in sorted(group.values(), key=lambda i: i.id):
-                    shown = f"`{it.id}` (`{it.name}`)" if it.id != it.name else f"`{it.name}`"
-                    lines.append(f"- {shown} — {it.description}")
-                lines.append("")
+        # Agents and skills are discovered natively by every tool (sub-agents, skills); only the workflows, the
+        # entry points, get a one-line index here — the full descriptions would cost tokens in every session.
+        lines = ["## Workflows adorno", "",
+                 "Chacun est une commande au même nom (sans commande native : le skill du même nom).", ""]
+        for it in sorted(items["workflow"].values(), key=lambda i: i.id):
+            first = re.split(r"(?<=[.;—])\s", it.description.strip(), maxsplit=1)[0].rstrip(" .;—")
+            lines.append(f"- `{it.id}` (`/{it.name}`) — {first[:110]}")
         parts.append("\n".join(lines).strip())
     return "\n\n".join(p for p in parts if p) + "\n"
 
@@ -916,7 +934,7 @@ def write_tree(base: Path, files: FileMap) -> None:
 
 
 def build_all(cfg: Config, items, out_root: Path) -> None:
-    if USE_LOCAL and out_root == ROOT:
+    if local_on() and out_root == ROOT:
         die("refusing to write the personal layer (local/) into dist/ (dist/ is committed and public)")
     dist = out_root / "dist"
     if dist.exists():
@@ -1323,9 +1341,10 @@ avec le skill `adorno-llm` :
 
 1. Rassemble les entrées que décrivent les consignes ci-dessous (fichiers, diff, sorties de scripts) avec tes outils,
    sans juger toi-même. Rien de secret ni de personnel : une entrée qui en contient est réduite ou retirée.
-2. Écris `role.md` (la section « Consignes du rôle », en entier) et `prompt.md` (la tâche et les entrées).
-3. `adorno-llm/scripts/llm-run {flags} --system role.md prompt.md > reply.json`
-4. Vérifie `reply.json` › `.content` : format attendu respecté, chaque `file:line` cité existe. Sinon, une relance avec
+2. Dans un dossier à toi seul (`d="$(mktemp -d)"` : d'autres délégués tournent peut-être en même temps), écris
+   `$d/role.md` (la section « Consignes du rôle », en entier) et `$d/prompt.md` (la tâche et les entrées).
+3. `adorno-llm/scripts/llm-run {flags} --system "$d/role.md" "$d/prompt.md" > "$d/reply.json"`
+4. Vérifie `$d/reply.json` › `.content` : format attendu respecté, chaque `file:line` cité existe. Sinon, une relance avec
    l'erreur ; un second échec ou une route indisponible → fais le travail toi-même et signale-le.
 5. Écris le livrable attendu à partir de la réponse ; note `model` et `usage` dans le compte rendu.
 
@@ -1333,6 +1352,85 @@ avec le skill `adorno-llm` :
 
 {it.body.strip()}
 """
+
+
+def kit_home() -> Path:
+    """~/.adorno, where the scripts read the registry and the runs. No variable moves it (the scripts would not follow)."""
+    return Path.home() / ".adorno"
+
+
+def write_registry() -> Path | None:
+    """The personal registry, read by every script at runtime: ~/.adorno/registry.json, outside every repo, read-only
+    (agents edit it only by going out of their way). Nothing to write without the personal layer."""
+    if not local_on():
+        return None
+    path = kit_home() / "registry.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        path.chmod(0o600)
+    path.write_text(json.dumps(registry(), indent=2, ensure_ascii=False, default=str) + "\n")
+    path.chmod(0o400)
+    return path
+
+
+def git_dir_file(dest: Path, name: str) -> Path | None:
+    """`.git/<name>` of the repository at dest (worktrees included), or None outside git."""
+    res = subprocess.run(["git", "-C", str(dest), "rev-parse", "--git-path", name], capture_output=True, text=True)
+    if res.returncode != 0:
+        return None
+    p = Path(res.stdout.strip())
+    return p if p.is_absolute() else dest / p
+
+
+def is_tracked(dest: Path, path: str) -> bool:
+    return subprocess.run(["git", "-C", str(dest), "ls-files", "--error-unmatch", path],
+                          capture_output=True).returncode == 0
+
+
+EXCLUDE_BEGIN, EXCLUDE_END = "# adorno:begin (bin/kit install: personal, never commit)", "# adorno:end"
+
+
+def exclude_patterns(files: list[str], extra: list[str]) -> list[str]:
+    """Anchored patterns covering what we installed: one per skill folder, one per other file."""
+    out: set[str] = set()
+    for f in files + extra:
+        parts = Path(f).parts
+        if len(parts) >= 3 and parts[1] == "skills":
+            out.add("/" + "/".join(parts[:3]) + "/")
+        else:
+            out.add("/" + f)
+    return sorted(out)
+
+
+def update_exclude(dest: Path, patterns: list[str]) -> None:
+    """Our block in .git/info/exclude: everything we install in a repo is invisible to git, so no `git add -A` (yours
+    or an agent's) can publish your profile, registry or vision."""
+    path = git_dir_file(dest, "info/exclude")
+    if path is None:
+        return
+    cur = path.read_text() if path.exists() else ""
+    cur = re.sub(rf"\n?{re.escape(EXCLUDE_BEGIN)}.*?{re.escape(EXCLUDE_END)}\n?", "\n", cur, flags=re.S).rstrip()
+    if patterns:
+        cur = (cur + "\n\n" if cur else "") + "\n".join([EXCLUDE_BEGIN, *patterns, EXCLUDE_END])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(cur + "\n" if cur else "")
+
+
+def settings_path(dest: Path, global_: bool) -> Path:
+    """Claude Code settings we manage rules in: your user settings for --global, the repo's local settings else."""
+    return Path.home() / ".claude" / "settings.json" if global_ else dest / ".claude" / "settings.local.json"
+
+
+def read_settings(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text() or "{}")
+    except json.JSONDecodeError as e:
+        die(f"{path} is not valid JSON ({e}); fix it before installing — nothing was written")
+    if not isinstance(data, dict):
+        die(f"{path} must contain a JSON object; nothing was written")
+    return data
 
 
 def install_dests(args) -> list[Path]:
@@ -1374,6 +1472,14 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
     MODELS = models_for(None if args.global_ else dest)
     items = apply_models(items, MODELS)
     instructions = render_instructions(cfg, items)
+    in_git = not args.global_ and git_dir_file(dest, "info/exclude") is not None
+    # a project next to a global install takes its instructions from the global one (no double loading), for the
+    # tools that read a global file next to the project's (Claude, Codex, Gemini), and only if that global install has
+    # what this one would add (your personal layer)
+    gstate = load_state(Path.home()) if not args.global_ else {}
+    global_targets = set(gstate.get("targets") or []) & {"claude", "codex", "gemini"}
+    if local_on() and not gstate.get("local"):
+        global_targets = set()
 
     plan: dict[str, tuple[bytes, bool, Path]] = {}
     managed: dict[str, str] = {}
@@ -1386,23 +1492,53 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
             if path in plan and plan[path][0] != data:
                 die(f"targets disagree on {path}; adjust adapters/targets.yaml")
             plan[path] = (data, exe, DIST / target / orig)
+        if target in global_targets:
+            continue
         for path, text in managed_files(cfg, target, instructions, args.global_).items():
             if path in managed and managed[path] != text:
                 managed[path] = instructions  # a full copy wins over a shim
             else:
                 managed.setdefault(path, text)
     managed = {p: t for p, t in managed.items() if p not in plan}
+    if in_git:
+        # never write personal instructions into a file the repo tracks. Claude gets them as a rule file instead; a
+        # shim that would import a tracked AGENTS.md (the repo's, not ours) gets the full text.
+        tracked = [p for p in list(managed) if is_tracked(dest, p)]
+        for path in tracked:
+            managed.pop(path, None)
+        if "claude" in targets and ({"CLAUDE.md", "AGENTS.md"} & set(tracked)):
+            plan[".claude/rules/adorno.md"] = (instructions.encode(), False, DIST / "claude" / "AGENTS.md")
+            managed.pop("CLAUDE.md", None)
+        if "AGENTS.md" in tracked:
+            for path in list(managed):
+                if managed[path] != instructions:
+                    managed[path] = instructions
+            others = [t for t in targets if t not in ("claude", "gemini")]
+            if others:
+                warn(f"AGENTS.md is tracked by the repo: {', '.join(others)} get no adorno instructions here "
+                     f"(install --global so they read them from your home)")
+        for path in tracked:
+            if path not in ("CLAUDE.md", "AGENTS.md"):
+                warn(f"{path} is tracked by the repo: adorno's instructions are not added to it "
+                     f"(install --global so that tool reads them from your home)")
 
     perms = claude_permissions(dest, targets, args.global_)
     env = {str(k): str(v) for k, v in (MODELS.get("claude_env") or {}).items()} \
-        if "claude" in targets and not args.global_ else {}
+        if "claude" in targets and not args.global_ and MODELS.get("external") is not False else {}
+    if args.global_ and any(isinstance(v, dict) and v.get("route") for v in (MODELS.get("agents") or {}).values()):
+        warn("models.agents in your defaults send agents to external routes in every repo; set `external: false` "
+             "on the repos whose data must stay with you")
+    spath = settings_path(dest, args.global_)
+    if perms or env or load_state(dest).get("permissions") or load_state(dest).get("env"):
+        read_settings(spath)  # fail before writing anything
     state = load_state(dest)
     if args.dry_run:
+        shown = str(spath).replace(str(Path.home()), "~", 1) if args.global_ else str(spath.relative_to(dest))
         for k, v in env.items():
-            print(f"  ! .claude/settings.local.json env.{k}={v}")
+            print(f"  ! {shown} env.{k}={v}")
         for kind, rules in perms.items():
             for r in rules:
-                print(f"  ! .claude/settings.local.json permissions.{kind}: {r}")
+                print(f"  ! {shown} permissions.{kind}: {r}")
         stale = sorted(set(state["files"]) - set(plan))
         print(f"would install {len(plan)} file(s) into {dest} for {', '.join(targets)}")
         for p in sorted(plan):
@@ -1415,9 +1551,12 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
 
     new_files: dict[str, str] = {}
     for path, digest in state["files"].items():
+        if path in (state.get("adopted") or []) and path not in plan:
+            continue
         if path not in plan and not remove_owned(dest, path, digest, args.force):
             new_files[path] = digest
     written = skipped = 0
+    adopted = [a for a in state.get("adopted") or [] if a in plan]
     for path, (data, exe, source) in sorted(plan.items()):
         p = dest / path
         ours = path in state["files"]
@@ -1426,6 +1565,11 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
             if not ours and current != data and not args.force:
                 warn(f"skipped {path}: exists and is not managed by kit (use --force)")
                 skipped += 1
+                continue
+            if current == data and not p.is_symlink() and not args.link:
+                if not ours:
+                    adopted.append(path)  # yours already, identical: tracked, but never deleted by uninstall
+                new_files[path] = sha(data)
                 continue
             if ours and not p.is_symlink() and sha(current) != state["files"][path] and not args.force:
                 warn(f"skipped {path}: you modified it since install (use --force)")
@@ -1456,15 +1600,30 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
                             capture_output=True, text=True).stdout.strip() or None
     state_path = dest / STATE
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    state_path.write_text(json.dumps({
+    record = {
         "kit": cfg.manifest.get("name"), "version": cfg.manifest.get("version"), "commit": commit,
         "source": str(ROOT), "targets": targets, "mode": "link" if args.link else "copy",
         "local": local_on(),
         "installed": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "files": new_files, "managed": new_managed,
-        "permissions": apply_permissions(dest, perms, state.get("permissions") or {}),
-        "env": apply_env(dest, env, state.get("env") or {}),
-    }, indent=2) + "\n")
+        "files": new_files, "managed": new_managed, "adopted": sorted(set(adopted)),
+        "permissions": state.get("permissions") or {}, "env": state.get("env") or {},
+    }
+    state_path.write_text(json.dumps(record, indent=2) + "\n")  # files are recorded before anything else can fail
+    record["permissions"] = apply_permissions(spath, perms, state.get("permissions") or {}, dest)
+    record["env"] = apply_env(spath, env, state.get("env") or {}, dest)
+    state_path.write_text(json.dumps(record, indent=2) + "\n")
+    if in_git:
+        # every file holding our block that the repo does not track, yours included: the block is personal
+        ours = [p for p in new_managed if not is_tracked(dest, p)]
+        for p in ours:
+            if not new_managed[p]:
+                warn(f"{p} is yours, untracked, and now holds adorno's personal block: excluded from git")
+        extra = [".adorno/"] + ([".claude/settings.local.json"] if spath.exists() and not args.global_ else [])
+        update_exclude(dest, exclude_patterns(list(new_files) + ours, extra))
+    # the registry follows your personal layer: every install with it rewrites it (a tightened max_level or deny
+    # applies at once, a new repo is known at once)
+    if args.global_ or local_on() or not (kit_home() / "registry.json").exists():
+        write_registry()
     n_rules = sum(len(r) for r in perms.values())
     print(f"installed {written} file(s) + {len(managed)} managed block(s) into {dest} "
           f"for {', '.join(targets)}" + (f", {n_rules} permission rule(s)" if n_rules else "")
@@ -1474,22 +1633,44 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
 
 
 def claude_permissions(dest: Path, targets: list[str], global_: bool) -> dict[str, list[str]]:
-    """`permissions.claude` of the repo at `dest`, to write into its .claude/settings.local.json."""
-    if global_ or "claude" not in targets or not local_on():
+    """`permissions.claude` to write as native Claude Code rules: the defaults (public ones included: no direct
+    `git push` or `gh` writes) for --global, the repo's resolved rules for a repo."""
+    if "claude" not in targets:
         return {}
-    repo = github_repo(dest)
-    conf = resolve_repo(registry(), repo) if repo else None
-    rules = ((conf or {}).get("permissions") or {}).get("claude") or {}
-    return {k: [str(r) for r in rules.get(k) or []] for k in CLAUDE_RULES if rules.get(k)}
+    reg = registry()
+    conf = None
+    if not global_:
+        repo = github_repo(dest)
+        conf = resolve_repo(reg, repo) if repo and local_on() else None
+    if conf is None:
+        conf = reg.get("defaults") or {}
+    rules = (conf.get("permissions") or {}).get("claude") or {}
+    out = {k: [str(r) for r in rules.get(k) or []] for k in CLAUDE_RULES if rules.get(k)}
+    if global_ and out.get("deny"):
+        # your user settings apply to every project, adorno or not: a shell write (git push, gh pr create…) asks
+        # there instead of being refused; edits of adorno's own files stay denied
+        shell = [r for r in out["deny"] if r.startswith("Bash(")]
+        out["deny"] = [r for r in out["deny"] if not r.startswith("Bash(")]
+        out["ask"] = sorted(set(out.get("ask", [])) | set(shell))
+        out = {k: v for k, v in out.items() if v}
+    return out
 
 
-def apply_permissions(dest: Path, wanted: dict[str, list[str]], previous: dict[str, list[str]]) -> dict:
-    """Merge our rules into .claude/settings.local.json (Claude Code's per-user project settings, git-ignored by
-    Claude Code), removing the ones a previous install added and no longer wants. Returns what we own now."""
-    path = dest / ".claude" / "settings.local.json"
+def write_settings(path: Path, data: dict, stop: Path) -> None:
+    if data:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, indent=2) + "\n")
+    elif path.exists():
+        path.unlink()
+        prune(path, stop)
+
+
+def apply_permissions(path: Path, wanted: dict[str, list[str]], previous: dict[str, list[str]], stop: Path) -> dict:
+    """Merge our rules into a Claude Code settings file, removing the ones a previous install added and no longer
+    wants; never touches a rule we did not add. Returns what we own now."""
     if not wanted and not previous:
         return {}
-    data = json.loads(path.read_text()) if path.exists() else {}
+    data = read_settings(path)
     block = data.setdefault("permissions", {})
     owned: dict[str, list[str]] = {}
     for kind in CLAUDE_RULES:
@@ -1503,22 +1684,16 @@ def apply_permissions(dest: Path, wanted: dict[str, list[str]], previous: dict[s
             owned[kind] = add
     if not block:
         data.pop("permissions")
-    if data:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, indent=2) + "\n")
-    elif path.exists():
-        path.unlink()
-        prune(path, dest)
+    write_settings(path, data, stop)
     return owned
 
 
-def apply_env(dest: Path, wanted: dict[str, str], previous: dict[str, str]) -> dict:
-    """`models.claude_env` into .claude/settings.local.json › env (model slots, gateway URL): set ours, remove the
-    ones a previous install set and no longer wants, never touch a variable we did not set. Returns what we own."""
-    path = dest / ".claude" / "settings.local.json"
+def apply_env(path: Path, wanted: dict[str, str], previous: dict[str, str], stop: Path) -> dict:
+    """`models.claude_env` into a Claude Code settings file › env: set ours, remove the ones a previous install set and
+    no longer wants, never touch a variable we did not set. Returns what we own."""
     if not wanted and not previous:
         return {}
-    data = json.loads(path.read_text()) if path.exists() else {}
+    data = read_settings(path)
     block = data.setdefault("env", {})
     for k, v in previous.items():
         if block.get(k) == v and k not in wanted:
@@ -1532,12 +1707,7 @@ def apply_env(dest: Path, wanted: dict[str, str], previous: dict[str, str]) -> d
         owned[k] = v
     if not block:
         data.pop("env")
-    if data:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, indent=2) + "\n")
-    elif path.exists():
-        path.unlink()
-        prune(path, dest)
+    write_settings(path, data, stop)
     return owned
 
 
@@ -1552,11 +1722,18 @@ def uninstall_from(args, dest: Path) -> None:
     state = load_state(dest)
     if not state["files"] and not state["managed"]:
         die(f"nothing installed by kit in {dest}")
-    kept = {p: d for p, d in state["files"].items() if not remove_owned(dest, p, d, args.force)}
+    adopted = set(state.get("adopted") or [])
+    kept = {p: d for p, d in state["files"].items() if p not in adopted and not remove_owned(dest, p, d, args.force)}
     for path, created in state["managed"].items():
         remove_block(dest / path, created, dest)
-    apply_permissions(dest, {}, state.get("permissions") or {})
-    apply_env(dest, {}, state.get("env") or {})
+    spath = settings_path(dest, dest == Path.home())
+    apply_permissions(spath, {}, state.get("permissions") or {}, dest)
+    apply_env(spath, {}, state.get("env") or {}, dest)
+    if dest != Path.home():
+        update_exclude(dest, [])
+    elif (kit_home() / "registry.json").exists():
+        (kit_home() / "registry.json").chmod(0o600)
+        (kit_home() / "registry.json").unlink()
     sp = dest / STATE
     if kept:
         state.update(files=kept, managed={}, permissions={}, env={})
@@ -1609,7 +1786,10 @@ def main() -> None:
         p.set_defaults(fn=fn)
 
     args = ap.parse_args()
-    args.fn(args)
+    try:
+        args.fn(args)
+    except BrokenPipeError:  # `kit list | head`
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
 
 
 if __name__ == "__main__":

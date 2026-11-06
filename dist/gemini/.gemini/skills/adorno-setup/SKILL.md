@@ -1,6 +1,6 @@
 ---
 name: adorno-setup
-description: Set up adorno for its owner — mode `profile` builds a fine-grained profile from a corpus of your own writing (GitHub reviews and diffs, Slack messages, Notion pages, any files you point to) and writes who you are, how you work on tech, product and code, how you write and your vision into your personal layer (local/, git-ignored); mode `repo` declares the current repo (or a whole workspace) with its reviewers, team, context, permissions and voice. Use on first use of adorno, when an agent reports that the profile or the voice is not set up, when a repo is "not registered", or when the owner asks to change their profile, voice, vision or a repo's settings.
+description: Installe adorno pour son propriétaire — le mode `profile` construit un profil fin à partir de ses propres écrits (reviews et diffs GitHub, messages Slack, pages Notion, fichiers indiqués) et écrit qui il est, comment il travaille en tech, produit et code, comment il écrit et sa vision ; le mode `repo` déclare le repo courant (ou tout un workspace) avec ses relecteurs, son équipe, son contexte, ses droits et sa voix. Tout va dans la couche personnelle (local/, ignorée par git). À utiliser au premier usage, quand un agent signale que le profil ou la voix manque, quand un repo n'est pas déclaré, ou pour changer profil, voix, vision ou réglages d'un repo.
 ---
 
 # Set up adorno

@@ -9,6 +9,8 @@ Entrée : la demande de l'utilisateur. Suis les étapes dans l'ordre.
 
 Entrée : la demande de l’utilisateur
 
+**Exécution** — avant toute chose : `adorno-github/scripts/run-begin --workflow workflow:issue:fix --mode auto --level <niveau validé au point de contrôle 1> --repo owner/repo` ; garde `id` et `dir` (le dossier d'exécution). Appelé par un autre workflow qui a déjà ouvert la sienne : réutilise-la. Toujours, même après un échec : `run-end <id>`. Sans exécution ouverte, les scripts refusent toute écriture.
+
 1. `adorno-github/scripts/issue-fetch la demande de l’utilisateur` → `issue.json` dans un nouveau dossier `.agent-run/`.
 2. `agent:fix:investigate` reproduit et écrit `diagnosis.md`. Pas de repro possible → commentaire-brouillon en
    anglais demandant ce qui manque, rendu à l'utilisateur ; arrêt.

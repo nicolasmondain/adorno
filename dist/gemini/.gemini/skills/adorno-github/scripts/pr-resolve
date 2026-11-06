@@ -8,6 +8,7 @@ parse_ref "${1:-}"
 thread="${2:-}"
 [ -n "$thread" ] || die "usage: pr-resolve owner/repo#N THREAD_ID" "$E_USAGE"
 require_level "$REPO" L3 resolve
+thread_of "$REPO" "$NUM" "$thread"
 
 policy="$(conf_get "$REPO" resolve_threads)"
 [ "$policy" = "author" ] || die "$REPO: threads are resolved by the reviewer (resolve_threads: ${policy:-unset})" "$E_POLICY"

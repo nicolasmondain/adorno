@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Usage: run-end ID
+# Ends a run started with run-begin: its grant is withdrawn; its run folder stays, with the deliverables.
+. "$(dirname "$0")/_lib.sh"
+
+id="${1:-}"
+[[ "$id" =~ ^[0-9T]+-[0-9]+-[0-9]+$ ]] || die "usage: run-end ID (as printed by run-begin)" "$E_USAGE"
+f="$(runs_dir)/$id.json"
+[ -f "$f" ] || die "no active run $id (already ended or expired)" "$E_USAGE"
+jq '{ended: .id, workflow, dir}' "$f"
+rm -f "$f"

@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Usage: run-begin --workflow ID --mode report|draft|pending|comment|auto --level L0..L3 --repo owner/repo [--repo …]
+#                  [--deny a,b] [--dry-run] [--dir PATH] [--ttl 2h]
+# Starts a run: records what this workflow execution is granted, in ~/.adorno/runs/active/<id>.json, and creates its
+# run folder (PATH, e.g. <workspace>/.agent-run/review-<date>, else under ~/.adorno/runs/). Every write script reads
+# it (require_level): a run applies only to the repos it names (at least one); no run for a repo → L0, every write
+# there is refused; several runs for a repo (two sessions) → the strictest wins. Prints {id, dir, level, deny, dry_run, repos, expires_at}.
+# End with run-end.
+# Modes have fixed floors: report → L0 and dry run; draft → push denied and dry run (nothing leaves the machine).
+. "$(dirname "$0")/_lib.sh"
+
+workflow="" mode="" level="" deny="" dry=false ttl="2h" dir=""; repos=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --workflow) workflow="${2:-}"; shift 2 ;;
+    --mode) mode="${2:-}"; shift 2 ;;
+    --level) level="${2:-}"; shift 2 ;;
+    --deny) deny="${2:-}"; shift 2 ;;
+    --dry-run) dry=true; shift ;;
+    --repo) split_repo "${2:-}"; repos+=("$REPO"); shift 2 ;;
+    --ttl) ttl="${2:-}"; shift 2 ;;
+    --dir) dir="${2:-}"; shift 2 ;;
+    *) die "unknown option $1" "$E_USAGE" ;;
+  esac
+done
+[[ "$workflow" =~ ^[a-z0-9:_-]+$ ]] || die "--workflow: a workflow id like workflow:pr:review" "$E_USAGE"
+case "$mode" in report|draft|pending|comment|auto) ;; *) die "--mode report, draft, pending, comment or auto" "$E_USAGE" ;; esac
+case "$level" in
+  L0|L1|L2|L3) ;;
+  L4) die "L4 (merge, tag, deploy) is never granted to a run" "$E_LEVEL" ;;
+  *) die "--level L0..L3" "$E_USAGE" ;;
+esac
+[ "${#repos[@]}" -gt 0 ] || die "--repo owner/repo is required (once per repo the run writes to)" "$E_USAGE"
+[[ "$deny" =~ ^[a-z_,]*$ ]] || die "--deny: comma-separated actions" "$E_USAGE"
+[[ "$ttl" =~ ^[0-9]+[mh]$ ]] || die "--ttl: like 90m or 6h" "$E_USAGE"
+
+case "$mode" in
+  report) level="L0"; dry=true ;;
+  draft) dry=true; deny="${deny:+$deny,}push" ;;
+esac
+
+id="$(date -u +%Y%m%dT%H%M%S)-$$-$RANDOM"
+slug="$(printf '%s' "$workflow" | sed 's/^workflow://; s/:/-/g')"
+[ -n "$dir" ] || dir="$(kit_home)/runs/$slug-$id"
+mkdir -p "$dir" "$(runs_dir)"
+case "$ttl" in *m) secs=$(( ${ttl%m} * 60 )) ;; *h) secs=$(( ${ttl%h} * 3600 )) ;; esac
+jq -n --arg id "$id" --arg w "$workflow" --arg m "$mode" --arg l "$level" --arg d "$deny" --argjson dry "$dry" \
+  --arg dir "$dir" --argjson exp "$(( $(date +%s) + secs ))" --args '
+  {id: $id, workflow: $w, mode: $m, level: $l, deny: ($d | split(",") | map(select(. != "")) | unique),
+   dry_run: $dry, repos: $ARGS.positional, dir: $dir, started: (now | todate), expires: $exp}' \
+  "${repos[@]}" >"$(runs_dir)/.$id.tmp"
+mv "$(runs_dir)/.$id.tmp" "$(runs_dir)/$id.json"
+jq '. + {expires_at: (.expires | todate)}' "$(runs_dir)/$id.json"

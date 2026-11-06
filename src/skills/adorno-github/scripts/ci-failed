@@ -6,6 +6,7 @@
 
 parse_ref "${1:-}"
 lines="${2:-200}"
+[[ "$lines" =~ ^[0-9]+$ ]] || die "lines must be a number" "$E_USAGE"
 repo_conf "$REPO" >/dev/null
 
 sha="$(gh pr view "$NUM" -R "$REPO" --json headRefOid --jq .headRefOid)"

@@ -9,7 +9,7 @@ filter="${1:-}"
 [ -z "$filter" ] || split_repo "$filter"
 me="$(viewer_login)"
 
-query='query($q:String!, $me:String!){ search(query:$q, type:ISSUE, first:50){ nodes{ ... on PullRequest{
+query='query($q:String!, $me:String!){ search(query:$q, type:ISSUE, first:100){ issueCount nodes{ ... on PullRequest{
   number title url isDraft updatedAt additions deletions changedFiles headRefOid
   author{ login } repository{ nameWithOwner }
   reviewRequests(first:20){ nodes{ requestedReviewer{ ... on User{login} ... on Team{slug} } } }
@@ -19,8 +19,11 @@ query='query($q:String!, $me:String!){ search(query:$q, type:ISSUE, first:50){ n
 q="is:pr is:open review-requested:@me archived:false"
 [ -z "$filter" ] || q="$q repo:$filter"
 
-gh api graphql -f query="$query" -F q="$q" -F me="$me" \
-| jq --arg me "$me" --slurpfile reg "$REGISTRY" '
+raw="$(gh api graphql -f query="$query" -F q="$q" -F me="$me")"
+reg="$(jq -r '.data.search.nodes[].repository.nameWithOwner' <<<"$raw" | sort -u | registered_map)"
+total="$(jq '.data.search.issueCount // 0' <<<"$raw")"
+[ "$total" -le 100 ] || log "warning: $total PRs match, only the first 100 are listed (narrow with owner/repo)"
+jq --arg me "$me" --argjson reg "$reg" '
   [ .data.search.nodes[]
     | .repository.nameWithOwner as $repo
     | [.reviewRequests.nodes[].requestedReviewer | (.login // .slug)] as $req
@@ -33,5 +36,5 @@ gh api graphql -f query="$query" -F q="$q" -F me="$me" \
         myLastReview: (if $mine then {state: $mine.state, at: $mine.submittedAt} else null end),
         reviewedHead: ($mine != null and $mine.commit.oid == .headRefOid),
         pendingReview: ((.pending.totalCount // 0) > 0),
-        registered: ($reg[0].repos | has($repo)) } ]
-  | sort_by(.reviewedHead, .isDraft, .updatedAt)'
+        registered: ($reg[$repo] // false) } ]
+  | sort_by(.reviewedHead, .isDraft, .updatedAt)' <<<"$raw"

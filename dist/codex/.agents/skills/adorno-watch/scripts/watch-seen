@@ -16,13 +16,13 @@ case "$cmd" in
   list)  jq '.seen | keys' "$f" ;;
   last)  jq '.last_run' "$f" ;;
   touch)
-    jq --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.last_run = $t' "$f" >"$f.tmp" && mv "$f.tmp" "$f"
+    locked_update "$f" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.last_run = $t'
     jq '{last_run}' "$f" ;;
   mark)
     [ $# -gt 0 ] || die "usage: watch-seen mark KEY ID..." "$E_USAGE"
-    jq --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --args '
+    locked_update "$f" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --args '
       reduce $ARGS.positional[] as $id (.; .seen[$id] = $t)
-      | .seen |= (to_entries | sort_by(.value) | .[-5000:] | from_entries)' "$@" <"$f" >"$f.tmp" && mv "$f.tmp" "$f"
+      | .seen |= (to_entries | sort_by(.value) | .[-5000:] | from_entries)' "$@"
     jq -n --args '{marked: $ARGS.positional}' "$@" ;;
   filter)
     src="${1:--}"
