@@ -7,7 +7,7 @@ Reads the hook event on stdin. A command that pushes, publishes on GitHub, edits
 HOME for an adorno script gets `deny` (in a repo install) or `ask` (in a global install, which applies to every
 project). Permission rules only compare the start of a command; this reads it the way a shell does: chained
 commands (; && || |), subshells, $( … ) and backticks, `bash -c '…'`, `eval`, `env`/`sudo`/`command` wrappers,
-`git -C dir`, git aliases, quotes; it reads the code given to python -c / node -e and the local scripts a command
+`git -C dir`, git aliases, quotes, heredocs; it reads the code given to python -c / node -e and the local scripts a command
 runs (./x.sh, bash x.sh, python3 x.py). A command it cannot read (a variable as program, unbalanced quotes) asks, and
 so does a bug in the guard. Anything else passes untouched (no output, exit 0).
 """
@@ -171,6 +171,33 @@ MESSAGES.update({
 })
 
 
+HEREDOC = re.compile(r"(?<!<)<<(-?)[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2")
+
+
+def heredocs(command):
+    """-> (the command without its heredoc bodies, [(program fed by the heredoc, body, quoted)]). A body is the stdin of
+    one command: data for `cat > f`, code for a shell or an interpreter (python3 - <<EOF), so the caller checks it
+    accordingly. An unquoted body is still expanded by the shell ($( … ) inside it runs)."""
+    lines, out, bodies, i = command.split("\n"), [], [], 0
+    while i < len(lines):
+        line = lines[i]; out.append(line); i += 1
+        for m in HEREDOC.finditer(line):
+            tabs, quoted, delim = m.group(1) == "-", bool(m.group(2)), m.group(3)
+            body = []
+            while i < len(lines) and (lines[i].lstrip("\t") if tabs else lines[i]) != delim:
+                body.append(lines[i]); i += 1
+            if i >= len(lines):
+                raise ValueError("unterminated heredoc")
+            i += 1
+            segment = re.split(r"[;&|(]", line[:m.start()])[-1]
+            try:
+                env, ws = strip(words(segment))
+            except ValueError:
+                ws = []
+            bodies.append((program(ws[0]) if ws else "", "\n".join(body), quoted))
+    return "\n".join(out), bodies
+
+
 def substitutions(command):
     """The commands inside $( … ) and ` … ` (nested ones included), which the shell runs before the rest."""
     out, i, n = [], 0, len(command)
@@ -260,6 +287,16 @@ def check(command, depth=0, cwd=None):
     """-> a MESSAGES key, or None. Raises ValueError on a command it cannot read."""
     if depth > 4:
         raise ValueError("nested too deep")
+    command, bodies = heredocs(command)
+    for prog, body, quoted in bodies:
+        if prog in SHELLS:
+            found = check(body, depth + 1, cwd)
+        elif prog in INTERPRETERS:
+            found = scan_code(body)
+        else:
+            found = None if quoted else next(filter(None, (check(x, depth + 1, cwd) for x in substitutions(body))), None)
+        if found:
+            return found
     for inner in substitutions(command):
         found = check(inner, depth + 1, cwd)
         if found:
