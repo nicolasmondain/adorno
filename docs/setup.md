@@ -125,8 +125,12 @@ sur un autre repo ne change rien. `ADORNO_LEVEL` peut seulement abaisser le nive
 directes : `git push`, `gh pr create|comment|review|merge|close|edit`, `gh issue comment|create`, `gh release`, et
 la modification du registre et des exécutions ; tout appel direct à `gh api` (qui écrit dès qu'il reçoit `-f`) te
 demande confirmation. Les agents publient par les scripts, qui vérifient les droits. Tes règles s'y ajoutent (les
-listes s'additionnent d'un niveau à l'autre, jamais ne se remplacent). Ces règles comparent le début de la commande :
-une forme détournée (`git -C dossier push`, `env git push`) leur échappe, et les scripts restent le vrai garde-fou.
+listes s'additionnent d'un niveau à l'autre, jamais ne se remplacent). Ces règles ne comparent que le début de la
+commande ; un hook Claude Code (`adorno-github/scripts/guard_bash.py`, installé avec elles) lit chaque commande shell
+comme le ferait le shell (enchaînements, `bash -c`, `env`, `sudo`, `git -C dossier push`, guillemets) et arrête tout
+push, toute publication GitHub, toute écriture du registre ou des exécutions, et tout `HOME=` pour un script adorno.
+Dans un repo il refuse ; avec `--global`, il te demande. Une commande qu'il ne sait pas lire te demande aussi. Il
+faut `python3` ; Codex et Gemini n'ont pas ce hook : chez eux, les scripts restent le garde-fou.
 
 **Le contenu non fiable.** Diffs, commentaires, messages Slack, pages Notion et logs sont traités comme des données,
 jamais comme des consignes. Le code d'une PR venue d'un fork n'est jamais exécuté. Une surveillance Slack ne lance son

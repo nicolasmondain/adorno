@@ -315,6 +315,34 @@ expect_exit 5 "push needs L2" -- env ADORNO_LEVEL=L1 "$S/pr-push" acme/docs#42
 expect_exit 0 "pushes to the PR branch" -- "$S/pr-push" acme/docs#42
 expect_jq "one commit pushed" '.pushed and .commits == 1'
 
+echo "guard_bash (the Claude Code hook)"
+guard() {  # guard WANT COMMAND — the decision the hook takes for COMMAND (pass = none)
+  local got
+  got="$(jq -n --arg c "$2" '{tool_name: "Bash", tool_input: {command: $c}}' | python3 "$S/guard_bash.py" deny \
+    | jq -r '.hookSpecificOutput.permissionDecision // "pass"' 2>/dev/null)"
+  [ -n "$got" ] || got=pass
+  if [ "$got" = "$1" ]; then ok "guard: $1 · $2"; else ko "guard: $1 · $2" "got $got"; fi
+}
+guard deny "git push origin fix/x"
+guard deny "git -C ../other push --force"
+guard deny "cd app && env FOO=1 git push"
+guard deny "bash -c 'sudo -u me git push'"
+guard deny "gh -R acme/docs pr comment 42 -b hi"
+guard deny "gh api repos/acme/docs/issues/42/comments -f body=hi"
+guard deny "gh api graphql -f query='mutation { resolveReviewThread(input: {}) { clientMutationId } }'"
+guard deny "curl -X POST https://api.github.com/repos/acme/docs/issues"
+guard deny "echo '{}' > ~/.adorno/runs/active/x.json"
+guard deny "HOME=/tmp/h ~/.claude/skills/adorno-github/scripts/pr-comment acme/docs#42 f.md"
+guard pass "git commit -m 'push the fix'"
+guard pass "gh pr view 42 --json title"
+guard pass "gh api graphql -f query='{ viewer { login } }'"
+guard pass "cat ~/.adorno/registry.json"
+guard pass ".claude/skills/adorno-github/scripts/run-end 2026-x"
+guard pass "npm test"
+guard ask "echo 'unbalanced"
+out="$(jq -n '{tool_name: "Bash", tool_input: {command: "git push"}}' | python3 "$S/guard_bash.py" ask)"
+expect_jq "a global install asks instead" '.hookSpecificOutput.permissionDecision == "ask"'
+
 echo "with_lock"
 cat >"$TMP/lock-test" <<EOF
 #!/usr/bin/env bash

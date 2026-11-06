@@ -195,7 +195,8 @@ n'écrit jamais dans un `CLAUDE.md` ou `AGENTS.md` suivi par le repo (Claude re�
 et à côté d'une installation globale (avec ta couche personnelle) il laisse les instructions à celle-ci pour Claude,
 Codex et Gemini. Ton registre complet vit dans `~/.adorno/registry.json`, hors de tout repo, en lecture seule ; chaque
 installation avec ta couche le réécrit. Avec `--global`, les écritures directes (`git push`, `gh pr …`) te demandent
-confirmation dans tous tes projets ; dans un repo installé, elles sont refusées. Un fichier de réglages Claude Code invalide arrête
+confirmation dans tous tes projets ; dans un repo installé, elles sont refusées. Un hook Claude Code lit chaque
+commande shell en entier, si bien que `git -C x push`, `bash -c '…'` ou `gh api -f` ne passent pas non plus. Un fichier de réglages Claude Code invalide arrête
 l'installation avant toute écriture.
 
 | | Skills | Agents | Workflows | Instructions |

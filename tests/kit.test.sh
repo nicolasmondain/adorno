@@ -81,6 +81,7 @@ check "the registry lives in the kit home, read-only" '[ "$(ls -l "$ADORNO_HOME/
 check "no personal registry inside the repo" '! grep -rq "janedoe" "$A/.claude/skills/adorno-github/repos.json"'
 check "your own rules and keys are kept" 'jq -e ".model == \"x\" and (.permissions.allow | index(\"Bash(make:*)\")) != null" "$A/.claude/settings.local.json" >/dev/null'
 check "the repo's and the default rules are added" 'jq -e "(.permissions.allow | index(\"Bash(npm test:*)\")) != null and (.permissions.deny | index(\"Bash(git push:*)\")) != null" "$A/.claude/settings.local.json" >/dev/null'
+check "the guard hook refuses direct writes in this repo" 'jq -e "[.hooks.PreToolUse[].hooks[].command | select(contains(\"guard_bash.py\") and endswith(\" deny\"))] | length == 1" "$A/.claude/settings.local.json" >/dev/null'
 check "tiers become Claude models" 'grep -q "^model: opus" "$A/.claude/agents/adorno.md"'
 check "the vision is in every agent" 'grep -q "owner.s vision" "$A/.claude/agents/adorno-agent-fix-patch.md"'
 check "the private profile is installed" '[ -f "$A/.claude/skills/adorno-profile/references/product.md" ] || [ -d "$A/.claude/skills/adorno-profile" ]'
@@ -133,11 +134,13 @@ echo "uninstall"
 expect_exit 0 "uninstall the repo" -- "${KIT[@]}" uninstall "$A" --force
 check "agents gone" '[ ! -e "$A/.claude/agents" ]'
 check "exclude block gone" '! grep -q "adorno:begin" "$(git -C "$A" rev-parse --git-path info/exclude)"'
+check "the hook is gone" '! jq -e ".hooks" "$A/.claude/settings.local.json" >/dev/null'
 check "your settings are back as they were" 'jq -e ".model == \"x\" and .permissions.allow == [\"Bash(make:*)\"] and (.permissions.deny == null)" "$A/.claude/settings.local.json" >/dev/null'
 
 echo "global install"
 expect_exit 0 "install --global" -- "${KIT[@]}" install --global --targets claude
 check "in your user settings, direct shell writes ask (they apply to every project)" 'jq -e "(.permissions.ask | index(\"Bash(gh pr comment:*)\")) != null and ((.permissions.deny // []) | index(\"Bash(gh pr comment:*)\")) == null" "$HOME/.claude/settings.json" >/dev/null'
+check "the global guard hook asks" 'jq -e "[.hooks.PreToolUse[].hooks[].command | select(contains(\"guard_bash.py\") and endswith(\" ask\"))] | length == 1" "$HOME/.claude/settings.json" >/dev/null'
 check "... and edits of adorno's files stay denied" 'jq -e "(.permissions.deny | index(\"Edit(~/.adorno/registry.json)\")) != null" "$HOME/.claude/settings.json" >/dev/null'
 expect_exit 0 "dry run of --global" -- "${KIT[@]}" install --global --targets claude --dry-run
 check "... names your user settings" 'grep -q "~/.claude/settings.json" <<<"$out"'

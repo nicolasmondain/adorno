@@ -1529,7 +1529,8 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
         warn("models.agents in your defaults send agents to external routes in every repo; set `external: false` "
              "on the repos whose data must stay with you")
     spath = settings_path(dest, args.global_)
-    if perms or env or load_state(dest).get("permissions") or load_state(dest).get("env"):
+    hook = guard_hook(dest, args.global_, plan) if "claude" in targets else None
+    if perms or env or hook or load_state(dest).get("permissions") or load_state(dest).get("env") or load_state(dest).get("hook"):
         read_settings(spath)  # fail before writing anything
     state = load_state(dest)
     if args.dry_run:
@@ -1539,6 +1540,8 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
         for kind, rules in perms.items():
             for r in rules:
                 print(f"  ! {shown} permissions.{kind}: {r}")
+        if hook:
+            print(f"  ! {shown} hooks.PreToolUse (Bash): {hook}")
         stale = sorted(set(state["files"]) - set(plan))
         print(f"would install {len(plan)} file(s) into {dest} for {', '.join(targets)}")
         for p in sorted(plan):
@@ -1606,11 +1609,12 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
         "local": local_on(),
         "installed": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "files": new_files, "managed": new_managed, "adopted": sorted(set(adopted)),
-        "permissions": state.get("permissions") or {}, "env": state.get("env") or {},
+        "permissions": state.get("permissions") or {}, "env": state.get("env") or {}, "hook": state.get("hook"),
     }
     state_path.write_text(json.dumps(record, indent=2) + "\n")  # files are recorded before anything else can fail
     record["permissions"] = apply_permissions(spath, perms, state.get("permissions") or {}, dest)
     record["env"] = apply_env(spath, env, state.get("env") or {}, dest)
+    record["hook"] = apply_hook(spath, hook, state.get("hook"), dest)
     state_path.write_text(json.dumps(record, indent=2) + "\n")
     if in_git:
         # every file holding our block that the repo does not track, yours included: the block is personal
@@ -1688,6 +1692,39 @@ def apply_permissions(path: Path, wanted: dict[str, list[str]], previous: dict[s
     return owned
 
 
+GUARD = ".claude/skills/adorno-github/scripts/guard_bash.py"
+
+
+def guard_hook(dest: Path, global_: bool, plan: dict) -> str | None:
+    """The PreToolUse hook command that stops direct writes (git push, gh pr comment, gh api -f…) however they are
+    written: `deny` in a repo, `ask` in your user settings (they apply to every project). None without Claude."""
+    if GUARD not in plan:
+        return None
+    return f'python3 "{dest / GUARD}" {"ask" if global_ else "deny"}'
+
+
+def apply_hook(path: Path, wanted: str | None, previous: str | None, stop: Path) -> str | None:
+    """Our Bash PreToolUse hook into a Claude Code settings file: add it, remove the one a previous install added,
+    never touch a hook we did not add. Returns the command we own."""
+    if not wanted and not previous:
+        return None
+    data = read_settings(path)
+    hooks = data.setdefault("hooks", {})
+    entries = [e for e in hooks.get("PreToolUse") or []
+               if not (isinstance(e, dict) and any(h.get("command") in (previous, wanted)
+                                                   for h in e.get("hooks") or [] if isinstance(h, dict)))]
+    if wanted:
+        entries.append({"matcher": "Bash", "hooks": [{"type": "command", "command": wanted, "timeout": 10}]})
+    if entries:
+        hooks["PreToolUse"] = entries
+    else:
+        hooks.pop("PreToolUse", None)
+    if not hooks:
+        data.pop("hooks")
+    write_settings(path, data, stop)
+    return wanted
+
+
 def apply_env(path: Path, wanted: dict[str, str], previous: dict[str, str], stop: Path) -> dict:
     """`models.claude_env` into a Claude Code settings file › env: set ours, remove the ones a previous install set and
     no longer wants, never touch a variable we did not set. Returns what we own."""
@@ -1729,6 +1766,7 @@ def uninstall_from(args, dest: Path) -> None:
     spath = settings_path(dest, dest == Path.home())
     apply_permissions(spath, {}, state.get("permissions") or {}, dest)
     apply_env(spath, {}, state.get("env") or {}, dest)
+    apply_hook(spath, None, state.get("hook"), dest)
     if dest != Path.home():
         update_exclude(dest, [])
     elif (kit_home() / "registry.json").exists():
@@ -1736,7 +1774,7 @@ def uninstall_from(args, dest: Path) -> None:
         (kit_home() / "registry.json").unlink()
     sp = dest / STATE
     if kept:
-        state.update(files=kept, managed={}, permissions={}, env={})
+        state.update(files=kept, managed={}, permissions={}, env={}, hook=None)
         sp.write_text(json.dumps(state, indent=2) + "\n")
     else:
         sp.unlink()

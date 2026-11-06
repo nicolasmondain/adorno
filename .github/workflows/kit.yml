@@ -17,6 +17,6 @@ jobs:
       - name: Validate sources and make sure dist/ is up to date
         run: ./bin/kit check --dist
       - name: Lint the scripts
-        run: shellcheck -x -s bash -P SCRIPTDIR $(find src/skills -path '*/scripts/*' -type f ! -name '*.jq') tests/fake-gh tests/fake-curl tests/*.sh
+        run: shellcheck -x -s bash -P SCRIPTDIR $(find src/skills -path '*/scripts/*' -type f ! -name '*.jq' ! -name '*.py') tests/fake-gh tests/fake-curl tests/*.sh
       - name: Test the scripts (fake gh, fake curl, fixtures)
         run: for t in tests/*.test.sh; do "$t" || exit 1; done
