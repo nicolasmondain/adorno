@@ -21,7 +21,7 @@ all="${args[*]}"
 respond() {
   local body; body="$(cat)"
   if [ "$paginate" = 1 ] && [ "$(jq -r 'type' <<<"$body")" = array ]; then
-    jq -c '[_nwise(2)] | if length == 0 then [[]] else . end | .[]' <<<"$body" | while IFS= read -r page; do
+    jq -c '[range(0; length; 2) as $i | .[$i:$i+2]] | if length == 0 then [[]] else . end | .[]' <<<"$body" | while IFS= read -r page; do
       if [ -n "$jq_expr" ]; then jq -r "$jq_expr" <<<"$page"; else printf '%s\n' "$page"; fi
     done
   elif [ -n "$jq_expr" ]; then jq -r "$jq_expr" <<<"$body"
