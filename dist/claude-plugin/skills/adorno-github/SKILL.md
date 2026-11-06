@@ -14,10 +14,10 @@ et rendent du JSON sur stdout ; les messages vont sur stderr. Prérequis : `gh` 
 | Script | Fait | Niveau |
 | --- | --- | --- |
 | `repo-conf owner/repo` | réglages fusionnés du repo (base, commandes, politique de threads…) | L0 |
-| `pr-status [owner/repo]` | toutes tes PRs ouvertes : review, CI, threads, `blocker` | L0 |
+| `pr-status [--ready] [owner/repo]` | toutes tes PRs ouvertes : review, CI, threads, `blocker` ; `--ready` : sans les drafts, la plus récente d'abord | L0 |
 | `pr-review-requested [owner/repo]` | PRs où ta review est demandée (directe ou par équipe), `reviewedHead` | L0 |
 | `pr-feedback-fetch owner/repo#N` | threads, commentaires et résumés de review à traiter (`needsReply`, `bot`), CI | L0 |
-| `pr-workspace owner/repo#N` | workspace dédié sous `~/.adorno` (clone à part, worktree au commit de tête) | L0 * |
+| `pr-workspace owner/repo#N` | ta PR, lancé depuis ton clone : le worktree de sa branche (créé s'il n'existe pas) ; sinon workspace dédié sous `~/.adorno` (clone à part, détaché au commit de tête) | L0 * |
 | `pr-workspace --clean` | supprime les workspaces des PRs fermées | L0 * |
 | `pr-areas owner/repo FICHIER_DIFF` | zones de code touchées (front, back, mongodb…) et relecteurs à appeler | L0 |
 | `pr-diff owner/repo#N` | métadonnées + diff sauvegardé dans un fichier | L0 |
@@ -54,8 +54,12 @@ et rendent du JSON sur stdout ; les messages vont sur stderr. Prérequis : `gh` 
 - **Langue** : les textes publiés sur GitHub (réponses, descriptions de PR) sont dans `reply_language` du repo
   (`en` par défaut), quelle que soit la langue de la conversation.
 - **Fichiers de travail** : chaque script a son propre dossier temporaire, lisible par toi seul (`~/.adorno/tmp/<pid>`, purgé après un jour) ; les livrables vont dans le dossier d'exécution que rend `run-begin`.
-- **Workspaces** : un par PR, `~/.adorno/workspaces/<owner>__<repo>/pr-<N>`, détaché au commit de tête. `.agent-run/`
-  y est exclu de git. `pr-workspace` refuse de déplacer un workspace qui contient du travail non poussé.
+- **Workspaces** : ta PR (pas un fork), `pr-workspace` lancé depuis ton clone du repo → le worktree où sa branche est
+  extraite, créé sous `~/.adorno/worktrees/<owner>__<repo>/<branche>` s'il n'y en a pas, avancé (fast-forward) à la
+  branche sur GitHub ; `pr-push` pousse depuis lui. Toute autre PR, ou hors de ton clone → un par PR,
+  `~/.adorno/workspaces/<owner>__<repo>/pr-<N>`, détaché au commit de tête. `worktree` (`branch` | `detached`) dans la
+  sortie dit lequel. `.agent-run/` y est exclu de git. `pr-workspace` refuse un workspace qui contient des changements
+  non commités ou des commits absents de GitHub.
 - **Signature** : si `reply_footer` est défini pour le repo, il est ajouté à tout texte publié.
 
 ## Codes de sortie

@@ -155,6 +155,33 @@ registered_map() {
 # Where dedicated clones and PR workspaces live (outside every working copy of the user).
 workspace_dir() { printf '%s/workspaces/%s__%s/pr-%s' "$(kit_home)" "$OWNER" "$NAME" "$NUM"; }
 cache_dir() { printf '%s/cache/%s__%s.git' "$(kit_home)" "$OWNER" "$NAME"; }
+# Your own PR: the path of its branch worktree, written by pr-workspace and read by pr-push.
+workspace_link() { printf '%s/workspaces/%s__%s/pr-%s.link' "$(kit_home)" "$OWNER" "$NAME" "$NUM"; }
+
+# local_clone owner/repo -> the git common dir of the repository in the current directory when its origin is
+# owner/repo (fetch URL and push URL); nothing otherwise
+local_clone() {
+  local url want
+  url="$(git config --get remote.origin.url 2>/dev/null)" || return 0
+  want="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  [ "$( (repo_of_url "$url") 2>/dev/null | tr '[:upper:]' '[:lower:]')" = "$want" ] || return 0
+  [ "$( (push_repo .) 2>/dev/null | tr '[:upper:]' '[:lower:]')" = "$want" ] || return 0
+  git rev-parse --path-format=absolute --git-common-dir
+}
+
+# branch_worktree GIT_DIR BRANCH -> the worktree where BRANCH is checked out, or nothing
+branch_worktree() {
+  git -C "$1" worktree list --porcelain \
+    | awk -v b="branch refs/heads/$2" '/^worktree /{p=substr($0,10)} $0 == b {print p; exit}'
+}
+
+# exclude_agent_run DIR — run artefacts live in the workspace but are never part of the PR
+exclude_agent_run() {
+  local common
+  common="$(git -C "$1" rev-parse --path-format=absolute --git-common-dir)"
+  mkdir -p "$common/info"
+  grep -qx '.agent-run/' "$common/info/exclude" 2>/dev/null || echo '.agent-run/' >>"$common/info/exclude"
+}
 
 conf_get() { repo_conf "$1" | jq -r --arg k "$2" '.[$k] // empty | if type == "array" then join(",") else tostring end'; }
 

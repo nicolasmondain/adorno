@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# Usage: pr-workspace owner/repo#N        create or refresh the PR's dedicated workspace
+# Usage: pr-workspace owner/repo#N        create or refresh the PR's workspace
 #        pr-workspace --clean             remove workspaces of closed or merged PRs
 #
-# A workspace is a git worktree of a dedicated clone under ~/.adorno, checked out
-# detached at the PR head. It never touches your own working copies, so agents can read, build and
-# test the PR in isolation. Prints JSON: dir, head and base, diffBase (merge-base), the repo's
-# commands, whether the PR is yours. Refuses to move a workspace that has unpushed work. A PR from a fork is
-# `untrusted`: its code is read, never run (review_checks forced to none).
+# Your own PR, run from your clone of the repo (its origin is owner/repo): the workspace is the worktree where the PR
+# branch is checked out, created under ~/.adorno/worktrees/<owner>__<repo>/<branch> when there is none. It is
+# fast-forwarded to the branch on GitHub; refused while it holds uncommitted changes or commits not on GitHub (yours or
+# a previous pass: push or drop them first). pr-push pushes from it.
+# Anyone else's PR, a fork, or no clone of the repo in the current directory: a git worktree of a dedicated clone under
+# ~/.adorno, detached at the PR head, never your own working copies. Refuses to move it while it has unpushed work.
+# Prints JSON: dir, worktree (branch | detached), head and base, diffBase (merge-base), the repo's commands, whether
+# the PR is yours. A PR from a fork is `untrusted`: its code is read, never run (review_checks forced to none).
 . "$(dirname "$0")/_lib.sh"
 need git
 
@@ -23,6 +26,25 @@ if [ "${1:-}" = "--clean" ]; then
     with_lock "cache-${OWNER}__${NAME}" git -C "$(cache_dir)" worktree remove --force "$dir"
     removed="$(jq --arg d "$dir" --arg s "$state" '. + [{dir: $d, state: $s}]' <<<"$removed")"
   done
+  # branch worktrees of your PRs: only those adorno created are removed (the branch stays); yours are left alone
+  for link in "$(kit_home)"/workspaces/*/pr-*.link; do
+    [ -f "$link" ] || continue
+    slug="$(basename "$(dirname "$link")")"; NUM="${link##*pr-}"; NUM="${NUM%.link}"
+    state="$(gh pr view "$NUM" -R "${slug%%__*}/${slug#*__}" --json state --jq .state 2>/dev/null || echo UNKNOWN)"
+    if [ "$state" = "OPEN" ] || [ "$state" = "UNKNOWN" ]; then continue; fi
+    dir="$(cat "$link")"
+    real="$(cd "$dir" 2>/dev/null && pwd -P || printf '%s' "$dir")"
+    case "$real" in
+      "$(cd "$(kit_home)" && pwd -P)/worktrees/"*)
+        if [ -d "$dir" ] && { [ -n "$(git -C "$dir" status --porcelain 2>/dev/null)" ] \
+             || [ "$(git -C "$dir" rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 1)" != "0" ]; }; then
+          kept="$(jq --arg d "$dir" '. + [{dir: $d, why: "uncommitted or unpushed work"}]' <<<"$kept")"; continue
+        fi
+        [ ! -d "$dir" ] || git -C "$dir" worktree remove "$dir"
+        removed="$(jq --arg d "$dir" --arg s "$state" '. + [{dir: $d, state: $s}]' <<<"$removed")" ;;
+    esac
+    rm -f "$link"
+  done
   jq -n --argjson r "$removed" --argjson k "$kept" '{removed: $r, kept: $k}'
   exit 0
 fi
@@ -31,45 +53,83 @@ parse_ref "${1:-}"
 conf="$(repo_conf "$REPO")"
 info="$(gh pr view "$NUM" -R "$REPO" --json headRefOid,headRefName,baseRefName,isCrossRepository,author,state)"
 sha="$(jq -r .headRefOid <<<"$info")"
+head="$(jq -r .headRefName <<<"$info")"
 base="$(jq -r .baseRefName <<<"$info")"
 author="$(jq -r .author.login <<<"$info")"
 me="$(viewer_login)"
+link="$(workspace_link)"
 
-cache="$(cache_dir)"; dir="$(workspace_dir)"; ref="refs/adorno/pr-$NUM"
-if [ -d "$dir" ]; then workspace_clean_state "$dir" "$ref"; fi
+clone=""
+if [ "$author" = "$me" ] && [ "$(jq -r .isCrossRepository <<<"$info")" = "false" ]; then
+  clone="$(local_clone "$REPO")"
+  [ -n "$clone" ] || log "no clone of $REPO in the current directory: dedicated workspace under ~/.adorno, detached at the head"
+fi
 
-# Parallel runs share the clone: clone, fetch and worktree changes happen under one lock per repo.
-sync_workspace() {
-  if [ ! -d "$cache" ]; then
-    mkdir -p "$(dirname "$cache")" || return 1
-    log "cloning $REPO into $cache (once)"
-    gh repo clone "$REPO" "$cache" -- --bare --filter=blob:none --quiet >&2 || return 1
-  fi
-  git -C "$cache" fetch --quiet origin "+refs/pull/$NUM/head:$ref" "+refs/heads/$base:refs/heads/$base" >&2 \
-    || { log "fetch failed: the workspace was not refreshed"; return 1; }
-  if [ -d "$dir" ]; then
-    git -C "$dir" checkout --quiet --detach "$ref" || return 1
-  else
-    mkdir -p "$(dirname "$dir")" || return 1
-    git -C "$cache" worktree add --quiet --detach "$dir" "$ref" >&2 || return 1
-  fi
-}
-with_lock "cache-${OWNER}__${NAME}" sync_workspace
-fetched="$(git -C "$cache" rev-parse "$ref")"
+if [ -n "$clone" ]; then
+  # Your PR: the worktree of its branch in your clone (one lock per clone: fetch and worktree changes)
+  upstream="refs/remotes/origin/$head"; baseref="refs/remotes/origin/$base"; mode=branch
+  sync_branch() {
+    git -C "$clone" fetch --quiet origin "+refs/heads/$head:$upstream" "+refs/heads/$base:$baseref" >&2 \
+      || { log "fetch failed: the workspace was not refreshed"; return 1; }
+    local wt
+    wt="$(branch_worktree "$clone" "$head")"
+    if [ -z "$wt" ]; then
+      wt="$(kit_home)/worktrees/${OWNER}__${NAME}/$head"
+      [ ! -e "$wt" ] || { log "$wt exists but is not the worktree of $head"; return 1; }
+      mkdir -p "$(dirname "$wt")" || return 1
+      if git -C "$clone" show-ref --verify --quiet "refs/heads/$head"; then
+        git -C "$clone" worktree add --quiet "$wt" "$head" >&2 || return 1
+      else
+        git -C "$clone" worktree add --quiet --track -b "$head" "$wt" "$upstream" >&2 || return 1
+      fi
+      wt="$(branch_worktree "$clone" "$head")"  # as git lists it, so every pass prints the same path
+      log "created the worktree of $head: $wt"
+    fi
+    mkdir -p "$(dirname "$link")" && printf '%s\n' "$wt" >"$link"
+  }
+  with_lock "clone-${OWNER}__${NAME}" sync_branch
+  dir="$(cat "$link")"
+  exclude_agent_run "$dir"
+  [ -z "$(git -C "$dir" status --porcelain)" ] \
+    || die "the worktree of $head ($dir) has uncommitted changes: commit or stash them first" "$E_POLICY"
+  ahead="$(git -C "$dir" rev-list --count "$upstream..HEAD")"
+  [ "$ahead" = "0" ] \
+    || die "the worktree of $head ($dir) has $ahead commit(s) not on GitHub: push them (pr-push) or drop them first" "$E_POLICY"
+  git -C "$dir" merge --ff-only --quiet "$upstream" >&2 || die "cannot fast-forward $dir to $upstream"
+  fetched="$(git -C "$dir" rev-parse "$upstream")"
+else
+  # Anyone else's PR: a dedicated clone, detached at the head (one lock per repo: clone, fetch and worktree changes)
+  rm -f "$link"
+  cache="$(cache_dir)"; dir="$(workspace_dir)"; ref="refs/adorno/pr-$NUM"; baseref="refs/heads/$base"; mode=detached
+  if [ -d "$dir" ]; then workspace_clean_state "$dir" "$ref"; fi
+  sync_workspace() {
+    if [ ! -d "$cache" ]; then
+      mkdir -p "$(dirname "$cache")" || return 1
+      log "cloning $REPO into $cache (once)"
+      gh repo clone "$REPO" "$cache" -- --bare --filter=blob:none --quiet >&2 || return 1
+    fi
+    git -C "$cache" fetch --quiet origin "+refs/pull/$NUM/head:$ref" "+refs/heads/$base:$baseref" >&2 \
+      || { log "fetch failed: the workspace was not refreshed"; return 1; }
+    if [ -d "$dir" ]; then
+      git -C "$dir" checkout --quiet --detach "$ref" || return 1
+    else
+      mkdir -p "$(dirname "$dir")" || return 1
+      git -C "$cache" worktree add --quiet --detach "$dir" "$ref" >&2 || return 1
+    fi
+  }
+  with_lock "cache-${OWNER}__${NAME}" sync_workspace
+  fetched="$(git -C "$cache" rev-parse "$ref")"
+  exclude_agent_run "$dir"
+fi
 [ "$fetched" = "$sha" ] || log "warning: GitHub reports head $sha, fetched $fetched (a push just landed?)"
 
-# run artefacts live in the workspace but are never part of the PR
-common="$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir)"
-mkdir -p "$common/info"
-grep -qx '.agent-run/' "$common/info/exclude" 2>/dev/null || echo '.agent-run/' >>"$common/info/exclude"
-
-diffbase="$(git -C "$dir" merge-base "refs/heads/$base" HEAD)"
+diffbase="$(git -C "$dir" merge-base "$baseref" HEAD)"
 changed="$(git -C "$dir" diff --name-only "$diffbase" HEAD | wc -l | tr -d ' ')"
 
-jq -n --arg repo "$REPO" --argjson num "$NUM" --arg dir "$dir" --arg sha "$fetched" --arg base "$base" \
+jq -n --arg repo "$REPO" --argjson num "$NUM" --arg dir "$dir" --arg mode "$mode" --arg sha "$fetched" --arg base "$base" \
   --arg diffbase "$diffbase" --arg author "$author" --arg me "$me" --argjson changed "$changed" \
   --argjson info "$info" --argjson conf "$conf" '{
-    repo: $repo, number: $num, dir: $dir,
+    repo: $repo, number: $num, dir: $dir, worktree: $mode,
     head: $info.headRefName, headSha: $sha, base: $base, diffBase: $diffbase,
     diffCommand: ("git diff " + $diffbase + "...HEAD"),
     changedFiles: $changed, author: $author, mine: ($author == $me),

@@ -135,6 +135,11 @@ expect_jq "blocker: unresolved threads before review" '(.[] | select(.number==42
 expect_jq "blocker: red CI first" '(.[] | select(.number==7) | .blocker) == "ci-red"'
 expect_jq "team and user reviewers listed" '(.[] | select(.number==7) | .waitingOn) == ["carol","core-team"]'
 expect_jq "unregistered repos flagged" '(.[] | select(.repo=="someone/else") | .registered) == false'
+grep -q "q=is:pr author:@me state:open archived:false$" "$FAKE_LOG" && ok "default query keeps drafts" || ko "default query keeps drafts" "$(tail -1 "$FAKE_LOG")"
+expect_exit 0 "--ready lists PRs" -- "$S/pr-status" --ready
+grep -q "q=is:pr author:@me state:open archived:false draft:false sort:updated-desc$" "$FAKE_LOG" \
+  && ok "--ready: no drafts, most recently updated first" || ko "--ready: no drafts, most recently updated first" "$(tail -1 "$FAKE_LOG")"
+expect_jq "--ready keeps GitHub's order" "[.[].number] == $(jq -c '[.data.search.nodes[].number]' "$FAKE_FIX/status.json")"
 
 echo "writes: levels, dry run, policy"
 printf 'Fixed in abc123.\n' >"$TMP/body.md"
@@ -457,6 +462,44 @@ FAKE_HEAD_SHA="$newsha" expect_exit 0 "refresh follows the new head" -- "$S/pr-w
 FAKE_PR_STATE=MERGED expect_exit 0 "clean removes merged PRs' workspaces" -- "$S/pr-workspace" --clean
 expect_jq "workspace removed" '(.removed | length) == 1'
 [ ! -d "$ws" ] && ok "directory gone" || ko "directory gone"
+
+echo "pr-workspace from your own clone: the worktree of the PR branch"
+L="$TMP/mine"; git clone -q "$O" "$L"; git -C "$L" config user.email t@t; git -C "$L" config user.name t
+git -C "$L" config "url.file://$O.insteadOf" "git@github.com:acme/docs.git"
+git -C "$L" remote set-url origin "git@github.com:acme/docs.git"
+git -C "$L" checkout -q main; git -C "$L" worktree add -q "$TMP/wt-mine" nm/pagination
+real() { (cd "$1" && pwd -P); }
+inL() { sh -c 'cd "$1" && shift && exec "$@"' sh "$L" "$@"; }  # inL CMD…: run CMD from your clone
+expect_exit 0 "uses the worktree where the branch is checked out" -- inL "$S/pr-workspace" acme/docs#42
+expect_jq "... in branch mode" ".worktree == \"branch\" and .dir == \"$(real "$TMP/wt-mine")\" and .mine"
+expect_exit 0 "someone else's PR stays detached, even from your clone" -- env FAKE_PR_AUTHOR=alice sh -c "cd '$L' && '$S/pr-workspace' acme/docs#42"
+expect_jq "... detached" '.worktree == "detached"'
+git -C "$L" worktree remove "$TMP/wt-mine"
+expect_exit 0 "creates the branch worktree when there is none" -- inL "$S/pr-workspace" acme/docs#42
+bw="$(jq -r .dir <<<"$out")"
+case "$(real "$bw")" in "$(real "$KH")/worktrees/acme__docs/nm/pagination") ok "... under the kit home" ;; *) ko "... under the kit home" "$bw" ;; esac
+[ "$(git -C "$bw" symbolic-ref --short HEAD)" = "nm/pagination" ] && ok "... on the branch, not detached" || ko "... on the branch, not detached"
+expect_exit 0 "a second pass reuses it" -- inL "$S/pr-workspace" acme/docs#42
+expect_jq "... same dir" ".dir == \"$bw\""
+git -C "$bw" config user.email t@t; git -C "$bw" config user.name t
+echo six >>"$bw/a.txt"
+expect_exit 4 "refused with uncommitted changes" -- inL "$S/pr-workspace" acme/docs#42
+git -C "$bw" commit -qam "fix: six"
+expect_exit 4 "refused with commits not on GitHub" -- inL "$S/pr-workspace" acme/docs#42
+expect_exit 0 "pr-push pushes the branch worktree, from anywhere" -- "$S/pr-push" acme/docs#42
+expect_jq "one commit pushed" '.pushed and .commits == 1'
+[ "$(git -C "$O" rev-parse nm/pagination)" = "$(git -C "$bw" rev-parse HEAD)" ] && ok "origin branch moved" || ko "origin branch moved"
+git -C "$W" pull -q "$O" nm/pagination; echo seven >>"$W/a.txt"; git -C "$W" commit -qam "feat: seven"
+git -C "$W" push -q "$O" nm/pagination
+expect_exit 0 "a push on GitHub is fast-forwarded" -- inL "$S/pr-workspace" acme/docs#42
+[ "$(git -C "$bw" rev-parse HEAD)" = "$(git -C "$O" rev-parse nm/pagination)" ] && ok "... to the new head" || ko "... to the new head"
+expect_exit 0 "outside your clone: detached again" -- "$S/pr-workspace" acme/docs#42
+expect_jq "... detached" '.worktree == "detached"'
+[ ! -f "$KH/workspaces/acme__docs/pr-42.link" ] && ok "... and pr-push forgets the branch worktree" || ko "... and pr-push forgets the branch worktree"
+inL "$S/pr-workspace" acme/docs#42 >/dev/null 2>&1
+FAKE_PR_STATE=MERGED expect_exit 0 "clean removes the branch worktree adorno created" -- "$S/pr-workspace" --clean
+[ ! -d "$bw" ] && [ ! -f "$KH/workspaces/acme__docs/pr-42.link" ] && ok "... worktree and link gone" || ko "... worktree and link gone"
+git -C "$L" show-ref --verify --quiet refs/heads/nm/pagination && ok "... the branch stays" || ko "... the branch stays"
 
 echo
 echo "$pass passed, $fail failed"

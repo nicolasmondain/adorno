@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
-# Usage: pr-status [owner/repo]
+# Usage: pr-status [--ready] [owner/repo]
 # Every open PR you authored (optionally one repo), in one GraphQL call, as a JSON array:
-# review decision, CI state, unresolved threads, and the single thing blocking it.
+# review decision, CI state, unresolved threads, and the single thing blocking it, sorted by repo and number.
+# --ready: drafts left out, most recently updated first (is:pr author:@me state:open archived:false draft:false
+# sort:updated-desc), the PRs workflow:review:received works on.
 . "$(dirname "$0")/_lib.sh"
 
+ready=false
+if [ "${1:-}" = "--ready" ]; then ready=true; shift; fi
 filter="${1:-}"
 [ -z "$filter" ] || split_repo "$filter"
 
@@ -14,14 +18,15 @@ query='query($q:String!){ search(query:$q, type:ISSUE, first:100){ issueCount no
   reviewThreads(first:100){ nodes{ isResolved } }
   commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } } } } } }'
 
-q="is:pr is:open author:@me archived:false"
+q="is:pr author:@me state:open archived:false"
+[ "$ready" = false ] || q="$q draft:false sort:updated-desc"
 [ -z "$filter" ] || q="$q repo:$filter"
 
 raw="$(gh api graphql -f query="$query" -F q="$q")"
 reg="$(jq -r '.data.search.nodes[].repository.nameWithOwner' <<<"$raw" | sort -u | registered_map)"
 total="$(jq '.data.search.issueCount // 0' <<<"$raw")"
 [ "$total" -le 100 ] || log "warning: $total PRs match, only the first 100 are listed (narrow with owner/repo)"
-jq --argjson reg "$reg" '
+jq --argjson reg "$reg" --argjson ready "$ready" '
   [ .data.search.nodes[]
     | (.commits.nodes[0].commit.statusCheckRollup.state // "NONE") as $ci
     | ([.reviewThreads.nodes[] | select(.isResolved | not)] | length) as $open
@@ -42,4 +47,4 @@ jq --argjson reg "$reg" '
           elif .reviewDecision == "REVIEW_REQUIRED" then "waiting-review"
           else "ready" end)
       } ]
-  | sort_by(.repo, .number)' <<<"$raw"
+  | if $ready then . else sort_by(.repo, .number) end' <<<"$raw"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage: pr-push owner/repo#N
-# Pushes the commits made in the PR's workspace to the PR branch. Never forces: if the branch moved
-# on GitHub, the push is rejected and the workspace must be refreshed. Only for your own PRs, from the
+# Pushes the commits made in the PR's workspace (the branch worktree pr-workspace chose, else the detached one) to
+# the PR branch. Never forces: if the branch moved on GitHub, the push is rejected and the workspace must be refreshed. Only for your own PRs, from the
 # same repository (not a fork). Needs L2. ADORNO_DRY_RUN=1 only prints.
 . "$(dirname "$0")/_lib.sh"
 need git
@@ -15,11 +15,20 @@ head="$(jq -r .headRefName <<<"$info")"
 [ "$(jq -r .isCrossRepository <<<"$info")" = "false" ] || die "$REPO#$NUM comes from a fork; push there by hand" "$E_POLICY"
 [ "$head" != "$(jq -r .baseRefName <<<"$info")" ] || die "refusing to push to the base branch" "$E_POLICY"
 
-dir="$(workspace_dir)"
-[ -d "$dir" ] || die "no workspace for $REPO#$NUM; run pr-workspace first" "$E_USAGE"
+# the branch worktree pr-workspace chose in your clone, else the dedicated detached workspace
+if [ -f "$(workspace_link)" ]; then
+  dir="$(cat "$(workspace_link)")"; upstream="refs/remotes/origin/$head"
+  [ -d "$dir" ] || die "the worktree of $head ($dir) is gone; run pr-workspace again" "$E_USAGE"
+  [ "$(git -C "$dir" symbolic-ref --short HEAD 2>/dev/null)" = "$head" ] || die "$dir is not on $head" "$E_POLICY"
+  lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+  [ "$(lower "$(push_repo "$dir")")" = "$(lower "$REPO")" ] || die "origin of $dir does not push to $REPO" "$E_POLICY"
+else
+  dir="$(workspace_dir)"; upstream="refs/adorno/pr-$NUM"
+  [ -d "$dir" ] || die "no workspace for $REPO#$NUM; run pr-workspace first" "$E_USAGE"
+fi
 [ -z "$(git -C "$dir" status --porcelain)" ] || die "workspace has uncommitted changes; commit them first" "$E_POLICY"
 local_sha="$(git -C "$dir" rev-parse HEAD)"
-ahead="$(git -C "$dir" rev-list --count "refs/adorno/pr-$NUM..HEAD")"
+ahead="$(git -C "$dir" rev-list --count "$upstream..HEAD")"
 
 if [ "$ahead" = "0" ]; then
   jq -n --arg sha "$local_sha" '{pushed: false, reason: "nothing new", sha: $sha}'
@@ -33,5 +42,5 @@ fi
 
 git -C "$dir" push --quiet origin "HEAD:refs/heads/$head" >&2 \
   || die "push rejected (the branch moved on GitHub?): run pr-workspace again, then redo the commits" 1
-git -C "$dir" update-ref "refs/adorno/pr-$NUM" "$local_sha"
+git -C "$dir" update-ref "$upstream" "$local_sha"
 jq -n --arg head "$head" --arg sha "$local_sha" --argjson n "$ahead" '{pushed: true, branch: $head, sha: $sha, commits: $n}'

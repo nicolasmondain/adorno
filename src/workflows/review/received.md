@@ -8,7 +8,8 @@ uses:
 model: balanced
 ---
 
-Entrée : {{args}} — sans argument : **toutes** tes PRs ouvertes dans les repos enregistrés.
+Entrée : {{args}} — sans argument : tes PRs ouvertes et prêtes, et elles seules (`pr-status --ready` :
+`is:pr author:@me state:open archived:false draft:false sort:updated-desc`), dans les repos enregistrés.
 
 **Exécution** — avant toute écriture : `adorno-github/scripts/run-begin --workflow workflow:review:received --mode <mode> --level L3 --repo owner/repo [--repo …]` — une fois la liste des PRs connue, un `--repo` par repo à traiter (une exécution ne vaut que pour les repos qu'elle nomme) ; garde `id` et `dir` (le dossier d'exécution). Appelé par un autre workflow qui a déjà ouvert la sienne : réutilise-la. Toujours, même après un échec : `run-end <id>`. Sans exécution ouverte, les scripts refusent toute écriture.
 
@@ -20,12 +21,13 @@ Entrée : {{args}} — sans argument : **toutes** tes PRs ouvertes dans les repo
 
 Un `max_level` plus bas du repo l'emporte toujours.
 
-1. **Cibler** — sans argument : `pr-status`, puis `pr-feedback-fetch` sur chaque PR `registered` ; garde celles dont
+1. **Cibler** — sans argument : `pr-status --ready` (ni draft, ni archivée ; la plus récemment mise à jour d'abord), puis `pr-feedback-fetch` sur chaque PR `registered` ; garde celles dont
    `needsReplyCount > 0` ou dont la CI est rouge. Les PRs sont indépendantes : par lots de `max_parallel`, lance dans le même
    tour les agents de toutes les PRs du lot (c'est toi qui délègues : un agent ne lance pas d'agent) ; de chaque PR ne
    garde en contexte que les livrables (`triage.json`, verdicts), jamais les échanges bruts.
-2. **Workspace** — `pr-workspace owner/repo#N` (refusé s'il reste du travail non poussé d'un passage précédent :
-   termine-le ou jette-le d'abord). Dossier d'exécution : `<workspace>/.agent-run/feedback-<date>/` (un par PR, sous l'exécution ouverte), avec
+2. **Workspace** — `pr-workspace owner/repo#N`, lancé depuis ton clone du repo : le worktree de la branche de la PR,
+   créé s'il n'existe pas (`worktree: branch`) ; jamais un workspace partagé d'un passage précédent. Refusé s'il reste
+   des changements non commités ou des commits absents de GitHub : arrête-toi sur cette PR et signale-le. Dossier d'exécution : `<workspace>/.agent-run/feedback-<date>/` (un par PR, sous l'exécution ouverte), avec
    `feedback.json`.
 3. **Trier** — `agent:core:triage` classe chaque élément où `needsReply` est vrai (thread, commentaire général,
    résumé de review) : catégorie (`fix`, `nit`, `test`, `question`, `disagree`, `scope`, `done`), **zone** (déduite
