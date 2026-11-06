@@ -17,6 +17,10 @@ en anglais.
 
 1. Relis `spec.md` et le code concerné ; repère les contrats à poser d'abord (API, schéma — skill
    `api-and-interface-design`).
+   `spec.md` a un § Plan fourni (rédigé par l'utilisateur ou son équipe, dans une page Notion, un fil Slack, un
+   fichier) : **suis-le**. Garde son ordre, ses choix techniques et ses noms ; ton travail est de le découper en
+   tranches testables et d'y attacher agents et tests. Un écart nécessaire (une étape impossible, un risque) est
+   signalé dans `plan.md` § Écarts au plan fourni, avec la raison, jamais appliqué en silence.
 2. Découpe en **tranches verticales** : chacune livre un comportement observable, de bout en bout, en moins de
    ~150 lignes de diff, et laisse le repo vert.
 3. Pour chaque tranche : objectif, fichiers probables, **test d'acceptation** (lequel des critères de la spec elle

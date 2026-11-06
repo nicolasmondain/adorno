@@ -150,7 +150,7 @@ Chacun est une commande au même nom (sans commande native : le skill du même n
 
 - `workflow:ci:red` (`/adorno-ci-red`) — Traite une CI rouge sur une PR
 - `workflow:feature:build` (`/adorno-feature-build`) — Mène une fonctionnalité de bout en bout
-- `workflow:issue:fix` (`/adorno-issue-fix`) — Corrige un bug à partir d'une issue GitHub
+- `workflow:issue:fix` (`/adorno-issue-fix`) — Corrige un bug à partir d'une issue GitHub, d'un fil Slack, d'une page Notion, d'un prompt ou d'une spec valid
 - `workflow:notion:assigned` (`/adorno-notion-assigned`) — Trouve les documents Notion qui te sont assignés (propriétés « personne » des bases suivies, statut encore ouv
 - `workflow:pr:impact` (`/adorno-pr-impact`) — Analyse l'impact des PRs que tu as mergées sur un repo
 - `workflow:pr:open` (`/adorno-pr-open`) — Ouvre la PR d'une branche prête
@@ -163,4 +163,4 @@ Chacun est une commande au même nom (sans commande native : le skill du même n
 - `workflow:review:requested` (`/adorno-review-requested`) — Analyse toutes les PRs où ta review est demandée
 - `workflow:slack:mentions` (`/adorno-slack-mentions`) — Chaque fois que tu es mentionné sur Slack (sur tous les canaux ou une liste), analyse le problème de la conver
 - `workflow:slack:watch` (`/adorno-slack-watch`) — Surveille un ou plusieurs canaux Slack selon une règle nommée
-- `workflow:spec:new` (`/adorno-spec-new`) — Cadre une nouvelle demande avec l'agent d'accueil
+- `workflow:spec:new` (`/adorno-spec-new`) — Cadre une demande de code avec l'agent d'accueil jusqu'à ta validation

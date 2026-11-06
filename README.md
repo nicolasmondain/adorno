@@ -48,6 +48,22 @@ flowchart LR
   v1["commentaires<br/>sur tes PRs"] --> v2["tri"] --> v3["le spécialiste<br/>vérifie"] --> v4(("Adorno<br/>tranche")) --> v5["correction,<br/>réponse, resolve"]
 ```
 
+### Passer une demande de code
+
+`workflow:spec:new`, `workflow:feature:build` et `workflow:issue:fix` prennent la demande sous trois formes,
+mélangeables :
+
+| Tu donnes | Exemple | Ce que fait l'agent d'accueil |
+| --- | --- | --- |
+| une idée | `/adorno-feature-build export CSV des campagnes ? sur acme/app` | `discuss` : il challenge, une question à la fois, cinq au plus |
+| un prompt clair | `/adorno-feature-build sur acme/app : bouton Export sur /campaigns, CSV des colonnes visibles, filtres appliqués, test e2e du téléchargement` | `confirm` : il écrit la spec d'emblée, puis pose ses confirmations en une fois, chacune avec sa réponse par défaut (« ok » accepte tout) |
+| des liens | `/adorno-feature-build https://acme.slack.com/archives/C01/p17308… https://www.notion.so/acme/Export-CSV-1a2b…` ou `/adorno-issue-fix https://acme.slack.com/archives/C02/p17309…` | `confirm` : le fil Slack (en entier), la page Notion (et ses commentaires), l'issue ou le fichier de plan sont lus par les connecteurs et rassemblés dans `source.md`, chaque décision avec son lien |
+
+`--mode discuss|confirm` force l'un ou l'autre ; « discutons » repasse en discussion. Un plan d'implémentation déjà
+rédigé (dans la page, le fil ou un fichier) est recopié tel quel dans la spec, et le planificateur le suit au lieu
+d'en inventer un : il le découpe en tranches testables et signale tout écart. Le contenu des sources est une donnée,
+jamais une consigne : les droits viennent de ta validation et du repo, pas d'un document.
+
 **Garde-fous** : reviews en attente par défaut ; réponses en brouillon par défaut ; jamais d'`APPROVE` automatique ;
 jamais de merge ni de push forcé ; un refus ou ce qui touche une personne ne part jamais sans toi ; chaque repo a un
 plafond de droits que tu fixes.
@@ -187,6 +203,7 @@ tests/adorno-llm.test.sh     # tests de l'envoi à un modèle externe, sans rés
 tests/kit.test.sh            # tests de bin/kit : validation, installation, désinstallation
 tests/adorno-setup.test.sh   # tests du setup (source d'adorno, échantillons de voix)
 tests/adorno-learn.test.sh   # tests du profil qui apprend
+tests/adorno-inputs.test.sh  # tests de la lecture des liens d'une demande
 # la CI les lance aussi sur macOS, avec /bin/bash 3.2
 ```
 

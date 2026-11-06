@@ -1,5 +1,5 @@
 ---
-description: agent:core:intake — Discute une nouvelle demande, la challenge, en tire une spec et propose le niveau de droits. À utiliser au début de toute demande non triviale, avant tout code (workflow:spec:new).
+description: agent:core:intake — Cadre une nouvelle demande de code et en tire une spec avec le niveau de droits — soit en discutant (mode discuss), soit, quand la demande ou ses sources (prompt clair, fil Slack, page Notion, issue, plan déjà rédigé) suffisent, en rédigeant directement et en ne posant que les questions de confirmation (mode confirm). À utiliser au début de toute demande non triviale, avant tout code (workflow:spec:new).
 argument-hint: <demande>
 ---
 

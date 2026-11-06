@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Usage: input-refs "<the request, as given>"      (or the request on stdin)
+# Finds what a request points to, so the agent reads each source with the right connector:
+#   Slack permalinks  → {kind: "slack", workspace, channel, ts, thread_ts}   (ts as Slack writes it: 1730800000.000100)
+#   Notion pages      → {kind: "notion", page_id}                             (dashed UUID)
+#   GitHub issues/PRs → {kind: "github-issue" | "github-pr" | "github-ref", repo, number}   (owner/repo#N: either)
+#   local files       → {kind: "file", path}                                  (an existing file named in the request)
+#   any other link    → {kind: "url"}
+# Prints {text, refs: [{kind, url?, …}], kinds: [...]}: `text` is the request without its links. Read only; no network.
+set -euo pipefail
+die() { printf 'input-refs: %s\n' "$1" >&2; exit "${2:-1}"; }
+command -v jq >/dev/null 2>&1 || die "missing dependency: jq"
+
+if [ $# -gt 0 ]; then input="$*"; else input="$(cat)"; fi
+[ -n "${input//[[:space:]]/}" ] || die "nothing to read: pass the request" 2
+
+refs="$(jq -n --arg s "$input" '
+  def notion_id: ascii_downcase | "\(.[0:8])-\(.[8:12])-\(.[12:16])-\(.[16:20])-\(.[20:32])";
+  [ $s | scan("https?://[^\\s<>\"\\)\\]]+") | sub("[.,;:!?]+$"; "") ]
+  | map(. as $u
+      | if test("^https://[a-z0-9-]+\\.slack\\.com/archives/[A-Z0-9]+/p[0-9]{16}") then
+          (capture("^https://(?<w>[a-z0-9-]+)\\.slack\\.com/archives/(?<c>[A-Z0-9]+)/p(?<a>[0-9]{10})(?<b>[0-9]{6})")) as $m
+          | ([capture("[?&]thread_ts=(?<t>[0-9]+\\.[0-9]+)").t] | first) as $t
+          | {kind: "slack", url: $u, workspace: $m.w, channel: $m.c, ts: "\($m.a).\($m.b)",
+             thread_ts: ($t // "\($m.a).\($m.b)")}
+        elif test("^https://([a-z0-9-]+\\.)?notion\\.(so|site)/") then
+          (([capture("[?&]p=(?<id>[0-9a-fA-F]{32})").id] | first)
+           // (sub("[?#].*$"; "") | [scan("[0-9a-fA-F]{32}")] | last)) as $id
+          | if $id then {kind: "notion", url: $u, page_id: ($id | notion_id)} else {kind: "url", url: $u} end
+        elif test("^https://github\\.com/[^/]+/[^/]+/(issues|pull)/[0-9]+") then
+          capture("^https://github\\.com/(?<o>[^/]+)/(?<r>[^/]+)/(?<k>issues|pull)/(?<n>[0-9]+)")
+          | {kind: (if .k == "pull" then "github-pr" else "github-issue" end), url: $u, repo: "\(.o)/\(.r)",
+             number: (.n | tonumber)}
+        else {kind: "url", url: $u} end)
+  + [ $s | gsub("https?://[^\\s<>\"\\)\\]]+"; " ") | scan("(?<![\\w/])[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+")
+      | capture("(?<repo>.+)#(?<n>[0-9]+)") | {kind: "github-ref", repo: .repo, number: (.n | tonumber)} ]')"
+
+# local files: words of the request (links removed) that name an existing file
+files="[]"
+words="$(jq -rn --arg s "$input" '$s | gsub("https?://[^\\s<>\"\\)\\]]+"; " ") | [splits("\\s+")] | .[] | select(. != "")')"
+while IFS= read -r w; do
+  w="${w%[.,;:!?]}"; w="${w#[\"\'(]}"; w="${w%[\"\')]}"
+  case "$w" in */*|*.md|*.txt|*.yaml|*.yml|*.json) ;; *) continue ;; esac
+  p="${w/#\~/$HOME}"
+  [ -f "$p" ] || continue
+  files="$(jq --arg p "$p" '. + [{kind: "file", path: $p}] | unique_by(.path)' <<<"$files")"
+done <<<"$words"
+
+jq -n --arg s "$input" --argjson r "$refs" --argjson f "$files" '
+  ($r + $f | unique_by([.kind, (.url // .path // "\(.repo)#\(.number)")])) as $all
+  | {text: ($s | gsub("https?://[^\\s<>\"\\)\\]]+"; "") | gsub("[ \\t]+"; " ") | gsub("^\\s+|\\s+$"; "")),
+     refs: $all, kinds: ($all | map(.kind) | unique)}'
