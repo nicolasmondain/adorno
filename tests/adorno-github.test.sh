@@ -9,6 +9,7 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/bin"; ln -s "$ROOT/tests/fake-gh" "$TMP/bin/gh"
 # a throwaway home: the scripts read the registry and the runs from ~/.adorno only
 export HOME="$TMP/home" PATH="$TMP/bin:$PATH"
+unset CLAUDE_CODE_SESSION_ID  # runs opened outside any session, unless a test sets one
 KH="$HOME/.adorno"; mkdir -p "$KH"
 reg() { rm -f "$KH/registry.json"; cp "$1" "$KH/registry.json"; chmod 400 "$KH/registry.json"; }  # reg FILE: use FILE as the registry
 reg "$ROOT/tests/fixtures/repos.json"
@@ -51,7 +52,7 @@ REPORT="$(jq -r .id <<<"$out")"
 expect_exit 0 "an auto run on the same repo" -- "$S/run-begin" --workflow workflow:pr:review --mode auto --level L3 --repo acme/docs
 AUTO="$(jq -r .id <<<"$out")"
 expect_exit 5 "the strictest active run wins (report L0 alongside auto L3)" -- "$S/pr-comment" acme/docs#42 "$TMP/norun.md"
-grep -q "several runs cover acme/docs" "$TMP/err" && ok "... and the script names the runs" || ko "... and the script names the runs" "$(cat "$TMP/err")"
+grep -q "several runs of this session cover acme/docs" "$TMP/err" && ok "... and the script names the runs" || ko "... and the script names the runs" "$(cat "$TMP/err")"
 "$S/run-end" "$REPORT" >/dev/null; "$S/run-end" "$AUTO" >/dev/null
 expect_exit 0 "a run scoped to one repo" -- "$S/run-begin" --workflow workflow:pr:review --mode auto --level L3 --repo acme/strict
 SCOPED="$(jq -r .id <<<"$out")"
@@ -61,6 +62,15 @@ OTHER="$(jq -r .id <<<"$out")"
 DRY_OUT="$("$S/pr-comment" acme/strict#7 "$TMP/norun.md" 2>/dev/null </dev/null)"
 case "$DRY_OUT" in *dryRun*) ko "a draft run on another repo leaves this one alone" "$DRY_OUT" ;; *) ok "a draft run on another repo leaves this one alone" ;; esac
 "$S/run-end" "$SCOPED" >/dev/null; "$S/run-end" "$OTHER" >/dev/null
+expect_exit 0 "a run opened in session A" -- env CLAUDE_CODE_SESSION_ID=sess-a "$S/run-begin" --workflow workflow:pr:review --mode auto --level L3 --repo acme/docs
+SA="$(jq -r .id <<<"$out")"
+expect_jq "... records its session" '.session == "sess-a"'
+expect_exit 5 "does not count in session B" -- env CLAUDE_CODE_SESSION_ID=sess-b "$S/pr-comment" acme/docs#42 "$TMP/norun.md"
+expect_exit 5 "nor outside any session" -- "$S/pr-comment" acme/docs#42 "$TMP/norun.md"
+expect_exit 0 "a report run in session B" -- env CLAUDE_CODE_SESSION_ID=sess-b "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
+SB="$(jq -r .id <<<"$out")"
+expect_exit 0 "does not lower session A" -- env CLAUDE_CODE_SESSION_ID=sess-a ADORNO_DRY_RUN=1 "$S/pr-comment" acme/docs#42 "$TMP/norun.md"
+"$S/run-end" "$SA" >/dev/null; "$S/run-end" "$SB" >/dev/null
 printf '{ half' >"$KH/runs/active/20990101T000000-1-1.json"
 expect_exit 5 "a half-written run file is ignored..." -- "$S/pr-comment" acme/docs#42 "$TMP/norun.md"
 [ -f "$KH/runs/active/20990101T000000-1-1.json" ] && ok "... and not deleted while it may be in progress" || ko "... and not deleted"
@@ -340,8 +350,53 @@ guard pass "cat ~/.adorno/registry.json"
 guard pass ".claude/skills/adorno-github/scripts/run-end 2026-x"
 guard pass "npm test"
 guard ask "echo 'unbalanced"
+guard deny "CLAUDE_CODE_SESSION_ID=other .claude/skills/adorno-github/scripts/pr-comment acme/docs#42 f.md"
+guard deny 'echo "$(git push)"'
+guard deny "echo \`gh pr merge 1\`"
+guard deny "git -c alias.up=push up"
+guard deny "python3 -c 'import os; os.system(\"git push\")'"
+guard ask 'c=push; git $c'
+printf 'git add .\ngit push origin HEAD\n' >"$TMP/deploy.sh"
+guard deny "bash $TMP/deploy.sh"
+guard deny "for t in $TMP/deploy*.sh; do bash \$t; done"
+guard deny 'for c in push; do git $c; done'
+guard pass 'for c in status log; do git $c; done'
+guard deny 'if true; then git push; fi'
+guard pass "$ROOT/bin/kit check"
+guard pass "$ROOT/tests/kit.test.sh"
+out="$(jq -n '{tool_name: "run_shell_command", tool_input: {command: "git push"}}' | python3 "$S/guard_bash.py" deny --format=gemini)"
+expect_jq "Gemini's protocol" '.decision == "deny" and (.reason | startswith("adorno:"))'
+out="$(jq -n '{tool_name: "Bash", tool_input: {command: "git push"}}' | python3 "$S/guard_bash.py" ask --format=codex)"
+expect_jq "Codex has no ask in hooks: deny" '.hookSpecificOutput.permissionDecision == "deny"'
 out="$(jq -n '{tool_name: "Bash", tool_input: {command: "git push"}}' | python3 "$S/guard_bash.py" ask)"
 expect_jq "a global install asks instead" '.hookSpecificOutput.permissionDecision == "ask"'
+
+echo "a registry older than the personal layer"
+printf 'repos: {}\n' >"$TMP/layer.yaml"
+jq --arg f "$TMP/layer.yaml" '. + {_layer: {file: $f}}' "$ROOT/tests/fixtures/repos.json" >"$TMP/reg-layer.json"
+reg "$TMP/reg-layer.json"
+expect_exit 0 "fresh registry" -- "$S/pr-areas" acme/docs "$TMP/tricky.diff"
+grep -q "changed since the last" "$TMP/err" && ko "no warning when the registry is fresh" || ok "no warning when the registry is fresh"
+touch -t 209901010000 "$TMP/layer.yaml"
+expect_exit 0 "stale registry" -- "$S/pr-areas" acme/docs "$TMP/tricky.diff"
+grep -q "changed since the last bin/kit install" "$TMP/err" && ok "... warns to reinstall" || ko "... warns to reinstall" "$(cat "$TMP/err")"
+reg "$ROOT/tests/fixtures/repos.json"
+
+echo "repo-audit (read only)"
+FAKE_LOG="$TMP/audit.log"
+FAKE_SCOPES="repo, workflow, gist" expect_exit 0 "a classic token, an unprotected branch" -- "$S/repo-audit" acme/docs
+expect_jq "broad scopes and the missing protection are reported" \
+  '.token.kind == "classic" and .token.broad == ["repo", "workflow"] and (.token.advice | test("fine-grained")) and .repos[0].protected == false and (.repos[0].advice[0] | test("ruleset"))'
+FAKE_RULES='[{"type":"pull_request"},{"type":"non_fast_forward"}]' FAKE_ADMIN=true expect_exit 0 "a fine-grained admin token, a ruleset" -- "$S/repo-audit" acme/docs
+expect_jq "protected by a ruleset, admin flagged" \
+  '.token.kind == "fine-grained or app" and .token.advice == null and .repos[0].protected and .repos[0].force_push_blocked and .repos[0].via == ["ruleset"] and (.repos[0].advice | length) == 1'
+FAKE_PROTECTION='{"required_pull_request_reviews":{"required_approving_review_count":1},"allow_force_pushes":{"enabled":false}}' \
+  expect_exit 0 "classic branch protection" -- "$S/repo-audit" acme/docs
+expect_jq "protected by branch protection" '.repos[0].protected and .repos[0].via == ["branch protection"] and .repos[0].advice == []'
+expect_exit 0 "every exact repo of the registry by default" -- "$S/repo-audit"
+expect_jq "registry repos, no wildcard" '(.repos | length) > 0 and all(.repos[]; .repo | test("[*?]") | not)'
+if grep -qE -- '(^| )(-X|--method|-f|-F|--input)( |$)' "$TMP/audit.log"; then ko "repo-audit only reads" "$(cat "$TMP/audit.log")"; else ok "repo-audit only reads"; fi
+FAKE_LOG="$TMP/gh.log"
 
 echo "with_lock"
 cat >"$TMP/lock-test" <<EOF

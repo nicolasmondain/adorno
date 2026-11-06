@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Usage: repo-audit [owner/repo …]   (default: every repo named exactly in your registry)
+# Read only. Checks what GitHub itself enforces, beyond adorno's scripts and hooks: the token your `gh` uses, and
+# whether each repo's default branch is protected (a ruleset or branch protection that requires a pull request
+# or blocks force pushes), so that even a push that got past every adorno guard would be refused by GitHub.
+# Prints {token: {kind, scopes, broad, advice}, repos: [{repo, default_branch, admin, protected, via, advice}]}.
+. "$(dirname "$0")/_lib.sh"
+
+repos=("$@")
+if [ "${#repos[@]}" -eq 0 ]; then
+  while IFS= read -r r; do repos+=("$r"); done < <(jq -r '(.repos // {}) | keys[] | select(test("^[^*?]+/[^*?]+$"))' "$REGISTRY")
+fi
+
+# the token: a classic token lists its scopes in X-OAuth-Scopes; a fine-grained token or an app token has none
+headers="$(gh api -i user 2>/dev/null | sed -n '1,/^\r\{0,1\}$/p')" || die "gh api user failed: run gh auth login" 6
+scopes="$(printf '%s\n' "$headers" | awk 'tolower($0) ~ /^x-oauth-scopes:/ { sub(/^[^:]*:[ \t]*/, ""); sub(/\r$/, ""); print; exit }')"
+if printf '%s\n' "$headers" | grep -qi '^x-oauth-scopes:'; then kind="classic"; else kind="fine-grained or app"; fi
+token="$(jq -n --arg kind "$kind" --arg scopes "$scopes" '
+  ($scopes | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(. != ""))) as $s
+  | ($s | map(select(IN("repo", "admin:org", "delete_repo", "workflow", "admin:repo_hook", "write:packages")))) as $broad
+  | {kind: $kind, scopes: $s, broad: $broad,
+     advice: (if $kind == "classic" and ($broad | length) > 0 then
+       "a classic token with \($broad | join(", ")) can do everything you can, on every repo: use a fine-grained token limited to the repos adorno works on (Contents, Pull requests, Issues: read and write; Actions: read; no Administration)"
+       elif $kind == "classic" then "a classic token: prefer a fine-grained token limited to the repos adorno works on"
+       else null end)}')"
+
+results="[]"
+for r in ${repos[@]+"${repos[@]}"}; do
+  split_repo "$r"
+  info="$(gh api "repos/$REPO" 2>/dev/null)" || { results="$(jq --arg r "$REPO" '. + [{repo: $r, error: "not readable with this token"}]' <<<"$results")"; continue; }
+  branch="$(jq -r .default_branch <<<"$info")"
+  admin="$(jq -r '.permissions.admin // false' <<<"$info")"
+  rules="$(gh api "repos/$REPO/rules/branches/$branch" 2>/dev/null || echo '[]')"
+  protection="$(gh api "repos/$REPO/branches/$branch/protection" 2>/dev/null || echo 'null')"
+  results="$(jq --arg r "$REPO" --arg b "$branch" --argjson admin "$admin" --argjson rules "$rules" \
+    --argjson prot "$protection" '
+    ([$rules[]?.type] | unique) as $types
+    | (($types | index("pull_request")) != null) as $rs_pr
+    | (($types | index("non_fast_forward")) != null) as $rs_ff
+    | ($prot != null and ($prot | type) == "object" and ($prot.required_pull_request_reviews != null)) as $bp_pr
+    | ($prot != null and ($prot | type) == "object" and (($prot.allow_force_pushes.enabled // true) | not)) as $bp_ff
+    | . + [{repo: $r, default_branch: $b, admin: $admin,
+            protected: ($rs_pr or $bp_pr),
+            via: ([if $rs_pr or $rs_ff then "ruleset" else empty end, if $bp_pr or $bp_ff then "branch protection" else empty end]),
+            force_push_blocked: ($rs_ff or $bp_ff),
+            advice: ([
+              if ($rs_pr or $bp_pr) | not then "\($b) accepts direct pushes: add a ruleset (Settings › Rules) that requires a pull request and blocks force pushes" else empty end,
+              if $admin then "this token is admin here: it could change the rules themselves; a fine-grained token without Administration cannot" else empty end
+            ])}]' <<<"$results")"
+done
+jq -n --argjson token "$token" --argjson repos "$results" '{token: $token, repos: $repos}'

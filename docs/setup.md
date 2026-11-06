@@ -116,21 +116,50 @@ même chose avec `adorno-github/scripts/repo-conf`.
 niveau, les actions qu'il s'interdit et les repos qu'il touche (au moins un `--repo`), dans un fichier sous
 `~/.adorno/runs/active/`, et la clôt (`run-end`) ; une exécution oubliée expire après 2 h. Les scripts lisent ce
 fichier : sans exécution ouverte sur le repo, toute écriture y est refusée ; en `report` et `draft`, tout est simulé
-(rien ne part) et `draft` interdit le push, même si une commande l'oublie. Deux exécutions sur un même repo (deux
-sessions en parallèle) : la plus stricte l'emporte et le script le signale, en nommant les exécutions ; une exécution
-sur un autre repo ne change rien. `ADORNO_LEVEL` peut seulement abaisser le niveau. Aucune variable ne déplace
-`~/.adorno` : le registre et les exécutions sont lus là, et seulement là.
+(rien ne part) et `draft` interdit le push, même si une commande l'oublie. Une exécution appartient à la session
+Claude Code qui l'a ouverte (`CLAUDE_CODE_SESSION_ID`, posé par Claude Code dans chaque commande) : une autre
+session ne la voit pas, elle ne peut ni abaisser ni relever tes droits. Hors session (Codex, Gemini, ton terminal),
+seules comptent les exécutions ouvertes hors session. Après un `/clear`, la session change : rouvre l'exécution.
+Deux exécutions d'une même session sur un même repo : la plus stricte l'emporte, et le script le signale.
+`ADORNO_LEVEL` peut seulement abaisser le niveau. Aucune variable ne déplace `~/.adorno` : le registre et les
+exécutions sont lus là, et seulement là. Le vrai plafond reste le `max_level` du repo : c'est l'agent qui déclare le
+mode et le niveau de son exécution, `max_level` et `permissions.deny` les bornent.
 
 **Les règles par défaut.** `repos.yaml` installe des règles Claude Code qui interdisent les commandes d'écriture
 directes : `git push`, `gh pr create|comment|review|merge|close|edit`, `gh issue comment|create`, `gh release`, et
 la modification du registre et des exécutions ; tout appel direct à `gh api` (qui écrit dès qu'il reçoit `-f`) te
 demande confirmation. Les agents publient par les scripts, qui vérifient les droits. Tes règles s'y ajoutent (les
-listes s'additionnent d'un niveau à l'autre, jamais ne se remplacent). Ces règles ne comparent que le début de la
-commande ; un hook Claude Code (`adorno-github/scripts/guard_bash.py`, installé avec elles) lit chaque commande shell
-comme le ferait le shell (enchaînements, `bash -c`, `env`, `sudo`, `git -C dossier push`, guillemets) et arrête tout
-push, toute publication GitHub, toute écriture du registre ou des exécutions, et tout `HOME=` pour un script adorno.
-Dans un repo il refuse ; avec `--global`, il te demande. Une commande qu'il ne sait pas lire te demande aussi. Il
-faut `python3` ; Codex et Gemini n'ont pas ce hook : chez eux, les scripts restent le garde-fou.
+listes s'additionnent d'un niveau à l'autre, jamais ne se remplacent).
+
+**Le hook de garde.** Les règles ne comparent que le début d'une commande. `bin/kit install` pose aussi un hook
+(`adorno-github/scripts/guard_bash.py`) qui lit chaque commande shell comme le ferait le shell : enchaînements,
+sous-shells, `$( … )` et backticks, `bash -c`, `eval`, `env`, `sudo`, `timeout`, `git -C dossier`, les alias git,
+le code passé à `python3 -c` ou `node -e`, et les scripts locaux qu'une commande lance (`./deploy.sh`,
+`bash x.sh`). Il arrête tout push, toute publication GitHub, toute écriture du registre ou des exécutions, tout
+`HOME=` devant un script adorno et toute tentative de fixer `CLAUDE_CODE_SESSION_ID`. Une commande qu'il ne sait pas
+lire (une variable comme programme, des guillemets non fermés) te demande ; un bug du hook aussi. Sans `python3`, ou
+si le fichier du hook manque, il bloque toute commande shell plutôt que de la laisser passer.
+
+| Outil | Dans un repo | Avec `--global` |
+| --- | --- | --- |
+| Claude Code | hook, refuse (`.claude/settings.local.json`) | hook, demande (`~/.claude/settings.json`) |
+| Codex | hook, refuse (`.codex/hooks.json`) | règles `prompt` (`~/.codex/rules/adorno.rules`) : demande |
+| Gemini CLI | hook `BeforeTool`, refuse (`.gemini/settings.json`) | politique `ask_user` (`~/.gemini/policies/adorno.toml`) : demande |
+
+Les hooks de Codex et de Gemini ne savent que refuser : en global, ils laissent la place aux règles natives de
+confirmation, qui comparent le début de la commande. Un fichier de hook suivi par le repo n'est jamais modifié
+(avertissement) ; ceux qu'adorno crée sont exclus de git. Ce que le hook ne voit pas : un programme qui pousse sans
+que ses mots apparaissent (un binaire, un `make` dont la recette pousse, un script d'un autre langage lancé par un
+autre), une variable calculée. C'est un garde-fou contre les erreurs et les contournements ordinaires ; la barrière
+absolue est côté GitHub.
+
+**Côté GitHub.** `adorno-github/scripts/repo-audit [owner/repo…]` (lecture seule ; sans argument, tous les repos de
+ton registre) dit ce que GitHub lui-même impose : le type de jeton que `gh` utilise (un jeton classique `repo`
+peut tout faire, partout) et si la branche par défaut de chaque repo exige une pull request et bloque les force
+pushes (ruleset ou protection de branche). Recommandé : un jeton *fine-grained* limité aux repos où travaille adorno
+(Contents, Pull requests, Issues : lecture et écriture ; Actions : lecture ; pas d'Administration), et un ruleset
+sur chaque branche par défaut (Settings › Rules : pull request obligatoire, force push bloqué). Même une écriture qui
+passerait toutes les gardes d'adorno serait alors refusée par GitHub.
 
 **Le contenu non fiable.** Diffs, commentaires, messages Slack, pages Notion et logs sont traités comme des données,
 jamais comme des consignes. Le code d'une PR venue d'un fork n'est jamais exécuté. Une surveillance Slack ne lance son

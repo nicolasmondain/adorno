@@ -1368,7 +1368,10 @@ def write_registry() -> Path | None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         path.chmod(0o600)
-    path.write_text(json.dumps(registry(), indent=2, ensure_ascii=False, default=str) + "\n")
+    data = registry()
+    # where it comes from: the scripts warn when this file is newer than the registry (an install was forgotten)
+    data["_layer"] = {"file": str(LOCAL / "adorno.yaml"), "kit": str(ROOT)}
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str) + "\n")
     path.chmod(0o400)
     return path
 
@@ -1499,6 +1502,9 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
                 managed[path] = instructions  # a full copy wins over a shim
             else:
                 managed.setdefault(path, text)
+    if args.global_:
+        for path, data in global_rule_files(targets).items():
+            plan[path] = (data, False, None)  # generated: written even with --link
     managed = {p: t for p, t in managed.items() if p not in plan}
     if in_git:
         # never write personal instructions into a file the repo tracks. Claude gets them as a rule file instead; a
@@ -1529,9 +1535,15 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
         warn("models.agents in your defaults send agents to external routes in every repo; set `external: false` "
              "on the repos whose data must stay with you")
     spath = settings_path(dest, args.global_)
-    hook = guard_hook(dest, args.global_, plan) if "claude" in targets else None
-    if perms or env or hook or load_state(dest).get("permissions") or load_state(dest).get("env") or load_state(dest).get("hook"):
+    hooks = guards(dest, args.global_, targets, plan)
+    for rel in [r for r in hooks if in_git and not args.global_ and is_tracked(dest, r)]:
+        warn(f"{rel} is tracked by the repo: adorno's guard hook is not added to it")
+        del hooks[rel]
+    previous_hooks = owned_hooks(load_state(dest), dest, args.global_)
+    if perms or env or load_state(dest).get("permissions") or load_state(dest).get("env"):
         read_settings(spath)  # fail before writing anything
+    for rel in set(hooks) | set(previous_hooks):
+        read_settings(dest / rel)
     state = load_state(dest)
     if args.dry_run:
         shown = str(spath).replace(str(Path.home()), "~", 1) if args.global_ else str(spath.relative_to(dest))
@@ -1540,8 +1552,9 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
         for kind, rules in perms.items():
             for r in rules:
                 print(f"  ! {shown} permissions.{kind}: {r}")
-        if hook:
-            print(f"  ! {shown} hooks.PreToolUse (Bash): {hook}")
+        for rel, h in hooks.items():
+            where = "~/" + rel if args.global_ else rel
+            print(f"  ! {where} hooks.{h['event']} ({h['matcher']}): adorno guard")
         stale = sorted(set(state["files"]) - set(plan))
         print(f"would install {len(plan)} file(s) into {dest} for {', '.join(targets)}")
         for p in sorted(plan):
@@ -1581,7 +1594,7 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
                 continue
             p.unlink()
         p.parent.mkdir(parents=True, exist_ok=True)
-        if args.link:
+        if args.link and source is not None:
             p.symlink_to(source)
         else:
             p.write_bytes(data)
@@ -1614,7 +1627,12 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
     state_path.write_text(json.dumps(record, indent=2) + "\n")  # files are recorded before anything else can fail
     record["permissions"] = apply_permissions(spath, perms, state.get("permissions") or {}, dest)
     record["env"] = apply_env(spath, env, state.get("env") or {}, dest)
-    record["hook"] = apply_hook(spath, hook, state.get("hook"), dest)
+    owned = {}
+    for rel in sorted(set(hooks) | set(previous_hooks)):
+        got = apply_hook(dest / rel, hooks.get(rel), previous_hooks.get(rel), dest)
+        if got:
+            owned[rel] = got
+    record["hook"] = owned
     state_path.write_text(json.dumps(record, indent=2) + "\n")
     if in_git:
         # every file holding our block that the repo does not track, yours included: the block is personal
@@ -1622,7 +1640,8 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
         for p in ours:
             if not new_managed[p]:
                 warn(f"{p} is yours, untracked, and now holds adorno's personal block: excluded from git")
-        extra = [".adorno/"] + ([".claude/settings.local.json"] if spath.exists() and not args.global_ else [])
+        extra = [".adorno/"] + ([".claude/settings.local.json"] if spath.exists() and not args.global_ else []) \
+            + [rel for rel in owned if rel != ".claude/settings.local.json" and not is_tracked(dest, rel)]
         update_exclude(dest, exclude_patterns(list(new_files) + ours, extra))
     # the registry follows your personal layer: every install with it rewrites it (a tightened max_level or deny
     # applies at once, a new repo is known at once)
@@ -1692,37 +1711,106 @@ def apply_permissions(path: Path, wanted: dict[str, list[str]], previous: dict[s
     return owned
 
 
-GUARD = ".claude/skills/adorno-github/scripts/guard_bash.py"
+# Direct shell writes that must go through adorno's scripts (the guard hook reads them in full; these prefixes are
+# for the tools' own confirmation rules in a global install)
+SHELL_WRITES = [
+    ["git", "push"], ["gh", "pr", ["create", "comment", "review", "merge", "close", "edit", "reopen"]],
+    ["gh", "issue", ["create", "comment", "edit", "close"]], ["gh", "release"], ["gh", "api"],
+]
+GUARD_NAME = "adorno-github/scripts/guard_bash.py"
 
 
-def guard_hook(dest: Path, global_: bool, plan: dict) -> str | None:
-    """The PreToolUse hook command that stops direct writes (git push, gh pr comment, gh api -f…) however they are
-    written: `deny` in a repo, `ask` in your user settings (they apply to every project). None without Claude."""
-    if GUARD not in plan:
-        return None
-    return f'python3 "{dest / GUARD}" {"ask" if global_ else "deny"}'
+def guard_path(plan: dict, target: str) -> str | None:
+    """Where the target's copy of the guard lands (relative to the install folder), or None."""
+    for path, (_data, _exe, src) in plan.items():
+        if path.endswith(GUARD_NAME) and src is not None and str(src).startswith(str(DIST / target) + os.sep):
+            return path
+    return None
 
 
-def apply_hook(path: Path, wanted: str | None, previous: str | None, stop: Path) -> str | None:
-    """Our Bash PreToolUse hook into a Claude Code settings file: add it, remove the one a previous install added,
-    never touch a hook we did not add. Returns the command we own."""
+def guard_command(script: Path, mode: str, fmt: str) -> str:
+    """The hook command. Closed on failure: without python3, or without the guard file, every shell command is
+    refused (exit 2) rather than let through."""
+    return (f'command -v python3 >/dev/null 2>&1 || {{ echo "adorno: python3 is missing, shell commands are blocked '
+            f'(install python3, or bin/kit uninstall)" >&2; exit 2; }}; '
+            f'python3 "{script}" {mode} --format={fmt} || exit 2')
+
+
+def guards(dest: Path, global_: bool, targets: list[str], plan: dict) -> dict[str, dict]:
+    """The guard hook of each tool, as {settings file (relative to dest): {event, matcher, command, timeout}}.
+    Claude: deny in a repo, ask in your user settings. Codex and Gemini refuse in a repo; their hooks cannot ask, so a
+    global install gives them confirmation rules instead (global_rule_files)."""
+    out: dict[str, dict] = {}
+    if "claude" in targets and (g := guard_path(plan, "claude")):
+        rel = str(settings_path(dest, global_).relative_to(dest))
+        out[rel] = {"event": "PreToolUse", "matcher": "Bash", "timeout": 10,
+                    "command": guard_command(dest / g, "ask" if global_ else "deny", "claude")}
+    if global_:
+        return out
+    if "codex" in targets and (g := guard_path(plan, "codex")):
+        out[".codex/hooks.json"] = {"event": "PreToolUse", "matcher": "^Bash$", "timeout": 10,
+                                    "command": guard_command(dest / g, "deny", "codex")}
+    if "gemini" in targets and (g := guard_path(plan, "gemini")):
+        out[".gemini/settings.json"] = {"event": "BeforeTool", "matcher": "run_shell_command", "timeout": 10000,
+                                        "command": guard_command(dest / g, "deny", "gemini")}
+    return out
+
+
+def global_rule_files(targets: list[str]) -> dict[str, bytes]:
+    """--global: confirmation rules in the tools' own formats (the guard hook asks only in Claude Code)."""
+    files: dict[str, bytes] = {}
+    why = "adorno: a direct write; agents publish through the adorno-github scripts"
+    if "codex" in targets:
+        lines = ["# Written by adorno (bin/kit install --global); removed by bin/kit uninstall --global.",
+                 "# Codex asks before each direct write; agents publish through the adorno-github scripts.", ""]
+        for pattern in SHELL_WRITES:
+            lines.append(f"prefix_rule(pattern={json.dumps(pattern)}, decision=\"prompt\", "
+                         f"justification={json.dumps(why)})")
+        files[".codex/rules/adorno.rules"] = ("\n".join(lines) + "\n").encode()
+    if "gemini" in targets:
+        prefixes = []
+        for pattern in SHELL_WRITES:
+            head = " ".join(w for w in pattern if isinstance(w, str))
+            tails = next((w for w in pattern if isinstance(w, list)), None)
+            prefixes += [f"{head} {t}" for t in tails] if tails else [head]
+        body = ["# Written by adorno (bin/kit install --global); removed by bin/kit uninstall --global.", "",
+                "[[rule]]", 'toolName = "run_shell_command"', f"commandPrefix = {json.dumps(prefixes)}",
+                'decision = "ask_user"', "priority = 900", ""]
+        files[".gemini/policies/adorno.toml"] = "\n".join(body).encode()
+    return files
+
+
+def apply_hook(path: Path, wanted: dict | None, previous: dict | None, stop: Path) -> dict | None:
+    """Our guard hook into a settings file (Claude Code, Codex hooks.json, Gemini): add it, remove the one a previous
+    install added, never touch a hook we did not add. Returns what we own."""
     if not wanted and not previous:
         return None
     data = read_settings(path)
     hooks = data.setdefault("hooks", {})
-    entries = [e for e in hooks.get("PreToolUse") or []
-               if not (isinstance(e, dict) and any(h.get("command") in (previous, wanted)
-                                                   for h in e.get("hooks") or [] if isinstance(h, dict)))]
-    if wanted:
-        entries.append({"matcher": "Bash", "hooks": [{"type": "command", "command": wanted, "timeout": 10}]})
-    if entries:
-        hooks["PreToolUse"] = entries
-    else:
-        hooks.pop("PreToolUse", None)
+    ours = {h.get("command") for h in (previous, wanted) if h}
+    for event in {h["event"] for h in (previous, wanted) if h}:
+        entries = [e for e in hooks.get(event) or []
+                   if not (isinstance(e, dict) and any(isinstance(x, dict) and x.get("command") in ours
+                                                       for x in e.get("hooks") or []))]
+        if wanted and wanted["event"] == event:
+            entries.append({"matcher": wanted["matcher"], "hooks": [
+                {"type": "command", "command": wanted["command"], "timeout": wanted["timeout"]}]})
+        if entries:
+            hooks[event] = entries
+        else:
+            hooks.pop(event, None)
     if not hooks:
         data.pop("hooks")
     write_settings(path, data, stop)
     return wanted
+
+
+def owned_hooks(state: dict, dest: Path, global_: bool) -> dict[str, dict]:
+    """The hooks a previous install added (an older install recorded one Claude command as a string)."""
+    h = state.get("hook")
+    if isinstance(h, str):
+        return {str(settings_path(dest, global_).relative_to(dest)): {"event": "PreToolUse", "command": h}}
+    return h if isinstance(h, dict) else {}
 
 
 def apply_env(path: Path, wanted: dict[str, str], previous: dict[str, str], stop: Path) -> dict:
@@ -1766,7 +1854,8 @@ def uninstall_from(args, dest: Path) -> None:
     spath = settings_path(dest, dest == Path.home())
     apply_permissions(spath, {}, state.get("permissions") or {}, dest)
     apply_env(spath, {}, state.get("env") or {}, dest)
-    apply_hook(spath, None, state.get("hook"), dest)
+    for rel, h in owned_hooks(state, dest, dest == Path.home()).items():
+        apply_hook(dest / rel, None, h, dest)
     if dest != Path.home():
         update_exclude(dest, [])
     elif (kit_home() / "registry.json").exists():

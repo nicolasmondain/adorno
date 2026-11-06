@@ -20,3 +20,16 @@ jobs:
         run: shellcheck -x -s bash -P SCRIPTDIR $(find src/skills -path '*/scripts/*' -type f ! -name '*.jq' ! -name '*.py') tests/fake-gh tests/fake-curl tests/*.sh
       - name: Test the scripts (fake gh, fake curl, fixtures)
         run: for t in tests/*.test.sh; do "$t" || exit 1; done
+
+  macos-bash-3-2:
+    # the scripts must run with the bash macOS ships (3.2): every suite, with /bin/bash first in PATH
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6.8.0
+      - name: Test the scripts with /bin/bash 3.2
+        run: |
+          mkdir -p "$RUNNER_TEMP/bash32" && ln -sf /bin/bash "$RUNNER_TEMP/bash32/bash"
+          export PATH="$RUNNER_TEMP/bash32:$PATH"
+          bash --version | head -1 | grep -q 'version 3\.2'
+          for t in tests/*.test.sh; do /bin/bash "$t" || exit 1; done

@@ -28,7 +28,8 @@ et rendent du JSON sur stdout ; les messages vont sur stderr. Prérequis : `gh` 
 | `ci-failed owner/repo#N [lignes]` | runs en échec sur le dernier commit + fin des logs dans des fichiers | L0 |
 | `ci-rerun owner/repo RUN_ID` | relance les jobs en échec, une seule fois par run | L2 |
 | `run-begin --workflow ID --mode report\|draft\|pending\|comment\|auto --level Lx --repo owner/repo… [--deny a,b] [--ttl 2h]` | ouvre une exécution pour les repos nommés : ce qu'elle a le droit d'écrire, son dossier ; `report`/`draft` forcent la simulation | — |
-| `guard_bash.py deny\|ask` | hook Claude Code (PreToolUse, Bash) posé par `bin/kit install` : refuse ou fait confirmer un push, une publication GitHub, une écriture du registre ou des exécutions, quelle que soit la forme de la commande | — |
+| `guard_bash.py deny\|ask [--format=claude\|codex\|gemini]` | hook (Claude Code, Codex, Gemini) posé par `bin/kit install` : refuse ou fait confirmer un push, une publication GitHub, une écriture du registre ou des exécutions, quelle que soit la forme de la commande ; bloque tout sans `python3` | — |
+| `repo-audit [owner/repo…]` | lecture seule : type et portée du jeton `gh`, protection de la branche par défaut (ruleset, protection de branche), droits admin ; conseils | — |
 | `run-end ID` | clôt l'exécution (à faire toujours, même après un échec) | — |
 | `git-push owner/repo [BRANCHE] [--dir CHEMIN]` | pousse une branche sans PR : jamais en force, jamais la base, nom conforme à `branch_pattern` | L2 |
 | `pr-push owner/repo#N` | pousse les commits du workspace sur la branche de ta PR, jamais en force | L2 |

@@ -187,6 +187,7 @@ tests/adorno-llm.test.sh     # tests de l'envoi à un modèle externe, sans rés
 tests/kit.test.sh            # tests de bin/kit : validation, installation, désinstallation
 tests/adorno-setup.test.sh   # tests du setup (source d'adorno, échantillons de voix)
 tests/adorno-learn.test.sh   # tests du profil qui apprend
+# la CI les lance aussi sur macOS, avec /bin/bash 3.2
 ```
 
 `kit install` est idempotent, retire ce qui a disparu du kit et ne touche ni tes fichiers ni ceux que tu as modifiés.
@@ -194,10 +195,22 @@ Dans un repo, tout ce qu'il installe est ajouté à `.git/info/exclude` (rien ne
 n'écrit jamais dans un `CLAUDE.md` ou `AGENTS.md` suivi par le repo (Claude reçoit alors `.claude/rules/adorno.md`),
 et à côté d'une installation globale (avec ta couche personnelle) il laisse les instructions à celle-ci pour Claude,
 Codex et Gemini. Ton registre complet vit dans `~/.adorno/registry.json`, hors de tout repo, en lecture seule ; chaque
-installation avec ta couche le réécrit. Avec `--global`, les écritures directes (`git push`, `gh pr …`) te demandent
-confirmation dans tous tes projets ; dans un repo installé, elles sont refusées. Un hook Claude Code lit chaque
-commande shell en entier, si bien que `git -C x push`, `bash -c '…'` ou `gh api -f` ne passent pas non plus. Un fichier de réglages Claude Code invalide arrête
-l'installation avant toute écriture.
+installation avec ta couche le réécrit, et les scripts préviennent quand `local/` a changé depuis. Un fichier de
+réglages invalide arrête l'installation avant toute écriture.
+
+Quatre barrières séparent une commande d'agent de GitHub (détail dans `docs/setup.md`, étape 4) :
+
+1. **Règles natives** de chaque outil, sur le début de la commande (`git push`, `gh pr comment`…).
+2. **Hook de garde** (`guard_bash.py`, pour Claude Code, Codex et Gemini) : il lit la commande comme le shell
+   (`git -C x push`, `bash -c '…'`, `$( … )`, alias git, `python3 -c`, scripts locaux lancés) ; il bloque tout si
+   `python3` manque.
+3. **Scripts adorno** : une exécution ouverte par la session (`CLAUDE_CODE_SESSION_ID`), pour les repos qu'elle
+   nomme, sous le `max_level` et les `deny` du repo.
+4. **GitHub** : ton jeton et tes rulesets. `repo-audit` (lecture seule) dit si la branche par défaut exige une PR et
+   si ton jeton est trop large.
+
+Dans un repo installé, les barrières 1 et 2 refusent ; avec `--global` (valable dans tous tes projets), elles te
+demandent confirmation.
 
 | | Skills | Agents | Workflows | Instructions |
 | --- | --- | --- | --- | --- |

@@ -81,7 +81,13 @@ check "the registry lives in the kit home, read-only" '[ "$(ls -l "$ADORNO_HOME/
 check "no personal registry inside the repo" '! grep -rq "janedoe" "$A/.claude/skills/adorno-github/repos.json"'
 check "your own rules and keys are kept" 'jq -e ".model == \"x\" and (.permissions.allow | index(\"Bash(make:*)\")) != null" "$A/.claude/settings.local.json" >/dev/null'
 check "the repo's and the default rules are added" 'jq -e "(.permissions.allow | index(\"Bash(npm test:*)\")) != null and (.permissions.deny | index(\"Bash(git push:*)\")) != null" "$A/.claude/settings.local.json" >/dev/null'
-check "the guard hook refuses direct writes in this repo" 'jq -e "[.hooks.PreToolUse[].hooks[].command | select(contains(\"guard_bash.py\") and endswith(\" deny\"))] | length == 1" "$A/.claude/settings.local.json" >/dev/null'
+check "the guard hook refuses direct writes in this repo" 'jq -e "[.hooks.PreToolUse[].hooks[].command | select(contains(\"guard_bash.py\") and contains(\" deny --format=claude\"))] | length == 1" "$A/.claude/settings.local.json" >/dev/null'
+check "Codex gets the same hook" 'jq -e "[.hooks.PreToolUse[] | select(.matcher == \"^Bash$\") | .hooks[].command | select(contains(\"--format=codex\"))] | length == 1" "$A/.codex/hooks.json" >/dev/null'
+HOOK="$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$A/.claude/settings.local.json")"
+got="$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git -C x push"}}' | sh -c "$HOOK" | jq -r .hookSpecificOutput.permissionDecision)"
+check "the installed hook runs and refuses" '[ "$got" = deny ]'
+printf '%s' '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | PATH=/nonexistent /bin/sh -c "$HOOK" 2>/dev/null; got=$?
+check "without python3 the hook blocks (exit 2), it does not let commands through" '[ "$got" = 2 ]'
 check "tiers become Claude models" 'grep -q "^model: opus" "$A/.claude/agents/adorno.md"'
 check "the vision is in every agent" 'grep -q "owner.s vision" "$A/.claude/agents/adorno-agent-fix-patch.md"'
 check "the private profile is installed" '[ -f "$A/.claude/skills/adorno-profile/references/product.md" ] || [ -d "$A/.claude/skills/adorno-profile" ]'
@@ -111,6 +117,7 @@ expect_exit 0 "a repo tracking CLAUDE.md and AGENTS.md" -- "${KIT[@]}" install "
 check "both tracked files untouched" '[ "$(cat "$D/CLAUDE.md")" = "# team" ] && [ "$(cat "$D/AGENTS.md")" = "# team agents" ]'
 check "Claude gets the rule file" '[ -f "$D/.claude/rules/adorno.md" ]'
 check "Gemini gets the full text, not a shim to the repo's AGENTS.md" 'grep -q "owner.s vision\|vision" "$D/GEMINI.md" && ! grep -qx "@AGENTS.md" "$D/GEMINI.md"'
+check "Gemini gets the guard hook" 'jq -e ".hooks.BeforeTool[0].matcher == \"run_shell_command\" and (.hooks.BeforeTool[0].hooks[0].command | contains(\"--format=gemini\"))" "$D/.gemini/settings.json" >/dev/null'
 check "Codex is warned it gets nothing" 'grep -q "codex get no adorno instructions" "$TMP/err"'
 check "nothing to commit" '[ -z "$(git -C "$D" status --porcelain)" ]'
 "${KIT[@]}" uninstall "$D" --force >/dev/null
@@ -134,13 +141,16 @@ echo "uninstall"
 expect_exit 0 "uninstall the repo" -- "${KIT[@]}" uninstall "$A" --force
 check "agents gone" '[ ! -e "$A/.claude/agents" ]'
 check "exclude block gone" '! grep -q "adorno:begin" "$(git -C "$A" rev-parse --git-path info/exclude)"'
+check "the Codex hook file is gone" '[ ! -e "$A/.codex/hooks.json" ]'
 check "the hook is gone" '! jq -e ".hooks" "$A/.claude/settings.local.json" >/dev/null'
 check "your settings are back as they were" 'jq -e ".model == \"x\" and .permissions.allow == [\"Bash(make:*)\"] and (.permissions.deny == null)" "$A/.claude/settings.local.json" >/dev/null'
 
 echo "global install"
-expect_exit 0 "install --global" -- "${KIT[@]}" install --global --targets claude
+expect_exit 0 "install --global" -- "${KIT[@]}" install --global --targets claude,codex,gemini
+check "Codex asks before direct writes (its own rules)" 'grep -q "prefix_rule(pattern=\[\"git\", \"push\"\], decision=\"prompt\"" "$HOME/.codex/rules/adorno.rules"'
+check "Gemini asks too (its policy engine)" 'grep -q "decision = \"ask_user\"" "$HOME/.gemini/policies/adorno.toml" && grep -q "\"gh pr comment\"" "$HOME/.gemini/policies/adorno.toml"'
 check "in your user settings, direct shell writes ask (they apply to every project)" 'jq -e "(.permissions.ask | index(\"Bash(gh pr comment:*)\")) != null and ((.permissions.deny // []) | index(\"Bash(gh pr comment:*)\")) == null" "$HOME/.claude/settings.json" >/dev/null'
-check "the global guard hook asks" 'jq -e "[.hooks.PreToolUse[].hooks[].command | select(contains(\"guard_bash.py\") and endswith(\" ask\"))] | length == 1" "$HOME/.claude/settings.json" >/dev/null'
+check "the global guard hook asks" 'jq -e "[.hooks.PreToolUse[].hooks[].command | select(contains(\"guard_bash.py\") and contains(\" ask --format=claude\"))] | length == 1" "$HOME/.claude/settings.json" >/dev/null'
 check "... and edits of adorno's files stay denied" 'jq -e "(.permissions.deny | index(\"Edit(~/.adorno/registry.json)\")) != null" "$HOME/.claude/settings.json" >/dev/null'
 expect_exit 0 "dry run of --global" -- "${KIT[@]}" install --global --targets claude --dry-run
 check "... names your user settings" 'grep -q "~/.claude/settings.json" <<<"$out"'
@@ -149,6 +159,7 @@ check "takes its instructions from the global one" '[ ! -e "$A/.claude/rules/ado
 "${KIT[@]}" uninstall "$A" --force >/dev/null
 expect_exit 0 "uninstall --global" -- "${KIT[@]}" uninstall --global
 check "rules removed from your user settings" '[ ! -e "$HOME/.claude/settings.json" ] || ! jq -e ".permissions.deny // .permissions.ask" "$HOME/.claude/settings.json" >/dev/null'
+check "the Codex and Gemini rules are removed" '[ ! -e "$HOME/.codex/rules/adorno.rules" ] && [ ! -e "$HOME/.gemini/policies/adorno.toml" ]'
 check "the registry is removed" '[ ! -e "$ADORNO_HOME/registry.json" ]'
 
 echo "workspace install"

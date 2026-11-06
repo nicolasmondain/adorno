@@ -47,7 +47,20 @@ pr_json() {
       end'
 }
 
+# repo-audit: the repo itself, its rulesets, its branch protection (404 → exit 1, like gh)
+if [[ "$all" =~ ^api\ repos/[^/\ ]+/[^/\ ]+$ ]]; then
+  jq -n --argjson admin "${FAKE_ADMIN:-false}" '{default_branch: "main", permissions: {admin: $admin, push: true}}' | respond
+  exit 0
+fi
 case "$all" in
+  "api -i user")
+    printf 'HTTP/2.0 200 OK\r\n'
+    [ -z "${FAKE_SCOPES+x}" ] || printf 'X-Oauth-Scopes: %s\r\n' "$FAKE_SCOPES"
+    printf 'Content-Type: application/json\r\n\r\n{"login":"octocat"}\n' ;;
+  api\ repos/*/rules/branches/*) printf '%s\n' "${FAKE_RULES:-[]}" | respond ;;
+  api\ repos/*/branches/*/protection)
+    if [ -n "${FAKE_PROTECTION:-}" ]; then printf '%s\n' "$FAKE_PROTECTION" | respond
+    else echo '{"message":"Branch not protected"}' >&2; exit 1; fi ;;
   "api user") echo '{"login":"octocat"}' | respond ;;
   api\ graphql*PullRequestReviewThread\ \{*)
     printf '{"data":{"node":{"pullRequest":{"number":%s,"repository":{"nameWithOwner":"%s"}}}}}\n' \

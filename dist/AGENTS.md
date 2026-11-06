@@ -71,7 +71,10 @@ l'exécution et pose la question.
 --mode <mode> --level <Lx> --repo owner/repo` et finit, toujours, par `run-end <id>`. Le droit accordé vit dans un
 fichier, pas dans une variable d'environnement : sans exécution ouverte sur le repo, chaque script d'écriture refuse
 (L0). Une exécution nomme chaque repo qu'elle touche (`--repo`, au moins un) et ne vaut que pour eux ; deux sessions
-sur un même repo : la plus stricte s'applique, et le script le dit. Les
+sur un même repo : la plus stricte s'applique, et le script le dit. Une exécution n'existe que dans la session qui
+l'a ouverte : après un `/clear`, rouvre-la ; ne fixe jamais `CLAUDE_CODE_SESSION_ID` ni `HOME` toi-même (le hook de
+garde le refuse). Une commande refusée par le hook ne se reformule pas pour passer : passe par le script prévu, ou
+arrête et dis-le. Les
 modes `report` et `draft` y forcent la simulation (rien ne part) et `draft` interdit le push, même si une commande
 l'oublie. Un workflow appelé par un autre réutilise l'exécution ouverte. Ne pousse jamais avec `git push` : `git-push`
 (branche sans PR) ou `pr-push` (branche d'une PR) vérifient le niveau et les droits.

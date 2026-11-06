@@ -77,6 +77,9 @@ Goal: the workflows know this repo — or a whole set of repos — and act withi
 7. **Apply** — `<source>/bin/kit check`, `<source>/bin/kit conf owner/repo` to show the result, then offer
    `<source>/bin/kit install <repo path>` (or `--workspace <name>`) so the native permissions land in the repo.
    Preparing the repo itself (`AGENTS.md`, `CONSTRAINTS.md`, verified commands) is `workflow:repo:onboard`.
+8. **GitHub's own guard** — run `adorno-github/scripts/repo-audit owner/repo` (read only) and show its advice: a
+   classic token with broad scopes, a default branch without a ruleset, an admin token. Offer the settings to change
+   (a fine-grained token limited to these repos, a ruleset requiring a pull request); never change them yourself.
 
 ## Afterwards
 

@@ -17,6 +17,14 @@ if [ -f "$(kit_home)/registry.json" ]; then
 else
   REGISTRY="$ADORNO_GITHUB_DIR/../repos.json"
 fi
+# A registry older than your personal layer: an install was forgotten, a new repo or a tightened right is not known yet.
+if [ "$REGISTRY" = "$(kit_home)/registry.json" ]; then
+  _layer="$(jq -r '._layer.file // empty' "$REGISTRY" 2>/dev/null || true)"
+  if [ -n "$_layer" ] && [ -f "$_layer" ] && [ "$_layer" -nt "$REGISTRY" ]; then
+    printf '%s: %s changed since the last bin/kit install: these rights may be stale (run bin/kit install)\n' \
+      "$(basename "$0")" "$_layer" >&2
+  fi
+fi
 
 # Exit codes shared by every script (documented in SKILL.md).
 E_USAGE=2 E_UNREGISTERED=3 E_POLICY=4 E_LEVEL=5
@@ -32,8 +40,8 @@ need jq
 # ── runs: what the current workflow was granted ───────────────────────────────────────────────────────────────────
 # A workflow starts with `run-begin` (mode, level, denied actions, dry run, repos) and ends with `run-end`. The grant
 # lives in a file, not in an environment variable (agents' shells do not keep them). A run applies only to the repos
-# it names. No run applies to a repo → L0: every write is refused (fail closed). Several runs apply (two sessions on
-# the same repo) → the strictest wins, and require_level says so.
+# it names, and only in the session that opened it. No run applies to a repo → L0: every write is refused (fail
+# closed). Several runs apply (one session, two workflows) → the strictest wins, and require_level says so.
 runs_dir() { printf '%s/runs/active' "$(kit_home)"; }
 
 # active_runs -> JSON array of the non-expired runs. An expired run file is removed; a file that does not parse is
@@ -55,12 +63,18 @@ active_runs() {
   printf '%s\n' "$out"
 }
 
-# grant [owner/repo] -> {level, deny, dry_run, runs, ids} for that repo: the active runs that name it, lowered (never
-# raised) by ADORNO_LEVEL. Without a repo: the runs that name any repo (used for dry_run only).
+# The session a run belongs to: Claude Code sets CLAUDE_CODE_SESSION_ID in every shell command it runs. In a session,
+# only that session's runs count (another session's run can neither lower nor raise yours); without one (Codex,
+# Gemini, a terminal), only the runs opened outside any session do.
+session_id() { printf '%s' "${CLAUDE_CODE_SESSION_ID:-}"; }
+
+# grant [owner/repo] -> {level, deny, dry_run, runs, ids} for that repo: this session's active runs that name it,
+# lowered (never raised) by ADORNO_LEVEL. Without a repo: those that name any repo (used for dry_run only).
 grant() {
-  active_runs | jq --arg env "${ADORNO_LEVEL:-}" --arg dry "${ADORNO_DRY_RUN:-0}" --arg repo "${1:-}" '
+  active_runs | jq --arg env "${ADORNO_LEVEL:-}" --arg dry "${ADORNO_DRY_RUN:-0}" --arg repo "${1:-}" \
+    --arg session "$(session_id)" '
     def n: {"L0":0,"L1":1,"L2":2,"L3":3,"L4":4}[.] // 0;
-    [ .[] | select(((.repos // []) | length) > 0)
+    [ .[] | select((.session // "") == $session) | select(((.repos // []) | length) > 0)
           | select($repo == "" or ((.repos | map(ascii_downcase) | index($repo | ascii_downcase)) != null)) ]
     | (if length == 0 then "L0" else (map(.level) | min_by(n)) end) as $runs
     | {level: (if $env != "" and ($env | n) < ($runs | n) then $env else $runs end),
@@ -160,7 +174,7 @@ require_level() {
   g="$(grant "$1")"
   granted="$(jq -r .level <<<"$g")"
   if [ "$(jq -r .runs <<<"$g")" -gt 1 ]; then
-    log "several runs cover $1, the strictest applies: $(jq -r '.ids | join("; ")' <<<"$g") (run-end the stale ones)"
+    log "several runs of this session cover $1, the strictest applies: $(jq -r '.ids | join("; ")' <<<"$g") (run-end the stale ones)"
   fi
   if [ "$(level_num "$granted")" -lt "$need_n" ]; then
     if [ "$(jq -r .runs <<<"$g")" = 0 ]; then
