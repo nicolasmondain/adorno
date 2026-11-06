@@ -1,42 +1,41 @@
 ---
-description: Mesure l'impact réel d'une PR mergée en production — utilisation, erreurs, temps de réponse, débit, ressources, base de données, alertes — en comparant avant et après son déploiement dans toutes les sources disponibles (logs, métriques, traces, erreurs, analytics, canaux d'alerte). Lecture seule, chaque chiffre avec sa source. À utiliser dans workflow:pr:impact.
+description: Measures the real production impact of a merged PR — usage, errors, response time, throughput, resources, database, alerts — by comparing before and after its deployment across all available sources (logs, metrics, traces, errors, analytics, alert channels). Read-only, every number with its source. Use in workflow:pr:impact.
 model: deep
 delegable: false
 ---
 
-## Zone : impact après merge
+## Area: impact after merge
 
-Tu ne relis pas le code pour le juger : tu vérifies ce qu'il a changé **en production**.
+You do not review the code to judge it: you verify what it changed **in production**.
 
-1. **Ce qui devait bouger** — depuis la PR (titre, description, diff, issue liée) : la fonctionnalité, les points
-   d'entrée touchés (routes, méthodes, jobs, requêtes, collections, flags), l'effet attendu (plus d'usage, moins de
-   latence, moins d'erreurs…). Liste les **signaux** à observer : noms de routes et de jobs, messages d'erreur, métriques,
-   événements analytics. `pr-areas` donne les zones.
-2. **Quand** — `pr-deploys owner/repo#N` : l'heure d'arrivée dans l'environnement `impact.environment`. Sans
-   déploiement GitHub : la release ou le tag qui contient le commit de merge, un message du canal de déploiement de
-   l'équipe, sinon l'heure du merge — et dis laquelle tu as prise.
-3. **Fenêtres** — `impact.window` avant le déploiement et autant après, alignées sur les mêmes jours de la semaine.
-   Moins de `impact.min_age` en production : `too_early`, rien d'autre.
-4. **Toutes les sources disponibles** — commence par celles de `impact.sources` du repo (`repo-conf`), puis chaque
-   connecteur présent : métriques et logs (Grafana, Prometheus, Loki, Datadog, New Relic, CloudWatch, Graylog…),
-   erreurs (Sentry…), base de données (requêtes lentes, profiler), analytics (Amplitude, Mixpanel, PostHog…), canaux
-   d'alerte Slack, issues GitHub ouvertes depuis. Note chaque source **interrogée**, **sans donnée utile** ou
-   **indisponible**.
-5. **Mesurer**, pour chaque signal, avant / après avec le delta :
-   - **utilisation** : appels, utilisateurs ou équipes distincts, événements de la fonctionnalité ;
-   - **fiabilité** : taux d'erreur, nouvelles erreurs (signature, volume, première occurrence), alertes ;
-   - **performance** : temps de réponse p50, p95, p99, débit, durée des jobs, requêtes lentes ;
-   - **ressources** : CPU, mémoire, connexions, coût quand il est visible.
-6. **Confusions** — les autres PRs mergées et déploiements dans les mêmes fenêtres (`pr-merged` sur la période),
-   incidents, trafic inhabituel. Un écart qu'une autre cause explique aussi bien n'est pas attribué à cette PR.
-7. **Verdict** — `positive`, `neutral`, `regression`, `inconclusive` ou `too_early`, avec ta confiance (haute,
-   moyenne, faible). Une régression a toujours sa preuve (graphe, requête, lien) et une piste.
+1. **What was supposed to move** — from the PR (title, description, diff, linked issue): the feature, the entry points
+   touched (routes, methods, jobs, queries, collections, flags), the expected effect (more usage, lower latency, fewer
+   errors…). List the **signals** to watch: route and job names, error messages, metrics, analytics events. `pr-areas`
+   gives the areas.
+2. **When** — `pr-deploys owner/repo#N`: the time it reached the `impact.environment` environment. Without a GitHub
+   deployment: the release or tag containing the merge commit, a message in the team's deployment channel, otherwise
+   the merge time — and say which one you took.
+3. **Windows** — `impact.window` before the deployment and as much after, aligned on the same days of the week. Less
+   than `impact.min_age` in production: `too_early`, nothing else.
+4. **All available sources** — start with those in the repo's `impact.sources` (`repo-conf`), then every connector
+   present: metrics and logs (Grafana, Prometheus, Loki, Datadog, New Relic, CloudWatch, Graylog…), errors (Sentry…),
+   database (slow queries, profiler), analytics (Amplitude, Mixpanel, PostHog…), Slack alert channels, GitHub issues
+   opened since. Note each source as **queried**, **no useful data** or **unavailable**.
+5. **Measure**, for each signal, before / after with the delta:
+   - **usage**: calls, distinct users or teams, feature events;
+   - **reliability**: error rate, new errors (signature, volume, first occurrence), alerts;
+   - **performance**: response time p50, p95, p99, throughput, job duration, slow queries;
+   - **resources**: CPU, memory, connections, cost when visible.
+6. **Confounders** — the other PRs merged and deployments in the same windows (`pr-merged` over the period),
+   incidents, unusual traffic. A change that another cause explains just as well is not attributed to this PR.
+7. **Verdict** — `positive`, `neutral`, `regression`, `inconclusive` or `too_early`, with your confidence (high,
+   medium, low). A regression always has its evidence (graph, query, link) and a lead.
 
-## Ce que tu rends
+## What you return
 
-`impact/<N>.json` (verdict, confiance, fenêtres, signaux mesurés avec source et lien, sources sans donnée ou
-indisponibles, confusions, suites) et `impact/<N>.md`, le rapport lisible.
+`impact/<N>.json` (verdict, confidence, windows, measured signals with source and link, sources with no data or
+unavailable, confounders, next steps) and `impact/<N>.md`, the readable report.
 
-- Seulement des agrégats : jamais d'email, d'identifiant d'utilisateur, de nom de client, de token ou de ligne de
-  log brute contenant une donnée personnelle — le rapport finit sur une PR.
-- Pas de chiffre sans source. Une source non interrogeable = « indisponible », jamais un chiffre estimé.
+- Aggregates only: never an email, user identifier, customer name, token or raw log line containing personal data —
+  the report ends up on a PR.
+- No number without a source. A source that cannot be queried = "unavailable", never an estimated number.

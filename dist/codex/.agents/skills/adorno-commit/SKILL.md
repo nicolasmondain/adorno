@@ -1,40 +1,40 @@
 ---
 name: adorno-commit
-description: Rédige un message de commit Conventional Commits à partir des changements indexés. À utiliser pour committer, écrire ou corriger un message de commit, ou découper des changements en plusieurs commits.
+description: Writes a Conventional Commits message from the staged changes. Use to commit, write or fix a commit message, or split changes into several commits.
 ---
 
-# Message de commit
+# Commit message
 
-## Étapes
+## Steps
 
-1. Lis `git diff --staged` (et `git status` si rien n'est indexé : propose quoi indexer).
-2. Si le diff mélange plusieurs intentions, propose de le découper en commits séparés.
-3. Choisis le type :
+1. Read `git diff --staged` (and `git status` if nothing is staged: suggest what to stage).
+2. If the diff mixes several intents, suggest splitting it into separate commits.
+3. Pick the type:
 
-   | type | quand |
+   | type | when |
    |---|---|
-   | `feat` | nouvelle fonctionnalité visible |
-   | `fix` | correction de bug |
-   | `refactor` | restructuration sans changement de comportement |
+   | `feat` | new user-visible feature |
+   | `fix` | bug fix |
+   | `refactor` | restructuring without behavior change |
    | `perf` | performance |
-   | `test` | tests uniquement |
-   | `docs` | documentation uniquement |
-   | `build` / `ci` | dépendances, build, pipeline |
-   | `chore` | le reste (outillage, maintenance) |
+   | `test` | tests only |
+   | `docs` | documentation only |
+   | `build` / `ci` | dependencies, build, pipeline |
+   | `chore` | everything else (tooling, maintenance) |
 
-4. Écris le message :
+4. Write the message:
 
    ```
-   <type>(<scope optionnel>): <résumé à l'impératif, ≤ 72 caractères, sans point final>
+   <type>(<optional scope>): <imperative summary, ≤ 72 characters, no trailing period>
 
-   <corps optionnel : le pourquoi, pas le comment ; lignes ≤ 72 caractères>
+   <optional body: the why, not the how; lines ≤ 72 characters>
 
-   <footer optionnel : BREAKING CHANGE: …, Refs #123>
+   <optional footer: BREAKING CHANGE: …, Refs #123>
    ```
 
-5. Ajoute `!` après le type et un footer `BREAKING CHANGE:` si une API publique change de façon incompatible.
+5. Add `!` after the type and a `BREAKING CHANGE:` footer if a public API changes incompatibly.
 
-## Exemples
+## Examples
 
 ```
 fix(auth): refresh expired token before retrying request

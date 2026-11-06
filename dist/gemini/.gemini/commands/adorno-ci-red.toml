@@ -1,16 +1,16 @@
-description = "Traite une CI rouge sur une PR — diagnostic des logs, une seule relance si flaky, sinon correction par l'agent désigné et push. À utiliser dès qu'un check échoue."
+description = "Handles a red CI on a PR — diagnosis from the logs, a single rerun if flaky, otherwise a fix by the designated agent and a push. Use as soon as a check fails."
 prompt = '''
-Entrée : {{args}}
+Input: {{args}}
 
-**Exécution** — avant toute chose : `adorno-github/scripts/run-begin --workflow workflow:ci:red --mode auto --level L2 --repo owner/repo` ; garde `id` et `dir` (le dossier d'exécution). Appelé par un autre workflow qui a déjà ouvert la sienne : réutilise-la. Toujours, même après un échec : `run-end <id>`. Sans exécution ouverte, les scripts refusent toute écriture.
+**Run** — before anything else: `adorno-github/scripts/run-begin --workflow workflow:ci:red --mode auto --level L2 --repo owner/repo`; keep `id` and `dir` (the run folder). Called by another workflow that already opened its own: reuse it. Always, even after a failure: `run-end <id>`. With no open run, the scripts refuse any write.
 
-1. `agent:ci:debug` lit `ci-failed {{args}}` et écrit `ci.md` (classe, cause, agent désigné).
-2. Selon la classe :
-   - **infra** : rien à corriger ; compte rendu et arrêt.
-   - **flaky** : `ci-rerun owner/repo <run>` une seule fois, puis `ci-wait`. Rechute → traite comme un vrai échec.
-   - **vrai échec** : l'agent désigné corrige sur la branche de la PR, dans un worktree ; tests et lint en local
-     d'abord, un commit typé, puis `pr-push owner/repo#N` (ou `git-push owner/repo <branche>` sans PR) — jamais
-     un `git push` direct.
-3. `ci-wait {{args}}`. Toujours rouge après deux tentatives de correction : arrêt.
-4. Compte rendu : check, classe, ce qui a été fait (commit ou relance), état final de la CI.
+1. `agent:ci:debug` reads `ci-failed {{args}}` and writes `ci.md` (class, cause, designated agent).
+2. According to the class:
+   - **infra**: nothing to fix; report and stop.
+   - **flaky**: `ci-rerun owner/repo <run>` only once, then `ci-wait`. Relapse → treat as a real failure.
+   - **real failure**: the designated agent fixes on the PR's branch, in a worktree; tests and lint locally
+     first, one typed commit, then `pr-push owner/repo#N` (or `git-push owner/repo <branch>` with no PR) — never
+     a direct `git push`.
+3. `ci-wait {{args}}`. Still red after two fix attempts: stop.
+4. Report: check, class, what was done (commit or rerun), final CI state.
 '''

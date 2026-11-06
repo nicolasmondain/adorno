@@ -1,8 +1,8 @@
 ---
-description: agent:refactor:simplify — Simplifie du code sans changer son comportement — code mort, duplication, abstractions inutiles, conditions tordues, et les nits de review. À utiliser sur un retour de review classé nit ou sur du code jugé trop complexe.
-argument-hint: <demande>
+description: agent:refactor:simplify — Simplify code without changing its behavior — dead code, duplication, needless abstractions, twisted conditions, and review nits. Use on a review comment classified nit or on code judged too complex.
+argument-hint: <request>
 ---
 
-Délègue la demande ci-dessous au sous-agent `adorno-agent-refactor-simplify` (agent:refactor:simplify) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-refactor-simplify`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-refactor-simplify` sub-agent (agent:refactor:simplify) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-refactor-simplify`) to handle the request.
 
-Demande : $ARGUMENTS
+Request: $ARGUMENTS

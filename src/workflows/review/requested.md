@@ -1,5 +1,5 @@
 ---
-description: Analyse toutes les PRs où ta review est demandée — un workspace dédié par PR, des relecteurs spécialisés choisis selon le code touché, puis ton agent qui tranche et rédige. Par défaut, une review en attente par PR, que tu relis et soumets toi-même.
+description: Analyzes all the PRs where your review is requested — a dedicated workspace per PR, specialized reviewers chosen by the touched code, then your agent who slices and writes. By default, a pending review per PR, that you reread and submit yourself.
 args: "[owner/repo] [--mode report|pending|auto] [--include-reviewed] [--direct-only]"
 uses:
   skills: [adorno-github]
@@ -7,28 +7,28 @@ uses:
 model: balanced
 ---
 
-Entrée : {{args}}
+Input: {{args}}
 
-**Exécution** — avant toute écriture : `adorno-github/scripts/run-begin --workflow workflow:review:requested --mode <mode> --level L3 --repo owner/repo [--repo …]` — une fois la liste des PRs connue, un `--repo` par repo à traiter (une exécution ne vaut que pour les repos qu'elle nomme) (`--deny submit` en mode `pending`) ; garde `id` et `dir` (le dossier d'exécution). Appelé par un autre workflow qui a déjà ouvert la sienne : réutilise-la. Toujours, même après un échec : `run-end <id>`. Sans exécution ouverte, les scripts refusent toute écriture.
+**Run** — before any write: `adorno-github/scripts/run-begin --workflow workflow:review:requested --mode <mode> --level L3 --repo owner/repo [--repo …]` — once the PR list is known, one `--repo` per repo to process (a run only covers the repos it names) (`--deny submit` in `pending` mode); keep `id` and `dir` (the run folder). Called by another workflow that already opened its own: reuse it. Always, even after a failure: `run-end <id>`. With no open run, the scripts refuse any write.
 
-Modes de `workflow:pr:review` : `report` (rien sur GitHub), `pending` (défaut : une review en attente, visible de toi
-seul), `auto` (soumise, jamais d'`APPROVE` si `allow_approve` est faux).
+Modes of `workflow:pr:review`: `report` (nothing on GitHub), `pending` (default: a pending review, visible only to
+you), `auto` (submitted, never `APPROVE` if `allow_approve` is false).
 
-1. **Lister** — `adorno-github/scripts/pr-review-requested [owner/repo]`. Écarte et cite dans le compte rendu :
-   - les repos non enregistrés (`registered: false`) ;
-   - les brouillons (`isDraft`) ;
-   - les PRs déjà relues à leur commit actuel (`reviewedHead`), sauf avec `--include-reviewed` ;
-   - celles où tu as déjà une review en attente (`pendingReview`) : elle est à toi, on n'y touche pas ;
-   - les demandes faites à une équipe seulement, avec `--direct-only`.
-2. **Annoncer** — montre la liste retenue (repo, PR, auteur, taille) avant de commencer. Plus de 10 PRs ou une PR de
-   plus de 1 500 lignes : demande confirmation, l'analyse coûte cher.
-3. **Analyser** — pour chaque PR, tu déroules toi-même les étapes de `workflow:pr:review owner/repo#N --mode <mode>`
-   dans l'exécution déjà ouverte (un sous-agent ne peut pas en lancer d'autres). Les PRs sont indépendantes : par lots
-   de `max_parallel` (3 par défaut), lance dans le même tour les spécialistes de toutes les PRs du lot. Chaque PR a son
-   propre workspace et son dossier `reviews/` ; de chaque PR, ne garde en contexte que son `review.json` fusionné
-   (`review-merge`) et la passe d'Adorno, jamais les avis bruts.
-4. **Rendre compte** — un tableau trié par urgence : PR (lien), auteur, zones touchées, relecteurs appelés, verdict,
-   nombre de points (🔴 / 🟠 / 🟡 / ❓), et le lien de la review en attente (ou soumise en `auto`). En `report`, la commande
-   pour créer la review en attente : `adorno-github/scripts/pr-review-submit owner/repo#N <review-final.json>`.
+1. **List** — `adorno-github/scripts/pr-review-requested [owner/repo]`. Drop and cite in the report:
+   - unregistered repos (`registered: false`);
+   - drafts (`isDraft`);
+   - PRs already reviewed at their current commit (`reviewedHead`), unless `--include-reviewed`;
+   - those where you already have a pending review (`pendingReview`): it is yours, leave it alone;
+   - requests made to a team only, with `--direct-only`.
+2. **Announce** — show the retained list (repo, PR, author, size) before starting. More than 10 PRs or a PR of
+   more than 1,500 lines: ask for confirmation, the analysis is expensive.
+3. **Analyze** — for each PR, you run through the steps of `workflow:pr:review owner/repo#N --mode <mode>` yourself
+   in the already open run (a subagent cannot launch others). PRs are independent: in batches
+   of `max_parallel` (3 by default), launch in the same turn the specialists of all the PRs in the batch. Each PR has its
+   own workspace and `reviews/` folder; from each PR, keep in context only its merged `review.json`
+   (`review-merge`) and Adorno's pass, never the raw reviews.
+4. **Report** — a table sorted by urgency: PR (link), author, touched areas, reviewers called, verdict,
+   number of points (🔴 / 🟠 / 🟡 / ❓), and the link to the pending review (or submitted in `auto`). In `report`, the command
+   to create the pending review: `adorno-github/scripts/pr-review-submit owner/repo#N <review-final.json>`.
 
-Les workspaces restent en place pour un second passage ; `pr-workspace --clean` supprime ceux des PRs fermées.
+Workspaces stay in place for a second pass; `pr-workspace --clean` deletes those of closed PRs.

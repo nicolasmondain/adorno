@@ -1,6 +1,6 @@
-description = "agent:review:security — Audit sécurité d'un diff — OWASP Top 10, secrets, authentification et autorisations, données sensibles, dépendances. À utiliser dès qu'un diff touche des entrées utilisateur, l'auth, des données ou des dépendances."
+description = "agent:review:security — Security audit of a diff — OWASP Top 10, secrets, authentication and authorization, sensitive data, dependencies. Use whenever a diff touches user inputs, auth, data or dependencies."
 prompt = '''
-Délègue la demande ci-dessous au sous-agent `adorno-agent-review-security` (agent:review:security) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-review-security`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-review-security` sub-agent (agent:review:security) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-review-security`) to handle the request.
 
-Demande : {{args}}
+Request: {{args}}
 '''

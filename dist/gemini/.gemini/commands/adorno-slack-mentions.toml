@@ -1,37 +1,37 @@
-description = "Chaque fois que tu es mentionné sur Slack (sur tous les canaux ou une liste), analyse le problème de la conversation et t'envoie, à part, l'analyse complète avec le lien vers la conversation et un brouillon de réponse dans ta voix. Une seule fois par mention. Lecture seule sur Slack. À lancer à la main ou depuis ta propre planification."
+description = "Every time you are mentioned on Slack (on all channels or a list), analyze the problem in the conversation and send you, separately, the full analysis with the link to the conversation and a draft reply in your voice. Once per mention. Read-only on Slack. Launch by hand or from your own scheduler."
 prompt = '''
-Entrée : {{args}}. Réglages dans ta couche personnelle (`local/adorno.yaml` › `slack.mentions`) :
+Input: {{args}}. Settings in your personal layer (`local/adorno.yaml` › `slack.mentions`):
 
 ```yaml
 slack:
-  user_id: U0123ABCD           # ton identifiant Slack (Profil › … › Copier l'identifiant de membre)
+  user_id: U0123ABCD           # your Slack ID (Profile › … › Copy member ID)
   mentions:
-    channels: ["#team", "#product-bug"]   # vide = tous les canaux
-    groups: ["@devs"]                     # groupes dont la mention compte aussi
+    channels: ["#team", "#product-bug"]   # empty = all channels
+    groups: ["@devs"]                     # groups whose mention also counts
     since: 24h
     max_messages: 50
     notify: dm                            # dm | draft | none
 ```
 
-Dossier d'exécution : `~/.adorno/runs/slack-mentions-<date>/`.
+Run folder: `~/.adorno/runs/slack-mentions-<date>/`.
 
-1. **Réglages** — `adorno-watch/scripts/watch-conf slack-mentions` (code 3 → skill `adorno-setup`).
-   `user_id` absent : retrouve-le avec le connecteur (ton profil) et propose de l'ajouter.
-2. **Chercher** — avec le connecteur Slack, les messages qui contiennent `<@user_id>` (et chaque groupe de
-   `groups`) depuis `since`, limités à `channels` s'il y en a, `max_messages` au plus. Écarte les messages que tu as
-   écrits toi-même et ceux où tu as déjà répondu dans le fil après la mention. Normalise en `mentions.json`.
-3. **Ne garder que le nouveau** — `watch-seen filter slack-mentions mentions.json` (`--all` : tout). Rien →
-   `watch-seen touch slack-mentions`, une ligne de compte rendu, fin. `--dry-run` : la liste, et fin.
-4. **Analyser** — pour chaque mention, en parallèle par lots de 3 : `agent:core:analyst` avec le fil complet
-   (`thread_ts`), le canal et le lien → `<id>/analysis.md`.
-5. **Préparer la réponse** — `agent:adorno` lit l'analyse et écrit, dans ta voix (skill `adorno-voice`, registre
-   Slack), un brouillon de réponse au fil → `<id>/reply.md`. Une question à laquelle seul toi peux répondre :
-   le brouillon le dit au lieu d'inventer. Le brouillon **n'est jamais posté**.
-6. **T'envoyer** — un message par mention, selon `notify` (à toi seul) :
-   - en tête : qui t'a mentionné, où, quand, et le **lien vers la conversation** ;
-   - le problème en une phrase, puis l'analyse complète ;
-   - le brouillon de réponse, à copier.
-   Plusieurs mentions dans le même fil : un seul message.
-7. **Retenir** — `watch-seen mark slack-mentions <id>…` pour chaque mention envoyée, puis
-   `watch-seen touch slack-mentions`. En réponse : le tableau des mentions traitées (canal, auteur, problème, lien).
+1. **Settings** — `adorno-watch/scripts/watch-conf slack-mentions` (exit code 3 → skill `adorno-setup`).
+   `user_id` missing: find it with the connector (your profile) and offer to add it.
+2. **Search** — with the Slack connector, the messages that contain `<@user_id>` (and each group in `groups`) since
+   `since`, limited to `channels` if any, `max_messages` at most. Discard messages you wrote yourself and those where
+   you already replied in the thread after the mention. Normalize into `mentions.json`.
+3. **Keep only what is new** — `watch-seen filter slack-mentions mentions.json` (`--all`: everything). Nothing →
+   `watch-seen touch slack-mentions`, a one-line report, end. `--dry-run`: the list, and end.
+4. **Analyze** — for each mention, in parallel in batches of 3: `agent:core:analyst` with the full thread
+   (`thread_ts`), the channel and the link → `<id>/analysis.md`.
+5. **Prepare the reply** — `agent:adorno` reads the analysis and writes, in your voice (skill `adorno-voice`, Slack
+   register), a draft reply to the thread → `<id>/reply.md`. A question only you can answer: the draft says so
+   instead of making something up. The draft is **never posted**.
+6. **Send it to you** — one message per mention, according to `notify` (to you alone):
+   - at the top: who mentioned you, where, when, and the **link to the conversation**;
+   - the problem in one sentence, then the full analysis;
+   - the draft reply, ready to copy.
+   Several mentions in the same thread: a single message.
+7. **Remember** — `watch-seen mark slack-mentions <id>…` for each mention sent, then
+   `watch-seen touch slack-mentions`. In the answer: the table of processed mentions (channel, author, problem, link).
 '''

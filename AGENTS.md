@@ -1,50 +1,50 @@
-# Consignes pour les agents qui travaillent sur ce dépôt
+# Instructions for agents working on this repo
 
-adorno est un setup d'agents portable et réutilisable. On y écrit des agents, des workflows et des skills dans un format neutre ;
-`bin/kit` les traduit pour chaque outil (Claude Code, Codex, Gemini CLI…).
+adorno is a portable, reusable agent setup. Agents, workflows and skills are written in a neutral format;
+`bin/kit` translates them for each tool (Claude Code, Codex, Gemini CLI…).
 
-## Où mettre quoi
+## Where to put what
 
-| Je veux… | Fichier |
+| I want… | File |
 | --- | --- |
-| une consigne valable dans tous les projets | `src/instructions/NN-sujet.md` (concaténés par ordre de nom) |
-| un agent | `src/agents/<type>/<spécialité>.md` → `agent:<type>:<spécialité>` ; `<type>` = un type Conventional Commit, ou `core`, `review` ; hors famille : `src/agents/adorno.md` → `agent:adorno` |
-| une règle commune à une famille | `src/agents/<type>/_family.md` (fusionné avant chaque spécialité ; `{{specialty}}` et `{{family}}` y sont remplacés) |
-| un workflow | `src/workflows/<domaine>/<action>.md` → `workflow:<domaine>:<action>` ; `{{args}}` = l'entrée |
-| un savoir-faire à la demande | `src/skills/<nom>/SKILL.md` (+ `scripts/`, `references/`) |
-| un accès GitHub | un script dans `src/skills/adorno-github/scripts/` + son test dans `tests/adorno-github.test.sh` |
-| une surveillance Slack ou Notion | un workflow `src/workflows/slack/…` ou `src/workflows/notion/…` ; le déterministe dans `src/skills/adorno-watch/scripts/` + `tests/adorno-watch.test.sh` ; lecture via les connecteurs, seule écriture : le compte rendu à soi-même |
-| le modèle d'un agent | son niveau `model:` (`fast`, `balanced`, `deep`) ; `delegable: true` s'il peut juger sur des entrées rassemblées d'avance (route externe) ; le choix réel par outil et par repo est dans `local/` › `models` |
-| un repo, un workspace, des droits, une voix, une vision | `local/` (ignoré par git ; modèle : `local.example/`) — jamais dans le dépôt |
-| un réglage public par défaut | `repos.yaml` (+ sa validation dans `bin/kit` › `validate_registry`) |
-| une règle de résolution des réglages | `src/skills/adorno-github/scripts/resolve.jq` (partagé par les scripts et `kit conf`) + ses tests |
-| du contenu d'un autre dépôt | `imports:` dans `kit.yaml`, puis `bin/kit import` |
-| modifier un élément importé | un fichier local avec `extends: <import>/<nom>` (jamais d'édition dans `vendor/`) |
+| an instruction valid in all projects | `src/instructions/NN-topic.md` (concatenated in name order) |
+| an agent | `src/agents/<type>/<specialty>.md` → `agent:<type>:<specialty>`; `<type>` = a Conventional Commit type, or `core`, `review`; outside a family: `src/agents/adorno.md` → `agent:adorno` |
+| a rule shared by a family | `src/agents/<type>/_family.md` (merged before each specialty; `{{specialty}}` and `{{family}}` are replaced in it) |
+| a workflow | `src/workflows/<domain>/<action>.md` → `workflow:<domain>:<action>`; `{{args}}` = the input |
+| an on-demand know-how | `src/skills/<name>/SKILL.md` (+ `scripts/`, `references/`) |
+| a GitHub access | a script in `src/skills/adorno-github/scripts/` + its test in `tests/adorno-github.test.sh` |
+| a Slack or Notion watch | a workflow `src/workflows/slack/…` or `src/workflows/notion/…`; the deterministic part in `src/skills/adorno-watch/scripts/` + `tests/adorno-watch.test.sh`; read through the connectors, only write: the report to oneself |
+| an agent's model | its `model:` tier (`fast`, `balanced`, `deep`); `delegable: true` if it can judge on inputs gathered in advance (external route); the actual choice per tool and per repo is in `local/` › `models` |
+| a repo, a workspace, permissions, a voice, a vision | `local/` (ignored by git; template: `local.example/`) — never in the repo |
+| a default public setting | `repos.yaml` (+ its validation in `bin/kit` › `validate_registry`) |
+| a settings resolution rule | `src/skills/adorno-github/scripts/resolve.jq` (shared by the scripts and `kit conf`) + its tests |
+| content from another repo | `imports:` in `kit.yaml`, then `bin/kit import` |
+| modifying an imported item | a local file with `extends: <import>/<name>` (never edit in `vendor/`) |
 
-`bin/kit new agent perf:redis` (ou `new workflow ci:flaky`, `new skill <nom>`) crée un fichier de départ.
+`bin/kit new agent perf:redis` (or `new workflow ci:flaky`, `new skill <name>`) creates a starter file.
 
-## Règles
+## Rules
 
-- **Ce dépôt est statique, enrichi à la main** : rien n'y est committé depuis un autre projet, ni par un agent. Ce qui
-  concerne une personne ou un repo réel (identité, relecteurs, équipe, contexte, droits, voix, vision, profil) va dans
-  `local/`, ignoré par git ; le public n'a que des modèles (`local.example/`). Seuls le skill `adorno-setup` et
-  `workflow:profile:learn` écrivent dans `local/`, et seulement ce que le propriétaire a validé.
+- **This repo is static, enriched by hand**: nothing is committed into it from another project, or by an agent. What
+  concerns a real person or repo (identity, reviewers, team, context, permissions, voice, vision, profile) goes in
+  `local/`, ignored by git; the public repo only has templates (`local.example/`). Only the `adorno-setup` skill and
+  `workflow:profile:learn` write into `local/`, and only what the owner has validated.
 
-- Un agent d'une famille ne produit que des commits de son type ; `core` et `review` ne committent pas.
-- La `description` dit ce que fait l'élément et quand l'utiliser : c'est elle qui le fait choisir.
-- `tools` : capacités neutres `read`, `write`, `edit`, `search`, `shell`, `web`, `agent`. `model` : `inherit`,
-  `fast`, `balanced`, `deep`. Un réglage propre à un outil va sous `targets: { claude: { … } }`.
-- `uses:` d'un workflow : identifiants logiques (`agent:fix:patch`, `workflow:ci:red`, `adorno-github`), vérifiés par
+- An agent of a family only produces commits of its type; `core` and `review` do not commit.
+- The `description` says what the item does and when to use it: it is what gets it chosen.
+- `tools`: neutral capabilities `read`, `write`, `edit`, `search`, `shell`, `web`, `agent`. `model`: `inherit`,
+  `fast`, `balanced`, `deep`. A tool-specific setting goes under `targets: { claude: { … } }`.
+- A workflow's `uses:`: logical identifiers (`agent:fix:patch`, `workflow:ci:red`, `adorno-github`), checked by
   `kit check`.
-- Scripts : bash compatible macOS 3.2, `set -euo pipefail`, JSON sur stdout, codes de sortie de `adorno-github/SKILL.md`,
-  écriture GitHub seulement après `require_level`, mode `ADORNO_DRY_RUN`.
-- Ne modifie jamais `dist/` ni `vendor/` à la main.
+- Scripts: bash compatible with macOS 3.2, `set -euo pipefail`, JSON on stdout, exit codes from `adorno-github/SKILL.md`,
+  GitHub writes only after `require_level`, `ADORNO_DRY_RUN` mode.
+- Never modify `dist/` or `vendor/` by hand.
 
-## Après chaque modification
+## After every change
 
 ```sh
 bin/kit check && bin/kit build && for t in tests/*.test.sh; do $t || break; done
 ```
 
-Committe `src/`, `dist/`, `vendor/`, `kit.yaml`, `kit.lock` et `repos.yaml` ensemble : la CI refuse un `dist/`
-périmé. Message au format Conventional Commits, ex. `feat(agents): add perf:redis`.
+Commit `src/`, `dist/`, `vendor/`, `kit.yaml`, `kit.lock` and `repos.yaml` together: CI rejects a stale `dist/`.
+Message in Conventional Commits format, e.g. `feat(agents): add perf:redis`.

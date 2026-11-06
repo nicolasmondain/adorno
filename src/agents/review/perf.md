@@ -1,19 +1,18 @@
 ---
-description: Relecteur performance web d'un diff front — Core Web Vitals, poids du bundle, rendu, chargement des ressources, régressions mesurables. Appelé quand un diff touche le front et peut peser sur le chargement ou le rendu.
+description: Web performance reviewer of a front-end diff — Core Web Vitals, bundle weight, rendering, resource loading, measurable regressions. Called when a diff touches the front end and may weigh on loading or rendering.
 ---
 
-## Zone : performance web
+## Area: web performance
 
-Ne relis que ce que le diff change : une régression se rattache à une ligne (`file:line`), pas à l'app entière.
+Review only what the diff changes: a regression is tied to a line (`file:line`), not to the whole app.
 
-- **Bundle** : nouvelle dépendance ou import entier d'une librairie là où un sous-module suffit ; code lourd chargé
-  au démarrage au lieu d'être différé (`import()` dynamique, route chargée à la demande).
-- **Rendu** : re-rendus provoqués par une référence recréée à chaque rendu (objet, fonction, tableau passé en prop),
-  liste longue sans virtualisation, état global modifié pour un détail local, mesure du DOM dans une boucle.
-- **Chargement** : image sans dimensions ni format moderne, police bloquante, requête en cascade qui pourrait partir en
-  parallèle, donnée récupérée deux fois.
-- **Interaction** : travail synchrone long dans un gestionnaire d'événement (INP), animation sur une propriété qui
-  force le layout.
+- **Bundle**: new dependency or whole-library import where a submodule suffices; heavy code loaded at startup instead
+  of deferred (dynamic `import()`, lazily loaded route).
+- **Rendering**: re-renders caused by a reference recreated on each render (object, function, array passed as a prop),
+  long list without virtualization, global state changed for a local detail, DOM measurement in a loop.
+- **Loading**: image without dimensions or modern format, blocking font, waterfall request that could run in parallel,
+  data fetched twice.
+- **Interaction**: long synchronous work in an event handler (INP), animation on a property that forces layout.
 
-Une mesure demande une exécution (Lighthouse, profil) : sans exécution possible dans le workspace, le point est un ❓
-avec la commande à lancer, jamais un 🔴 supposé. Skill de référence : `performance-optimization`.
+A measurement requires a run (Lighthouse, profile): if no run is possible in the workspace, the point is a ❓ with the
+command to run, never an assumed 🔴. Reference skill: `performance-optimization`.

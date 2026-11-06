@@ -1,5 +1,5 @@
-<!-- Ta vision : quelques principes qui priment sur tous les agents, skills et workflows (seules les règles d'un
-     repo priment sur son code). Copiée dans chaque agent à l'install : reste court (60 lignes au plus). -->
+<!-- Your vision: a few principles that override all agents, skills and workflows (only a repo's rules override
+     them on its code). Copied into every agent on install: keep it short (60 lines at most). -->
 
 - The smallest change that fully solves the problem wins.
 - A claim without evidence (`file:line`, a command run, a link) is a question, not a finding.

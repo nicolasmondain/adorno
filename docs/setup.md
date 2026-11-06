@@ -1,16 +1,16 @@
-# Installer et régler adorno
+# Install and configure adorno
 
-Ce guide va de l'installation à un Adorno qui relit, répond et ouvre des PRs comme toi, sur les repos et avec les
-droits que tu choisis. Tout ce qui te concerne vit dans `local/`, ignoré par git : le dépôt public reste générique.
+This guide goes from installation to an Adorno that reviews, replies and opens PRs like you, on the repos and with
+the permissions you choose. Everything about you lives in `local/`, ignored by git: the public repo stays generic.
 
 ```mermaid
 flowchart LR
-  A["1. installer"] --> B["2. profil<br/>adorno-setup profile"] --> C["3. repos<br/>adorno-setup repo"] --> D["4. droits"] --> E["5. lancer<br/>un workflow"]
+  A["1. install"] --> B["2. profile<br/>adorno-setup profile"] --> C["3. repos<br/>adorno-setup repo"] --> D["4. permissions"] --> E["5. run<br/>a workflow"]
 ```
 
-## 1. Installer
+## 1. Install
 
-Prérequis : [uv](https://docs.astral.sh/uv/) (`brew install uv`), `gh` authentifié (`gh auth status`), `jq`, `git`.
+Prerequisites: [uv](https://docs.astral.sh/uv/) (`brew install uv`), authenticated `gh` (`gh auth status`), `jq`, `git`.
 
 ```sh
 git clone https://github.com/<owner>/adorno ~/code/adorno && cd ~/code/adorno
@@ -19,158 +19,157 @@ bin/kit check
 bin/kit install --global          # ~/.claude, ~/.agents, ~/.gemini
 ```
 
-`--global` rend Adorno disponible dans tous tes projets, écrit ton registre dans `~/.adorno/registry.json` (hors de
-tout repo, en lecture seule) et ajoute à tes réglages Claude Code (`~/.claude/settings.json`, valables dans **tous**
-tes projets, adorno ou non) des règles qui te **demandent confirmation** avant une écriture directe (`git push`,
-`gh pr comment`…, voir étape 4). `bin/kit install ~/code/mon-projet` ajoute dans un seul projet ses permissions (là,
-les écritures directes sont **refusées**) et ses modèles propres ; tout ce qu'il y installe est exclu de git
-(`.git/info/exclude`), y compris un `AGENTS.md` non suivi qui reçoit ton bloc, et il n'écrit jamais dans un fichier
-d'instructions suivi par le repo. Chaque installation avec ta couche personnelle réécrit le registre : relance
-`bin/kit install` (global ou dans un repo) après chaque changement de `local/` ou du dépôt, pour qu'un nouveau repo
-ou un droit resserré s'applique aussitôt.
+`--global` makes Adorno available in all your projects, writes your registry to `~/.adorno/registry.json` (outside any
+repo, read-only) and adds to your Claude Code settings (`~/.claude/settings.json`, valid in **all** your projects,
+adorno or not) rules that **ask you for confirmation** before a direct write (`git push`,
+`gh pr comment`…, see step 4). `bin/kit install ~/code/my-project` adds its permissions to a single project (there,
+direct writes are **refused**) and its own models; everything it installs there is excluded from git
+(`.git/info/exclude`), including an untracked `AGENTS.md` that receives your block, and it never writes into an
+instructions file tracked by the repo. Each install with your personal layer rewrites the registry: rerun
+`bin/kit install` (global or in a repo) after each change to `local/` or to the repo, so that a new repo
+or a tightened permission applies right away.
 
-## 2. Ton profil
+## 2. Your profile
 
-Dans Claude Code (ou un autre outil installé), demande : **« lance le skill adorno-setup, mode profile »**.
+In Claude Code (or another installed tool), ask: **"run the adorno-setup skill, profile mode"**.
 
-| Étape | Ce qu'il te demande | Où il l'écrit |
+| Step | What it asks you | Where it writes it |
 | --- | --- | --- |
-| Identité | nom, login GitHub, langue des échanges | `local/adorno.yaml` › `owner` |
-| Voix | l'accord pour lire tes dernières reviews et descriptions de PR sur GitHub, quelques messages Slack si tu veux | `local/src/skills/adorno-voice/references/voice.md` + `defaults.voice` |
-| Profil | ce que tu changerais dans chaque modèle : identité, types et design, échelle, méthode et review | `local/src/skills/adorno-profile/references/*.md` |
-| Résumé | 15 à 30 lignes toujours chargées, tirées du profil | `local/src/instructions/20-owner.md` |
-| Vision | les quelques principes qui priment sur tout | `local/vision.md` |
+| Identity | name, GitHub login, language of the exchanges | `local/adorno.yaml` › `owner` |
+| Voice | your agreement to read your latest reviews and PR descriptions on GitHub, a few Slack messages if you want | `local/src/skills/adorno-voice/references/voice.md` + `defaults.voice` |
+| Profile | what you would change in each model: identity, types and design, scale, method and review | `local/src/skills/adorno-profile/references/*.md` |
+| Summary | 15 to 30 lines always loaded, drawn from the profile | `local/src/instructions/20-owner.md` |
+| Vision | the few principles that override everything | `local/vision.md` |
 
-Il te montre chaque fichier avant de l'écrire, puis lance `bin/kit check` et propose `bin/kit install --global`.
-Tu peux aussi tout écrire à la main à partir des modèles de `local.example/`.
+It shows you each file before writing it, then runs `bin/kit check` and offers `bin/kit install --global`.
+You can also write everything by hand from the templates in `local.example/`.
 
-Tant que le profil n'existe pas, les agents le disent et travaillent avec les instructions et les réglages du repo
-seulement.
+As long as the profile does not exist, the agents say so and work with the repo's instructions and settings
+only.
 
-### Un profil fin, puis qui apprend
+### A fine profile, then one that learns
 
-Le mode `profile` est d'autant plus juste qu'il lit tes vraies traces. Il te propose chaque source, une par une : tes
-reviews, descriptions et diffs de PR sur GitHub, tes messages Slack (90 jours, les tiens seulement), tes pages Notion,
-et tous les fichiers que tu lui indiques. Il en tire, dimension par dimension (tech, code, produit, méthode,
-communication, voix), des traits appuyés chacun par au moins deux extraits, puis confronte chaque fichier du profil à
-cette analyse. Rien du corpus n'est gardé après la session : seulement ce que tu valides dans le profil.
+The `profile` mode is all the more accurate as it reads your real traces. It offers you each source, one by one: your
+reviews, PR descriptions and diffs on GitHub, your Slack messages (90 days, yours only), your Notion pages,
+and any files you point it to. From them it draws, dimension by dimension (tech, code, product, method,
+communication, voice), traits each backed by at least two excerpts, then checks each profile file against
+that analysis. Nothing from the corpus is kept after the session: only what you validate in the profile.
 
-Ensuite, le profil s'ajuste en continu. Quand tu corriges Adorno, que tu tranches autrement que lui, que tu réécris un
-de ses brouillons ou que tu dis comment tu veux les choses, le skill `adorno-learn` le note avec sa preuve
-(`~/.adorno/learn/`). Un point dit explicitement, ou vu deux fois, devient « prêt ». Adorno le signale en une ligne à
-la fin de son compte rendu, et `/adorno-profile-learn` te les présente un par un : la phrase proposée, le fichier, les
-preuves ; tu acceptes, reformules, reportes ou rejettes. Un point rejeté ne revient pas.
+After that, the profile adjusts continuously. When you correct Adorno, decide differently from it, rewrite one of
+its drafts or say how you want things done, the `adorno-learn` skill notes it with its evidence
+(`~/.adorno/learn/`). A point said explicitly, or seen twice, becomes "ready". Adorno flags it in one line at
+the end of its report, and `/adorno-profile-learn` presents them to you one by one: the proposed sentence, the file, the
+evidence; you accept, rephrase, postpone or reject. A rejected point does not come back.
 
-## 3. Tes repos
+## 3. Your repos
 
-Un workflow n'agit que sur un repo **déclaré**. Dans le repo, demande : **« lance le skill adorno-setup, mode repo »**.
-Il détecte les commandes, les relecteurs habituels et la branche par défaut, te demande l'équipe, le contexte et les
-droits, puis écrit l'entrée dans `local/adorno.yaml`.
+A workflow only acts on a **declared** repo. In the repo, ask: **"run the adorno-setup skill, repo mode"**.
+It detects the commands, the usual reviewers and the default branch, asks you for the team, the context and the
+permissions, then writes the entry in `local/adorno.yaml`.
 
-### Un repo, un groupe de repos, un workspace
+### A repo, a group of repos, a workspace
 
 ```yaml
-presets:                         # un bloc partagé
+presets:                         # a shared block
   platform-team:
     team: {name: platform, org: acme, slack: ["#platform"]}
     reviewers: [alice, bob]
     context: ["Priority order: a waiting customer > production errors > roadmap."]
 
-workspaces:                      # tout un ensemble de repos
+workspaces:                      # a whole set of repos
   acme:
-    repos: ["acme/*"]            # globs GitHub : `*` un segment, `**` tout
-    paths: ["~/code/acme"]       # dossiers locaux : les repos git trouvés dessous (2 niveaux) en font partie
+    repos: ["acme/*"]            # GitHub globs: `*` one segment, `**` everything
+    paths: ["~/code/acme"]       # local folders: the git repos found below (2 levels) are part of it
     use: [platform-team]
 
-repos:                           # un repo précis, ou un glob (`acme/docs-*`)
+repos:                           # a specific repo, or a glob (`acme/docs-*`)
   acme/app:
     context: ["Unit test coverage must stay >= 80%."]
     test: "npm test"
 ```
 
-### Comment les réglages se combinent
+### How the settings combine
 
 ```mermaid
 flowchart LR
-  d1["défauts publics<br/>repos.yaml"] --> d2["defaults<br/>local"] --> w["workspaces<br/>qui contiennent le repo"] --> g["repos avec *<br/>qui correspondent"] --> e["repos<br/>clé exacte"]
+  d1["public defaults<br/>repos.yaml"] --> d2["local<br/>defaults"] --> w["workspaces<br/>containing the repo"] --> g["repos with *<br/>that match"] --> e["repos<br/>exact key"]
 ```
 
-De gauche à droite, chaque niveau l'emporte sur le précédent ; chacun développe d'abord ses `use:`. Les objets se
-fusionnent clé par clé ; listes et valeurs sont remplacées, sauf `context`, `vision` et les droits
-(`permissions.deny`, `permissions.claude.*`) qui s'additionnent : un niveau plus précis ajoute des refus, jamais n'en
-retire.
+From left to right, each level overrides the previous one; each one expands its `use:` first. Objects
+merge key by key; lists and values are replaced, except `context`, `vision` and the permissions
+(`permissions.deny`, `permissions.claude.*`) which add up: a more specific level adds denials, never removes any.
 
-`bin/kit conf acme/app` affiche le résultat, avec `scopes` : la liste des niveaux qui ont joué. Les agents lisent la
-même chose avec `adorno-github/scripts/repo-conf`.
+`bin/kit conf acme/app` shows the result, with `scopes`: the list of levels that played a part. The agents read the
+same thing with `adorno-github/scripts/repo-conf`.
 
-## 4. Les droits
+## 4. Permissions
 
-| Réglage | Effet | Exemple |
+| Setting | Effect | Example |
 | --- | --- | --- |
-| `max_level` | plafond du repo : L0 lecture, L1 fichiers locaux, L2 push sur une branche, L3 PR, réponses, resolve. L4 (merge, tag) n'est jamais automatique | `max_level: L2` |
-| `permissions.deny` | actions GitHub refusées par les scripts : `push`, `reply`, `comment`, `resolve`, `rerequest`, `review` (en attente), `submit`, `open_pr`, `ci_rerun` | `deny: [submit, resolve]` |
-| `permissions.claude` | règles natives de Claude Code (`allow`, `ask`, `deny`), écrites dans `<repo>/.claude/settings.local.json` à l'install (avec `--global` : `~/.claude/settings.json`, où les `deny` de commandes shell deviennent des `ask`) et retirées à la désinstallation | `deny: ["Bash(git push:*)"]` |
-| `allow_approve` | une review automatique peut-elle approuver ? | `false` (défaut) |
+| `max_level` | repo cap: L0 read, L1 local files, L2 push to a branch, L3 PR, replies, resolve. L4 (merge, tag) is never automatic | `max_level: L2` |
+| `permissions.deny` | GitHub actions refused by the scripts: `push`, `reply`, `comment`, `resolve`, `rerequest`, `review` (pending), `submit`, `open_pr`, `ci_rerun` | `deny: [submit, resolve]` |
+| `permissions.claude` | native Claude Code rules (`allow`, `ask`, `deny`), written into `<repo>/.claude/settings.local.json` at install (with `--global`: `~/.claude/settings.json`, where shell command `deny` rules become `ask`) and removed at uninstall | `deny: ["Bash(git push:*)"]` |
+| `allow_approve` | can an automatic review approve? | `false` (default) |
 
-**Les exécutions.** Chaque workflow qui écrit sur GitHub ouvre une exécution (`run-begin`) qui fixe son mode, son
-niveau, les actions qu'il s'interdit et les repos qu'il touche (au moins un `--repo`), dans un fichier sous
-`~/.adorno/runs/active/`, et la clôt (`run-end`) ; une exécution oubliée expire après 2 h. Les scripts lisent ce
-fichier : sans exécution ouverte sur le repo, toute écriture y est refusée ; en `report` et `draft`, tout est simulé
-(rien ne part) et `draft` interdit le push, même si une commande l'oublie. Une exécution appartient à la session
-Claude Code qui l'a ouverte (`CLAUDE_CODE_SESSION_ID`, posé par Claude Code dans chaque commande) : une autre
-session ne la voit pas, elle ne peut ni abaisser ni relever tes droits. Hors session (Codex, Gemini, ton terminal),
-seules comptent les exécutions ouvertes hors session. Après un `/clear`, la session change : rouvre l'exécution.
-Deux exécutions d'une même session sur un même repo : la plus stricte l'emporte, et le script le signale.
-`ADORNO_LEVEL` peut seulement abaisser le niveau. Aucune variable ne déplace `~/.adorno` : le registre et les
-exécutions sont lus là, et seulement là. Le vrai plafond reste le `max_level` du repo : c'est l'agent qui déclare le
-mode et le niveau de son exécution, `max_level` et `permissions.deny` les bornent.
+**Runs.** Every workflow that writes to GitHub opens a run (`run-begin`) that fixes its mode, its
+level, the actions it forbids itself and the repos it touches (at least one `--repo`), in a file under
+`~/.adorno/runs/active/`, and closes it (`run-end`); a forgotten run expires after 2 h. The scripts read that
+file: without a run open on the repo, any write there is refused; in `report` and `draft`, everything is simulated
+(nothing goes out) and `draft` forbids push, even if a command forgets it. A run belongs to the Claude Code
+session that opened it (`CLAUDE_CODE_SESSION_ID`, set by Claude Code in each command): another
+session does not see it, and cannot lower or raise your permissions. Outside a session (Codex, Gemini, your terminal),
+only runs opened outside a session count. After a `/clear`, the session changes: reopen the run.
+Two runs of the same session on the same repo: the strictest wins, and the script says so.
+`ADORNO_LEVEL` can only lower the level. No variable moves `~/.adorno`: the registry and the
+runs are read there, and only there. The real cap remains the repo's `max_level`: the agent declares the
+mode and level of its run, `max_level` and `permissions.deny` bound them.
 
-**Les règles par défaut.** `repos.yaml` installe des règles Claude Code qui interdisent les commandes d'écriture
-directes : `git push`, `gh pr create|comment|review|merge|close|edit`, `gh issue comment|create`, `gh release`, et
-la modification du registre et des exécutions ; tout appel direct à `gh api` (qui écrit dès qu'il reçoit `-f`) te
-demande confirmation. Les agents publient par les scripts, qui vérifient les droits. Tes règles s'y ajoutent (les
-listes s'additionnent d'un niveau à l'autre, jamais ne se remplacent).
+**The default rules.** `repos.yaml` installs Claude Code rules that forbid direct write commands:
+`git push`, `gh pr create|comment|review|merge|close|edit`, `gh issue comment|create`, `gh release`, and
+modification of the registry and the runs; any direct call to `gh api` (which writes as soon as it gets `-f`) asks
+you for confirmation. The agents publish through the scripts, which check the permissions. Your rules are added to them (lists
+add up from one level to the next, never replace each other).
 
-**Le hook de garde.** Les règles ne comparent que le début d'une commande. `bin/kit install` pose aussi un hook
-(`adorno-github/scripts/guard_bash.py`) qui lit chaque commande shell comme le ferait le shell : enchaînements,
-sous-shells, `$( … )` et backticks, `bash -c`, `eval`, `env`, `sudo`, `timeout`, `git -C dossier`, les alias git,
-le code passé à `python3 -c` ou `node -e`, et les scripts locaux qu'une commande lance (`./deploy.sh`,
-`bash x.sh`). Il arrête tout push, toute publication GitHub, toute écriture du registre ou des exécutions, tout
-`HOME=` devant un script adorno et toute tentative de fixer `CLAUDE_CODE_SESSION_ID`. Une commande qu'il ne sait pas
-lire (une variable comme programme, des guillemets non fermés) te demande ; un bug du hook aussi. Sans `python3`, ou
-si le fichier du hook manque, il bloque toute commande shell plutôt que de la laisser passer.
+**The guard hook.** The rules only compare the start of a command. `bin/kit install` also installs a hook
+(`adorno-github/scripts/guard_bash.py`) that reads each shell command the way the shell would: chains,
+subshells, `$( … )` and backticks, `bash -c`, `eval`, `env`, `sudo`, `timeout`, `git -C folder`, git aliases,
+the code passed to `python3 -c` or `node -e`, and the local scripts a command runs (`./deploy.sh`,
+`bash x.sh`). It stops any push, any GitHub publication, any write to the registry or the runs, any
+`HOME=` in front of an adorno script and any attempt to set `CLAUDE_CODE_SESSION_ID`. A command it cannot
+read (a variable as program, unclosed quotes) asks you; so does a bug in the hook. Without `python3`, or
+if the hook file is missing, it blocks every shell command rather than let it through.
 
-| Outil | Dans un repo | Avec `--global` |
+| Tool | In a repo | With `--global` |
 | --- | --- | --- |
-| Claude Code | hook, refuse (`.claude/settings.local.json`) | hook, demande (`~/.claude/settings.json`) |
-| Codex | hook, refuse (`.codex/hooks.json`) | règles `prompt` (`~/.codex/rules/adorno.rules`) : demande |
-| Gemini CLI | hook `BeforeTool`, refuse (`.gemini/settings.json`) | politique `ask_user` (`~/.gemini/policies/adorno.toml`) : demande |
+| Claude Code | hook, refuses (`.claude/settings.local.json`) | hook, asks (`~/.claude/settings.json`) |
+| Codex | hook, refuses (`.codex/hooks.json`) | `prompt` rules (`~/.codex/rules/adorno.rules`): asks |
+| Gemini CLI | `BeforeTool` hook, refuses (`.gemini/settings.json`) | `ask_user` policy (`~/.gemini/policies/adorno.toml`): asks |
 
-Les hooks de Codex et de Gemini ne savent que refuser : en global, ils laissent la place aux règles natives de
-confirmation, qui comparent le début de la commande. Un fichier de hook suivi par le repo n'est jamais modifié
-(avertissement) ; ceux qu'adorno crée sont exclus de git. Ce que le hook ne voit pas : un programme qui pousse sans
-que ses mots apparaissent (un binaire, un `make` dont la recette pousse, un script d'un autre langage lancé par un
-autre), une variable calculée. C'est un garde-fou contre les erreurs et les contournements ordinaires ; la barrière
-absolue est côté GitHub.
+The Codex and Gemini hooks can only refuse: in global mode, they leave room to the native confirmation rules,
+which compare the start of the command. A hook file tracked by the repo is never modified
+(warning); those adorno creates are excluded from git. What the hook does not see: a program that pushes without
+its words appearing (a binary, a `make` whose recipe pushes, a script in another language launched by
+another), a computed variable. It is a safeguard against mistakes and ordinary workarounds; the absolute barrier
+is on the GitHub side.
 
-**Côté GitHub.** `adorno-github/scripts/repo-audit [owner/repo…]` (lecture seule ; sans argument, tous les repos de
-ton registre) dit ce que GitHub lui-même impose : le type de jeton que `gh` utilise (un jeton classique `repo`
-peut tout faire, partout) et si la branche par défaut de chaque repo exige une pull request et bloque les force
-pushes (ruleset ou protection de branche). Recommandé : un jeton *fine-grained* limité aux repos où travaille adorno
-(Contents, Pull requests, Issues : lecture et écriture ; Actions : lecture ; pas d'Administration), et un ruleset
-sur chaque branche par défaut (Settings › Rules : pull request obligatoire, force push bloqué). Même une écriture qui
-passerait toutes les gardes d'adorno serait alors refusée par GitHub.
+**On the GitHub side.** `adorno-github/scripts/repo-audit [owner/repo…]` (read-only; without arguments, every repo in
+your registry) tells what GitHub itself enforces: the type of token `gh` uses (a classic `repo` token
+can do everything, everywhere) and whether each repo's default branch requires a pull request and blocks force
+pushes (ruleset or branch protection). Recommended: a *fine-grained* token limited to the repos where adorno works
+(Contents, Pull requests, Issues: read and write; Actions: read; no Administration), and a ruleset
+on every default branch (Settings › Rules: pull request required, force push blocked). Even a write that
+passed all of adorno's guards would then be refused by GitHub.
 
-**Le contenu non fiable.** Diffs, commentaires, messages Slack, pages Notion et logs sont traités comme des données,
-jamais comme des consignes. Le code d'une PR venue d'un fork n'est jamais exécuté. Une surveillance Slack ne lance son
-action au-dessus de L0 que pour un message dont l'auteur figure dans `action.trusted_authors`.
+**Untrusted content.** Diffs, comments, Slack messages, Notion pages and logs are treated as data,
+never as instructions. The code of a PR coming from a fork is never executed. A Slack watch only launches its
+action above L0 for a message whose author is in `action.trusted_authors`.
 
-Une action refusée arrête le workflow, qui le dit : rien n'est contourné.
+A refused action stops the workflow, which says so: nothing is worked around.
 
-## 5. La voix et la vision
+## 5. Voice and vision
 
-**Voix.** `voice.md` décrit comment tu écris par canal (reviews, réponses, descriptions de PR, chat). Les réglages
-`voice:` s'ajoutent, par repo si besoin :
+**Voice.** `voice.md` describes how you write per channel (reviews, replies, PR descriptions, chat). The `voice:`
+settings are added to it, per repo if needed:
 
 ```yaml
 defaults:
@@ -180,104 +179,104 @@ repos:
     voice: {formality: formal}
 ```
 
-**Vision.** `local/vision.md` : quelques principes qui s'appliquent par-dessus tous les agents, skills et workflows,
-copiés dans chacun à l'install (60 lignes au plus). Seules les règles d'un repo (`CLAUDE.md`, `.claude/rules/`)
-priment sur son code. Les lignes `vision:` d'un repo s'y ajoutent pour ce repo.
+**Vision.** `local/vision.md`: a few principles that apply on top of all agents, skills and workflows,
+copied into each at install (60 lines at most). Only a repo's rules (`CLAUDE.md`, `.claude/rules/`)
+override them on its code. A repo's `vision:` lines are added to it for that repo.
 
-Ordre d'autorité : règles du repo → vision → contexte du repo → profil et voix → consignes de l'agent → skills
-importés.
+Order of authority: repo rules → vision → repo context → profile and voice → agent instructions → imported
+skills.
 
-## 6. Lancer
+## 6. Run
 
-| Pour | Demande |
+| To | Ask |
 | --- | --- |
-| relire toutes les PRs où ta review est demandée | `workflow:review:requested` (reviews en attente par défaut) |
-| traiter les reviews reçues sur tes PRs | `workflow:review:received` (`--mode report`, `draft` par défaut, `auto`) |
-| ouvrir la PR de ta branche | `workflow:pr:open` |
-| voir où en sont tes PRs | `workflow:pr:status` |
+| review all the PRs where your review is requested | `workflow:review:requested` (pending reviews by default) |
+| handle the reviews received on your PRs | `workflow:review:received` (`--mode report`, `draft` by default, `auto`) |
+| open your branch's PR | `workflow:pr:open` |
+| see where your PRs stand | `workflow:pr:status` |
 
-Chaque workflow est une commande au nom en `adorno-` : `workflow:review:requested` → `/adorno-review-requested`,
-`workflow:pr:status` → `/adorno-pr-status`. Via le plugin Claude Code, le même nom est préfixé `adorno:`.
+Each workflow is a command named with the `adorno-` prefix: `workflow:review:requested` → `/adorno-review-requested`,
+`workflow:pr:status` → `/adorno-pr-status`. Through the Claude Code plugin, the same name is prefixed with `adorno:`.
 
-## 7. L'impact des PRs mergées
+## 7. The impact of merged PRs
 
-`workflow:pr:impact owner/repo` reprend les PRs que tu as mergées (14 derniers jours par défaut), attend qu'elles
-soient en production depuis `min_age`, puis compare `window` avant et après leur déploiement : utilisation, erreurs,
-temps de réponse (p50, p95, p99), débit, durée des jobs, requêtes lentes, ressources. Il interroge toutes les sources
-disponibles (connecteurs de métriques, logs, erreurs, analytics, canaux d'alerte) et poste un rapport en commentaire de
-chaque PR, avec un verdict et la source de chaque chiffre. Une PR déjà rapportée n'est pas reprise (`--refresh` pour
-une mise à jour).
+`workflow:pr:impact owner/repo` takes the PRs you merged (last 14 days by default), waits until they have been in
+production for `min_age`, then compares `window` before and after their deployment: usage, errors,
+response times (p50, p95, p99), throughput, job duration, slow queries, resources. It queries all available
+sources (metrics connectors, logs, errors, analytics, alert channels) and posts a report as a comment on
+each PR, with a verdict and the source of each figure. A PR already reported is not taken again (`--refresh` for
+an update).
 
 ```yaml
-defaults:                    # ou par repo, preset ou workspace
+defaults:                    # or per repo, preset or workspace
   impact:
-    window: 7d               # comparé avant / après
-    min_age: 3d              # délai en production avant d'analyser
+    window: 7d               # compared before / after
+    min_age: 3d              # time in production before analyzing
     environment: production
     post: comment            # comment | none
-    post_public: false       # sur un repo public, aucun rapport en commentaire (chiffres de production)
+    post_public: false       # on a public repo, no report as a comment (production figures)
 repos:
   acme/app:
     impact:
-      sources:               # repères ; tout autre connecteur présent est aussi interrogé
+      sources:               # hints; any other connector present is also queried
         - {tool: grafana, dashboard: "API latency", service: "app-api"}
         - {tool: sentry, project: "app"}
 ```
 
-Le moment du déploiement vient des déploiements GitHub du repo ; sans eux, de la release qui contient le commit, du
-canal de déploiement de l'équipe, ou à défaut de l'heure du merge, et le rapport le dit. Les rapports ne contiennent
-que des agrégats : aucune donnée personnelle ne finit sur une PR.
+The deployment time comes from the repo's GitHub deployments; without them, from the release that contains the commit,
+the team's deployment channel, or failing that the merge time, and the report says so. The reports contain
+only aggregates: no personal data ends up on a PR.
 
-## 8. Slack et Notion
+## 8. Slack and Notion
 
-Trois workflows lisent Slack et Notion à travers leurs connecteurs (dans Claude : connecte Slack et Notion). Ils ne
-postent rien, ne réagissent à rien et ne modifient aucune page : leur seule écriture est le compte rendu qu'ils
-**t'envoient à toi**, selon `notify` (`dm` message à toi-même, `draft` brouillon non envoyé, `none` rien). Chacun
-retient ce qu'il a déjà traité (`~/.adorno/state/`) : relancé toutes les heures, il ne traite que le nouveau.
+Three workflows read Slack and Notion through their connectors (in Claude: connect Slack and Notion). They post
+nothing, react to nothing and modify no page: their only write is the report they
+**send to you**, according to `notify` (`dm` message to yourself, `draft` unsent draft, `none` nothing). Each one
+remembers what it has already processed (`~/.adorno/state/`): rerun every hour, it only processes what is new.
 
 ```mermaid
 flowchart LR
-  S["Slack / Notion<br/>lecture seule"] --> F["filtre<br/>règle, période, déjà vu"] --> A["agent ou workflow<br/>analyse, action"] --> D(("Adorno")) --> M["message<br/>à toi seul"]
+  S["Slack / Notion<br/>read-only"] --> F["filter<br/>rule, period, already seen"] --> A["agent or workflow<br/>analysis, action"] --> D(("Adorno")) --> M["message<br/>to you alone"]
 ```
 
-| Workflow | Réglages (`local/adorno.yaml`) | Ce que tu reçois |
+| Workflow | Settings (`local/adorno.yaml`) | What you receive |
 | --- | --- | --- |
-| `workflow:slack:mentions` | `slack.user_id`, `slack.mentions` : canaux (vide = tous), groupes, période | par mention : le lien vers la conversation, l'analyse complète, un brouillon de réponse dans ta voix |
-| `workflow:slack:watch <règle>` | `slack.watches.<règle>` : canaux, `includes` (mots) ou `regex`, `since`, `max_messages`, `action` (agent, workflow ou consigne, avec son niveau) | le compte rendu des messages qui correspondent et du résultat de l'action |
-| `workflow:notion:assigned` | `notion.assigned` : propriétés « personne », bases, statuts exclus, agent par base, `mode` report ou run | par document : l'action choisie, son résultat, ce qui attend ta décision |
+| `workflow:slack:mentions` | `slack.user_id`, `slack.mentions`: channels (empty = all), groups, period | per mention: the link to the conversation, the full analysis, a draft reply in your voice |
+| `workflow:slack:watch <rule>` | `slack.watches.<rule>`: channels, `includes` (words) or `regex`, `since`, `max_messages`, `action` (agent, workflow or instruction, with its level) | the report of the matching messages and of the action's result |
+| `workflow:notion:assigned` | `notion.assigned`: "person" properties, databases, excluded statuses, agent per database, `mode` report or run | per document: the chosen action, its result, what awaits your decision |
 
-Ton identifiant Slack : ton profil Slack › ⋮ › « Copier l'identifiant de membre ». Le skill `adorno-setup` peut aussi
-le retrouver avec le connecteur. Modèle commenté : `local.example/adorno.yaml`.
+Your Slack ID: your Slack profile › ⋮ › "Copy member ID". The `adorno-setup` skill can also
+find it with the connector. Commented template: `local.example/adorno.yaml`.
 
-Ces workflows se lancent à la main, ou depuis ta propre planification (une tâche planifiée qui lance
-`workflow:slack:mentions` toutes les heures, par exemple) : adorno ne planifie rien lui-même.
+These workflows are launched by hand, or from your own scheduler (a scheduled task that runs
+`workflow:slack:mentions` every hour, for example): adorno schedules nothing itself.
 
-## 9. Modèles et fournisseurs
+## 9. Models and providers
 
-Un workflow enchaîne des agents ; chacun tourne sur le modèle qui suffit à sa tâche. Trier des commentaires ou choisir
-un pattern n'a pas besoin du même modèle que trancher une review en ton nom.
+A workflow chains agents; each one runs on the model that is enough for its task. Sorting comments or choosing
+a pattern does not need the same model as deciding a review in your name.
 
 ```mermaid
 flowchart LR
   W["workflow:review:received"] --> T["triage<br/>fast"]
-  W --> S["spécialistes<br/>balanced"]
+  W --> S["specialists<br/>balanced"]
   W --> A(("Adorno<br/>deep"))
-  T -.->|"route externe"| O["OpenRouter<br/>ou tes modèles"]
+  T -.->|"external route"| O["OpenRouter<br/>or your models"]
 ```
 
-**Trois niveaux neutres.** Chaque agent déclare `fast`, `balanced` ou `deep` (et `inherit` = le modèle de la
-session). L'installation les traduit pour chaque outil :
+**Three neutral tiers.** Each agent declares `fast`, `balanced` or `deep` (and `inherit` = the session's model). The
+install translates them for each tool:
 
-| Outil | Par défaut | Réglable |
+| Tool | Default | Configurable |
 | --- | --- | --- |
-| Claude Code | `haiku`, `sonnet`, `opus` (sous-agents et commandes de workflow) | `models.tiers.claude`, ou un identifiant précis par agent |
-| Gemini CLI | le modèle de la session (`inherit`) | `models.tiers.gemini` (ex. `gemini-2.5-flash` / `gemini-2.5-pro`) |
-| Codex | le modèle de la session : Codex n'a pas de sous-agents, les agents y sont des skills | le modèle de la session (`.codex/config.toml`) |
+| Claude Code | `haiku`, `sonnet`, `opus` (subagents and workflow commands) | `models.tiers.claude`, or a specific identifier per agent |
+| Gemini CLI | the session's model (`inherit`) | `models.tiers.gemini` (e.g. `gemini-2.5-flash` / `gemini-2.5-pro`) |
+| Codex | the session's model: Codex has no subagents, the agents are skills there | the session's model (`.codex/config.toml`) |
 
-Les défauts du dépôt : `triage` et `router` en `fast` ; les spécialistes en `balanced` ;
-`adorno`, `intake`, `analyst`, `review:ponytail`, `review:impact` et `perf:*` en `deep`.
+The repo's defaults: `triage` and `router` on `fast`; the specialists on `balanced`;
+`adorno`, `intake`, `analyst`, `review:ponytail`, `review:impact` and `perf:*` on `deep`.
 
-**Le régler**, à n'importe quel niveau de `local/adorno.yaml` (defaults, preset, workspace, repo) :
+**Setting it**, at any level of `local/adorno.yaml` (defaults, preset, workspace, repo):
 
 ```yaml
 defaults:
@@ -285,11 +284,11 @@ defaults:
     tiers:
       claude: {fast: haiku, balanced: sonnet, deep: opus}
     agents:
-      agent:review:mongodb: deep                     # un autre niveau
-      agent:core:analyst: claude-opus-5-5            # un modèle précis
-      agent:core:triage: {route: openrouter-small}   # un modèle externe
+      agent:review:mongodb: deep                     # another tier
+      agent:core:analyst: claude-opus-5-5            # a specific model
+      agent:core:triage: {route: openrouter-small}   # an external model
     workflows:
-      workflow:pr:status: fast                       # la session qui orchestre ce workflow
+      workflow:pr:status: fast                       # the session that orchestrates this workflow
     routes:
       openrouter-small: {base_url: https://openrouter.ai/api/v1, model: qwen/qwen3-coder, api_key_env: OPENROUTER_API_KEY}
       ours: {base_url: https://llm.acme.internal/v1, model: acme-coder, api_key_env: ACME_LLM_KEY}
@@ -298,20 +297,20 @@ repos:
     models: {external: false, agents: {agent:review:security: deep}}
 ```
 
-Le réglage d'un repo prend effet avec `bin/kit install <repo>` (ou `--workspace`) : les agents installés dans le repo
-priment sur ceux de `--global`. `bin/kit conf owner/repo` montre le résultat (`models`).
+A repo's setting takes effect with `bin/kit install <repo>` (or `--workspace`): the agents installed in the repo
+override those of `--global`. `bin/kit conf owner/repo` shows the result (`models`).
 
-**OpenRouter, OpenAI, Google, tes modèles : les routes.** Une route est un point d'accès compatible OpenAI. Un agent
-envoyé sur une route reste lancé par l'outil, en `fast`, mais devient un agent léger : il rassemble les entrées avec
-ses outils, envoie le jugement au modèle de la route (`adorno-llm/scripts/llm-run`), vérifie la réponse et écrit le
-livrable. Seuls les agents qui jugent sur des entrées rassemblées d'avance peuvent y aller (`delegable: true` :
-`triage`, `router`, les relecteurs `review:*` sauf `impact`) ; ceux qui doivent fouiller ou écrire du code restent
-dans l'outil. La clé reste dans ton profil shell (`export OPENROUTER_API_KEY=…`) : le fichier ne contient que le nom
-de la variable. `external: false` sur un repo : rien n'en sort, les routes y sont ignorées.
+**OpenRouter, OpenAI, Google, your models: routes.** A route is an OpenAI-compatible endpoint. An agent
+sent to a route is still launched by the tool, on `fast`, but becomes a light agent: it gathers the inputs with
+its tools, sends the judgment to the route's model (`adorno-llm/scripts/llm-run`), checks the response and writes the
+deliverable. Only agents that judge on inputs gathered in advance can go there (`delegable: true`:
+`triage`, `router`, the `review:*` reviewers except `impact`); those that must dig or write code stay
+in the tool. The key stays in your shell profile (`export OPENROUTER_API_KEY=…`): the file only contains the name
+of the variable. `external: false` on a repo: nothing leaves it, routes are ignored there.
 
-**Tout Claude Code via une passerelle.** Pour faire tourner toute la session Claude Code sur OpenRouter, ses
-créneaux `haiku`, `sonnet` et `opus` pointant vers les modèles de ton choix, utilise `models.claude_env`, écrit dans
-`.claude/settings.local.json` du repo à l'install :
+**All of Claude Code through a gateway.** To run the whole Claude Code session on OpenRouter, its
+`haiku`, `sonnet` and `opus` slots pointing to the models of your choice, use `models.claude_env`, written into
+the repo's `.claude/settings.local.json` at install:
 
 ```yaml
 models:
@@ -320,27 +319,27 @@ models:
     ANTHROPIC_DEFAULT_HAIKU_MODEL: qwen/qwen3-coder
 ```
 
-La clé va dans `ANTHROPIC_AUTH_TOKEN`, dans ton profil shell (le kit refuse toute variable de secret dans le fichier).
-Claude Code est optimisé pour les modèles d'Anthropic : avec d'autres, l'usage des outils peut se dégrader. Ne règle
-pas `CLAUDE_CODE_SUBAGENT_MODEL` : il écrase le modèle de chaque agent.
+The key goes in `ANTHROPIC_AUTH_TOKEN`, in your shell profile (the kit refuses any secret variable in the file).
+Claude Code is optimized for Anthropic's models: with others, tool use may degrade. Do not set
+`CLAUDE_CODE_SUBAGENT_MODEL`: it overrides each agent's model.
 
-## Ajouter tes propres agents et skills
+## Adding your own agents and skills
 
-`local/src/` est un `src/` privé, posé sur le public à l'install : un agent `local/src/agents/feat/billing.md`, un
-skill `local/src/skills/<nom>/SKILL.md`, une consigne `local/src/instructions/30-equipe.md`. Un dossier
-`local/src/skills/<nom>/` sans `SKILL.md` complète le skill public du même nom, fichier par fichier.
+`local/src/` is a private `src/`, laid over the public one at install: an agent `local/src/agents/feat/billing.md`, a
+skill `local/src/skills/<name>/SKILL.md`, an instruction `local/src/instructions/30-team.md`. A folder
+`local/src/skills/<name>/` without `SKILL.md` completes the public skill of the same name, file by file.
 
-## Autre machine
+## Another machine
 
-Clone le dépôt, recopie `local/` (ou pointe `ADORNO_LOCAL` vers un dossier synchronisé), puis `bin/kit install
---global`. `--public-only` installe sans la couche personnelle.
+Clone the repo, copy `local/` over (or point `ADORNO_LOCAL` to a synced folder), then `bin/kit install
+--global`. `--public-only` installs without the personal layer.
 
-## Dépannage
+## Troubleshooting
 
-| Symptôme | Cause | Remède |
+| Symptom | Cause | Remedy |
 | --- | --- | --- |
-| « not declared in your local config » (code 3) | le repo n'est dans aucun `repos` ni `workspaces` | `adorno-setup` mode `repo`, puis `bin/kit install` |
-| « allows up to L2 » (code 5) | `max_level` du repo, ou mode du workflow trop bas | relève `max_level` ou change de mode |
-| « denies 'submit' » (code 4) | `permissions.deny` du repo | retire l'action de la liste si c'est voulu |
-| « profile is not set up » | pas de `local/src/skills/adorno-profile/references/` | `adorno-setup` mode `profile` |
-| un repo d'un workspace par dossier n'est pas trouvé | cloné après l'install, ou plus de 2 niveaux sous `paths` | relance `bin/kit install`, ou ajoute-le à `repos:` |
+| "not declared in your local config" (code 3) | the repo is in no `repos` or `workspaces` | `adorno-setup` repo mode, then `bin/kit install` |
+| "allows up to L2" (code 5) | the repo's `max_level`, or the workflow's mode is too low | raise `max_level` or change mode |
+| "denies 'submit'" (code 4) | the repo's `permissions.deny` | remove the action from the list if intended |
+| "profile is not set up" | no `local/src/skills/adorno-profile/references/` | `adorno-setup` profile mode |
+| a repo of a folder-based workspace is not found | cloned after the install, or more than 2 levels below `paths` | rerun `bin/kit install`, or add it to `repos:` |

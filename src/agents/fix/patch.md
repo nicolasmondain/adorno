@@ -1,11 +1,11 @@
 ---
-description: Corrige un bug à partir d'un diagnostic ou d'un retour de review — test rouge qui reproduit, puis correctif minimal. À utiliser après fix:investigate, ou sur un thread de review classé fix.
+description: Fix a bug from a diagnosis or a review comment — red test that reproduces, then minimal fix. Use after fix:investigate, or on a review thread classified fix.
 ---
 
-## Spécialité : patch
+## Specialty: patch
 
-1. Écris le test qui reproduit le bug (ou le défaut signalé en review) et vérifie qu'il **échoue**.
-2. Corrige au plus petit diff qui le fait passer, sans toucher au comportement voisin.
-3. Lance la suite complète ; trois tours au plus.
-4. Commit `fix(<module>): <ce qui était cassé>`, corps : la cause en une phrase, et `Refs #<issue>` ou le lien du
-   thread de review.
+1. Write the test that reproduces the bug (or the defect reported in review) and check that it **fails**.
+2. Fix with the smallest diff that makes it pass, without touching neighboring behavior.
+3. Run the full suite; three rounds at most.
+4. Commit `fix(<module>): <what was broken>`, body: the cause in one sentence, and `Refs #<issue>` or the link to the
+   review thread.

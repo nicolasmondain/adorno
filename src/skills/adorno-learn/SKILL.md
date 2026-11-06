@@ -1,6 +1,6 @@
 ---
 name: adorno-learn
-description: Garde le profil et la voix du propriétaire en phase avec ses vraies décisions — pendant toute tâche, repère ce qui révèle son jugement en tech, logique produit, logique code, méthode ou écriture (une correction, un verdict renversé, un brouillon réécrit, une préférence dite, un choix répété), le note avec sa preuve et propose une mise à jour du profil quand c'est solide. À utiliser chaque fois que le propriétaire te corrige ou tranche autrement, réécrit un brouillon avant de l'envoyer, dit comment il veut les choses, ou à la fin d'un workflow mené par agent:adorno ; workflow:profile:learn applique ce qu'il valide.
+description: Keeps the owner's profile and voice in line with their real decisions — during any task, spots what reveals their judgment in tech, product logic, code logic, method or writing (a correction, an overturned verdict, a rewritten draft, a stated preference, a repeated choice), records it with its evidence and proposes a profile update when it is solid. Use whenever the owner corrects you or decides differently, rewrites a draft before sending it, says how they want things, or at the end of a workflow run by agent:adorno; workflow:profile:learn applies what they validate.
 ---
 
 # adorno-learn

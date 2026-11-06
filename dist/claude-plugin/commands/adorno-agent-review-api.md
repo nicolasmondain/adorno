@@ -1,8 +1,8 @@
 ---
-description: agent:review:api — Relecteur API — contrats d'endpoints et de méthodes, validation des entrées, codes et formats d'erreur, pagination, compatibilité, documentation publique. Appelé quand un diff touche une interface, ou pour vérifier un commentaire de review sur une API.
-argument-hint: <demande>
+description: agent:review:api — API reviewer — endpoint and method contracts, input validation, error codes and formats, pagination, compatibility, public documentation. Called when a diff touches an interface, or to verify a review comment about an API.
+argument-hint: <request>
 ---
 
-Délègue la demande ci-dessous au sous-agent `adorno-agent-review-api` (agent:review:api) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-review-api`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-review-api` sub-agent (agent:review:api) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-review-api`) to handle the request.
 
-Demande : $ARGUMENTS
+Request: $ARGUMENTS

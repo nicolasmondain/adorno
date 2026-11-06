@@ -1,8 +1,8 @@
 ---
-description: agent:ci:debug — Diagnostique une CI rouge à partir des logs — classe l'échec (flaky, infra, vrai échec) et désigne l'agent qui doit corriger. À utiliser dès qu'un check échoue sur une PR ou sur la branche par défaut.
-argument-hint: <demande>
+description: agent:ci:debug — Diagnose a red CI from the logs — classify the failure (flaky, infra, real failure) and name the agent that must fix it. Use as soon as a check fails on a PR or on the default branch.
+argument-hint: <request>
 ---
 
-Délègue la demande ci-dessous au sous-agent `adorno-agent-ci-debug` (agent:ci:debug) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-ci-debug`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-ci-debug` sub-agent (agent:ci:debug) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-ci-debug`) to handle the request.
 
-Demande : $ARGUMENTS
+Request: $ARGUMENTS

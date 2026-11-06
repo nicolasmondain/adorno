@@ -1,8 +1,8 @@
 ---
-description: agent:review:front — Relecteur front — composants, état, rendu, accessibilité WCAG 2.1 AA, design system, performance perçue. Appelé quand un diff touche l'interface, ou pour vérifier un commentaire de review sur du front.
-argument-hint: <demande>
+description: agent:review:front — Front-end reviewer — components, state, rendering, WCAG 2.1 AA accessibility, design system, perceived performance. Called when a diff touches the interface, or to verify a review comment about the front end.
+argument-hint: <request>
 ---
 
-Délègue la demande ci-dessous au sous-agent `adorno-agent-review-front` (agent:review:front) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-review-front`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-review-front` sub-agent (agent:review:front) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-review-front`) to handle the request.
 
-Demande : $ARGUMENTS
+Request: $ARGUMENTS

@@ -1,27 +1,27 @@
-# Réglages publics par défaut, valables pour tout repo. Tes repos, presets et workspaces vivent dans
-# local/adorno.yaml (ignoré par git) ; `bin/kit install` écrit le registre complet dans ~/.adorno/registry.json, hors
-# de tout repo, que les scripts lisent. Un repo déclaré nulle part est signalé, jamais traité.
+# Public default settings, valid for every repo. Your repos, presets and workspaces live in
+# local/adorno.yaml (git-ignored); `bin/kit install` writes the full registry to ~/.adorno/registry.json, outside
+# any repo, which the scripts read. A repo declared nowhere is reported, never processed.
 #
-#   base             branche par défaut (vide = lue sur GitHub)
-#   install/test/lint/typecheck  commandes ; vides = détectées par workflow:repo:onboard
-#   required_checks  checks CI à attendre (vide = tous)
-#   reviewers        relecteurs à relancer par défaut (vide = ceux qui ont déjà relu)
-#   resolve_threads  author | reviewer : qui résout un thread de review
-#   reply_language   langue des réponses publiées sur GitHub
-#   max_level        niveau de droits maximal (L0 lecture … L3 PR ; L4 merge n'est jamais automatique)
+#   base             default branch (empty = read from GitHub)
+#   install/test/lint/typecheck  commands; empty = detected by workflow:repo:onboard
+#   required_checks  CI checks to wait for (empty = all)
+#   reviewers        reviewers to re-request by default (empty = those who already reviewed)
+#   resolve_threads  author | reviewer: who resolves a review thread
+#   reply_language   language of replies published on GitHub
+#   max_level        maximum permission level (L0 read … L3 PR; L4 merge is never automatic)
 #   ponytail         lite | full | ultra
-#   review_checks    dans le workspace d'une review : none | lint (lint + typecheck) | full (+ install et tests)
-#                    défaut none : un point qui demande une exécution est un ❓, la CI tranche (agent:adorno)
-#   allow_approve    une review automatique peut-elle APPROUVER ? (false : seuls COMMENT et REQUEST_CHANGES)
-#   max_inline       commentaires en ligne au plus par review ; le reste va dans le corps (agent:adorno : 8)
-#   branch_pattern   regex que doit suivre le nom de branche d'une PR (process.md : <type>/<issue-id>-kebab)
-#   max_parallel     PRs traitées en même temps par review:requested et review:received
-#   areas            zones de code : motifs de chemin (globs bash, `*` traverse les dossiers) et/ou
-#                    regex sur les lignes ajoutées ; une zone peut être surchargée par repo
-#   area_reviewers   agents relecteurs demandés selon les zones touchées (`always` = à chaque fois)
-#   impact           analyse d'impact des PRs mergées (workflow:pr:impact) : fenêtre comparée avant / après le
-#                    déploiement, délai minimal avant d'analyser, sources à interroger (connecteurs et repères :
-#                    dashboards, services, projets, canaux d'alerte), publication en commentaire ou non
+#   review_checks    in a review workspace: none | lint (lint + typecheck) | full (+ install and tests)
+#                    default none: a point that needs execution is a ❓, CI decides (agent:adorno)
+#   allow_approve    may an automatic review APPROVE? (false: only COMMENT and REQUEST_CHANGES)
+#   max_inline       max inline comments per review; the rest goes in the body (agent:adorno: 8)
+#   branch_pattern   regex a PR branch name must follow (process.md: <type>/<issue-id>-kebab)
+#   max_parallel     PRs processed at the same time by review:requested and review:received
+#   areas            code areas: path patterns (bash globs, `*` crosses folders) and/or
+#                    regexes on added lines; an area can be overridden per repo
+#   area_reviewers   reviewer agents requested depending on the areas touched (`always` = every time)
+#   impact           impact analysis of merged PRs (workflow:pr:impact): window compared before / after the
+#                    deployment, minimum delay before analysing, sources to query (connectors and hints:
+#                    dashboards, services, projects, alert channels), whether to post as a comment
 
 defaults:
   base: null
@@ -61,12 +61,12 @@ defaults:
         - "Bash(gh api:*)"
 
   impact:
-    window: 7d            # même durée comparée avant et après le déploiement
-    min_age: 3d           # pas d'analyse tant que la PR n'est pas en production depuis ce délai
+    window: 7d            # same duration compared before and after the deployment
+    min_age: 3d           # no analysis until the PR has been in production for this long
     environment: production
-    post: comment         # comment : le rapport part en commentaire de la PR · none : rapport local seulement
-    post_public: false    # sur un repo public, jamais de chiffres de production en commentaire, sauf true
-    sources: []           # tes repères par repo, dans local/adorno.yaml (voir local.example/)
+    post: comment         # comment: the report is posted as a PR comment · none: local report only
+    post_public: false    # on a public repo, never post production figures in a comment, unless true
+    sources: []           # your per-repo hints, in local/adorno.yaml (see local.example/)
 
   areas:
     front:
@@ -103,6 +103,6 @@ defaults:
     ci: [agent:review:security]
     docs: []
 
-# Tes repos réels (relecteurs, équipe, contexte, droits, voix, vision) vivent dans local/adorno.yaml, ignoré par git
-# et appliqué par `bin/kit install`. Modèle : local.example/adorno.yaml. Résultat pour un repo : `bin/kit conf`.
+# Your real repos (reviewers, team, context, permissions, voice, vision) live in local/adorno.yaml, git-ignored
+# and applied by `bin/kit install`. Template: local.example/adorno.yaml. Result for a repo: `bin/kit conf`.
 repos: {}

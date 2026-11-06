@@ -22,7 +22,7 @@ NOTION="https://www.notion.so/acme/Export-CSV-1a2b3c4d5e6f40718293a4b5c6d7e8f9?p
 
 echo "input-refs"
 expect_exit 0 "a request with every kind of source" -- "$S/input-refs" \
-  "Export CSV des campagnes sur acme/app, décidé dans $SLACK, détaillé dans $NOTION. Voir acme/app#42, https://github.com/acme/app/pull/7 et $TMP/plan.md."
+  "Export campaign CSV on acme/app, decided in $SLACK, detailed in $NOTION. See acme/app#42, https://github.com/acme/app/pull/7 and $TMP/plan.md."
 expect_jq "kinds found" '.kinds == ["file", "github-pr", "github-ref", "notion", "slack"]'
 expect_jq "Slack: channel, message and thread timestamps" \
   '.refs[] | select(.kind == "slack") | .workspace == "acme" and .channel == "C0123ABCD" and .ts == "1730800000.000100" and .thread_ts == "1730799000.000200"'
@@ -30,7 +30,7 @@ expect_jq "Notion: dashed page id" '.refs[] | select(.kind == "notion") | .page_
 expect_jq "GitHub: PR and short reference" \
   '([.refs[] | select(.kind == "github-pr")][0] | .repo == "acme/app" and .number == 7) and ([.refs[] | select(.kind == "github-ref")][0].number == 42)'
 expect_jq "an existing plan file" '.refs[] | select(.kind == "file") | .path | endswith("/plan.md")'
-expect_jq "the text keeps the request, without links" '(.text | test("Export CSV des campagnes")) and (.text | test("https://") | not)'
+expect_jq "the text keeps the request, without links" '(.text | test("Export campaign CSV")) and (.text | test("https://") | not)'
 
 expect_exit 0 "a Slack message outside a thread" -- "$S/input-refs" "https://acme.slack.com/archives/C9/p1730800000000100"
 expect_jq "its own timestamp is the thread" '.refs[0].ts == "1730800000.000100" and .refs[0].thread_ts == "1730800000.000100"'
@@ -40,9 +40,9 @@ expect_exit 0 "a notion.site page" -- "$S/input-refs" "voir https://acme.notion.
 expect_jq "trailing punctuation dropped" '.refs[0].kind == "notion" and (.refs[0].url | endswith("abcdef"))'
 expect_exit 0 "an issue link" -- "$S/input-refs" "fix https://github.com/acme/app/issues/12"
 expect_jq "github-issue" '.refs == [{kind: "github-issue", url: "https://github.com/acme/app/issues/12", repo: "acme/app", number: 12}]'
-expect_exit 0 "a plain prompt" -- "$S/input-refs" "Ajoute un bouton Export sur la page Campagnes de acme/app"
+expect_exit 0 "a plain prompt" -- "$S/input-refs" "Add an Export button to the Campaigns page of acme/app"
 expect_jq "no source" '.refs == [] and .kinds == []'
-expect_exit 0 "another link" -- "$S/input-refs" "comme sur https://example.com/doc"
+expect_exit 0 "another link" -- "$S/input-refs" "like on https://example.com/doc"
 expect_jq "kept as url" '.refs == [{kind: "url", url: "https://example.com/doc"}]'
 expect_exit 0 "a file name that does not exist" -- "$S/input-refs" "voir docs/nope.md"
 expect_jq "no file" '.refs == []'

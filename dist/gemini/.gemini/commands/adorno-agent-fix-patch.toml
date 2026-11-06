@@ -1,6 +1,6 @@
-description = "agent:fix:patch — Corrige un bug à partir d'un diagnostic ou d'un retour de review — test rouge qui reproduit, puis correctif minimal. À utiliser après fix:investigate, ou sur un thread de review classé fix."
+description = "agent:fix:patch — Fix a bug from a diagnosis or a review comment — red test that reproduces, then minimal fix. Use after fix:investigate, or on a review thread classified fix."
 prompt = '''
-Délègue la demande ci-dessous au sous-agent `adorno-agent-fix-patch` (agent:fix:patch) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-fix-patch`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-fix-patch` sub-agent (agent:fix:patch) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-fix-patch`) to handle the request.
 
-Demande : {{args}}
+Request: {{args}}
 '''

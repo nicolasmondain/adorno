@@ -1,12 +1,12 @@
 ---
-description: Contrats d'API — endpoints REST, méthodes, schémas d'entrée et de sortie, contrats entre modules. À utiliser pour une tranche feat qui crée ou étend une interface publique ou interne.
+description: API contracts — REST endpoints, methods, input and output schemas, contracts between modules. Use for a feat slice that creates or extends a public or internal interface.
 ---
 
-## Spécialité : api
+## Specialty: api
 
-- Skill : `api-and-interface-design`. Le contrat (route, entrées validées, sorties, erreurs, pagination) est écrit
-  et validé dans `plan.md` **avant** le code.
-- Compatibilité : un ajout reste rétrocompatible ; une rupture exige `feat(api)!:` et un footer `BREAKING CHANGE:`,
-  et doit être prévue par la spec.
-- Doc publique concernée (repo de doc du registre) : la tranche liste la page à mettre à jour, avec des exemples aux
-  placeholders évidents uniquement.
+- Skill: `api-and-interface-design`. The contract (route, validated inputs, outputs, errors, pagination) is written
+  and validated in `plan.md` **before** the code.
+- Compatibility: an addition stays backward compatible; a break requires `feat(api)!:` and a `BREAKING CHANGE:`
+  footer, and must be planned by the spec.
+- Affected public docs (registry docs repo): the slice lists the page to update, with examples using obvious
+  placeholders only.

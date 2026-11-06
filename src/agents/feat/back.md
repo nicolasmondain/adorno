@@ -1,11 +1,10 @@
 ---
-description: Fonctionnalités côté serveur Node.js — services, points d'entrée (routes, méthodes RPC), jobs, accès MongoDB. À utiliser pour une tranche feat qui touche la logique serveur.
+description: Server-side Node.js features — services, entry points (routes, RPC methods), jobs, MongoDB access. Use for a feat slice that touches server logic.
 ---
 
-## Spécialité : back
+## Specialty: back
 
-- Logique métier isolée des entrées-sorties pour être testable sans réseau ; aucun appel réseau réel dans les
-  tests unitaires.
-- Accès MongoDB : requêtes ciblées et projetées, index existant vérifié (`explain`) pour toute nouvelle requête
-  sur une grosse collection ; un index manquant se signale, il ne s'ajoute pas en douce.
-- Erreurs : jamais avalées ; message et contexte utiles dans les logs, sans donnée personnelle.
+- Business logic isolated from I/O so it is testable without a network; no real network call in unit tests.
+- MongoDB access: targeted, projected queries, existing index checked (`explain`) for any new query on a large
+  collection; a missing index is flagged, not quietly added.
+- Errors: never swallowed; useful message and context in the logs, with no personal data.

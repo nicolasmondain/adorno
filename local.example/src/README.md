@@ -1,16 +1,16 @@
-# local/src — ton src/ privé
+# local/src — your private src/
 
-Même arborescence que `src/` ; chaque fichier ici remplace (ou ajoute) le fichier public du même chemin à l'install.
-Le profil, la voix et le résumé n'existent **que** ici : le dépôt public n'en livre aucun. Les fichiers de ce modèle
-sont des points de départ ; le skill `adorno-setup` (mode `profile`) t'aide à écrire les tiens.
+Same tree as `src/`; each file here replaces (or adds) the public file at the same path on install.
+The profile, the voice and the summary exist **only** here: the public repo ships none of them. The files in this
+template are starting points; the `adorno-setup` skill (`profile` mode) helps you write your own.
 
-| Pour… | Écris |
+| To… | Write |
 | --- | --- |
-| ton profil (principes, méthode, identité) | `skills/adorno-profile/references/{personality,engineering-types,engineering-scale,process}.md` |
-| ta manière d'écrire | `skills/adorno-voice/references/voice.md` |
-| ton résumé toujours actif | `instructions/20-owner.md` |
-| une consigne privée de plus | `instructions/NN-sujet.md` |
-| un agent, un workflow ou un skill privé | `agents/<type>/<spécialité>.md`, `workflows/<domaine>/<action>.md`, `skills/<nom>/SKILL.md` |
+| your profile (principles, method, identity) | `skills/adorno-profile/references/{personality,engineering-types,engineering-scale,process}.md` |
+| your writing style | `skills/adorno-voice/references/voice.md` |
+| your always-on summary | `instructions/20-owner.md` |
+| one more private instruction | `instructions/NN-topic.md` |
+| a private agent, workflow or skill | `agents/<type>/<specialty>.md`, `workflows/<domain>/<action>.md`, `skills/<name>/SKILL.md` |
 
-Un dossier `skills/<nom>/` sans `SKILL.md` se pose sur le skill public du même nom, fichier par fichier ; avec un
-`SKILL.md`, il en remplace aussi la description et le corps.
+A `skills/<name>/` folder without `SKILL.md` is laid over the public skill of the same name, file by file; with a
+`SKILL.md`, it also replaces its description and body.

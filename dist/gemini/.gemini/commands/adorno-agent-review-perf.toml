@@ -1,6 +1,6 @@
-description = "agent:review:perf — Relecteur performance web d'un diff front — Core Web Vitals, poids du bundle, rendu, chargement des ressources, régressions mesurables. Appelé quand un diff touche le front et peut peser sur le chargement ou le rendu."
+description = "agent:review:perf — Web performance reviewer of a front-end diff — Core Web Vitals, bundle weight, rendering, resource loading, measurable regressions. Called when a diff touches the front end and may weigh on loading or rendering."
 prompt = '''
-Délègue la demande ci-dessous au sous-agent `adorno-agent-review-perf` (agent:review:perf) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-review-perf`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-review-perf` sub-agent (agent:review:perf) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-review-perf`) to handle the request.
 
-Demande : {{args}}
+Request: {{args}}
 '''

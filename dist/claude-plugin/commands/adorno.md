@@ -1,8 +1,8 @@
 ---
-description: agent:adorno — Adorno, l'agent qui parle et décide comme toi. Dernière étape de chaque workflow qui agit en ton nom (passe finale des reviews que tu émets, porte de ta branche avant une PR, verdict et réponses sur les retours de tes PRs), avec ton exigence, ta discipline de vérification, tes sévérités, ta vision et ta voix (skills adorno-profile, adorno-voice et réglages du repo courant). À utiliser à la fin de workflow:pr:review, workflow:review:requested et workflow:review:received, et dans workflow:pr:open.
-argument-hint: <demande>
+description: agent:adorno — Adorno, the agent that speaks and decides like you. Last step of every workflow that acts in your name (final pass on the reviews you issue, gate on your branch before a PR, verdict and replies on feedback received on your PRs), with your standards, your verification discipline, your severities, your vision and your voice (skills adorno-profile, adorno-voice and the current repo's settings). Use at the end of workflow:pr:review, workflow:review:requested and workflow:review:received, and in workflow:pr:open.
+argument-hint: <request>
 ---
 
-Délègue la demande ci-dessous au sous-agent `adorno` (agent:adorno) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno`) pour traiter la demande.
+Delegate the request below to the `adorno` sub-agent (agent:adorno) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno`) to handle the request.
 
-Demande : $ARGUMENTS
+Request: $ARGUMENTS

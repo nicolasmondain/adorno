@@ -1,52 +1,52 @@
 ---
 name: adorno-slack-watch
-description: workflow:slack:watch — Surveille un ou plusieurs canaux Slack selon une règle nommée — mots inclus ou regex, sur une période, au plus N messages — et lance l'action configurée (agent, workflow ou consigne) sur chaque message qui correspond, une seule fois par message. Lecture seule sur Slack ; compte rendu envoyé à toi seul. À lancer à la main ou depuis ta propre planification.
+description: workflow:slack:watch — Watch one or more Slack channels according to a named rule — included words or regex, over a period, at most N messages — and launch the configured action (agent, workflow or instruction) on each message that matches, once per message. Read-only on Slack; report sent to you alone. Launch by hand or from your own scheduler.
 ---
 
 # workflow:slack:watch
 
-Entrée : la demande de l'utilisateur. Suis les étapes dans l'ordre.
+Input: the user's request. Follow the steps in order.
 
-Entrée : la demande de l’utilisateur. Les règles se déclarent dans ta couche personnelle (`local/adorno.yaml` › `slack.watches`) :
+Input: the user’s request. Rules are declared in your personal layer (`local/adorno.yaml` › `slack.watches`):
 
 ```yaml
 slack:
-  user_id: U0123ABCD                 # toi : destinataire des comptes rendus
+  user_id: U0123ABCD                 # you: recipient of the reports
   watches:
     prod-timeouts:
       channels: ["#notif-errors"]
-      includes: ["Timeout", "ETIMEDOUT"]   # au moins un mot (insensible à la casse)…
-      regex: 'took (\d{4,})ms'             # …ou cette regex
-      since: 24h                           # 90m, 24h, 7d ou une date
-      max_messages: 200                    # messages lus au plus, les plus récents d'abord
+      includes: ["Timeout", "ETIMEDOUT"]   # at least one word (case-insensitive)…
+      regex: 'took (\d{4,})ms'             # …or this regex
+      since: 24h                           # 90m, 24h, 7d or a date
+      max_messages: 200                    # messages read at most, most recent first
       action:
-        agent: agent:core:analyst          # ou workflow: workflow:issue:fix, ou rien
-        prompt: "Rattache l'erreur à un module et dis si elle est nouvelle."
-        level: L0                          # droits de l'action (L0 par défaut)
+        agent: agent:core:analyst          # or workflow: workflow:issue:fix, or nothing
+        prompt: "Tie the error to a module and say whether it is new."
+        level: L0                          # permissions of the action (L0 by default)
       notify: dm                           # dm | draft | none
 ```
 
-Dossier d'exécution : `~/.adorno/runs/slack-watch-<nom>-<date>/`.
+Run folder: `~/.adorno/runs/slack-watch-<name>-<date>/`.
 
-1. **Réglages** — `adorno-watch/scripts/watch-conf slack-watch <nom>` ; `--since`, `--max` les remplacent pour cette
-   exécution. Règle absente (code 3) → propose le skill `adorno-setup`.
-2. **Lire** — pour chaque canal, l'historique depuis `since` avec le connecteur Slack (lecture de canal, réponses des
-   fils comprises si `threads: true`), jusqu'à `max_messages`. Normalise en `messages.json` (format du skill
+1. **Settings** — `adorno-watch/scripts/watch-conf slack-watch <name>`; `--since`, `--max` override them for this
+   run. Rule missing (exit code 3) → offer the skill `adorno-setup`.
+2. **Read** — for each channel, the history since `since` with the Slack connector (channel read, thread replies
+   included if `threads: true`), up to `max_messages`. Normalize into `messages.json` (format of the skill
    `adorno-watch`).
-3. **Filtrer** — `watch-match <nom> messages.json` → `matches.json` : ce qui correspond et n'a pas encore été traité
-   (`--all` retraite tout). Aucun résultat → compte rendu court, `watch-seen touch slack-watch-<nom>`, fin.
-4. **Annoncer** — plus de 20 correspondances : dis-le et demande avant de lancer les actions (coûteuses).
-   `--dry-run` : arrête-toi ici avec la liste.
-5. **Agir** — pour chaque message, dans l'ordre chronologique, l'action de la règle avec le message, son lien et le
-   fil complet en entrée, plus la `prompt` de la règle :
-   - `agent:` → l'agent, en lecture seule sauf si `level` le permet ;
-   - `workflow:` → le workflow, qui ouvre son exécution au niveau `action_level` que rend `watch-match` (`L0` si
-     l'auteur du message n'est pas dans `trusted_authors`) ; un workflow qui publie sur GitHub reste borné par les
-     droits du repo ;
-   - seulement `prompt:` → `agent:core:analyst` avec cette consigne.
-   Les messages sont indépendants : traite-les en parallèle par lots de 3. Un échec n'arrête pas les autres.
-6. **Retenir** — `watch-seen mark slack-watch-<nom> <id>…` pour chaque message dont l'action a abouti (pas ceux en
-   échec), puis `watch-seen touch slack-watch-<nom>`.
-7. **Rendre compte** — `report.md` : période, canaux, messages lus, correspondances ; pour chacune, le lien, l'auteur,
-   l'extrait qui a déclenché, le résultat de l'action. Envoi selon `notify` (skill `adorno-watch` : à toi seul,
-   jamais dans le canal).
+3. **Filter** — `watch-match <name> messages.json` → `matches.json`: what matches and has not been processed yet
+   (`--all` reprocesses everything). No result → short report, `watch-seen touch slack-watch-<name>`, end.
+4. **Announce** — more than 20 matches: say so and ask before launching the actions (costly). `--dry-run`: stop here
+   with the list.
+5. **Act** — for each message, in chronological order, the action of the rule with the message, its link and the full
+   thread as input, plus the rule's `prompt`:
+   - `agent:` → the agent, read-only unless `level` allows more;
+   - `workflow:` → the workflow, which opens its run at the `action_level` that `watch-match` returns (`L0` if the
+     message author is not in `trusted_authors`); a workflow that publishes to GitHub remains bounded by the
+     repo's permissions;
+   - only `prompt:` → `agent:core:analyst` with that instruction.
+   Messages are independent: process them in parallel in batches of 3. A failure does not stop the others.
+6. **Remember** — `watch-seen mark slack-watch-<name> <id>…` for each message whose action succeeded (not those that
+   failed), then `watch-seen touch slack-watch-<name>`.
+7. **Report** — `report.md`: period, channels, messages read, matches; for each, the link, the author, the excerpt
+   that triggered it, the result of the action. Sent according to `notify` (skill `adorno-watch`: to you alone, never
+   in the channel).

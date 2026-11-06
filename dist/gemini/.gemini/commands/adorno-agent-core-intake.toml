@@ -1,6 +1,6 @@
-description = "agent:core:intake — Cadre une nouvelle demande de code et en tire une spec avec le niveau de droits — soit en discutant (mode discuss), soit, quand la demande ou ses sources (prompt clair, fil Slack, page Notion, issue, plan déjà rédigé) suffisent, en rédigeant directement et en ne posant que les questions de confirmation (mode confirm). À utiliser au début de toute demande non triviale, avant tout code (workflow:spec:new)."
+description = "agent:core:intake — Frames a new code request and turns it into a spec with the permission level — either by discussing (discuss mode), or, when the request or its sources (clear prompt, Slack thread, Notion page, issue, already written plan) are enough, by writing it directly and asking only confirmation questions (confirm mode). Use at the start of any non-trivial request, before any code (workflow:spec:new)."
 prompt = '''
-Délègue la demande ci-dessous au sous-agent `adorno-agent-core-intake` (agent:core:intake) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-core-intake`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-core-intake` sub-agent (agent:core:intake) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-core-intake`) to handle the request.
 
-Demande : {{args}}
+Request: {{args}}
 '''

@@ -1,20 +1,20 @@
-description = "Fait évoluer ton profil et ta voix — passe en revue les points relevés par adorno-learn pendant le travail (orientés tech, logique produit, logique code, méthode, écriture), te montre chacun avec ses preuves et la phrase proposée dans le bon fichier, et n'écrit que ce que tu valides, dans ta couche personnelle. Lancé à la main quand Adorno signale des points prêts."
+description = "Evolve your profile and your voice — reviews the points noted by adorno-learn during work (tech, product logic, code logic, method, writing), shows you each with its evidence and the proposed sentence in the right file, and writes only what you validate, in your personal layer. Launched by hand when Adorno signals ready points."
 prompt = '''
-Entrée : {{args}}
+Input: {{args}}
 
-1. **Lister** — `adorno-learn/scripts/learn-list --ready` (`--all` : tous les points en attente, y compris ceux vus une
-   seule fois ; `--kind` filtre). Rien → dis-le, fin.
-2. **Situer** — `adorno-setup/scripts/adorno-source` → la couche personnelle. Pour chaque point, lis le fichier visé
-   (`local/src/skills/adorno-profile/references/<fichier>`, `…/adorno-voice/references/voice.md` ou
-   `local/src/instructions/20-owner.md`) : le principe y est-il déjà, en partie, ou contredit ?
-3. **Proposer**, un point à la fois :
-   - ce qui a été observé, combien de fois, avec les liens ;
-   - le changement exact : la phrase ajoutée ou remplacée, dans quelle section (un diff) ; une contradiction avec
-     le profil actuel est montrée comme telle, avec les deux versions ;
-   - le choix : **accepter**, **reformuler** (tu dictes, on montre le nouveau diff), **plus tard**, **rejeter**.
-4. **Écrire** ce qui est accepté, dans le fichier de la couche personnelle seulement (jamais dans un fichier suivi du
-   dépôt adorno), puis `learn-decide <clé> accepted` ; `rejected` ou `later` sinon. Un principe qui change ta façon
-   de travailler au quotidien remonte aussi, en une ligne, dans `20-owner.md` si tu le veux.
-5. **Appliquer** — `<source>/bin/kit check`, puis `<source>/bin/kit install --global` (et les repos installés à
-   part, s'il y en a). Compte rendu : ce qui a changé, fichier par fichier.
+1. **List** — `adorno-learn/scripts/learn-list --ready` (`--all`: every pending point, including those seen only
+   once; `--kind` filters). Nothing → say so, end.
+2. **Locate** — `adorno-setup/scripts/adorno-source` → the personal layer. For each point, read the targeted file
+   (`local/src/skills/adorno-profile/references/<file>`, `…/adorno-voice/references/voice.md` or
+   `local/src/instructions/20-owner.md`): is the principle already there, partly, or contradicted?
+3. **Propose**, one point at a time:
+   - what was observed, how many times, with the links;
+   - the exact change: the sentence added or replaced, in which section (a diff); a contradiction with the current
+     profile is shown as such, with both versions;
+   - the choice: **accept**, **rephrase** (you dictate, the new diff is shown), **later**, **reject**.
+4. **Write** what is accepted, in the personal layer file only (never in a tracked file of the adorno repo), then
+   `learn-decide <key> accepted`; `rejected` or `later` otherwise. A principle that changes how you work day to day
+   also goes up, in one line, into `20-owner.md` if you want.
+5. **Apply** — `<source>/bin/kit check`, then `<source>/bin/kit install --global` (and the repos installed
+   separately, if any). Report: what changed, file by file.
 '''

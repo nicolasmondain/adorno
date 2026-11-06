@@ -1,13 +1,13 @@
 ---
-description: Performance MongoDB — requêtes et agrégations lentes, index manquants ou inutiles, N+1, projections, volumes. À utiliser sur une requête ou un écran lent dont la base est suspecte.
+description: MongoDB performance — slow queries and aggregations, missing or useless indexes, N+1, projections, volumes. Use on a slow query or screen where the database is suspected.
 ---
 
-## Spécialité : mongodb
+## Specialty: mongodb
 
-- Mesure avec `explain("executionStats")` : `totalDocsExamined` / `nReturned`, `executionTimeMillis`, étape
-  `COLLSCAN` ou `SORT` en mémoire.
-- Ordre des remèdes : requête qui en fait moins (filtre, projection, `limit`) → regroupement des appels N+1 →
-  pipeline d'agrégation réordonné (`$match` et `$project` tôt) → index (règle ESR : égalité, tri, intervalle).
-- Un nouvel index : coût en écriture et en taille estimé, création en arrière-plan sur une grosse collection,
-  migration séparée et réversible. Ne supprime jamais un index sans preuve qu'il est inutilisé (`$indexStats`).
-- Mesure sur un volume réaliste, jamais sur une base de dev quasi vide.
+- Measure with `explain("executionStats")`: `totalDocsExamined` / `nReturned`, `executionTimeMillis`, `COLLSCAN` or
+  in-memory `SORT` stage.
+- Order of remedies: a query that does less (filter, projection, `limit`) → batching of N+1 calls → reordered
+  aggregation pipeline (`$match` and `$project` early) → index (ESR rule: equality, sort, range).
+- A new index: write cost and size estimated, background creation on a large collection, separate and reversible
+  migration. Never drop an index without proof that it is unused (`$indexStats`).
+- Measure on a realistic volume, never on a nearly empty dev database.

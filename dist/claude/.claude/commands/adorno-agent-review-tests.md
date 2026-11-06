@@ -1,8 +1,8 @@
 ---
-description: agent:review:tests — Revue des tests d'un diff — couverture des chemins à risque, cas limites, erreurs, lisibilité des tests. À utiliser dès que de la logique change.
-argument-hint: <demande>
+description: agent:review:tests — Test review of a diff — coverage of risky paths, edge cases, errors, test readability. Use whenever logic changes.
+argument-hint: <request>
 ---
 
-Délègue la demande ci-dessous au sous-agent `adorno-agent-review-tests` (agent:review:tests) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-review-tests`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-review-tests` sub-agent (agent:review:tests) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-review-tests`) to handle the request.
 
-Demande : $ARGUMENTS
+Request: $ARGUMENTS

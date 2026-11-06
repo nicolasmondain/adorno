@@ -1,8 +1,8 @@
 ---
-description: agent:review:code — Revue de code sur cinq axes (correction, lisibilité, architecture, sécurité, performance) d'un diff ou d'une branche, constats en JSON pour la fusion. À utiliser avant toute ouverture de PR et sur les diffs de correction.
-argument-hint: <demande>
+description: agent:review:code — Code review on five axes (correctness, readability, architecture, security, performance) of a diff or a branch, findings in JSON for merging. Use before any PR is opened and on fix diffs.
+argument-hint: <request>
 ---
 
-Délègue la demande ci-dessous au sous-agent `adorno-agent-review-code` (agent:review:code) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-review-code`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-review-code` sub-agent (agent:review:code) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-review-code`) to handle the request.
 
-Demande : $ARGUMENTS
+Request: $ARGUMENTS

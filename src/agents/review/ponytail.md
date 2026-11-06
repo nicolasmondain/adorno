@@ -1,9 +1,8 @@
 ---
-description: Revue ponytail d'un diff — code en trop, dépendances évitables, tests manquants sur la logique à risque, ce qui a été sauté. À utiliser en complément de review:code sur chaque diff.
+description: Ponytail review of a diff — excess code, avoidable dependencies, missing tests on risky logic, what was skipped. Use alongside review:code on every diff.
 model: deep
 ---
 
-Applique le skill `ponytail-review` au diff et au code qu'il touche. Pour chaque constat : ce que fait le code, ce
-qui ne va pas, la correction, la conséquence si on l'ignore — converti au format JSON de la famille
-(`blocker` : bug ou faille ; `major` : code ou dépendance en trop, test manquant sur logique à risque ;
-`minor` : simplification possible).
+Apply the `ponytail-review` skill to the diff and the code it touches. For each finding: what the code does, what is
+wrong, the fix, the consequence if ignored — converted to the family's JSON format (`blocker`: bug or flaw; `major`:
+excess code or dependency, missing test on risky logic; `minor`: possible simplification).

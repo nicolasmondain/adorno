@@ -1,8 +1,8 @@
 ---
-description: agent:core:triage — Trie les retours de review sur une PR (catégorie, zone, spécialiste à consulter, correcteur pressenti) et suit CI et relances via adorno-github. Ne répond jamais lui-même, agent:adorno tranche et répond. À utiliser dans workflow:review:received, workflow:pr:watch, workflow:pr:open et workflow:pr:status.
-argument-hint: <demande>
+description: agent:core:triage — Sorts the review feedback on a PR (category, area, specialist to consult, likely fixer) and tracks CI and re-requests via adorno-github. Never replies itself, agent:adorno rules and replies. Use in workflow:review:received, workflow:pr:watch, workflow:pr:open and workflow:pr:status.
+argument-hint: <request>
 ---
 
-Délègue la demande ci-dessous au sous-agent `adorno-agent-core-triage` (agent:core:triage) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-core-triage`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-core-triage` sub-agent (agent:core:triage) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-core-triage`) to handle the request.
 
-Demande : $ARGUMENTS
+Request: $ARGUMENTS

@@ -1,27 +1,27 @@
 ---
-description: Ouvre la PR d'une branche prête — porte de revue d'abord (spécialistes par zone + ton agent), puis titre et description en anglais selon ton gabarit, relecteurs du registre. Pas de PR tant qu'un 🔴 ou un 🟠 n'est pas réglé ou accepté.
-args: "<owner/repo> <branche> [dossier .agent-run]"
+description: Opens the PR of a ready branch — review gate first (area specialists + your agent), then title and description in English following your template, reviewers from the registry. No PR while a 🔴 or a 🟠 is unresolved or unaccepted.
+args: "<owner/repo> <branch> [.agent-run folder]"
 uses:
   skills: [adorno-github, adorno-commit, adorno-profile, adorno-voice]
   agents: [agent:core:triage, agent:adorno, agent:review:code, agent:review:ponytail, agent:review:front, agent:review:back, agent:review:mongodb, agent:review:api, agent:review:security, agent:review:tests]
 ---
 
-Entrée : {{args}}
+Input: {{args}}
 
-**Exécution** — avant toute chose : `adorno-github/scripts/run-begin --workflow workflow:pr:open --mode auto --level L3 --repo owner/repo` ; garde `id` et `dir` (le dossier d'exécution). Appelé par un autre workflow qui a déjà ouvert la sienne : réutilise-la. Toujours, même après un échec : `run-end <id>`. Sans exécution ouverte, les scripts refusent toute écriture.
+**Run** — before anything else: `adorno-github/scripts/run-begin --workflow workflow:pr:open --mode auto --level L3 --repo owner/repo`; keep `id` and `dir` (the run folder). Called by another workflow that already opened its own: reuse it. Always, even after a failure: `run-end <id>`. With no open run, the scripts refuse any write.
 
-1. **Vérifications locales**, dans le clone où vit la branche : nom conforme à `branch_pattern`, à jour avec la base
-   (`git fetch` puis `git diff origin/<base>...HEAD` : la vraie portée), chaque commit au format Conventional Commits,
-   tests, lint et typecheck verts. Un échec : arrêt et compte rendu.
-2. **Porte de revue** (situation 1 de `agent:adorno`) : `pr-areas owner/repo` sur ce diff → relecteurs ; ils
-   relisent en parallèle, en lecture seule ; `agent:adorno` revérifie et rend son verdict. **Pas de PR tant qu'un 🔴 ou un 🟠 n'est pas réglé ou explicitement accepté par
-   l'utilisateur** ; les 🟡 et ❓ restants vont dans la description (`Impact / Risks`, Verification).
-3. `agent:adorno` rédige en anglais, dans ta voix (skill `adorno-voice`), avec la skill de PR du repo si `repo-conf` en donne une (`pr_skill`) :
-   - le titre au format Conventional Commit du changement principal ;
-   - la description selon `process.md` § Pull requests : What / How / mermaid / Verification, `How to test` ouvert par
-     les commandes réellement lancées et leur résultat, lien vers l'issue (`Fixes #n`). Aucune donnée réelle.
-4. **Point de contrôle 2** si `gates` contient `open_pr` : montre titre, description et verdict de la porte, attends le
-   « oui ».
-5. `adorno-github/scripts/git-push owner/repo <branche>` (jamais un `git push` direct), puis `pr-open owner/repo <branche> "<titre>" <fichier> --draft` : brouillon tant que
-   la CI n'est pas verte (`process.md`), relecteurs du registre sans l'auteur.
-6. Rends l'URL de la PR et propose `workflow:pr:watch owner/repo#N`.
+1. **Local checks**, in the clone where the branch lives: name matches `branch_pattern`, up to date with the base
+   (`git fetch` then `git diff origin/<base>...HEAD`: the real scope), every commit in Conventional Commits format,
+   tests, lint and typecheck green. A failure: stop and report.
+2. **Review gate** (situation 1 of `agent:adorno`): `pr-areas owner/repo` on this diff → reviewers; they
+   review in parallel, read-only; `agent:adorno` rechecks and delivers its verdict. **No PR while a 🔴 or a 🟠 is unresolved or explicitly accepted by
+   the user**; remaining 🟡 and ❓ go in the description (`Impact / Risks`, Verification).
+3. `agent:adorno` writes in English, in your voice (skill `adorno-voice`), with the repo's PR skill if `repo-conf` gives one (`pr_skill`):
+   - the title in Conventional Commit format for the main change;
+   - the description following `process.md` § Pull requests: What / How / mermaid / Verification, `How to test` opened
+     by the commands actually run and their result, link to the issue (`Fixes #n`). No real data.
+4. **Checkpoint 2** if `gates` contains `open_pr`: show the title, description and gate verdict, wait for the
+   "yes".
+5. `adorno-github/scripts/git-push owner/repo <branch>` (never a direct `git push`), then `pr-open owner/repo <branch> "<title>" <file> --draft`: draft until
+   CI is green (`process.md`), registry reviewers without the author.
+6. Return the PR URL and suggest `workflow:pr:watch owner/repo#N`.

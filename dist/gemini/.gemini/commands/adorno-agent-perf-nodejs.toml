@@ -1,6 +1,6 @@
-description = "agent:perf:nodejs — Performance Node.js — CPU, mémoire et fuites, boucle d'événements bloquée, I/O séquentielles, sérialisation coûteuse. À utiliser sur un service ou un job Node.js lent ou gourmand."
+description = "agent:perf:nodejs — Node.js performance — CPU, memory and leaks, blocked event loop, sequential I/O, costly serialization. Use on a slow or resource-hungry Node.js service or job."
 prompt = '''
-Délègue la demande ci-dessous au sous-agent `adorno-agent-perf-nodejs` (agent:perf:nodejs) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-perf-nodejs`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-perf-nodejs` sub-agent (agent:perf:nodejs) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-perf-nodejs`) to handle the request.
 
-Demande : {{args}}
+Request: {{args}}
 '''

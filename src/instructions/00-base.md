@@ -1,34 +1,35 @@
-# Instructions de travail
+# Working instructions
 
 ## Communication
 
-- Échanges avec l'utilisateur dans sa langue (`owner.language` de `local/adorno.yaml`, lue par `repo-conf`). Code, commentaires de code, messages de commit, descriptions de PR et
-  textes publiés sur GitHub en anglais (`reply_language` du repo). Tout texte publié en son nom
-  passe par le skill `adorno-voice`.
-- Va droit au but : ce qui a changé, ce qui a été vérifié, ce qui reste ouvert, ce qui attend une décision.
+- Talk to the user in their language (`owner.language` in `local/adorno.yaml`, read by `repo-conf`). Code, code comments,
+  commit messages, PR descriptions and texts published on GitHub are in English (the repo's `reply_language`). Any text
+  published in their name goes through the `adorno-voice` skill.
+- Get to the point: what changed, what was verified, what is still open, what waits for a decision.
 
-## Avant de modifier
+## Before changing anything
 
-- Lis d'abord le `CLAUDE.md` et les `.claude/rules/` du repo : ils font autorité sur le code (sauf `.claude/rules/adorno.md`, qui est ce texte-ci, posé par `bin/kit` quand le repo suit déjà son `CLAUDE.md`).
-- Puis le profil (skill `adorno-profile`) et les réglages du repo courant : `adorno-github/scripts/repo-conf` (équipe,
-  relecteurs, `context`, `vision`, `voice`, `permissions`, skills du repo), issus de `local/adorno.yaml`.
-- Le propriétaire te corrige, tranche autrement que son profil ne le prévoyait, réécrit ton brouillon ou dit comment
-  il veut que ce soit fait : note-le avec le skill `adorno-learn` (avec la preuve), sans interrompre la tâche.
-- Profil absent (skill `adorno-profile` sans `references/`) ou repo non déclaré (`repo-conf` sort en 3) : dis-le une
-  fois et propose le skill `adorno-setup` (mode `profile` ou `repo`).
-- Tâche floue ou coûteuse à défaire : `workflow:spec:new` avant d'écrire du code.
+- Read the repo's `CLAUDE.md` and `.claude/rules/` first: they are authoritative on the code (except
+  `.claude/rules/adorno.md`, which is this text, placed by `bin/kit` when the repo already follows its own `CLAUDE.md`).
+- Then the profile (`adorno-profile` skill) and the current repo's settings: `adorno-github/scripts/repo-conf` (team,
+  reviewers, `context`, `vision`, `voice`, `permissions`, the repo's skills), taken from `local/adorno.yaml`.
+- The owner corrects you, decides differently from what their profile expected, rewrites your draft or says how they
+  want it done: note it with the `adorno-learn` skill (with the evidence), without interrupting the task.
+- Profile missing (`adorno-profile` skill without `references/`) or repo not declared (`repo-conf` exits 3): say so once
+  and offer the `adorno-setup` skill (mode `profile` or `repo`).
+- Vague task, or costly to undo: `workflow:spec:new` before writing code.
 
-## Pendant
+## During
 
-- Changements minimaux et chirurgicaux (skill `ponytail`, au niveau `ponytail` du repo, `full` par défaut) ; là où il recoupe le profil, le profil gagne,
-  et le repo gagne sur les deux.
-- Aucun secret (clé, token, mot de passe) dans un fichier, une commande, un log, un commit ou un texte publié.
+- Minimal, surgical changes (`ponytail` skill, at the repo's `ponytail` level, `full` by default); where it overlaps
+  the profile, the profile wins, and the repo wins over both.
+- No secret (key, token, password) in a file, a command, a log, a commit or a published text.
 
 ## Git
 
-- Branche `<type>/<issue-id>-kebab-description` (`<type>` = type Conventional Commit), jamais de commit sur la branche
-  par défaut, jamais `--no-verify`.
-- Commits au format Conventional Commits (skill `adorno-commit`), numérotés dans une pile. Un agent `agent:<type>:*`
-  ne produit que des commits de son type.
-- Jamais de merge, de tag, de push sur la branche par défaut ni de push forcé sans accord explicite
-  (`--force-with-lease` seulement, et seulement s'il le demande).
+- Branch `<type>/<issue-id>-kebab-description` (`<type>` = Conventional Commit type), never a commit on the default
+  branch, never `--no-verify`.
+- Commits in Conventional Commits format (`adorno-commit` skill), numbered in a stack. An `agent:<type>:*` agent only
+  produces commits of its type.
+- Never a merge, a tag, a push to the default branch or a force push without explicit agreement
+  (`--force-with-lease` only, and only if they ask for it).

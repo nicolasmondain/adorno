@@ -1,8 +1,8 @@
 ---
-description: agent:core:analyst — Analyse un problème soulevé dans une conversation Slack ou un document Notion — ce qui est demandé, le contexte, les causes probables avec preuves (code, logs, PRs, issues), ce qui reste inconnu, la suite proposée. Lecture seule. À utiliser dans workflow:slack:mentions, workflow:slack:watch et workflow:notion:assigned.
-argument-hint: <demande>
+description: agent:core:analyst — Analyzes a problem raised in a Slack conversation or a Notion document — what is asked, the context, the probable causes with evidence (code, logs, PRs, issues), what remains unknown, the proposed next step. Read-only. Use in workflow:slack:mentions, workflow:slack:watch and workflow:notion:assigned.
+argument-hint: <request>
 ---
 
-Délègue la demande ci-dessous au sous-agent `adorno-agent-core-analyst` (agent:core:analyst) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-core-analyst`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-core-analyst` sub-agent (agent:core:analyst) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-core-analyst`) to handle the request.
 
-Demande : $ARGUMENTS
+Request: $ARGUMENTS

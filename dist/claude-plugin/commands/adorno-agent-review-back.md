@@ -1,8 +1,8 @@
 ---
-description: agent:review:back — Relecteur back — logique serveur Node.js, points d'entrée (routes, méthodes RPC, handlers), jobs, erreurs, concurrence, permissions côté serveur. Appelé quand un diff touche le serveur, ou pour vérifier un commentaire de review sur du back.
-argument-hint: <demande>
+description: agent:review:back — Back-end reviewer — Node.js server logic, entry points (routes, RPC methods, handlers), jobs, errors, concurrency, server-side permissions. Called when a diff touches the server, or to verify a review comment about the back end.
+argument-hint: <request>
 ---
 
-Délègue la demande ci-dessous au sous-agent `adorno-agent-review-back` (agent:review:back) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-review-back`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-review-back` sub-agent (agent:review:back) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-review-back`) to handle the request.
 
-Demande : $ARGUMENTS
+Request: $ARGUMENTS

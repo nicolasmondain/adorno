@@ -1,6 +1,6 @@
 ---
 name: adorno-run-plan
-description: Comment la session principale exécute un run-plan.yaml écrit par agent:core:router — une délégation par étape, boucles plafonnées, revues parallèles fusionnées par script, escalades, status.md. À utiliser dans workflow:feature:build (et tout workflow qui déroule un plan) (un sous-agent ne peut pas en lancer d'autres, c'est la session qui le fait).
+description: How the main session executes a run-plan.yaml written by agent:core:router — one delegation per step, capped loops, parallel reviews merged by script, escalations, status.md. Use in workflow:feature:build (and any workflow that unrolls a plan) (a subagent cannot start others, the session does it).
 ---
 
 # Executing a run plan

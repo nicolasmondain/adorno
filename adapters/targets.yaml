@@ -1,15 +1,15 @@
-# Comment chaque outil reçoit le contenu neutre de src/ et vendor/.
+# How each tool receives the neutral content of src/ and vendor/.
 #
-# skills     dossier où copier les skills (format Agent Skills, identique partout)
-# agents     format: natif (claude | gemini | copilot) ou `skill` = converti en skill de rôle
-# workflows  format: natif (claude-command | gemini-command | copilot-prompt | cursor-command) ou `skill`
-# instructions  fichiers à créer à côté d'AGENTS.md ; `shim` = bloc qui importe AGENTS.md
-# global     installation dans ~ (`kit install --global`) : fichier d'instructions,
-#            remappage de dossiers (map) et dossiers non supportés (skip)
-# tools      capacités neutres -> noms d'outils natifs
-# models     niveaux neutres (fast | balanced | deep | inherit) -> modèles natifs
+# skills     folder to copy skills into (Agent Skills format, identical everywhere)
+# agents     format: native (claude | gemini | copilot) or `skill` = converted to a role skill
+# workflows  format: native (claude-command | gemini-command | copilot-prompt | cursor-command) or `skill`
+# instructions  files to create next to AGENTS.md; `shim` = block that imports AGENTS.md
+# global     install into ~ (`kit install --global`): instructions file,
+#            folder remapping (map) and unsupported folders (skip)
+# tools      neutral capabilities -> native tool names
+# models     neutral tiers (fast | balanced | deep | inherit) -> native models
 #
-# `verified: false` : chemins tirés de la doc publique, pas encore testés sur ta machine.
+# `verified: false` : paths taken from the public docs, not yet tested on your machine.
 
 capabilities: [read, write, edit, search, shell, web, agent]
 model_tiers: [inherit, fast, balanced, deep]
@@ -35,7 +35,7 @@ targets:
 
   codex:
     label: OpenAI Codex
-    skills: .agents/skills          # chemin standard partagé (Codex, Amp, Kimi…)
+    skills: .agents/skills          # shared standard path (Codex, Amp, Kimi…)
     agents: {format: skill}
     workflows: {format: skill}
     instructions: {}                # lit AGENTS.md nativement

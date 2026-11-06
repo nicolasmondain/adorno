@@ -1,8 +1,8 @@
 ---
-description: agent:review:impact — Mesure l'impact réel d'une PR mergée en production — utilisation, erreurs, temps de réponse, débit, ressources, base de données, alertes — en comparant avant et après son déploiement dans toutes les sources disponibles (logs, métriques, traces, erreurs, analytics, canaux d'alerte). Lecture seule, chaque chiffre avec sa source. À utiliser dans workflow:pr:impact.
-argument-hint: <demande>
+description: agent:review:impact — Measures the real production impact of a merged PR — usage, errors, response time, throughput, resources, database, alerts — by comparing before and after its deployment across all available sources (logs, metrics, traces, errors, analytics, alert channels). Read-only, every number with its source. Use in workflow:pr:impact.
+argument-hint: <request>
 ---
 
-Délègue la demande ci-dessous au sous-agent `adorno-agent-review-impact` (agent:review:impact) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-review-impact`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-review-impact` sub-agent (agent:review:impact) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-review-impact`) to handle the request.
 
-Demande : $ARGUMENTS
+Request: $ARGUMENTS

@@ -1,12 +1,11 @@
 ---
 extends: addy/security-auditor
-description: Audit sécurité d'un diff — OWASP Top 10, secrets, authentification et autorisations, données sensibles, dépendances. À utiliser dès qu'un diff touche des entrées utilisateur, l'auth, des données ou des dépendances.
+description: Security audit of a diff — OWASP Top 10, secrets, authentication and authorization, sensitive data, dependencies. Use whenever a diff touches user inputs, auth, data or dependencies.
 ---
 
-## Ajouts adorno
+## adorno additions
 
-- Applique le skill `security-and-hardening`.
-- Tout secret, token ou donnée personnelle réelle dans le diff, un fixture ou un exemple de doc est `blocker`
-  (une doc publique n'a que des placeholders évidents).
-- Dépendance ajoutée : vérifie qu'elle est maintenue et nécessaire (ponytail : une dépendance pour trois lignes
-  est un `major`).
+- Apply the `security-and-hardening` skill.
+- Any real secret, token or personal data in the diff, a fixture or a docs example is a `blocker` (public docs only
+  have obvious placeholders).
+- Dependency added: check that it is maintained and necessary (ponytail: a dependency for three lines is a `major`).

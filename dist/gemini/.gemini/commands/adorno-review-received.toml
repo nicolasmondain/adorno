@@ -1,48 +1,48 @@
-description = "Passe sur toutes tes PRs ouvertes (ou une seule) — chaque commentaire, thread ou résumé de review sans réponse est vérifié par le spécialiste du sujet dans un workspace dédié, corrigé si besoin, puis ton agent répond dans ta voix et résout. Modes report, draft (défaut), auto."
+description = "Goes over all your open PRs (or a single one) — every unanswered comment, thread or review summary is checked by the subject's specialist in a dedicated workspace, fixed if needed, then your agent replies in your voice and resolves. Modes report, draft (default), auto."
 prompt = '''
-Entrée : {{args}} — sans argument : tes PRs ouvertes et prêtes, et elles seules (`pr-status --ready` :
-`is:pr author:@me state:open archived:false draft:false sort:updated-desc`), dans les repos enregistrés.
+Input: {{args}} — with no argument: your open, ready PRs, and only those (`pr-status --ready`:
+`is:pr author:@me state:open archived:false draft:false sort:updated-desc`), in the registered repos.
 
-**Exécution** — avant toute écriture : `adorno-github/scripts/run-begin --workflow workflow:review:received --mode <mode> --level L3 --repo owner/repo [--repo …]` — une fois la liste des PRs connue, un `--repo` par repo à traiter (une exécution ne vaut que pour les repos qu'elle nomme) ; garde `id` et `dir` (le dossier d'exécution). Appelé par un autre workflow qui a déjà ouvert la sienne : réutilise-la. Toujours, même après un échec : `run-end <id>`. Sans exécution ouverte, les scripts refusent toute écriture.
+**Run** — before any write: `adorno-github/scripts/run-begin --workflow workflow:review:received --mode <mode> --level L3 --repo owner/repo [--repo …]` — once the PR list is known, one `--repo` per repo to process (a run only covers the repos it names); keep `id` and `dir` (the run folder). Called by another workflow that already opened its own: reuse it. Always, even after a failure: `run-end <id>`. With no open run, the scripts refuse any write.
 
-| Mode | Fait | Niveau | Publie |
+| Mode | Does | Level | Publishes |
 | --- | --- | --- | --- |
-| `report` | étapes 1 à 4 et 9 : ce qui attend une réponse, avec l'avis vérifié des spécialistes | L0 | rien |
-| `draft` (défaut) | + corrections commitées dans le workspace, réponses rédigées | L3, push interdit et simulation (forcés par `run-begin --mode draft`) | rien : les commits restent dans le workspace |
-| `auto` | tout : push, réponses, résolutions, relance des relecteurs | L3 | oui, sauf ce que `adorno-profile` range dans « à valider » |
+| `report` | steps 1 to 4 and 9: what awaits a reply, with the specialists' verified opinion | L0 | nothing |
+| `draft` (default) | + fixes committed in the workspace, replies drafted | L3, push forbidden and dry run (forced by `run-begin --mode draft`) | nothing: commits stay in the workspace |
+| `auto` | everything: push, replies, resolutions, reviewer re-requests | L3 | yes, except what `adorno-profile` files under "to validate" |
 
-Un `max_level` plus bas du repo l'emporte toujours.
+A lower repo `max_level` always wins.
 
-1. **Cibler** — sans argument : `pr-status --ready` (ni draft, ni archivée ; la plus récemment mise à jour d'abord), puis `pr-feedback-fetch` sur chaque PR `registered` ; garde celles dont
-   `needsReplyCount > 0` ou dont la CI est rouge. Les PRs sont indépendantes : par lots de `max_parallel`, lance dans le même
-   tour les agents de toutes les PRs du lot (c'est toi qui délègues : un agent ne lance pas d'agent) ; de chaque PR ne
-   garde en contexte que les livrables (`triage.json`, verdicts), jamais les échanges bruts.
-2. **Workspace** — `pr-workspace owner/repo#N`, lancé depuis ton clone du repo : le worktree de la branche de la PR,
-   créé s'il n'existe pas (`worktree: branch`) ; jamais un workspace partagé d'un passage précédent. Refusé s'il reste
-   des changements non commités ou des commits absents de GitHub : arrête-toi sur cette PR et signale-le. Dossier d'exécution : `<workspace>/.agent-run/feedback-<date>/` (un par PR, sous l'exécution ouverte), avec
+1. **Target** — with no argument: `pr-status --ready` (no drafts, no archived; most recently updated first), then `pr-feedback-fetch` on each `registered` PR; keep those with
+   `needsReplyCount > 0` or with red CI. PRs are independent: in batches of `max_parallel`, launch in the same
+   turn the agents of all the PRs in the batch (you delegate: an agent does not launch agents); from each PR keep
+   in context only the deliverables (`triage.json`, verdicts), never the raw exchanges.
+2. **Workspace** — `pr-workspace owner/repo#N`, run from your clone of the repo: the worktree of the PR's branch,
+   created if it does not exist (`worktree: branch`); never a shared workspace from a previous pass. Refused if there are
+   uncommitted changes or commits missing from GitHub: stop on this PR and report it. Run folder: `<workspace>/.agent-run/feedback-<date>/` (one per PR, under the open run), with
    `feedback.json`.
-3. **Trier** — `agent:core:triage` classe chaque élément où `needsReply` est vrai (thread, commentaire général,
-   résumé de review) : catégorie (`fix`, `nit`, `test`, `question`, `disagree`, `scope`, `done`), **zone** (déduite
-   du fichier visé avec `pr-areas` sur le diff de la PR, ou du sujet du commentaire), spécialiste(s) à consulter,
-   agent correcteur pressenti → `triage.json`. Les commentaires de bots ne demandent pas de réponse ; leurs constats
-   sont vérifiés comme les autres quand ils visent du code (relecteur IA).
-4. **Vérifier ce qui est dit** — pour chaque élément qui affirme quelque chose sur le code (tout sauf `done`), le ou
-   les spécialistes de sa zone en mode **consultation**, en parallèle : le relecteur a-t-il raison ? preuve à l'appui
-   (code lu, commande lancée dans le workspace) → `consult/<élément>-<agent>.json`.
-5. **Décider** — `agent:adorno`, situation 3 : charge la zone (règles du repo, profil, `repo-conf` du repo), lit triage et avis, consulte un autre spécialiste si un avis ne tient pas, et statue
-   **confirmé / refusé / reporté** pour chaque élément. Un collègue : pas de preuve contre lui → confirmé. Un bot : pas
-   reproduit → refusé. Reporté : la tranche suivante de la pile, nommée.
-6. **Corriger** (modes `draft` et `auto`) — dans le workspace, chaque correction par l'agent désigné (`fix:patch`,
-   `refactor:simplify`, `test:unit`, ou l'agent de la famille du sujet) : un commit typé par élément, message qui cite
-   le commentaire, tests et lint du repo verts, trois tours au plus. Puis `review:code` et `review:ponytail` sur les
-   seuls nouveaux commits ; un `blocker` → retour à la correction, deux fois au plus.
-7. **Publier** (mode `auto`) — `pr-push owner/repo#N` (jamais forcé). Puis `agent:adorno` écrit chaque réponse
-   dans la langue du repo (`reply_language`, anglais par défaut) et dans ta voix, avec le SHA du commit, et publie : `pr-reply` (thread) ou `pr-comment` (commentaire
-   général, résumé de review). Il résout (`pr-resolve`) les threads réglés ; il laisse ouverts ceux où il pose une
-   question ou conteste, et garde en brouillon tout ce qui est « à valider ».
-8. **Relancer** — `pr-rerequest owner/repo#N` pour chaque relecteur dont tous les points sont traités ;
-   `ci-wait owner/repo#N`, et `workflow:ci:red` si la CI rougit (deux tentatives au plus).
-9. **Rendre compte** — `status.md` par PR et, en réponse, un tableau : PR, élément, ce que disait le relecteur, verdict
-   vérifié (raison / en partie / tort / pas clair), action, réponse publiée ou en brouillon. **En tête : ce qui attend
-   ta décision.** En `draft`, la commande pour tout publier : `workflow:review:received owner/repo#N --mode auto`.
+3. **Triage** — `agent:core:triage` classifies each item where `needsReply` is true (thread, general comment,
+   review summary): category (`fix`, `nit`, `test`, `question`, `disagree`, `scope`, `done`), **area** (deduced
+   from the targeted file with `pr-areas` on the PR diff, or from the comment's subject), specialist(s) to consult,
+   likely fixer agent → `triage.json`. Bot comments do not require a reply; their findings
+   are checked like the others when they target code (AI reviewer).
+4. **Verify what is said** — for each item that claims something about the code (everything except `done`), the
+   specialist(s) of its area in **consult** mode, in parallel: is the reviewer right? evidence required
+   (code read, command run in the workspace) → `consult/<item>-<agent>.json`.
+5. **Decide** — `agent:adorno`, situation 3: loads the area (repo rules, profile, the repo's `repo-conf`), reads triage and opinions, consults another specialist if an opinion does not hold, and rules
+   **confirmed / refused / deferred** for each item. A colleague: no evidence against them → confirmed. A bot: not
+   reproduced → refused. Deferred: the next slice of the stack, named.
+6. **Fix** (`draft` and `auto` modes) — in the workspace, each fix by the designated agent (`fix:patch`,
+   `refactor:simplify`, `test:unit`, or the agent of the subject's family): one typed commit per item, message citing
+   the comment, repo tests and lint green, three rounds at most. Then `review:code` and `review:ponytail` on the
+   new commits only; a `blocker` → back to the fix, twice at most.
+7. **Publish** (`auto` mode) — `pr-push owner/repo#N` (never forced). Then `agent:adorno` writes each reply
+   in the repo's language (`reply_language`, English by default) and in your voice, with the commit SHA, and publishes: `pr-reply` (thread) or `pr-comment` (general
+   comment, review summary). It resolves (`pr-resolve`) the settled threads; it leaves open those where it asks a
+   question or disputes, and keeps as a draft everything that is "to validate".
+8. **Re-request** — `pr-rerequest owner/repo#N` for each reviewer whose points are all handled;
+   `ci-wait owner/repo#N`, and `workflow:ci:red` if CI turns red (two attempts at most).
+9. **Report** — `status.md` per PR and, as the reply, a table: PR, item, what the reviewer said, verified verdict
+   (right / partly / wrong / unclear), action, reply published or drafted. **At the top: what awaits
+   your decision.** In `draft`, the command to publish everything: `workflow:review:received owner/repo#N --mode auto`.
 '''

@@ -1,6 +1,6 @@
 ---
 name: adorno-watch
-description: Surveillances Slack et Notion du propriétaire — réglages de chaque surveillance (canaux, motif, période, maximum de messages, action, notification), filtrage déterministe des messages Slack, et mémoire de ce qui est déjà traité pour ne rien traiter deux fois. La lecture passe par les connecteurs Slack et Notion (lecture seule) ; la seule écriture est le compte rendu envoyé au propriétaire lui-même. À utiliser dans workflow:slack:watch, workflow:slack:mentions et workflow:notion:assigned.
+description: The owner's Slack and Notion watches — settings of each watch (channels, pattern, period, maximum messages, action, notification), deterministic filtering of Slack messages, and memory of what is already processed so nothing is handled twice. Reading goes through the Slack and Notion connectors (read-only); the only write is the report sent to the owner themself. Use in workflow:slack:watch, workflow:slack:mentions and workflow:notion:assigned.
 ---
 
 # adorno-watch

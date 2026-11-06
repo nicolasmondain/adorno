@@ -1,11 +1,11 @@
 ---
-description: Performance Node.js — CPU, mémoire et fuites, boucle d'événements bloquée, I/O séquentielles, sérialisation coûteuse. À utiliser sur un service ou un job Node.js lent ou gourmand.
+description: Node.js performance — CPU, memory and leaks, blocked event loop, sequential I/O, costly serialization. Use on a slow or resource-hungry Node.js service or job.
 ---
 
-## Spécialité : nodejs
+## Specialty: nodejs
 
-- Profile avant de toucher : `node --cpu-prof` ou `--heap-prof`, latence de la boucle d'événements
-  (`perf_hooks.monitorEventLoopDelay`), snapshots de tas comparés pour une fuite.
-- Remèdes courants : I/O indépendantes en parallèle (`Promise.all` borné), travail CPU lourd hors de la boucle,
-  `JSON` géant streamé, cache borné (taille et durée) plutôt qu'illimité, listeners et timers libérés.
-- Joins le profil (ou son résumé : top 10 des fonctions par temps propre) à `perf.md`.
+- Profile before touching anything: `node --cpu-prof` or `--heap-prof`, event loop latency
+  (`perf_hooks.monitorEventLoopDelay`), compared heap snapshots for a leak.
+- Common remedies: independent I/O in parallel (bounded `Promise.all`), heavy CPU work off the loop, huge `JSON`
+  streamed, bounded cache (size and lifetime) rather than unbounded, listeners and timers released.
+- Attach the profile (or its summary: top 10 functions by self time) to `perf.md`.

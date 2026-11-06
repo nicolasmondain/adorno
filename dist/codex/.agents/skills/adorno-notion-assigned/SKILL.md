@@ -1,50 +1,50 @@
 ---
 name: adorno-notion-assigned
-description: workflow:notion:assigned — Trouve les documents Notion qui te sont assignés (propriétés « personne » des bases suivies, statut encore ouvert) et lance sur chaque nouveau document l'agent ou le workflow qui convient — choisi par base dans ta config, sinon par le routeur. Lecture seule sur Notion ; compte rendu envoyé à toi seul. Modes report (défaut) ou run.
+description: workflow:notion:assigned — Find the Notion documents assigned to you ("person" properties of the watched databases, status still open) and launch on each new document the agent or workflow that fits — chosen per database in your config, otherwise by the router. Read-only on Notion; report sent to you alone. Modes report (default) or run.
 ---
 
 # workflow:notion:assigned
 
-Entrée : la demande de l'utilisateur. Suis les étapes dans l'ordre.
+Input: the user's request. Follow the steps in order.
 
-Entrée : la demande de l’utilisateur. Réglages dans ta couche personnelle (`local/adorno.yaml` › `notion.assigned`) :
+Input: the user’s request. Settings in your personal layer (`local/adorno.yaml` › `notion.assigned`):
 
 ```yaml
 notion:
   assigned:
-    properties: ["Assignee", "Owner"]        # propriétés « personne » qui valent assignation
-    databases: ["https://www.notion.so/…"]   # bases suivies ; vide = recherche dans tout l'espace
-    exclude_status: ["Done", "Archived"]     # statuts ignorés
-    since: 30d                               # documents modifiés depuis
-    max_messages: 20                         # documents traités au plus par exécution
-    agents:                                  # quoi lancer selon la base (nom ou lien) ; sinon le routeur décide
+    properties: ["Assignee", "Owner"]        # "person" properties that count as an assignment
+    databases: ["https://www.notion.so/…"]   # watched databases; empty = search the whole workspace
+    exclude_status: ["Done", "Archived"]     # statuses ignored
+    since: 30d                               # documents modified since
+    max_messages: 20                         # documents processed at most per run
+    agents:                                  # what to launch per database (name or link); otherwise the router decides
       "Roadmap": workflow:spec:new
       "Bugs": workflow:issue:fix
-    mode: report                             # report : analyse et plan · run : lance l'agent ou le workflow
-    level: L0                                # droits en mode run
+    mode: report                             # report: analysis and plan · run: launches the agent or workflow
+    level: L0                                # permissions in run mode
     notify: dm
 ```
 
-Dossier d'exécution : `~/.adorno/runs/notion-assigned-<date>/`.
+Run folder: `~/.adorno/runs/notion-assigned-<date>/`.
 
-1. **Réglages** — `adorno-watch/scripts/watch-conf notion-assigned` (code 3 → skill `adorno-setup`) ; `--mode` et
-   `--since` les remplacent. Toi dans Notion : le connecteur (ton utilisateur).
-2. **Trouver** — avec le connecteur Notion : dans chaque base de `databases`, les pages dont une propriété de
-   `properties` te contient, statut hors `exclude_status`, modifiées depuis `since` ; sans base, une recherche des
-   pages qui te sont assignées. `max_messages` au plus, les plus récentes d'abord. Normalise en `docs.json` :
+1. **Settings** — `adorno-watch/scripts/watch-conf notion-assigned` (exit code 3 → skill `adorno-setup`); `--mode` and
+   `--since` override them. You in Notion: the connector (your user).
+2. **Find** — with the Notion connector: in each database of `databases`, the pages where a property from
+   `properties` contains you, status outside `exclude_status`, modified since `since`; without a database, a search
+   for the pages assigned to you. `max_messages` at most, most recent first. Normalize into `docs.json`:
    `{id, title, url, database, status, assigned_by, last_edited}`.
-3. **Ne garder que le nouveau** — `watch-seen filter notion-assigned docs.json` (`--all` : tout). Un document déjà
-   traité mais modifié depuis ne revient que s'il change de statut. Rien → fin. `--dry-run` : la liste, et fin.
-4. **Lire et choisir** — pour chaque document : son contenu complet, ses propriétés et commentaires. L'action :
-   `agents` de la config pour sa base, sinon `agent:core:router` (une spec à cadrer → `workflow:spec:new`, un bug →
-   `workflow:issue:fix`, une question → `agent:core:analyst`…).
-5. **Agir** —
-   - `report` (défaut) : `agent:core:analyst` rend l'analyse et ce que l'action choisie ferait (plan, repo visé,
-     droits nécessaires), sans rien lancer ;
-   - `run` : l'action choisie, qui ouvre sa propre exécution au niveau `level` (`run-begin --level <level>`), bornée par les droits du repo visé. Les étapes qui demandent ta
-     validation (spec, ouverture de PR) restent des points d'arrêt.
-   Les documents sont indépendants : en parallèle par lots de 3.
-6. **Retenir** — `watch-seen mark notion-assigned <id>…` pour chaque document traité, puis
+3. **Keep only what is new** — `watch-seen filter notion-assigned docs.json` (`--all`: everything). A document already
+   processed but modified since only comes back if its status changed. Nothing → end. `--dry-run`: the list, and end.
+4. **Read and choose** — for each document: its full content, properties and comments. The action: `agents` from the
+   config for its database, otherwise `agent:core:router` (a spec to scope → `workflow:spec:new`, a bug →
+   `workflow:issue:fix`, a question → `agent:core:analyst`…).
+5. **Act** —
+   - `report` (default): `agent:core:analyst` returns the analysis and what the chosen action would do (plan, target
+     repo, permissions needed), without launching anything;
+   - `run`: the chosen action, which opens its own run at the `level` level (`run-begin --level <level>`), bounded by
+     the permissions of the target repo. Steps that ask for your validation (spec, PR opening) remain stop points.
+   Documents are independent: in parallel, in batches of 3.
+6. **Remember** — `watch-seen mark notion-assigned <id>…` for each processed document, then
    `watch-seen touch notion-assigned`.
-7. **Rendre compte** — `report.md` et un message selon `notify` (à toi seul) : par document, le titre et son lien,
-   la base, l'action choisie et pourquoi, le résultat, ce qui attend ta décision. Notion n'est jamais modifié.
+7. **Report** — `report.md` and a message according to `notify` (to you alone): per document, the title and its link,
+   the database, the chosen action and why, the result, what awaits your decision. Notion is never modified.

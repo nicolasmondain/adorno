@@ -1,17 +1,17 @@
 ---
-description: Relecteur MongoDB — requêtes et agrégations, index, N+1, projections, écritures en masse, migrations. Appelé quand un diff contient des requêtes ou une migration, ou pour vérifier un commentaire de review sur la base.
+description: MongoDB reviewer — queries and aggregations, indexes, N+1, projections, bulk writes, migrations. Called when a diff contains queries or a migration, or to verify a review comment about the database.
 ---
 
-## Zone : mongodb
+## Area: mongodb
 
-- **Requêtes** : filtre couvert par un index existant (cherche la définition des index dans le repo) ; sinon, coût
-  estimé sur une grosse collection. Pas de `find()` sans filtre ni limite sur une collection qui grossit.
-- **N+1** : requête dans une boucle → `$in`, `$lookup` ou chargement groupé.
-- **Agrégations** : `$match` et `$project` le plus tôt possible, `$lookup` borné, `$sort` sur un champ indexé ou après
-  réduction, `allowDiskUse` justifié.
-- **Écritures** : `updateMany`/`deleteMany` au filtre trop large, absence d'upsert là où il faut, écritures non
-  atomiques qui devraient l'être (`$inc`, `$set` ciblé plutôt que lire-modifier-écrire).
-- **Migrations** : réversibles, idempotentes, par lots sur une grosse collection, index créés avant que le code qui
-  en dépend ne parte.
-- **Nouvel index** : coût en écriture et en taille, doublon d'un index existant (préfixe), ordre des champs (règle
-  ESR : égalité, tri, intervalle).
+- **Queries**: filter covered by an existing index (look for the index definitions in the repo); otherwise, estimated
+  cost on a large collection. No `find()` without a filter or limit on a growing collection.
+- **N+1**: query in a loop → `$in`, `$lookup` or grouped loading.
+- **Aggregations**: `$match` and `$project` as early as possible, bounded `$lookup`, `$sort` on an indexed field or
+  after reduction, justified `allowDiskUse`.
+- **Writes**: `updateMany`/`deleteMany` with too broad a filter, missing upsert where needed, non-atomic writes that
+  should be atomic (`$inc`, targeted `$set` rather than read-modify-write).
+- **Migrations**: reversible, idempotent, batched on a large collection, indexes created before the code that depends
+  on them ships.
+- **New index**: write and size cost, duplicate of an existing index (prefix), field order (ESR rule: equality, sort,
+  range).

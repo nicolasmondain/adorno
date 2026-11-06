@@ -1,8 +1,8 @@
 ---
-description: agent:test:unit — Écrit des tests unitaires pour de la logique existante ou demandés en review — cas nominaux, limites, erreurs. À utiliser sur un thread de review classé test ou un trou listé par review:tests.
-argument-hint: <demande>
+description: agent:test:unit — Write unit tests for existing logic or requested in review — nominal cases, limits, errors. Use on a review thread classified test or a gap listed by review:tests.
+argument-hint: <request>
 ---
 
-Délègue la demande ci-dessous au sous-agent `adorno-agent-test-unit` (agent:test:unit) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-test-unit`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-test-unit` sub-agent (agent:test:unit) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-test-unit`) to handle the request.
 
-Demande : $ARGUMENTS
+Request: $ARGUMENTS

@@ -1,23 +1,22 @@
-description = "Mène une fonctionnalité de bout en bout — cadrage, routage, plan en tranches, construction par les agents feat, revue parallèle, PR, suivi jusqu'à prête à merger. Trois points de contrôle humains."
+description = "Take a feature end to end — scoping, routing, sliced plan, build by the feat agents, parallel review, PR, follow-up until ready to merge. Three human checkpoints."
 prompt = '''
-Entrée : {{args}}
+Input: {{args}}
 
-**Exécution** — avant toute chose : `adorno-github/scripts/run-begin --workflow workflow:feature:build --mode auto --level <niveau de la spec> --repo owner/repo` ; garde `id` et `dir` (le dossier d'exécution). Appelé par un autre workflow qui a déjà ouvert la sienne : réutilise-la. Toujours, même après un échec : `run-end <id>`. Sans exécution ouverte, les scripts refusent toute écriture.
+**Run** — before anything else: `adorno-github/scripts/run-begin --workflow workflow:feature:build --mode auto --level <spec level> --repo owner/repo`; keep `id` and `dir` (the run folder). Called by another workflow that already opened its own: reuse it. Always, even after a failure: `run-end <id>`. Without an open run, the scripts refuse any write.
 
-1. **Cadrer** — sans spec validée, `workflow:spec:new {{args}}` d'abord (point de contrôle 1) : une idée se
-   discute, un prompt clair ou des liens (fil Slack, page Notion, issue, fichier de plan) se confirment. Un plan déjà
-   rédigé passe dans `spec.md` § Plan fourni, et `core:planner` le suit.
-2. **Router** — `agent:core:router` lit `spec.md` et écrit `run-plan.yaml`. Si le routeur conclut qu'un seul
-   agent suffit, le plan n'a qu'une étape : c'est normal.
-3. **Planifier** — `agent:core:planner` écrit `plan.md` (tranches, agent `feat:*` de chaque tranche, tests
-   d'acceptation).
-4. **Construire et vérifier** — tu déroules toi-même `run-plan.yaml` (skill `adorno-run-plan` : un sous-agent ne peut pas en lancer d'autres) sur la branche `<type>/<issue-id>-<slug>` :
-   tranches (boucle tests, trois tours ; QA `agent:test:e2e` avec captures et vidéo pour les tranches visibles),
-   puis relecteurs en parallèle (boucle de correction, deux tours).
-5. **Ouvrir** — `workflow:pr:open`, dont `agent:adorno` est la porte : il relit la branche comme toi, et la
-   description de PR part dans ta voix (point de contrôle 2 si prévu).
-6. **Suivre** — `workflow:pr:watch` jusqu'à ce que la PR soit prête (point de contrôle 3 : le merge, par l'utilisateur).
+1. **Scope** — without a validated spec, `workflow:spec:new {{args}}` first (checkpoint 1): an idea is discussed, a
+   clear prompt or links (Slack thread, Notion page, issue, plan file) are confirmed. A plan that is already written
+   goes into `spec.md` § Provided plan, and `core:planner` follows it.
+2. **Route** — `agent:core:router` reads `spec.md` and writes `run-plan.yaml`. If the router concludes that a single
+   agent is enough, the plan has only one step: that is normal.
+3. **Plan** — `agent:core:planner` writes `plan.md` (slices, the `feat:*` agent of each slice, acceptance tests).
+4. **Build and verify** — you run `run-plan.yaml` yourself (skill `adorno-run-plan`: a subagent cannot launch
+   others) on the branch `<type>/<issue-id>-<slug>`: slices (test loop, three rounds; QA by `agent:test:e2e` with
+   screenshots and video for visible slices), then reviewers in parallel (fix loop, two rounds).
+5. **Open** — `workflow:pr:open`, of which `agent:adorno` is the gate: it reviews the branch as you would, and the
+   PR description goes out in your voice (checkpoint 2 if planned).
+6. **Follow** — `workflow:pr:watch` until the PR is ready (checkpoint 3: the merge, by the user).
 
-À chaque arrêt (plafond, droit manquant, escalade vers la spec) : `status.md` dit où et pourquoi, et la commande
-pour reprendre.
+At every stop (cap, missing permission, escalation to the spec): `status.md` says where and why, and the command to
+resume.
 '''

@@ -1,15 +1,15 @@
-# Extras par outil
+# Extras per tool
 
-Fichiers propres à un outil, copiés tels quels dans le projet par `kit install`.
-Le chemin sous `src/extras/<cible>/` est le chemin final dans le projet.
+Tool-specific files, copied as-is into the project by `kit install`.
+The path under `src/extras/<target>/` is the final path in the project.
 
 ```
-src/extras/claude/.claude/settings.json      # permissions, hooks Claude Code
-src/extras/claude/.mcp.json                  # serveurs MCP du projet
+src/extras/claude/.claude/settings.json      # permissions, Claude Code hooks
+src/extras/claude/.mcp.json                  # the project's MCP servers
 src/extras/gemini/.gemini/settings.json
-src/extras/claude-plugin/hooks/hooks.json    # hooks embarqués dans le plugin Claude Code
-src/extras/claude-plugin/.mcp.json           # MCP embarqués dans le plugin
+src/extras/claude-plugin/hooks/hooks.json    # hooks bundled in the Claude Code plugin
+src/extras/claude-plugin/.mcp.json           # MCP servers bundled in the plugin
 ```
 
-Ce README n'est copié nulle part : seuls les dossiers dont le nom est une cible
-(`claude`, `codex`, `gemini`, `copilot`, `cursor`) ou `claude-plugin` sont lus.
+This README is not copied anywhere: only the folders whose name is a target
+(`claude`, `codex`, `gemini`, `copilot`, `cursor`) or `claude-plugin` are read.

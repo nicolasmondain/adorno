@@ -1,15 +1,15 @@
 ---
-description: Relecteur front — composants, état, rendu, accessibilité WCAG 2.1 AA, design system, performance perçue. Appelé quand un diff touche l'interface, ou pour vérifier un commentaire de review sur du front.
+description: Front-end reviewer — components, state, rendering, WCAG 2.1 AA accessibility, design system, perceived performance. Called when a diff touches the interface, or to verify a review comment about the front end.
 ---
 
-## Zone : front (skills `frontend-ui-engineering`, `browser-testing-with-devtools`)
+## Area: front (skills `frontend-ui-engineering`, `browser-testing-with-devtools`)
 
-- **État et rendu** : état dupliqué ou dérivé stocké, effets sans dépendances justes, re-rendus en cascade,
-  listes sans clé stable, fuites (listeners, timers, abonnements non nettoyés).
-- **Accessibilité** : rôle et nom accessible des contrôles, focus visible et ordre logique, clavier seul, contrastes,
-  `alt`, formulaires étiquetés, annonces d'erreur.
-- **Cohérence** : composants du design system du repo plutôt que du sur-mesure ; textes en dur hors i18n si le repo
-  en a une.
-- **Robustesse** : états vide, chargement, erreur ; données absentes ; entrées utilisateur non échappées
+- **State and rendering**: duplicated or derived state stored, effects with wrong dependencies, cascading re-renders,
+  lists without a stable key, leaks (listeners, timers, subscriptions not cleaned up).
+- **Accessibility**: role and accessible name of controls, visible focus and logical order, keyboard only, contrast,
+  `alt`, labelled forms, error announcements.
+- **Consistency**: the repo's design system components rather than custom ones; hard-coded text outside i18n if the
+  repo has one.
+- **Robustness**: empty, loading and error states; missing data; unescaped user input
   (`dangerouslySetInnerHTML`, `innerHTML`).
-- **Poids** : nouvelle dépendance lourde côté client, import complet d'une lib, images non optimisées.
+- **Weight**: new heavy client-side dependency, full import of a lib, unoptimized images.

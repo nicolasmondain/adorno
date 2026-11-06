@@ -1,6 +1,6 @@
-description = "agent:core:planner — Découpe une spec validée en tranches verticales ordonnées, chacune testable, et choisit l'agent de famille qui réalisera chaque tranche. À utiliser après le routeur, avant toute implémentation."
+description = "agent:core:planner — Splits a validated spec into ordered vertical slices, each testable, and picks the family agent that will build each slice. Use after the router, before any implementation."
 prompt = '''
-Délègue la demande ci-dessous au sous-agent `adorno-agent-core-planner` (agent:core:planner) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-core-planner`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-core-planner` sub-agent (agent:core:planner) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-core-planner`) to handle the request.
 
-Demande : {{args}}
+Request: {{args}}
 '''

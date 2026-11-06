@@ -1,5 +1,5 @@
 {
   "name": "adorno",
   "version": "0.2.0",
-  "description": "Adorno, un agent qui travaille comme toi : il relit les PRs qu'on te demande, répond aux reviews que tu reçois et ouvre tes PRs, avec ton exigence et ta voix. Setup d'agents portable (Claude Code, Codex, Gemini CLI) sur addy/agent-skills et ponytail."
+  "description": "Adorno, an agent that works like you: it reviews the PRs you are asked to review, answers the reviews you receive and opens your PRs, with your standards and your voice. Portable agent setup (Claude Code, Codex, Gemini CLI) built on addy/agent-skills and ponytail."
 }

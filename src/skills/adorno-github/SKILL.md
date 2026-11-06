@@ -1,75 +1,76 @@
 ---
 name: adorno-github
-description: Scripts déterministes pour tout ce qui touche GitHub — lister ses PRs et les reviews qu'on attend de soi, préparer un workspace dédié par PR, classer un diff par zone de code, lire et publier des reviews, répondre et résoudre, relancer, suivre la CI, ouvrir une PR. À utiliser dès qu'un agent ou un workflow doit lire ou écrire sur GitHub ; ne jamais appeler `gh` en écriture à la main.
+description: Deterministic scripts for everything GitHub — list your PRs and the reviews expected from you, prepare a dedicated workspace per PR, classify a diff by code area, read and publish reviews, reply and resolve, re-request, follow CI, open a PR. Use whenever an agent or workflow must read or write on GitHub; never call `gh` by hand to write.
 ---
 
 # adorno-github
 
-Tout accès à GitHub passe par les scripts de `scripts/` (chemin relatif à ce fichier). Ils lisent le registre
-`repos.json` (généré depuis `repos.yaml` du kit), refusent un repo non enregistré, appliquent les niveaux de droits
-et rendent du JSON sur stdout ; les messages vont sur stderr. Prérequis : `gh` authentifié et `jq`.
+All GitHub access goes through the scripts in `scripts/` (path relative to this file). They read the `repos.json`
+registry (generated from the kit's `repos.yaml`), refuse an unregistered repo, enforce the permission levels and print
+JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq`.
 
 ## Scripts
 
-| Script | Fait | Niveau |
+| Script | Does | Level |
 | --- | --- | --- |
-| `repo-conf owner/repo` | réglages fusionnés du repo (base, commandes, politique de threads…) | L0 |
-| `pr-status [--ready] [owner/repo]` | toutes tes PRs ouvertes : review, CI, threads, `blocker` ; `--ready` : sans les drafts, la plus récente d'abord | L0 |
-| `pr-review-requested [owner/repo]` | PRs où ta review est demandée (directe ou par équipe), `reviewedHead` | L0 |
-| `pr-feedback-fetch owner/repo#N` | threads, commentaires et résumés de review à traiter (`needsReply`, `bot`), CI | L0 |
-| `pr-workspace owner/repo#N` | ta PR, lancé depuis ton clone : le worktree de sa branche (créé s'il n'existe pas) ; sinon workspace dédié sous `~/.adorno` (clone à part, détaché au commit de tête) | L0 * |
-| `pr-workspace --clean` | supprime les workspaces des PRs fermées | L0 * |
-| `pr-areas owner/repo FICHIER_DIFF` | zones de code touchées (front, back, mongodb…) et relecteurs à appeler | L0 |
-| `pr-diff owner/repo#N` | métadonnées + diff sauvegardé dans un fichier | L0 |
-| `issue-fetch owner/repo#N` | issue + commentaires | L0 |
-| `pr-merged owner/repo [--since 14d] [--author LOGIN] [--pr N]` | PRs mergées (les tiennes par défaut) : commit de merge, fichiers, rapport d'impact déjà posté ou non | L0 |
-| `pr-deploys owner/repo#N` | quand le merge a atteint chaque environnement (déploiements GitHub) ; `source: none` sans déploiements | L0 |
-| `ci-wait owner/repo#N [secondes]` | attend la fin des checks (requis seulement si configurés) | L0 |
-| `ci-failed owner/repo#N [lignes]` | runs en échec sur le dernier commit + fin des logs dans des fichiers | L0 |
-| `ci-rerun owner/repo RUN_ID` | relance les jobs en échec, une seule fois par run | L2 |
-| `run-begin --workflow ID --mode report\|draft\|pending\|comment\|auto --level Lx --repo owner/repo… [--deny a,b] [--ttl 2h]` | ouvre une exécution pour les repos nommés : ce qu'elle a le droit d'écrire, son dossier ; `report`/`draft` forcent la simulation | — |
-| `guard_bash.py deny\|ask [--format=claude\|codex\|gemini]` | hook (Claude Code, Codex, Gemini) posé par `bin/kit install` : refuse ou fait confirmer un push, une publication GitHub, une écriture du registre ou des exécutions, quelle que soit la forme de la commande ; bloque tout sans `python3` | — |
-| `repo-audit [owner/repo…]` | lecture seule : type et portée du jeton `gh`, protection de la branche par défaut (ruleset, protection de branche), droits admin ; conseils | — |
-| `run-end ID` | clôt l'exécution (à faire toujours, même après un échec) | — |
-| `git-push owner/repo [BRANCHE] [--dir CHEMIN]` | pousse une branche sans PR : jamais en force, jamais la base, nom conforme à `branch_pattern` | L2 |
-| `pr-push owner/repo#N` | pousse les commits du workspace sur la branche de ta PR, jamais en force | L2 |
-| `pr-reply owner/repo#N THREAD_ID FICHIER` | répond dans un thread (`-` = stdin) | L3 |
-| `pr-resolve owner/repo#N THREAD_ID` | résout un thread si `resolve_threads: author` et que tu es l'auteur | L3 |
-| `pr-comment owner/repo#N FICHIER` | commentaire dans la conversation de la PR (`-` = stdin) | L3 |
-| `pr-review-submit owner/repo#N FICHIER_JSON` | publie une review avec commentaires en ligne ; `APPROVE` seulement si `allow_approve` | L3 |
-| `pr-rerequest owner/repo#N [login…]` | redemande une review (défaut : ceux qui ont déjà relu) | L3 |
-| `pr-open owner/repo BRANCHE "type(scope): titre" FICHIER [--draft]` | ouvre la PR, demande les relecteurs du registre | L3 |
+| `repo-conf owner/repo` | the repo's merged settings (base, commands, thread policy…) | L0 |
+| `pr-status [--ready] [owner/repo]` | all your open PRs: review, CI, threads, `blocker`; `--ready`: without drafts, most recent first | L0 |
+| `pr-review-requested [owner/repo]` | PRs where your review is requested (directly or via a team), `reviewedHead` | L0 |
+| `pr-feedback-fetch owner/repo#N` | threads, comments and review summaries to handle (`needsReply`, `bot`), CI | L0 |
+| `pr-workspace owner/repo#N` | your PR, run from your clone: its branch's worktree (created if missing); otherwise a dedicated workspace under `~/.adorno` (separate clone, detached at the head commit) | L0 * |
+| `pr-workspace --clean` | deletes the workspaces of closed PRs | L0 * |
+| `pr-areas owner/repo DIFF_FILE` | code areas touched (front, back, mongodb…) and the reviewers to call | L0 |
+| `pr-diff owner/repo#N` | metadata + diff saved to a file | L0 |
+| `issue-fetch owner/repo#N` | issue + comments | L0 |
+| `pr-merged owner/repo [--since 14d] [--author LOGIN] [--pr N]` | merged PRs (yours by default): merge commit, files, whether an impact report was already posted | L0 |
+| `pr-deploys owner/repo#N` | when the merge reached each environment (GitHub deployments); `source: none` without deployments | L0 |
+| `ci-wait owner/repo#N [seconds]` | waits for the checks to finish (required ones only, if configured) | L0 |
+| `ci-failed owner/repo#N [lines]` | failed runs on the latest commit + log tails in files | L0 |
+| `ci-rerun owner/repo RUN_ID` | re-runs the failed jobs, once per run | L2 |
+| `run-begin --workflow ID --mode report\|draft\|pending\|comment\|auto --level Lx --repo owner/repo… [--deny a,b] [--ttl 2h]` | opens a run for the named repos: what it may write, its folder; `report`/`draft` force a dry run | — |
+| `guard_bash.py deny\|ask [--format=claude\|codex\|gemini]` | hook (Claude Code, Codex, Gemini) installed by `bin/kit install`: refuses or asks to confirm a push, a GitHub publication, a write to the registry or to runs, whatever the shape of the command; blocks everything without `python3` | — |
+| `repo-audit [owner/repo…]` | read-only: type and scope of the `gh` token, default branch protection (ruleset, branch protection), admin rights; advice | — |
+| `run-end ID` | closes the run (always do it, even after a failure) | — |
+| `git-push owner/repo [BRANCH] [--dir PATH]` | pushes a branch without a PR: never forced, never the base, name matching `branch_pattern` | L2 |
+| `pr-push owner/repo#N` | pushes the workspace's commits to your PR's branch, never forced | L2 |
+| `pr-reply owner/repo#N THREAD_ID FILE` | replies in a thread (`-` = stdin) | L3 |
+| `pr-resolve owner/repo#N THREAD_ID` | resolves a thread if `resolve_threads: author` and you are the author | L3 |
+| `pr-comment owner/repo#N FILE` | comment in the PR conversation (`-` = stdin) | L3 |
+| `pr-review-submit owner/repo#N JSON_FILE` | publishes a review with inline comments; `APPROVE` only if `allow_approve` | L3 |
+| `pr-rerequest owner/repo#N [login…]` | re-requests a review (default: those who already reviewed) | L3 |
+| `pr-open owner/repo BRANCH "type(scope): title" FILE [--draft]` | opens the PR, requests the registry's reviewers | L3 |
 
-\* Écrit seulement sous `~/.adorno` (aucune variable ne le déplace), jamais dans tes copies de travail ni sur GitHub.
+\* Writes only under `~/.adorno` (no variable moves it), never in your working copies nor on GitHub.
 
-## Règles
+## Rules
 
-- **Droits** : chaque script d'écriture vérifie le `max_level` du repo, ses `permissions.deny`, et l'exécution
-  active (`run-begin` : niveau, actions refusées, repos couverts). Sans exécution active : L0, toute écriture est
-  refusée. Une exécution ne vaut que pour les repos qu'elle nomme ; deux exécutions sur un même repo (deux sessions) :
-  la plus stricte s'applique, et le script le signale. `ADORNO_LEVEL` peut seulement **abaisser** le niveau.
-- **Simulation** : une exécution en mode `report` ou `draft`, ou `ADORNO_DRY_RUN=1`, fait afficher aux scripts
-  d'écriture ce qu'ils publieraient, sans rien publier.
-- **Pousser** : `git-push owner/repo <branche>` (sans PR) ou `pr-push owner/repo#N` ; jamais `git push` direct.
-- **Langue** : les textes publiés sur GitHub (réponses, descriptions de PR) sont dans `reply_language` du repo
-  (`en` par défaut), quelle que soit la langue de la conversation.
-- **Fichiers de travail** : chaque script a son propre dossier temporaire, lisible par toi seul (`~/.adorno/tmp/<pid>`, purgé après un jour) ; les livrables vont dans le dossier d'exécution que rend `run-begin`.
-- **Workspaces** : ta PR (pas un fork), `pr-workspace` lancé depuis ton clone du repo → le worktree où sa branche est
-  extraite, créé sous `~/.adorno/worktrees/<owner>__<repo>/<branche>` s'il n'y en a pas, avancé (fast-forward) à la
-  branche sur GitHub ; `pr-push` pousse depuis lui. Toute autre PR, ou hors de ton clone → un par PR,
-  `~/.adorno/workspaces/<owner>__<repo>/pr-<N>`, détaché au commit de tête. `worktree` (`branch` | `detached`) dans la
-  sortie dit lequel. `.agent-run/` y est exclu de git. `pr-workspace` refuse un workspace qui contient des changements
-  non commités ou des commits absents de GitHub.
-- **Signature** : si `reply_footer` est défini pour le repo, il est ajouté à tout texte publié.
+- **Rights**: every write script checks the repo's `max_level`, its `permissions.deny`, and the active run
+  (`run-begin`: level, denied actions, covered repos). Without an active run: L0, every write is refused. A run is
+  valid only for the repos it names; two runs on the same repo (two sessions): the strictest applies, and the script
+  says so. `ADORNO_LEVEL` can only **lower** the level.
+- **Dry run**: a run in `report` or `draft` mode, or `ADORNO_DRY_RUN=1`, makes the write scripts print what they would
+  publish, without publishing anything.
+- **Pushing**: `git-push owner/repo <branch>` (no PR) or `pr-push owner/repo#N`; never a direct `git push`.
+- **Language**: texts published on GitHub (replies, PR descriptions) are in the repo's `reply_language` (`en` by
+  default), whatever the language of the conversation.
+- **Working files**: each script has its own temporary folder, readable only by you (`~/.adorno/tmp/<pid>`, purged
+  after a day); deliverables go in the run folder that `run-begin` returns.
+- **Workspaces**: your PR (not a fork), `pr-workspace` run from your clone of the repo → the worktree where its branch
+  is checked out, created under `~/.adorno/worktrees/<owner>__<repo>/<branch>` if there is none, fast-forwarded to the
+  branch on GitHub; `pr-push` pushes from it. Any other PR, or outside your clone → one per PR,
+  `~/.adorno/workspaces/<owner>__<repo>/pr-<N>`, detached at the head commit. `worktree` (`branch` | `detached`) in the
+  output says which. `.agent-run/` is excluded from git there. `pr-workspace` refuses a workspace that contains
+  uncommitted changes or commits missing from GitHub.
+- **Signature**: if `reply_footer` is set for the repo, it is appended to any published text.
 
-## Codes de sortie
+## Exit codes
 
-| Code | Sens | Que faire |
+| Code | Meaning | What to do |
 | --- | --- | --- |
-| 0 | succès | — |
-| 1 | échec (ou CI rouge pour `ci-wait`) | lire stderr |
-| 2 | mauvais usage | corriger les arguments |
-| 3 | repo déclaré nulle part (`local/adorno.yaml` : `repos`, `workspaces`) | s'arrêter et le signaler, ne jamais contourner |
-| 4 | refusé par la politique du repo | s'arrêter et le signaler |
-| 5 | niveau de droits insuffisant | s'arrêter et demander l'élargissement à l'utilisateur |
-| 6 | délai dépassé (`ci-wait`) | relancer plus tard ou rendre compte |
+| 0 | success | — |
+| 1 | failure (or red CI for `ci-wait`) | read stderr |
+| 2 | wrong usage | fix the arguments |
+| 3 | repo declared nowhere (`local/adorno.yaml`: `repos`, `workspaces`) | stop and report it, never work around it |
+| 4 | refused by the repo's policy | stop and report it |
+| 5 | insufficient permission level | stop and ask the user to widen it |
+| 6 | timeout (`ci-wait`) | retry later or report |

@@ -1,25 +1,25 @@
 ---
-description: Accompagne une PR ouverte jusqu'à ce qu'elle soit prête à merger — boucle CI rouge et nouveaux threads de review, avec plafond. Le merge reste à toi.
+description: Accompanies an open PR until it is ready to merge — loops on red CI and new review threads, with a cap. The merge stays yours.
 argument-hint: <owner/repo#N> [--mode draft|auto] [--rounds 5]
 ---
 
-Entrée : $ARGUMENTS
+Input: $ARGUMENTS
 
-**Exécution** — avant toute chose : `adorno-github/scripts/run-begin --workflow workflow:pr:watch --mode <mode> --level L3 --repo owner/repo` ; garde `id` et `dir` (le dossier d'exécution). Appelé par un autre workflow qui a déjà ouvert la sienne : réutilise-la. Toujours, même après un échec : `run-end <id>`. Sans exécution ouverte, les scripts refusent toute écriture.
+**Run** — before anything else: `adorno-github/scripts/run-begin --workflow workflow:pr:watch --mode <mode> --level L3 --repo owner/repo`; keep `id` and `dir` (the run folder). Called by another workflow that already opened its own: reuse it. Always, even after a failure: `run-end <id>`. With no open run, the scripts refuse any write.
 
-Mode par défaut : `auto` si la spec l'a validé, sinon `draft`. Plafond par défaut : 5 tours.
+Default mode: `auto` if the spec validated it, otherwise `draft`. Default cap: 5 rounds.
 
-À chaque tour :
+On each round:
 
-1. `pr-status owner/repo` → la ligne de cette PR.
-2. Selon `blocker` :
-   - `ci-red` → `workflow:ci:red owner/repo#N` ;
-   - `changes-requested` ou `unresolved-threads` → `workflow:review:received owner/repo#N --mode <mode>` ;
-   - `ci-running` → `ci-wait owner/repo#N` ;
-   - `conflicts` → **arrêt** : un rebase réécrit l'historique, l'utilisateur décide ;
-   - `waiting-review` → arrêt : rien à faire tant que personne n'a relu ;
-   - `ready` → arrêt : CI verte et review approuvée.
-3. Rien n'a bougé depuis le tour précédent → arrêt, pour ne pas tourner à vide.
+1. `pr-status owner/repo` → the line for this PR.
+2. According to `blocker`:
+   - `ci-red` → `workflow:ci:red owner/repo#N`;
+   - `changes-requested` or `unresolved-threads` → `workflow:review:received owner/repo#N --mode <mode>`;
+   - `ci-running` → `ci-wait owner/repo#N`;
+   - `conflicts` → **stop**: a rebase rewrites history, the user decides;
+   - `waiting-review` → stop: nothing to do until someone has reviewed;
+   - `ready` → stop: CI green and review approved.
+3. Nothing moved since the previous round → stop, to avoid spinning idle.
 
-**Point de contrôle 3** : la PR prête, rends le lien et le résumé des tours. Le merge est à l'utilisateur, jamais
-automatique.
+**Checkpoint 3**: with the PR ready, return the link and a summary of the rounds. The merge is the user's, never
+automatic.

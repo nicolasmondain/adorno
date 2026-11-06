@@ -1,35 +1,35 @@
 ---
 name: adorno-pr-impact
-description: workflow:pr:impact — Analyse l'impact des PRs que tu as mergées sur un repo — depuis leur déploiement, utilisation, erreurs, temps de réponse, performance et ressources comparés avant / après dans toutes les sources disponibles — et poste le rapport en commentaire de chaque PR. Une PR déjà rapportée est sautée, une trop récente attend. Modes report ou comment (défaut).
+description: workflow:pr:impact — Analyzes the impact of the PRs you merged on a repo — usage, errors, response times, performance and resources compared before / after their deployment across every available source — and posts the report as a comment on each PR. An already reported PR is skipped, one that is too recent waits. Modes report or comment (default).
 ---
 
 # workflow:pr:impact
 
-Entrée : la demande de l'utilisateur. Suis les étapes dans l'ordre.
+Input: the user's request. Follow the steps in order.
 
-Entrée : la demande de l’utilisateur
+Input: the user’s request
 
-**Exécution** — avant toute chose : `adorno-github/scripts/run-begin --workflow workflow:pr:impact --mode <mode> --level L3 --deny push,reply,resolve,rerequest,review,submit,open_pr,ci_rerun --repo owner/repo` ; garde `id` et `dir` (le dossier d'exécution). Appelé par un autre workflow qui a déjà ouvert la sienne : réutilise-la. Toujours, même après un échec : `run-end <id>`. Sans exécution ouverte, les scripts refusent toute écriture.
+**Run** — before anything else: `adorno-github/scripts/run-begin --workflow workflow:pr:impact --mode <mode> --level L3 --deny push,reply,resolve,rerequest,review,submit,open_pr,ci_rerun --repo owner/repo`; keep `id` and `dir` (the run folder). Called by another workflow that already opened its own: reuse it. Always, even after a failure: `run-end <id>`. With no open run, the scripts refuse any write.
 
-| Mode | Fait | Niveau |
+| Mode | Does | Level |
 | --- | --- | --- |
-| `report` | les rapports dans le dossier d'exécution, rien sur GitHub | L0 |
-| `comment` (défaut) | + un commentaire par PR analysée | L3 (action `comment`) |
+| `report` | the reports in the run folder, nothing on GitHub | L0 |
+| `comment` (default) | + one comment per analyzed PR | L3 (action `comment`) |
 
-Réglages du repo : `adorno-github/scripts/repo-conf owner/repo` › `impact` (`window`, `min_age`, `environment`, `post`,
-`sources`, `post_public`). `post: none` force le mode `report` ; sur un repo public, `pr-comment` refuse le rapport
-tant que `post_public` n'est pas vrai (les chiffres de production restent chez toi). Dossier d'exécution : `~/.adorno/runs/pr-impact-<repo>-<date>/`.
+Repo settings: `adorno-github/scripts/repo-conf owner/repo` › `impact` (`window`, `min_age`, `environment`, `post`,
+`sources`, `post_public`). `post: none` forces `report` mode; on a public repo, `pr-comment` refuses the report
+unless `post_public` is true (production numbers stay with you). Run folder: `~/.adorno/runs/pr-impact-<repo>-<date>/`.
 
-1. **Lister** — `pr-merged owner/repo --since <période>` (14 jours par défaut ; `--pr N` pour une seule PR). Écarte, en
-   le disant : celles déjà rapportées (`impactReported`, sauf `--refresh`), et celles arrivées en production depuis
-   moins de `min_age` (`pr-deploys`) — elles seront prises au prochain passage.
-2. **Annoncer** — la liste retenue, et les sources que tu vas interroger (connecteurs présents + `impact.sources`).
-   Aucun connecteur d'observabilité : dis-le ; l'analyse se limite alors à GitHub et aux canaux d'alerte, et le
-   verdict ne peut pas dépasser `inconclusive`.
-3. **Mesurer** — `agent:review:impact` sur chaque PR → `impact/<N>.json` et `impact/<N>.md`. Les PRs sont
-   indépendantes : en parallèle par lots de `max_parallel`.
-4. **Rédiger** — `agent:adorno` relit chaque rapport (une affirmation sans source est retirée) et écrit le commentaire
-   en anglais, dans ta voix :
+1. **List** — `pr-merged owner/repo --since <period>` (14 days by default; `--pr N` for a single PR). Drop, and say
+   so: those already reported (`impactReported`, unless `--refresh`), and those that reached production less than
+   `min_age` ago (`pr-deploys`) — they will be picked up on the next pass.
+2. **Announce** — the retained list, and the sources you are going to query (present connectors + `impact.sources`).
+   No observability connector: say so; the analysis is then limited to GitHub and alert channels, and the
+   verdict cannot go beyond `inconclusive`.
+3. **Measure** — `agent:review:impact` on each PR → `impact/<N>.json` and `impact/<N>.md`. PRs are
+   independent: in parallel, in batches of `max_parallel`.
+4. **Write** — `agent:adorno` rereads each report (a claim with no source is removed) and writes the comment
+   in English, in your voice:
 
    ```markdown
    <!-- adorno:impact -->
@@ -45,9 +45,8 @@ tant que `post_public` n'est pas vrai (les chiffres de production restent chez t
    **Caveats**: other changes in the window, unavailable sources.
    ```
 
-   `--refresh` sur une PR déjà rapportée : un commentaire « Impact report update » qui dit ce qui a changé depuis.
-5. **Publier** (mode `comment`) — `pr-comment owner/repo#N <fichier>` pour chaque PR, après avoir vérifié qu'aucune
-   donnée personnelle ni secret n'y figure. Une PR `regression` : le commentaire part aussi, et la régression est en
-   tête de ton compte rendu.
-6. **Rendre compte** — un tableau : PR (lien), verdict, signal principal, lien du commentaire ; puis les PRs écartées
-   et pourquoi ; puis, pour chaque régression, la suite proposée (`workflow:issue:fix`, revert à décider par toi).
+   `--refresh` on an already reported PR: an "Impact report update" comment that says what changed since.
+5. **Publish** (`comment` mode) — `pr-comment owner/repo#N <file>` for each PR, after checking that no personal
+   data or secret appears in it. A `regression` PR: the comment still goes out, and the regression leads your report.
+6. **Report** — a table: PR (link), verdict, main signal, comment link; then the skipped PRs and why;
+   then, for each regression, the proposed next step (`workflow:issue:fix`, revert for you to decide).

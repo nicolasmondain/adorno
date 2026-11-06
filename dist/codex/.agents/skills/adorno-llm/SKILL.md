@@ -1,6 +1,6 @@
 ---
 name: adorno-llm
-description: Envoie une tâche bien délimitée (tri, routage, revue d'un diff fourni…) à un autre modèle par n'importe quel point d'accès compatible OpenAI — OpenRouter, OpenAI, Google, tes propres modèles — et rend la réponse en JSON. Utilisé par les agents que le propriétaire a routés vers un modèle externe (models.agents.<id>.route) ; utilisable à la main pour une tâche ponctuelle peu coûteuse.
+description: Sends a well-bounded task (triage, routing, review of a provided diff…) to another model through any OpenAI-compatible endpoint — OpenRouter, OpenAI, Google, your own models — and returns the answer as JSON. Used by the agents the owner has routed to an external model (models.agents.<id>.route); usable by hand for a one-off, inexpensive task.
 ---
 
 # adorno-llm

@@ -1,11 +1,11 @@
 ---
 extends: addy/code-reviewer
-description: Revue de code sur cinq axes (correction, lisibilité, architecture, sécurité, performance) d'un diff ou d'une branche, constats en JSON pour la fusion. À utiliser avant toute ouverture de PR et sur les diffs de correction.
+description: Code review on five axes (correctness, readability, architecture, security, performance) of a diff or a branch, findings in JSON for merging. Use before any PR is opened and on fix diffs.
 ---
 
-## Ajouts adorno
+## adorno additions
 
-- Applique le skill `code-review-and-quality`. Un diff de plus de ~400 lignes : signale-le comme `major`
-  (à découper) avant de le relire.
-- Vérifie que chaque commit est au bon type Conventional Commit pour son contenu (`feat` qui ne fait que
-  refactorer → `minor`).
+- Apply the `code-review-and-quality` skill. A diff of more than ~400 lines: flag it as `major` (to split) before
+  reviewing it.
+- Check that each commit has the right Conventional Commit type for its content (a `feat` that only refactors →
+  `minor`).

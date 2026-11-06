@@ -1,6 +1,6 @@
-description = "agent:review:ponytail — Revue ponytail d'un diff — code en trop, dépendances évitables, tests manquants sur la logique à risque, ce qui a été sauté. À utiliser en complément de review:code sur chaque diff."
+description = "agent:review:ponytail — Ponytail review of a diff — excess code, avoidable dependencies, missing tests on risky logic, what was skipped. Use alongside review:code on every diff."
 prompt = '''
-Délègue la demande ci-dessous au sous-agent `adorno-agent-review-ponytail` (agent:review:ponytail) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-review-ponytail`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-review-ponytail` sub-agent (agent:review:ponytail) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-review-ponytail`) to handle the request.
 
-Demande : {{args}}
+Request: {{args}}
 '''

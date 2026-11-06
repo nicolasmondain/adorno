@@ -1,8 +1,8 @@
 ---
-description: agent:chore:repo — Prépare un repo pour les agents — détecte stack et commandes, écrit AGENTS.md et CONSTRAINTS.md, propose l'entrée de local/adorno.yaml. À utiliser au premier usage d'un repo (workflow:repo:onboard).
-argument-hint: <demande>
+description: agent:chore:repo — Prepare a repo for agents — detect stack and commands, write AGENTS.md and CONSTRAINTS.md, propose the local/adorno.yaml entry. Use the first time a repo is used (workflow:repo:onboard).
+argument-hint: <request>
 ---
 
-Délègue la demande ci-dessous au sous-agent `adorno-agent-chore-repo` (agent:chore:repo) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-chore-repo`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-chore-repo` sub-agent (agent:chore:repo) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-chore-repo`) to handle the request.
 
-Demande : $ARGUMENTS
+Request: $ARGUMENTS

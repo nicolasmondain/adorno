@@ -1,6 +1,6 @@
 ---
 name: adorno-inputs
-description: Rassemble ce qui décrit une demande de code — prompt, lien Slack vers la discussion, page Notion, issue ou PR GitHub, fichier de plan — en un seul source.md sourcé, lu par l'agent d'accueil. À utiliser au début de workflow:spec:new, workflow:feature:build et workflow:issue:fix quand l'entrée contient des liens ou un plan déjà rédigé.
+description: Gathers what describes a code request — prompt, Slack link to the discussion, Notion page, GitHub issue or PR, plan file — into a single sourced source.md, read by the intake agent. Use at the start of workflow:spec:new, workflow:feature:build and workflow:issue:fix when the input contains links or an already written plan.
 ---
 
 # adorno-inputs
@@ -42,7 +42,7 @@ content. Never guess what a link says. Never write to Slack, Notion or the issue
 <the substance, per source, faithful: decisions, constraints, examples, numbers, who decided what. Quote decisions
 verbatim with their link. Mark disagreements between sources or between messages, and which is the latest.>
 
-## Plan provided
+## Provided plan
 <only if a source contains an implementation plan (steps, slices, files, API, schema): verbatim, with its link.
 Otherwise: "none".>
 

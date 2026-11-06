@@ -1,6 +1,6 @@
-description = "agent:perf:mongodb — Performance MongoDB — requêtes et agrégations lentes, index manquants ou inutiles, N+1, projections, volumes. À utiliser sur une requête ou un écran lent dont la base est suspecte."
+description = "agent:perf:mongodb — MongoDB performance — slow queries and aggregations, missing or useless indexes, N+1, projections, volumes. Use on a slow query or screen where the database is suspected."
 prompt = '''
-Délègue la demande ci-dessous au sous-agent `adorno-agent-perf-mongodb` (agent:perf:mongodb) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-perf-mongodb`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-perf-mongodb` sub-agent (agent:perf:mongodb) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-perf-mongodb`) to handle the request.
 
-Demande : {{args}}
+Request: {{args}}
 '''

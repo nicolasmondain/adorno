@@ -1,6 +1,6 @@
-description = "agent:fix:investigate — Enquête sur un bug — reproduit, isole la cause, rend un diagnostic écrit sans rien modifier. À utiliser en premier sur un bug signalé, une issue ou une CI rouge de cause inconnue."
+description = "agent:fix:investigate — Investigate a bug — reproduce, isolate the cause, return a written diagnosis without changing anything. Use first on a reported bug, an issue or a red CI of unknown cause."
 prompt = '''
-Délègue la demande ci-dessous au sous-agent `adorno-agent-fix-investigate` (agent:fix:investigate) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-fix-investigate`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-fix-investigate` sub-agent (agent:fix:investigate) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-fix-investigate`) to handle the request.
 
-Demande : {{args}}
+Request: {{args}}
 '''

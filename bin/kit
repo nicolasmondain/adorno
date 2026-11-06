@@ -402,13 +402,13 @@ def vision_text() -> str:
 
 def vision_section(text: str, agent: bool = False) -> str:
     head = ("## The owner's vision (applies over this agent's defaults)" if agent
-            else "## La vision du propriétaire")
+            else "## The owner's vision")
     note = ("It overrides your own instructions, the profile and the imported skills; only the repo's rules "
             "(CLAUDE.md, .claude/rules/) win on its code. A conflict with them: apply the repo's way and flag it."
             if agent else
-            "Elle s'applique par-dessus tous les agents, skills et workflows ; seules les règles du repo "
-            "(`CLAUDE.md`, `.claude/rules/`) priment sur son code. Conflit avec elles : applique celles du repo et "
-            "signale-le. Les lignes `vision` du repo courant (`repo-conf`) s'y ajoutent.")
+            "It applies over every agent, skill and workflow; only the repo's rules (`CLAUDE.md`, "
+            "`.claude/rules/`) win on its code. A conflict with them: apply the repo's way and flag it. The current "
+            "repo's `vision` lines (`repo-conf`) are added to it.")
     return f"{head}\n\n> {note}\n\n{text}\n"
 
 
@@ -728,15 +728,15 @@ def skill_tree(cfg: Config, it: Item, target: str) -> FileMap:
 def as_skill(it: Item, target: str) -> FileMap:
     """Agents and workflows for tools that have no native equivalent."""
     if it.kind == "agent":
-        desc = f"Rôle {it.id} — {it.description}"
-        body = (f"# Rôle : {it.id}\n\n"
-                f"Quand ce skill est invoqué, adopte le rôle ci-dessous pour la tâche en cours, "
-                f"puis reviens à ton comportement normal une fois le résultat rendu.\n\n{it.body.strip()}")
+        desc = f"Role {it.id} — {it.description}"
+        body = (f"# Role: {it.id}\n\n"
+                f"When this skill is invoked, take on the role below for the current task, "
+                f"then return to your normal behavior once the result is delivered.\n\n{it.body.strip()}")
     else:
         desc = f"{it.id} — {it.description}"
         body = (f"# {it.id}\n\n"
-                f"Entrée : la demande de l'utilisateur. Suis les étapes dans l'ordre.\n\n"
-                f"{it.body.strip().replace(ARGS_TOKEN, 'la demande de l’utilisateur')}")
+                f"Input: the user's request. Follow the steps in order.\n\n"
+                f"{it.body.strip().replace(ARGS_TOKEN, 'the user’s request')}")
     meta = {"name": it.name, "description": desc[:1024]}
     meta.update(it.overrides(target))
     return {"SKILL.md": (dump_md(meta, body).encode(), False)}
@@ -744,10 +744,10 @@ def as_skill(it: Item, target: str) -> FileMap:
 
 def agent_command(it: Item) -> Item:
     """A command that hands its input to the agent, so every agent can also be called by hand."""
-    body = (f"Délègue la demande ci-dessous au sous-agent `{it.name}` ({it.id}) et rends son résultat "
-            f"tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier "
-            f"`{it.name}`) pour traiter la demande.\n\nDemande : {ARGS_TOKEN}")
-    meta = {"description": f"{it.id} — {it.description}"[:1024], "args": "<demande>"}
+    body = (f"Delegate the request below to the `{it.name}` sub-agent ({it.id}) and return its result "
+            f"as is. If the sub-agent is not available, take on its role (skill or file "
+            f"`{it.name}`) to handle the request.\n\nRequest: {ARGS_TOKEN}")
+    meta = {"description": f"{it.id} — {it.description}"[:1024], "args": "<request>"}
     return Item("workflow", it.name, meta, body, it.path, it.origin, id=it.id)
 
 
@@ -803,7 +803,7 @@ def render_workflow(it: Item, target: str, fmt: str, tcfg: dict | None = None) -
         return dump_md(meta, body.replace(ARGS_TOKEN, "${input:args}"))
     if fmt == "cursor-command":
         return f"# {it.name}\n\n{it.description}\n\n" + \
-            body.replace(ARGS_TOKEN, "le texte saisi après la commande") + "\n"
+            body.replace(ARGS_TOKEN, "the text typed after the command") + "\n"
     die(f"unknown workflow format '{fmt}'")
     return ""
 
@@ -820,7 +820,7 @@ def render_instructions(cfg: Config, items: dict[str, dict[str, Item]]) -> str:
         # Agents and skills are discovered natively by every tool (sub-agents, skills); only the workflows, the
         # entry points, get a one-line index here — the full descriptions would cost tokens in every session.
         lines = ["## Workflows adorno", "",
-                 "Chacun est une commande au même nom (sans commande native : le skill du même nom).", ""]
+                 "Each one is a command of the same name (without native commands: the skill of the same name).", ""]
         for it in sorted(items["workflow"].values(), key=lambda i: i.id):
             first = re.split(r"(?<=[.;—])\s", it.description.strip(), maxsplit=1)[0].rstrip(" .;—")
             lines.append(f"- `{it.id}` (`/{it.name}`) — {first[:110]}")
@@ -1034,40 +1034,40 @@ def cmd_build(args) -> None:
 TEMPLATES = {
     "skill": """---
 name: {name}
-description: Ce que fait ce skill et QUAND l'utiliser (c'est ce texte qui déclenche le skill).
+description: What this skill does and WHEN to use it (this text is what triggers the skill).
 ---
 
 # {title}
 
-## Quand l'utiliser
+## When to use
 
-## Étapes
+## Steps
 
 1.
 """,
     "agent": """---
 name: {name}
-description: Spécialité de l'agent et QUAND lui déléguer une tâche.
-tools: [read, search]        # read, write, edit, search, shell, web, agent — omets pour tout autoriser
+description: The agent's specialty and WHEN to delegate a task to it.
+tools: [read, search]        # read, write, edit, search, shell, web, agent — omit to allow everything
 model: inherit               # inherit, fast, balanced, deep
 ---
 
-Tu es …
+You are …
 
-## Méthode
+## Method
 
-## Ce que tu rends
+## What you return
 """,
     "workflow": """---
 name: {name}
-description: Ce que ce workflow accomplit de bout en bout.
-args: "<entrée attendue>"
+description: What this workflow accomplishes end to end.
+args: "<expected input>"
 uses:
   skills: []
   agents: []
 ---
 
-Entrée : {{{{args}}}}
+Input: {{{{args}}}}
 
 1.
 """,
@@ -1334,21 +1334,21 @@ def delegate(it: Item, name: str, route: dict) -> None:
         flags += f" --max-tokens {route['max_tokens']}"
     it.meta["model"] = route.get("host_tier", "fast")
     it.meta["tools"] = sorted(set(as_list(it.meta.get("tools")) or []) | {"read", "write", "search", "shell"})
-    it.body = f"""## Rôle délégué au modèle `{route['model']}` (route `{name}`)
+    it.body = f"""## Role delegated to model `{route['model']}` (route `{name}`)
 
-Le jugement de ce rôle tourne sur un modèle externe, pas sur celui de cette session. Toi, tu prépares et tu vérifies,
-avec le skill `adorno-llm` :
+This role's judgment runs on an external model, not on this session's. You prepare and you verify, with the
+`adorno-llm` skill:
 
-1. Rassemble les entrées que décrivent les consignes ci-dessous (fichiers, diff, sorties de scripts) avec tes outils,
-   sans juger toi-même. Rien de secret ni de personnel : une entrée qui en contient est réduite ou retirée.
-2. Dans un dossier à toi seul (`d="$(mktemp -d)"` : d'autres délégués tournent peut-être en même temps), écris
-   `$d/role.md` (la section « Consignes du rôle », en entier) et `$d/prompt.md` (la tâche et les entrées).
+1. Gather the inputs the instructions below describe (files, diff, script outputs) with your tools, without judging
+   yourself. Nothing secret or personal: an input that contains any is trimmed or removed.
+2. In a folder of your own (`d="$(mktemp -d)"`: other delegates may be running at the same time), write
+   `$d/role.md` (the "Role instructions" section, in full) and `$d/prompt.md` (the task and the inputs).
 3. `adorno-llm/scripts/llm-run {flags} --system "$d/role.md" "$d/prompt.md" > "$d/reply.json"`
-4. Vérifie `$d/reply.json` › `.content` : format attendu respecté, chaque `file:line` cité existe. Sinon, une relance avec
-   l'erreur ; un second échec ou une route indisponible → fais le travail toi-même et signale-le.
-5. Écris le livrable attendu à partir de la réponse ; note `model` et `usage` dans le compte rendu.
+4. Check `$d/reply.json` › `.content`: expected format respected, every cited `file:line` exists. Otherwise, one retry
+   with the error; a second failure or an unavailable route → do the work yourself and flag it.
+5. Write the expected deliverable from the reply; note `model` and `usage` in the report.
 
-## Consignes du rôle
+## Role instructions
 
 {it.body.strip()}
 """

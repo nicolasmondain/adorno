@@ -1,8 +1,8 @@
 ---
-description: agent:feat:back — Fonctionnalités côté serveur Node.js — services, points d'entrée (routes, méthodes RPC), jobs, accès MongoDB. À utiliser pour une tranche feat qui touche la logique serveur.
-argument-hint: <demande>
+description: agent:feat:back — Server-side Node.js features — services, entry points (routes, RPC methods), jobs, MongoDB access. Use for a feat slice that touches server logic.
+argument-hint: <request>
 ---
 
-Délègue la demande ci-dessous au sous-agent `adorno-agent-feat-back` (agent:feat:back) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-feat-back`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-feat-back` sub-agent (agent:feat:back) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-feat-back`) to handle the request.
 
-Demande : $ARGUMENTS
+Request: $ARGUMENTS

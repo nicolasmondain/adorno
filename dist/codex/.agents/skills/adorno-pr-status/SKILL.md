@@ -1,18 +1,18 @@
 ---
 name: adorno-pr-status
-description: workflow:pr:status — État de toutes tes PRs ouvertes (ou d'un repo) — review, CI, threads non résolus, et ce qui bloque chacune. Lecture seule.
+description: workflow:pr:status — Status of all your open PRs (or those of one repo) — review, CI, unresolved threads, and what blocks each one. Read-only.
 ---
 
 # workflow:pr:status
 
-Entrée : la demande de l'utilisateur. Suis les étapes dans l'ordre.
+Input: the user's request. Follow the steps in order.
 
-Entrée : la demande de l’utilisateur
+Input: the user’s request
 
-1. `adorno-github/scripts/pr-status la demande de l’utilisateur` (lecture seule : aucune exécution à ouvrir).
-2. Rends un tableau trié par urgence — `ci-red`, `changes-requested`, `unresolved-threads`, `conflicts`,
-   `waiting-review`, `ci-running`, `draft`, `ready` — avec : PR (lien), titre, blocage, qui attend qui
-   (`waitingOn`), dernière mise à jour.
-3. Sous le tableau, une ligne par action utile, sous forme de commande prête à lancer
+1. `adorno-github/scripts/pr-status the user’s request` (read-only: no run to open).
+2. Return a table sorted by urgency — `ci-red`, `changes-requested`, `unresolved-threads`, `conflicts`,
+   `waiting-review`, `ci-running`, `draft`, `ready` — with: PR (link), title, blocker, who is waiting on whom
+   (`waitingOn`), last update.
+3. Under the table, one line per useful action, as a ready-to-run command
    (`workflow:review:received owner/repo#N`, `workflow:ci:red owner/repo#N`).
-4. Les PRs de repos non enregistrés sont listées à part, sans action proposée.
+4. PRs from unregistered repos are listed separately, with no action proposed.

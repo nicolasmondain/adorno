@@ -1,41 +1,41 @@
 ---
-description: Relit la PR d'un collègue dans un workspace dédié — relecteurs spécialisés choisis selon les zones de code touchées (front, back, mongodb, api, sécurité…), en parallèle, puis ton agent qui revérifie, tranche et rédige. Par défaut, une review en attente que tu relis et soumets toi-même.
+description: Reviews a colleague's PR in a dedicated workspace — specialized reviewers chosen by the touched code areas (front, back, mongodb, api, security…), in parallel, then your agent who rechecks, slices and writes. By default, a pending review that you reread and submit yourself.
 argument-hint: <owner/repo#N> [--mode report|pending|auto]
 ---
 
-Entrée : $ARGUMENTS
+Input: $ARGUMENTS
 
-**Exécution** — avant toute chose : `adorno-github/scripts/run-begin --workflow workflow:pr:review --mode <mode> --level L3 --repo owner/repo` (`--deny submit` en mode `pending`) ; garde `id` et `dir` (le dossier d'exécution). Appelé par un autre workflow qui a déjà ouvert la sienne : réutilise-la. Toujours, même après un échec : `run-end <id>`. Sans exécution ouverte, les scripts refusent toute écriture.
+**Run** — before anything else: `adorno-github/scripts/run-begin --workflow workflow:pr:review --mode <mode> --level L3 --repo owner/repo` (`--deny submit` in `pending` mode); keep `id` and `dir` (the run folder). Called by another workflow that already opened its own: reuse it. Always, even after a failure: `run-end <id>`. With no open run, the scripts refuse any write.
 
-| Mode | Ce qui part sur GitHub | Niveau |
+| Mode | What goes to GitHub | Level |
 | --- | --- | --- |
-| `report` | rien : le rapport seul | L0 |
-| `pending` (défaut) | une review **en attente**, visible de toi seul, que tu modifies et soumets | L3 |
-| `auto` | la review soumise (`COMMENT` ou `REQUEST_CHANGES`, jamais `APPROVE` sauf `allow_approve`) | L3 |
+| `report` | nothing: the report only | L0 |
+| `pending` (default) | a **pending** review, visible only to you, that you edit and submit | L3 |
+| `auto` | the submitted review (`COMMENT` or `REQUEST_CHANGES`, never `APPROVE` unless `allow_approve`) | L3 |
 
-Dossier d'exécution : `<workspace>/.agent-run/review-<date>/` (exclu de git par `pr-workspace`), passé à `run-begin
---dir` ; appelé par `review:requested`, un sous-dossier de son exécution.
+Run folder: `<workspace>/.agent-run/review-<date>/` (excluded from git by `pr-workspace`), passed to `run-begin
+--dir`; when called by `review:requested`, a subfolder of its run.
 
-1. **Préconditions** — `pr-review-requested owner/repo` (ou `pr-diff`) : PR fermée, repassée en brouillon, ou review en
-   attente déjà ouverte par toi (`pendingReview`) → arrêt, et dis-le.
-2. **Workspace** — `pr-workspace owner/repo#N` : clone dédié sous `~/.adorno`, au commit de tête, `diffBase`
-   calculé (diff de la PR contre sa propre base, jamais le cumul d'une pile). Tes propres copies ne sont pas touchées.
-3. **Contexte** — `pr-diff owner/repo#N` (description, fichiers, diff) ; issue liée si la description en cite une.
-4. **Zones et relecteurs** — `pr-areas owner/repo <fichier de diff>` → zones touchées et `reviewers` (`always` + ceux de
-   chaque zone, réglés dans `repos.yaml` et surchargeables dans `local/adorno.yaml`). Les fichiers en `other` vont à `review:code`.
-5. **Vérifications locales** selon `commands.review_checks` : `none` par défaut (un point qui demande une exécution est
-   un ❓, la CI tranche) ; `lint` : lint et typecheck seulement ; `full` : + install et tests. Sorties dans `checks.log`.
-   Une PR venue d'un fork (`untrusted: true`) : jamais d'exécution, quel que soit le réglage.
-6. **Spécialistes en parallèle** — tous les agents de `reviewers` dans le même tour, en mode revue, chacun avec le
-   workspace, `diffBase`, la description, les fichiers de sa zone (tous pour `review:code`) → `reviews/<agent>.json`.
-7. **Fusion** — `adorno-github/scripts/review-merge reviews/ > review.json` : toujours la même fusion (doublons, sévérité
-   la plus haute, verdict le plus sévère) ; ne lis pas toi-même chaque avis, seulement `review.json` (`invalid` liste un
-   avis mal formé : relance ce spécialiste une fois).
-8. **Ta passe** — `agent:adorno`, situation 2, avec `review.json` et le workspace : charge la zone (règles du repo,
-   profil, `repo-conf`), revérifie chaque point, garde ce que tu posterais (8 commentaires en ligne au plus), écrit
-   `review-final.json` et `review-notes.md`. S'il rend des demandes `consult`, lance ces spécialistes sur leur
-   question précise et rappelle-le avec leurs réponses (une fois).
-9. **Publier** — `report` : rien. `pending` : `pr-review-submit owner/repo#N review-final.json` sans `event` → review en
-   attente. `auto` : même script, avec l'`event` choisi. Rien qui vaille d'être posté → pas de review, et dis-le.
-10. **Compte rendu** — périmètre, une ligne par point (sévérité, `file:line`, problème, conséquence, source), verdict,
-    relecteurs et zones, points écartés et pourquoi, lien de la review.
+1. **Preconditions** — `pr-review-requested owner/repo` (or `pr-diff`): PR closed, put back to draft, or a pending
+   review already opened by you (`pendingReview`) → stop, and say so.
+2. **Workspace** — `pr-workspace owner/repo#N`: dedicated clone under `~/.adorno`, at the head commit, `diffBase`
+   computed (diff of the PR against its own base, never the cumulative diff of a stack). Your own copies are not touched.
+3. **Context** — `pr-diff owner/repo#N` (description, files, diff); linked issue if the description cites one.
+4. **Areas and reviewers** — `pr-areas owner/repo <diff file>` → touched areas and `reviewers` (`always` + those of
+   each area, set in `repos.yaml` and overridable in `local/adorno.yaml`). Files in `other` go to `review:code`.
+5. **Local checks** according to `commands.review_checks`: `none` by default (a point that needs execution is
+   a ❓, CI decides); `lint`: lint and typecheck only; `full`: + install and tests. Outputs in `checks.log`.
+   A PR from a fork (`untrusted: true`): never executed, whatever the setting.
+6. **Specialists in parallel** — all the agents in `reviewers` in the same turn, in review mode, each with the
+   workspace, `diffBase`, the description, the files of its area (all of them for `review:code`) → `reviews/<agent>.json`.
+7. **Merge** — `adorno-github/scripts/review-merge reviews/ > review.json`: always the same merge (duplicates, highest
+   severity, most severe verdict); do not read each review yourself, only `review.json` (`invalid` lists a
+   malformed review: rerun that specialist once).
+8. **Your pass** — `agent:adorno`, situation 2, with `review.json` and the workspace: loads the area (repo rules,
+   profile, `repo-conf`), rechecks each point, keeps what you would post (8 inline comments at most), writes
+   `review-final.json` and `review-notes.md`. If it returns `consult` requests, run those specialists on their
+   precise question and call it back with their answers (once).
+9. **Publish** — `report`: nothing. `pending`: `pr-review-submit owner/repo#N review-final.json` without `event` → pending
+   review. `auto`: same script, with the chosen `event`. Nothing worth posting → no review, and say so.
+10. **Report** — scope, one line per point (severity, `file:line`, problem, consequence, source), verdict,
+    reviewers and areas, dropped points and why, review link.

@@ -1,16 +1,16 @@
 ---
-description: Tests de bout en bout et QA navigateur avec preuves — parcours Playwright, captures d'écran, vidéo et trace jointes au compte rendu ou à la PR. À utiliser pour vérifier une fonctionnalité front de bout en bout, reproduire un bug d'interface ou fournir la preuve visuelle d'un correctif.
+description: End-to-end tests and browser QA with evidence — Playwright journeys, screenshots, video and trace attached to the report or the PR. Use to verify a front feature end to end, reproduce a UI bug or provide visual proof of a fix.
 ---
 
-## Spécialité : e2e
+## Specialty: e2e
 
-- Outil, dans l'ordre : le skill `playwright-cli` (captures, vidéo WebM, traces, génération de tests ; CLI
-  `@playwright/cli`), sinon `webapp-testing` (Python Playwright, captures et logs console, sans vidéo). Ni l'un ni
-  l'autre installé : dis-le, ne l'installe pas sans accord.
-- Une app locale se lance sur un port libre explicite, jamais sur un port déjà pris ; arrête-la en partant.
-- Chaque parcours rend sa preuve dans `.agent-run/<id>/qa/` : une capture par étape clé, la vidéo du parcours
-  complet, la trace en cas d'échec, et `qa.md` (parcours, attendu, observé, verdict). Rien de tout ça n'est committé.
-- Un test e2e committé suit la convention du repo (dossier, nommage) ; sélecteurs par rôle ou par texte accessible,
-  jamais d'attente fixe.
-- Les preuves vont dans la PR via le compte rendu (lien ou pièce jointe selon `pr-attachments` de `playwright-cli`),
-  jamais de donnée personnelle ou de secret visible dans une capture.
+- Tool, in order: the `playwright-cli` skill (screenshots, WebM video, traces, test generation; `@playwright/cli`
+  CLI), otherwise `webapp-testing` (Python Playwright, screenshots and console logs, no video). Neither installed:
+  say so, do not install it without approval.
+- A local app starts on an explicit free port, never on a port already taken; stop it when you leave.
+- Each journey returns its evidence in `.agent-run/<id>/qa/`: one screenshot per key step, the video of the full
+  journey, the trace on failure, and `qa.md` (journey, expected, observed, verdict). None of this is committed.
+- A committed e2e test follows the repo's convention (folder, naming); selectors by role or accessible text, never a
+  fixed wait.
+- Evidence goes into the PR through the report (link or attachment depending on `playwright-cli`'s
+  `pr-attachments`), never any personal data or secret visible in a screenshot.

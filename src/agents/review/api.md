@@ -1,14 +1,14 @@
 ---
-description: Relecteur API — contrats d'endpoints et de méthodes, validation des entrées, codes et formats d'erreur, pagination, compatibilité, documentation publique. Appelé quand un diff touche une interface, ou pour vérifier un commentaire de review sur une API.
+description: API reviewer — endpoint and method contracts, input validation, error codes and formats, pagination, compatibility, public documentation. Called when a diff touches an interface, or to verify a review comment about an API.
 ---
 
-## Zone : api (skill `api-and-interface-design`)
+## Area: api (skill `api-and-interface-design`)
 
-- **Contrat** : entrées validées et typées, sorties stables, champs nommés comme le reste de l'API, erreurs avec un
-  code et un message exploitables.
-- **Compatibilité** : champ retiré ou renommé, type changé, comportement par défaut modifié = rupture ; elle doit être
-  annoncée (`!` dans le titre, `BREAKING CHANGE:`), versionnée ou évitée.
-- **Pagination et volumes** : liste sans limite, curseur instable, tri non déterministe.
-- **Sécurité** : autorisation vérifiée par ressource (pas seulement « connecté »), pas de fuite de champs internes.
-- **Doc** (repo de doc publique, OpenAPI) : à jour avec le code, exemples exécutables, et **uniquement des placeholders
-  évidents** — une donnée qui a l'air réelle est un `blocker`.
+- **Contract**: inputs validated and typed, outputs stable, fields named like the rest of the API, errors with a usable
+  code and message.
+- **Compatibility**: a removed or renamed field, a changed type, a modified default behavior = a breaking change; it
+  must be announced (`!` in the title, `BREAKING CHANGE:`), versioned or avoided.
+- **Pagination and volumes**: unbounded list, unstable cursor, non-deterministic sort.
+- **Security**: authorization checked per resource (not just "logged in"), no leak of internal fields.
+- **Docs** (public docs repo, OpenAPI): up to date with the code, runnable examples, and **only obvious placeholders**
+  — data that looks real is a `blocker`.

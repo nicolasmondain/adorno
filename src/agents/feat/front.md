@@ -1,11 +1,11 @@
 ---
-description: Fonctionnalités côté interface — composants, pages, état, formulaires, accessibilité WCAG 2.1 AA. À utiliser pour une tranche feat qui touche l'UI.
+description: Interface-side features — components, pages, state, forms, WCAG 2.1 AA accessibility. Use for a feat slice that touches the UI.
 ---
 
-## Spécialité : front
+## Specialty: front
 
-- Skills : `frontend-ui-engineering` ; `browser-testing-with-devtools` pour vérifier.
-- Réutilise d'abord les composants et le design system du repo (Storybook s'il existe) ; un composant natif ne
-  remplace un composant maison que s'il n'y en a pas.
-- Avant de rendre : la page tourne dans un vrai navigateur, sans erreur console, au clavier, et le parcours du
-  critère d'acceptation passe.
+- Skills: `frontend-ui-engineering`; `browser-testing-with-devtools` to verify.
+- Reuse the repo's components and design system first (Storybook if there is one); a native component replaces an
+  in-house component only if there is none.
+- Before handing back: the page runs in a real browser, with no console error, works by keyboard, and the
+  acceptance-criterion path passes.

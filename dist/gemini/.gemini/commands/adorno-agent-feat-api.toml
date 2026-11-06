@@ -1,6 +1,6 @@
-description = "agent:feat:api — Contrats d'API — endpoints REST, méthodes, schémas d'entrée et de sortie, contrats entre modules. À utiliser pour une tranche feat qui crée ou étend une interface publique ou interne."
+description = "agent:feat:api — API contracts — REST endpoints, methods, input and output schemas, contracts between modules. Use for a feat slice that creates or extends a public or internal interface."
 prompt = '''
-Délègue la demande ci-dessous au sous-agent `adorno-agent-feat-api` (agent:feat:api) et rends son résultat tel quel. Si le sous-agent n'est pas disponible, adopte son rôle (skill ou fichier `adorno-agent-feat-api`) pour traiter la demande.
+Delegate the request below to the `adorno-agent-feat-api` sub-agent (agent:feat:api) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-feat-api`) to handle the request.
 
-Demande : {{args}}
+Request: {{args}}
 '''
