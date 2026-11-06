@@ -28,9 +28,6 @@
           "Write(~/.adorno/registry.json)",
           "Edit(~/.adorno/runs/active/**)",
           "Write(~/.adorno/runs/active/**)"
-        ],
-        "ask": [
-          "Bash(gh api:*)"
         ]
       }
     },

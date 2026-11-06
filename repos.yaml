@@ -56,9 +56,9 @@ defaults:
         - "Write(~/.adorno/registry.json)"
         - "Edit(~/.adorno/runs/active/**)"
         - "Write(~/.adorno/runs/active/**)"
-      ask:
-        # `gh api` writes as soon as it gets -f, -F or --input (no -X needed): every direct call asks you first
-        - "Bash(gh api:*)"
+      # No rule on `gh api`: a native rule cannot tell a read from a write and asks even in bypassPermissions,
+      # which blocks unattended runs. The shell guard (guard_bash.py) asks only for a write: a GraphQL mutation,
+      # -f/-F/--input on REST, or a method other than GET/HEAD.
 
   impact:
     window: 7d            # same duration compared before and after the deployment
