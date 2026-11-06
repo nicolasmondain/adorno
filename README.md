@@ -178,6 +178,7 @@ src/
   agents/<family>/      _family.md + <specialty>.md → agent:<family>:<specialty>
   workflows/<domain>/   <action>.md → workflow:<domain>:<action>
   skills/               adorno-* (setup, profile, voice, learn, github, watch, llm, run-plan, commit)
+  **/SCHEMA.md          → mermaid diagram of a family, domain or skill (not an item, not shipped to dist/)
 repos.yaml              default public settings (code areas, reviewers per area, permissions)
 local.example/          template of your personal layer
 vendor/                 imported skills and agents (kit import), pinned in kit.lock

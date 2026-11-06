@@ -289,6 +289,9 @@ class Config:
 
 
 FAMILY_FILE = "_family.md"
+# a folder's mermaid diagram, for readers of the source: never an item, never shipped
+SCHEMA_FILE = "SCHEMA.md"
+NOT_ITEMS = (FAMILY_FILE, SCHEMA_FILE)
 
 
 def load_item(kind: str, path: Path, origin: str) -> Item:
@@ -331,7 +334,7 @@ def scan(base: Path, origin: str) -> list[Item]:
     for kind in ("agent", "workflow"):
         root = base / KINDS[kind]
         paths = sorted(root.glob("*.md")) + sorted(root.glob("*/*.md"))
-        found += [load_item(kind, p, origin) for p in paths if p.name != FAMILY_FILE]
+        found += [load_item(kind, p, origin) for p in paths if p.name not in NOT_ITEMS]
     return found
 
 
@@ -385,7 +388,7 @@ def overlay_private(items: dict) -> None:
     for kind in ("agent", "workflow"):
         root = LOCAL_SRC / KINDS[kind]
         for p in sorted(root.glob("*.md")) + sorted(root.glob("*/*.md")):
-            if p.name != FAMILY_FILE:
+            if p.name not in NOT_ITEMS:
                 it = load_item(kind, p, "private")
                 items[kind][it.name] = it
 
@@ -715,7 +718,7 @@ def skill_tree(cfg: Config, it: Item, target: str) -> FileMap:
     out: FileMap = {}
     for base in (*it.base_dirs, it.path.parent, *it.overlay_dirs):  # imported, ours, then private on top
         for f in sorted(base.rglob("*")):
-            if f.is_dir() or f.name == ".DS_Store":
+            if f.is_dir() or f.name in (".DS_Store", SCHEMA_FILE):
                 continue
             r = f.relative_to(base).as_posix()
             if r != "SKILL.md":

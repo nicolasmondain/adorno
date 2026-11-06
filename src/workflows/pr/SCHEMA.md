@@ -1,0 +1,106 @@
+# `workflow:pr:*`
+
+## workflow:pr:impact
+
+```mermaid
+flowchart TD
+  A["Input: owner/repo, --since, --pr, --mode"] --> B["run-begin L3 (comment) or L0 (report)"]
+  B --> C["pr-merged: list merged PRs"]
+  C --> D{"Already reported or deployed less than min_age ago?"}
+  D -->|"yes"| E["Skip and mention in report"]
+  D -->|"no"| F["Announce PRs and sources"]
+  F --> G["agent:review:impact per PR, batches of max_parallel"]
+  G --> H["impact/N.json and impact/N.md"]
+  H --> I["agent:adorno: drop unsourced claims, write comment"]
+  I --> J{"Mode comment and post allowed?"}
+  J -->|"yes"| K["pr-comment owner/repo#N"]
+  J -->|"no"| L["Reports stay in run folder"]
+  K --> M["Final report table + regressions"]
+  L --> M
+  E --> M
+  M --> N["run-end"]
+```
+
+## workflow:pr:open
+
+```mermaid
+flowchart TD
+  A["Input: owner/repo, branch"] --> B["run-begin L3"]
+  B --> C["Local checks: branch_pattern, diff vs base, commits, tests, lint, typecheck"]
+  C -->|"fail"| X["Stop and report"]
+  C -->|"ok"| D["pr-areas on the diff"]
+  D --> E["Reviewers in parallel: review:code, ponytail, front, back, mongodb, api, security, tests"]
+  E --> F["agent:adorno: recheck and verdict (situation 1)"]
+  F --> G{"Red or orange point unresolved?"}
+  G -->|"yes"| X
+  G -->|"no"| H["agent:adorno: title + description (What / How / mermaid / Verification)"]
+  H --> I{"gates contains open_pr?"}
+  I -->|"yes"| J["Checkpoint 2: wait for yes"]
+  I -->|"no"| K["git-push owner/repo branch"]
+  J --> K
+  K --> L["pr-open --draft with registry reviewers"]
+  L --> M["Return PR URL, suggest workflow:pr:watch"]
+  M --> N["run-end"]
+```
+
+## workflow:pr:review
+
+```mermaid
+flowchart TD
+  A["Input: owner/repo#N, --mode"] --> B["run-begin L3"]
+  B --> C{"PR closed, draft, or pendingReview?"}
+  C -->|"yes"| X["Stop and say so"]
+  C -->|"no"| D["pr-workspace + pr-diff"]
+  D --> E["pr-areas: areas and reviewers"]
+  E --> F{"review_checks and not untrusted?"}
+  F -->|"lint or full"| G["Local checks into checks.log"]
+  F -->|"none"| H["Specialists in parallel"]
+  G --> H
+  H --> I["reviews/agent.json"]
+  I --> J["review-merge: review.json"]
+  J --> K["agent:adorno: recheck, max 8 inline comments (situation 2)"]
+  K -->|"consult requests"| L["Run specialists, recall adorno once"]
+  L --> K
+  K --> M["review-final.json and review-notes.md"]
+  M --> N{"Mode"}
+  N -->|"report"| O["Nothing published"]
+  N -->|"pending"| P["pr-review-submit without event"]
+  N -->|"auto"| Q["pr-review-submit with event"]
+  O --> R["Final report"]
+  P --> R
+  Q --> R
+  R --> S["run-end"]
+```
+
+## workflow:pr:status
+
+```mermaid
+flowchart TD
+  A["Input: optional owner/repo"] --> B["pr-status (read-only, no run)"]
+  B --> C["Table sorted by urgency: ci-red, changes-requested, unresolved-threads, conflicts, waiting-review, ci-running, draft, ready"]
+  C --> D["One ready-to-run command per action"]
+  B --> E["Unregistered repos listed apart, no action"]
+```
+
+## workflow:pr:watch
+
+```mermaid
+flowchart TD
+  A["Input: owner/repo#N, --mode, --rounds 5"] --> B["run-begin L3"]
+  B --> C["pr-status: line of the PR"]
+  C --> D{"blocker"}
+  D -->|"ci-red"| E["workflow:ci:red"]
+  D -->|"changes-requested or unresolved-threads"| F["workflow:review:received"]
+  D -->|"ci-running"| G["ci-wait"]
+  D -->|"conflicts"| X["Stop: user decides the rebase"]
+  D -->|"waiting-review"| Y["Stop"]
+  D -->|"ready"| Z["Checkpoint 3: link and summary, merge is the user's"]
+  E --> H{"Anything moved and rounds left?"}
+  F --> H
+  G --> H
+  H -->|"yes"| C
+  H -->|"no"| Y
+  Z --> W["run-end"]
+  X --> W
+  Y --> W
+```

@@ -12,6 +12,7 @@ adorno is a portable, reusable agent setup. Agents, workflows and skills are wri
 | a rule shared by a family | `src/agents/<type>/_family.md` (merged before each specialty; `{{specialty}}` and `{{family}}` are replaced in it) |
 | a workflow | `src/workflows/<domain>/<action>.md` → `workflow:<domain>:<action>`; `{{args}}` = the input |
 | an on-demand know-how | `src/skills/<name>/SKILL.md` (+ `scripts/`, `references/`) |
+| a diagram of an agent family, workflow domain or skill | `SCHEMA.md` in that folder (mermaid only; ignored by `bin/kit` as an item and not shipped to `dist/`) |
 | a GitHub access | a script in `src/skills/adorno-github/scripts/` + its test in `tests/adorno-github.test.sh` |
 | a Slack or Notion watch | a workflow `src/workflows/slack/…` or `src/workflows/notion/…`; the deterministic part in `src/skills/adorno-watch/scripts/` + `tests/adorno-watch.test.sh`; read through the connectors, only write: the report to oneself |
 | an agent's model | its `model:` tier (`fast`, `balanced`, `deep`); `delegable: true` if it can judge on inputs gathered in advance (external route); the actual choice per tool and per repo is in `local/` › `models` |
