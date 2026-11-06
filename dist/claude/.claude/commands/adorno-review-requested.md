@@ -1,12 +1,12 @@
 ---
 description: Analyzes all the PRs where your review is requested — a dedicated workspace per PR, specialized reviewers chosen by the touched code, then your agent who slices and writes. By default, a pending review per PR, that you reread and submit yourself.
-argument-hint: '[owner/repo] [--mode report|pending|auto] [--include-reviewed] [--direct-only]'
+argument-hint: '[owner/repo] [--mode report|pending|auto] [--include-reviewed] [--direct-only] [--max N]'
 model: sonnet
 ---
 
 Input: $ARGUMENTS
 
-**Run** — before any write: `adorno-github/scripts/run-begin --workflow workflow:review:requested --mode <mode> --level L3 --repo owner/repo [--repo …]` — once the PR list is known, one `--repo` per repo to process (a run only covers the repos it names) (`--deny submit` in `pending` mode); keep `id` and `dir` (the run folder). Called by another workflow that already opened its own: reuse it. Always, even after a failure: `run-end <id>`. With no open run, the scripts refuse any write.
+**Run** — before any write: `adorno-github/scripts/run-begin --workflow workflow:review:requested --mode <mode> --level L3 --repo owner/repo [--repo …]` — once the PR list is known, one `--repo` per repo of the kept PRs (a run only covers the repos it names) (`--deny submit` in `pending` mode); keep `id` and `dir` (the run folder). Called by another workflow that already opened its own: reuse it. Always, even after a failure: `run-end <id>`. With no open run, the scripts refuse any write.
 
 Modes of `workflow:pr:review`: `report` (nothing on GitHub), `pending` (default: a pending review, visible only to
 you), `auto` (submitted, never `APPROVE` if `allow_approve` is false).
@@ -17,8 +17,11 @@ you), `auto` (submitted, never `APPROVE` if `allow_approve` is false).
    - PRs already reviewed at their current commit (`reviewedHead`), unless `--include-reviewed`;
    - those where you already have a pending review (`pendingReview`): it is yours, leave it alone;
    - requests made to a team only, with `--direct-only`.
-2. **Announce** — show the retained list (repo, PR, author, size) before starting. More than 10 PRs or a PR of
-   more than 1,500 lines: ask for confirmation, the analysis is expensive.
+
+   Then keep at most `--max` PRs (5 by default), in the script's order (least recently updated first: the
+   longest-waiting); the others are *deferred*: cited in the report, for the next run.
+2. **Announce** — show the kept list (repo, PR, author, size) and the number deferred before starting. More than 10
+   PRs (raised `--max`) or a PR of more than 1,500 lines: ask for confirmation, the analysis is expensive.
 3. **Analyze** — for each PR, you run through the steps of `workflow:pr:review owner/repo#N --mode <mode>` yourself
    in the already open run (a subagent cannot launch others). PRs are independent: in batches
    of `max_parallel` (3 by default), launch in the same turn the specialists of all the PRs in the batch. Each PR has its
@@ -26,6 +29,7 @@ you), `auto` (submitted, never `APPROVE` if `allow_approve` is false).
    (`review-merge`) and Adorno's pass, never the raw reviews.
 4. **Report** — a table sorted by urgency: PR (link), author, touched areas, reviewers called, verdict,
    number of points (🔴 / 🟠 / 🟡 / ❓), and the link to the pending review (or submitted in `auto`). In `report`, the command
-   to create the pending review: `adorno-github/scripts/pr-review-submit owner/repo#N <review-final.json>`.
+   to create the pending review: `adorno-github/scripts/pr-review-submit owner/repo#N <review-final.json>`. Below the table, the deferred
+   PRs (repo, PR, author) and how to take them: rerun the workflow, or `--max N`.
 
 Workspaces stay in place for a second pass; `pr-workspace --clean` deletes those of closed PRs.
