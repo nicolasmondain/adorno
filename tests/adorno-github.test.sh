@@ -655,6 +655,42 @@ for tail in "echo hi >| ~/.bashrc" "cat b.txt >| $TMP/o9" "cat b.txt 2>| $TMP/o9
     "git log --textconv -p" "git diff --no-index a b"; do
   guard_at pass "$C" "" "git add . && $tail"
 done
+echo "guard_bash: a substitution is one quoted commit message, a cd never climbs (sixth security review)"
+for inject in "git commit -m x \"\$(cat <<'EOF'
+--no-verify
+EOF
+)\"" "git commit -m x \$(cat <<'EOF'
+--no-verify
+EOF
+)" "git commit -m \$(cat <<'EOF'
+x --no-verify
+EOF
+)" "git add \"\$(cat <<'EOF'
+-f
+EOF
+)\" .env" "$S/pr-edit acme/docs#42 'feat: x' \"\$(cat <<'EOF'
+/etc/passwd
+EOF
+)\"" "$S/pr-workspace acme/docs#42 --dir \"\$(cat <<'EOF'
+/etc
+EOF
+)\"" "git commit -m \"see \$(cat <<'EOF'
+x
+EOF
+)\""; do
+  guard_at pass "$C" "" "$inject"
+done
+guard_at ask "$C" "" "git commit -m \"\`cat <<'EOF'
+x
+EOF\`\""
+guard_at allow "$C" "" "git commit --message=\"\$(cat <<'EOF'
+feat: b
+EOF
+)\""
+ln -s "$O" "$C/lnk"
+guard_at deny "$C" "" "cd lnk/.. && git push origin HEAD"
+guard_at deny "$C" "" "git -C lnk/.. push origin HEAD"
+rm "$C/lnk"
 guard_at allow "$C" "" "git add . >/dev/null 2>&1 && echo done"
 guard_at allow "$C" "" "git status && git add . 2>/dev/null"
 

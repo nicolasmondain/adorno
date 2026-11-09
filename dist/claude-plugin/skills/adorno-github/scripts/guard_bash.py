@@ -489,7 +489,9 @@ ALLOWED_SCRIPTS = {"repo-conf", "run-check", "run-end", "pr-status", "pr-areas",
 
 
 def blank_substitutions(command):
-    """The command with every $( … ) and ` … ` replaced by one marker word (their content is checked apart)."""
+    """The command with every $( … ) replaced by one marker word (its content is checked apart). Only the exact
+    shape "$( … )" — one double-quoted word and nothing else — reads as one argument at run time: unquoted, bash
+    splits its text into more arguments (`--no-verify`, `-f`, a path), so anything else raises."""
     out, i, n = [], 0, len(command)
     while i < n:
         if command.startswith("$(", i) and not command.startswith("$((", i):
@@ -500,12 +502,12 @@ def blank_substitutions(command):
                 if command[j] == ")":
                     depth -= 1
                 j += 1
+            if command[i - 1:i] != '"' or command[j:j + 1] != '"' or command[i - 2:i - 1] not in ("", " ", "=") \
+                    or command[j + 1:j + 2] not in ("", " ", "\n", ";", "&", "|"):
+                raise ValueError("a substitution that is not one quoted word")
             out.append(SUBST); i = j
         elif command[i] == "`":
-            j = command.find("`", i + 1)
-            if j < 0:
-                raise ValueError("unbalanced backtick")
-            out.append(SUBST); i = j + 1
+            raise ValueError("a backtick substitution")
         else:
             out.append(command[i]); i += 1
     return "".join(out)
@@ -595,9 +597,15 @@ def safe_paths(args, here):
     return True
 
 
-def options(args, flags, valued, here, files=()):
-    """-> (positional words, {flag: value}) when every option is listed in flags / valued (`--x=v` allowed), and every
-    value of a flag in files is "-" or a safe_file; else None."""
+def options(args, flags, valued, here, files=(), subst_ok=()):
+    """-> (positional words, {flag: value}) when every option is listed in flags / valued (`--x=v` allowed), every
+    value of a flag in files is "-" or a safe_file, and a "$( … )" stands only as the value of a flag in subst_ok (a
+    commit message); else None."""
+    if any(SUBST in a for a in args):
+        allowed = {j + 1 for j, a in enumerate(args) if a in subst_ok} | {
+            j for j, a in enumerate(args) if a.split("=", 1)[0] in subst_ok and "=" in a}
+        if any(SUBST in a and j not in allowed for j, a in enumerate(args)):
+            return None
     pos, vals, i = [], {}, 0
     while i < len(args):
         a = args[i]
@@ -669,10 +677,14 @@ def allowable(command, cwd):
         if any(EXPANDS.search(w) for w in ws[1:] if w != SUBST):
             return None
         prog, args = program(ws[0]), ws[1:]
+        # a "$( … )" only as a git commit message (options(), subst_ok); anywhere else its text becomes arguments
+        if any(SUBST in a for a in args) and not (prog == "git" and ws[0] == "git"):
+            return None
         if prog == "cd" and ws[0] == "cd":
-            if len(args) != 1:
+            # bash resolves `..` logically, the checks physically: through a symlink they would look at another repo
+            if len(args) != 1 or ".." in args[0].split("/"):
                 return None
-            here = os.path.join(here, os.path.expanduser(args[0]))
+            here = os.path.normpath(os.path.join(here, os.path.expanduser(args[0])))
         elif adorno_script(ws[0], here):
             if not safe_paths(args, here):
                 return None
@@ -680,8 +692,12 @@ def allowable(command, cwd):
         elif prog == "git" and ws[0] == "git":
             where, i = here, 0
             while i < len(args) and args[i] == "-C" and i + 1 < len(args):
-                where = os.path.join(where, os.path.expanduser(args[i + 1])); i += 2
+                if ".." in args[i + 1].split("/"):
+                    return None
+                where = os.path.normpath(os.path.join(where, os.path.expanduser(args[i + 1]))); i += 2
             sub, rest = (args[i], args[i + 1:]) if i < len(args) else (None, [])
+            if sub != "commit" and any(SUBST in a for a in args):
+                return None
             if sub in GIT_READS:
                 if any(a.startswith(("--output", "--ext-diff", "--textconv", "--no-index")) for a in rest):
                     return None
@@ -691,7 +707,8 @@ def allowable(command, cwd):
                     return None
                 checks.append(("run", where, "L2", "")); wanted = True
             elif sub == "commit":
-                if options(rest, COMMIT_FLAGS, COMMIT_VALUED, where, files=("-F", "--file")) is None:
+                if options(rest, COMMIT_FLAGS, COMMIT_VALUED, where, files=("-F", "--file"),
+                           subst_ok=("-m", "--message")) is None:
                     return None
                 checks.append(("run", where, "L2", "")); wanted = True
             elif sub == "push":
