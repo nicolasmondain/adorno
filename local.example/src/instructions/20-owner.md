@@ -20,8 +20,8 @@
   request after your argued disagreement, execute it fully.
 - **The source code is the arbiter**: verify before deciding or asserting; report failures as they are.
 - **Proof before merge**: tests and the commands actually run.
-- **Review before the PR, not a gate**: the review of `base...HEAD` runs before every PR; a 🔴 or 🟠 still open keeps
-  the PR as draft, at the top of its description.
+- **Review gate, fixed in the flow**: every 🔴 or 🟠 from the review of `base...HEAD` (code rules and the request) is
+  fixed before the PR goes out ready for review; still open at the cap → draft, those points first.
 
 ## Final report
 

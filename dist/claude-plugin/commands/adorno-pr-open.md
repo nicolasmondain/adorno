@@ -1,25 +1,25 @@
 ---
-description: Opens the PR of a ready branch, without asking — review by the area specialists and your agent, then title and description in English following your template, reviewers from the registry. A 🔴 or a 🟠 still open does not block, the PR opens as draft with them at the top. Default pr_skill of workflow:pr:ship.
+description: Opens the PR of a ready branch, without asking — title and description in English following your template, in your voice, reviewers from the registry. Ready for review when the review loop of workflow:pr:ship left nothing 🔴 or 🟠, draft otherwise. Default pr_skill of workflow:pr:ship.
 argument-hint: <owner/repo> <branch> [.agent-run folder]
 ---
 
 Input: $ARGUMENTS
 
-**Run** — before anything else: `adorno-github/scripts/run-begin --workflow workflow:pr:open --mode auto --level L3 --repo owner/repo`; keep `id` and `dir` (the run folder). Called by another workflow that already opened its own: reuse it. Always, even after a failure: `run-end <id>`. With no open run, the scripts refuse any write.
+**Run** — reuse the run of `workflow:pr:ship`. Called alone, not by it: run `workflow:pr:ship $ARGUMENTS` instead,
+which commits, reviews and fixes the branch, then comes back here.
 
 No checkpoint: the PR opens without waiting for a "yes" (running the workflow is the request).
 
 1. **Local checks**, in the clone where the branch lives: name matches `branch_pattern`, up to date with the base
    (`git fetch` then `git diff origin/<base>...HEAD`: the real scope), every commit in Conventional Commits format,
    tests, lint and typecheck green. A failure: stop and report.
-2. **Review** (situation 1 of `agent:adorno`): `pr-areas owner/repo` on this diff → reviewers; they review in
-   parallel, read-only; `agent:adorno` rechecks and delivers its verdict into `reviews/`. A 🔴 or a 🟠 still open does
-   **not** block: the PR opens as draft and they head the description (`Impact / Risks`), with `file:line`; remaining
-   🟡 and ❓ go in the description too (`Impact / Risks`, Verification).
+2. **The verdict** of the review loop (`workflow:pr:ship` step 4, in the run's `reviews/`): clean → the PR goes out
+   ready for review; a 🔴 or 🟠 still open after the cap → as draft, those points first in the description.
 3. `agent:adorno` writes in English, in your voice (skill `adorno-voice`):
    - the title in Conventional Commit format for the main change;
    - the description following `process.md` § Pull requests: What / How / mermaid / Verification, `How to test` opened
-     by the commands actually run and their result, link to the issue (`Fixes #n`). No real data.
-4. `adorno-github/scripts/git-push owner/repo <branch>`, then `pr-open owner/repo <branch> "<title>" <file> --draft`:
-   draft until CI is green (`process.md`), registry reviewers without the author.
-5. Return the PR URL and suggest `workflow:pr:watch owner/repo#N`.
+     by the commands actually run and their result, link to the issue (`Fixes #n`), what the review loop fixed, the
+     🟡 and ❓ left (`Impact / Risks`). No real data.
+4. `adorno-github/scripts/git-push owner/repo <branch>`, then `pr-open owner/repo <branch> "<title>" <file>`
+   (`--draft` only when the verdict is not clean): registry reviewers without the author.
+5. Return the PR URL, ready or draft, and suggest `workflow:pr:watch owner/repo#N`.

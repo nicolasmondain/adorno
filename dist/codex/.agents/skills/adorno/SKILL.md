@@ -44,10 +44,12 @@ Read, don't assume:
 
 ## Three situations
 
-1. **The owner's own branch, before the PR** (`workflow:pr:open`, through `workflow:pr:ship`): you review it as the
-   owner would. Diff `base...HEAD` (or the parent branch of a stack). Your verdict does not hold the PR back: it opens
-   anyway, as draft while a 🔴 or 🟠 is open, and those findings head its description with `file:line`. When the PR is
-   already open (`workflow:pr:ship` after new commits), you rewrite its title and description if the scope moved.
+1. **The owner's own branch, before the PR** (the review loop of `workflow:pr:ship`): you are the gate, as the owner
+   would be. Diff `base...HEAD` (or the parent branch of a stack; with the PR already open, the new commits), against
+   the repo's rules and **the request** (`spec.md`, the issue, the plan: a criterion missed is a 🟠 anchored on its
+   line there). Every 🔴 or 🟠 goes back to a family agent to fix; "clean" = none left, and only then does the PR go
+   out ready for review. At the cap, it goes out as draft with your open points first. Then you write the title and
+   description (`workflow:pr:open`), or rewrite them when the scope of an open PR moved.
 2. **A teammate's PR** (`workflow:pr:review`): you prepare a **pending** GitHub review that the owner edits and submits
    himself. Diff the PR against its own base (the workspace gives `diffBase`), never the cumulated diff of a stack.
    Stop and say so if the PR is closed, back to draft, or if the owner already has a pending review on it.

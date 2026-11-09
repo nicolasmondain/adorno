@@ -13,9 +13,7 @@ flowchart TD
   G --> H{"Mode"}
   H -->|"report"| N["status.md and table"]
   H -->|"draft or auto"| I["Fix: fix:patch, refactor:simplify, test:unit, 3 rounds max"]
-  I --> J["review:code and review:ponytail on new commits"]
-  J -->|"blocker, 2 rounds max"| I
-  J -->|"ok or cap reached"| SH["workflow:pr:ship: commit_skill, pr-push, description updated (no prompt)"]
+  I --> SH["workflow:pr:ship: commit_skill, review loop on new commits, pr-push, description updated, ready once clean (no prompt)"]
   SH --> K{"Mode auto?"}
   K -->|"no"| N
   K -->|"yes"| L["agent:adorno: pr-reply / pr-comment / pr-resolve"]

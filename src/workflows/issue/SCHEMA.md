@@ -16,9 +16,9 @@ flowchart TD
   CP1["Checkpoint 1: diagnosis and level (L3 default) validated"]
   RB["run-begin --mode auto --level validated"]
   PT["Branch fix/n-slug: agent:fix:patch - red test, fix, green suite"]
-  RV["agent:review:code + agent:review:tests in parallel"]
-  BL{"blocker?"}
-  PO["workflow:pr:ship - commit_skill, pr_skill, Fixes #N if issue"]
+  RV["workflow:pr:ship review loop: area reviewers + agent:adorno vs the diagnosis"]
+  BL{"red or orange?"}
+  PO["pr_skill: PR ready for review once clean (draft at the cap), Fixes #N if issue"]
   PW["workflow:pr:watch"]
   RE["run-end id - always"]
   IN --> SRC

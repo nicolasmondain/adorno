@@ -45,9 +45,12 @@ run. Push with `git-push` (branch without a PR) or `pr-push` (branch of a PR), w
 a direct `git push` / `gh pr create|edit` only from the repo's own `commit_skill` / `pr_skill` in `workflow:pr:ship`,
 which the guard lets through at the run's level.
 
-**Every workflow that touched code ends with `workflow:pr:ship`**: the repo's `commit_skill` commits what is left,
-then its `pr_skill` opens the PR, or pushes and updates the title and description of the one already open. No
-confirmation and no permission prompt: running the workflow is the explicit request. What still stops it: the run's
+**Every workflow that touched code ends with `workflow:pr:ship`**: the repo's `commit_skill` commits what is left;
+the area reviewers and `agent:adorno` check the change against the repo's rules and the request, and every 🔴 or 🟠
+is fixed in the flow (fix, commit, review again, two rounds); then the repo's `pr_skill` opens the PR **ready for
+review**, or pushes and updates the one already open (and marks it ready). Still a 🔴 or 🟠 at the cap: draft, those
+points first, and `status.md` says what waits for the owner. No confirmation and no permission prompt: running the
+workflow is the explicit request. What still stops it: the run's
 level, the repo's `max_level` and `permissions.deny` (a refusal is reported, never worked around), and the hard
 limits (never forced, never the default branch, never a merge).
 

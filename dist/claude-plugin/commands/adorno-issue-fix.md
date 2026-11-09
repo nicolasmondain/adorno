@@ -1,5 +1,5 @@
 ---
-description: Fix a bug from a GitHub issue, a Slack thread, a Notion page, a prompt or a validated spec — investigation, red test, minimal fix, review, PR ("Fixes
+description: Fix a bug from a GitHub issue, a Slack thread, a Notion page, a prompt or a validated spec — investigation, red test, minimal fix, review and fix until clean, PR ready for review ("Fixes
 argument-hint: <owner/repo#N | Slack / Notion links | bug description with owner/repo | .agent-run folder>
 ---
 
@@ -18,7 +18,8 @@ Input: $ARGUMENTS
    stop.
 3. **Checkpoint 1**: diagnosis and level (L3 by default) validated by the user.
 4. Branch `fix/<n>-<slug>` (no issue: `fix/<slug>`) from the base; `agent:fix:patch`: red test, fix, green suite.
-5. `agent:review:code` and `agent:review:tests` in parallel; a `blocker` → back to `fix:patch` (two rounds).
-6. `workflow:pr:ship owner/repo <branch>`, without asking: `commit_skill`, then `pr_skill` with `Fixes #N` in the
+5. `workflow:pr:ship owner/repo <branch> <worktree> <run folder>`, without asking: `commit_skill`, the review loop
+   (area reviewers and `agent:adorno` against the diagnosis and the report: every 🔴 or 🟠 back to `fix:patch`, two
+   rounds), then `pr_skill`, ready for review once clean, with `Fixes #N` in the
    description if there is an issue (otherwise the links of the sources, if
    the team can access them), then `workflow:pr:watch`.

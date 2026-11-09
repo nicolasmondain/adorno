@@ -20,9 +20,11 @@ Input: the user’s request
 4. **Build and verify** — you run `run-plan.yaml` yourself (skill `adorno-run-plan`: a subagent cannot launch
    others) on the branch `<type>/<issue-id>-<slug>`: slices (test loop, three rounds; QA by `agent:test:e2e` with
    screenshots and video for visible slices), then reviewers in parallel (fix loop, two rounds).
-5. **Ship** — `workflow:pr:ship owner/repo <branch>`, without asking: the repo's `commit_skill` commits what is
-   left, its `pr_skill` (default `workflow:pr:open`, where `agent:adorno` reviews the branch as you would) opens the
-   PR, its description in your voice. An open 🔴 or 🟠 keeps it as draft, at the top of the description.
+5. **Ship** — `workflow:pr:ship owner/repo <branch> <worktree> <run folder>`, without asking: the repo's
+   `commit_skill` commits what is left; the area reviewers and `agent:adorno` check the whole branch against the
+   repo's rules and `spec.md`, and every 🔴 or 🟠 is fixed in the flow (two rounds); then its `pr_skill` (default
+   `workflow:pr:open`) opens the PR **ready for review**, its description in your voice. Still a 🔴 or 🟠 at the
+   cap: the PR goes out as draft, those points first, and `status.md` says what waits for you.
 6. **Follow** — `workflow:pr:watch` until the PR is ready (checkpoint 2: the merge, by the user).
 
 At every stop (cap, missing permission, escalation to the spec): `status.md` says where and why, and the command to

@@ -25,20 +25,15 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A["Input: owner/repo, branch"] --> B["run-begin L3"]
-  B --> C["Local checks: branch_pattern, diff vs base, commits, tests, lint, typecheck"]
+  A["Called by workflow:pr:ship: owner/repo, branch (alone: run workflow:pr:ship)"] --> C["Local checks: branch_pattern, diff vs base, commits, tests, lint, typecheck"]
   C -->|"fail"| X["Stop and report"]
-  C -->|"ok"| D["pr-areas on the diff"]
-  D --> E["Reviewers in parallel: review:code, ponytail, front, back, mongodb, api, security, tests"]
-  E --> F["agent:adorno: recheck and verdict (situation 1)"]
-  F --> G{"Red or orange point unresolved?"}
-  G -->|"yes"| GH["They head the description, PR stays draft"]
-  G -->|"no"| H["agent:adorno: title + description (What / How / mermaid / Verification)"]
+  C -->|"ok"| G{"Verdict of the review loop clean?"}
+  G -->|"yes"| H["agent:adorno: title + description (What / How / mermaid / Verification)"]
+  G -->|"no, cap reached"| GH["Open points head the description"]
   GH --> H
   H --> K["git-push owner/repo branch (no checkpoint)"]
-  K --> L["pr-open --draft with registry reviewers"]
-  L --> M["Return PR URL, suggest workflow:pr:watch"]
-  M --> N["run-end"]
+  K --> L["pr-open: ready for review if clean, --draft otherwise"]
+  L --> M["Return PR URL, ready or draft, suggest workflow:pr:watch"]
 ```
 
 ## workflow:pr:ship
@@ -53,11 +48,20 @@ flowchart TD
   E --> G["pr-status: PR of this branch?"]
   F -->|"no"| X["Nothing to ship: say so"]
   F -->|"yes"| G
-  G -->|"none"| H["pr_skill (default workflow:pr:open)"]
-  G -->|"open"| I["pr-push, then pr_skill update: agent:adorno and pr-edit if the scope moved"]
-  H --> J["Report: commits, PR URL, opened, updated or unchanged, open findings"]
-  I --> J
-  K["Repo skill pushes or runs gh pr create or edit itself"] -.->|"guard: allow inside the run, at its level"| H
+  G --> R["Area reviewers in parallel, agent:adorno checks code rules and the request (spec, issue)"]
+  R --> V{"Red or orange left?"}
+  V -->|"yes, under 2 rounds"| FX["Family agent fixes, commit_skill commits"]
+  FX --> R
+  V -->|"no"| OK["Clean: ready for review"]
+  V -->|"cap reached"| DR["Draft, open points first, status.md"]
+  OK --> P{"PR open?"}
+  DR --> P
+  P -->|"no"| H["pr_skill (default workflow:pr:open)"]
+  P -->|"yes"| I["pr-push, pr-edit if the scope moved"]
+  H --> RD["Still a draft while clean: pr-ready"]
+  I --> RD
+  RD --> J["Report: commits, rounds, PR URL, ready or draft"]
+  K["Repo skill pushes or runs gh pr create, edit or ready itself"] -.->|"guard: allow inside the run, at its level"| H
   K -.-> I
   J --> L["A refusal (exit 4 or 5, guard deny): reported, never worked around"]
 ```
