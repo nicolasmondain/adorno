@@ -82,6 +82,9 @@ repos:                                 # a specific repo, or a glob (`acme/docs-
         - {tool: posthog, events: ["team_settings_viewed"]}
     vision:
       - "On this repo, correctness beats speed: no shortcut on migrations."
+    notion_spec:                       # a request whose spec is a Notion page: its properties at each step
+      start: {Lifecycle: Ongoing, "Working date": "{{today}}"}   # spec or diagnosis validated, work starts
+      pr_opened: {Lifecycle: "In Code Review"}                     # PR opened ({{pr_url}} available)
     pr_skill: /acme-pr                 # the repo's skill for writing a PR, if there is one
     setup_skill: null                  # skill that sets up a fresh worktree
     test: "npm test"

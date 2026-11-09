@@ -13,9 +13,11 @@ Input: {{args}}
 2. `agent:fix:investigate` reproduces from this report and writes `diagnosis.md`. No repro possible → draft a reply
    (on the issue or the original thread, never posted) in English asking for what is missing, handed to the user;
    stop.
-3. **Checkpoint 1**: diagnosis and level (L3 by default) validated by the user.
+3. **Checkpoint 1**: diagnosis and level (L3 by default) validated by the user. Then
+   `adorno-notion-sync start <.agent-run folder> owner/repo` (the Notion page of the report gets the repo's
+   `notion_spec.start` properties; nothing to do without a Notion page or without that setting).
 4. Branch `fix/<n>-<slug>` (no issue: `fix/<slug>`) from the base; `agent:fix:patch`: red test, fix, green suite.
 5. `agent:review:code` and `agent:review:tests` in parallel; a `blocker` → back to `fix:patch` (two rounds).
-6. `workflow:pr:open` with `Fixes #N` in the description if there is an issue (otherwise the links of the sources, if
-   the team can access them), then `workflow:pr:watch`.
+6. `workflow:pr:open owner/repo <branch> <.agent-run folder>` with `Fixes #N` in the description if there is an issue
+   (otherwise the links of the sources, if the team can access them), then `workflow:pr:watch`.
 '''

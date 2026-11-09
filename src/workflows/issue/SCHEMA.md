@@ -7,7 +7,7 @@ flowchart TD
   IN["Input: owner/repo#N, links, description or .agent-run folder"]
   SRC{"Kind of report"}
   IF["issue-fetch -> issue.json"]
-  IR["input-refs -> source.md"]
+  IR["input-refs -> refs.json, source.md"]
   SP["Validated spec.md"]
   DS["Description + repo"]
   INV["agent:fix:investigate reproduces, writes diagnosis.md"]
@@ -15,10 +15,11 @@ flowchart TD
   DR["Draft reply asking for missing info - never posted, stop"]
   CP1["Checkpoint 1: diagnosis and level (L3 default) validated"]
   RB["run-begin --mode auto --level validated"]
+  NS["adorno-notion-sync start - Notion spec page properties"]
   PT["Branch fix/n-slug: agent:fix:patch - red test, fix, green suite"]
   RV["agent:review:code + agent:review:tests in parallel"]
   BL{"blocker?"}
-  PO["workflow:pr:open - Fixes #N if issue"]
+  PO["workflow:pr:open with the run folder - Fixes #N if issue"]
   PW["workflow:pr:watch"]
   RE["run-end id - always"]
   IN --> SRC
@@ -28,6 +29,6 @@ flowchart TD
   SRC -->|"description"| DS --> INV
   INV --> REP
   REP -->|"no"| DR
-  REP -->|"yes"| CP1 --> RB --> PT --> RV --> BL
+  REP -->|"yes"| CP1 --> RB --> NS --> PT --> RV --> BL
   BL -->|"yes, max 2 rounds"| PT
   BL -->|"no"| PO --> PW --> RE

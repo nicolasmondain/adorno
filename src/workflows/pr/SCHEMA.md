@@ -25,7 +25,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A["Input: owner/repo, branch"] --> B["run-begin L3"]
+  A["Input: owner/repo, branch, optional .agent-run folder"] --> B["run-begin L3"]
   B --> C["Local checks: branch_pattern, diff vs base, commits, tests, lint, typecheck"]
   C -->|"fail"| X["Stop and report"]
   C -->|"ok"| D["pr-areas on the diff"]
@@ -39,7 +39,10 @@ flowchart TD
   I -->|"no"| K["git-push owner/repo branch"]
   J --> K
   K --> L["pr-open --draft with registry reviewers"]
-  L --> M["Return PR URL, suggest workflow:pr:watch"]
+  L --> NS{"agent-run folder given?"}
+  NS -->|"yes"| NP["adorno-notion-sync pr_opened --pr-url"]
+  NS -->|"no"| M["Return PR URL, suggest workflow:pr:watch"]
+  NP --> M
   M --> N["run-end"]
 ```
 

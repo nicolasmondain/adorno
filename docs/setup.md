@@ -248,6 +248,20 @@ flowchart LR
 Your Slack ID: your Slack profile › ⋮ › "Copy member ID". The `adorno-setup` skill can also
 find it with the connector. Commented template: `local.example/adorno.yaml`.
 
+**The Notion spec page follows the work.** When `workflow:feature:build` or `workflow:issue:fix` starts from a Notion
+page, the repo's `notion_spec` sets its properties at two steps: `start` (spec or diagnosis validated) and `pr_opened`
+(PR opened by `workflow:pr:open`). It is the only Notion write, limited to these properties of that page (the first
+Notion link of the request), and a `report` or `draft` run only shows it. A property or an option missing from the
+page stops the update and says so; nothing is created.
+
+```yaml
+repos:
+  acme/app:
+    notion_spec:
+      start: {Lifecycle: Ongoing, "Working date": "{{today}}"}
+      pr_opened: {Lifecycle: "In Code Review", PR: "{{pr_url}}"}
+```
+
 These workflows are launched by hand, or from your own scheduler (a scheduled task that runs
 `workflow:slack:mentions` every hour, for example): adorno schedules nothing itself.
 
