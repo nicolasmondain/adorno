@@ -18,7 +18,7 @@ Input: the user’s request
    agent is enough, the plan has only one step: that is normal.
 3. **Plan** — `agent:core:planner` writes `plan.md` (slices, the `feat:*` agent of each slice, acceptance tests).
 4. **Build and verify** — you run `run-plan.yaml` yourself (skill `adorno-run-plan`: a subagent cannot launch
-   others) on the branch `<type>/<issue-id>-<slug>`: slices (test loop, three rounds; QA by `agent:test:e2e` with
+   others) on the branch `<type>/<slug>`: slices (test loop, three rounds; QA by `agent:test:e2e` with
    screenshots and video for visible slices), then reviewers in parallel (fix loop, two rounds).
 5. **Open** — `workflow:pr:open`, of which `agent:adorno` is the gate: it reviews the branch as you would, and the
    PR description goes out in your voice (checkpoint 2 if planned).
