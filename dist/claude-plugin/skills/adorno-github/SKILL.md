@@ -16,7 +16,7 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | `repo-conf owner/repo` | the repo's merged settings (base, commands, thread policy…) | L0 |
 | `pr-status [--ready] [owner/repo]` | all your open PRs: review, CI, threads, `blocker`; `--ready`: without drafts, most recent first | L0 |
 | `pr-review-requested [owner/repo]` | PRs where your review is requested (directly or via a team), `reviewedHead` | L0 |
-| `pr-feedback-fetch owner/repo#N` | threads, comments and review summaries to handle (`needsReply`, `bot`), CI | L0 |
+| `pr-feedback-fetch owner/repo#N` | threads, comments and review summaries to handle (`needsReply`, `bot`), CI; `pending`: their ids keyed by last activity, for `watch-seen` | L0 |
 | `pr-workspace owner/repo#N` | your PR, run from your clone: its branch's worktree (created if missing); otherwise a dedicated workspace under `~/.adorno` (separate clone, detached at the head commit) | L0 * |
 | `pr-workspace --clean` | deletes the workspaces of closed PRs | L0 * |
 | `pr-areas owner/repo DIFF_FILE` | code areas touched (front, back, mongodb…) and the reviewers to call | L0 |
