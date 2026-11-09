@@ -36,7 +36,9 @@ flowchart TD
   B --> C["pr-review-requested"]
   C --> D{"Unregistered, draft, reviewedHead, pendingReview, team-only with --direct-only?"}
   D -->|"yes"| E["Drop and cite in report"]
-  D -->|"no"| F["Announce list"]
+  D -->|"no"| X["Keep the first --max (5 by default), least recently updated first"]
+  X -->|"beyond --max"| Y["Deferred, cited in report"]
+  X --> F["Announce list"]
   F --> G{"More than 10 PRs or a PR over 1500 lines?"}
   G -->|"yes"| H["Ask confirmation"]
   G -->|"no"| I["For each PR: steps of workflow:pr:review in the open run"]
@@ -45,5 +47,6 @@ flowchart TD
   J --> K["Keep only merged review.json and adorno pass"]
   K --> L["Report table sorted by urgency"]
   E --> L
+  Y --> L
   L --> M["run-end"]
 ```
