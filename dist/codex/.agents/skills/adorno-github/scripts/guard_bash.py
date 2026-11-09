@@ -187,25 +187,71 @@ HEREDOC = re.compile(r"(?<!<)<<(-?)[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2")
 def heredocs(command):
     """-> (the command without its heredoc bodies, [(program fed by the heredoc, body, quoted)]). A body is the stdin of
     one command: data for `cat > f`, code for a shell or an interpreter (python3 - <<EOF), so the caller checks it
-    accordingly. An unquoted body is still expanded by the shell ($( … ) inside it runs)."""
-    lines, out, bodies, i = command.split("\n"), [], [], 0
+    accordingly. An unquoted body is still expanded by the shell ($( … ) inside it runs).
+    Read the way the shell reads it: a `<<` inside quotes is text, not an operator (`-m "a;git <<'EOF'"` must not hide
+    the next lines), one inside $( … ) or backticks is code. The operators are removed from the command: the body is
+    checked apart, and the operator alone would read as unterminated."""
+    lines, out, bodies, stack, i = command.split("\n"), [], [], [], 0
     while i < len(lines):
-        line = lines[i]; out.append(line); i += 1
-        for m in HEREDOC.finditer(line):
-            tabs, quoted, delim = m.group(1) == "-", bool(m.group(2)), m.group(3)
+        line = lines[i]; i += 1
+        ops, j, n, seg = [], 0, len(line), 0  # seg: where the current simple command starts on this line
+        while j < n:
+            c, top = line[j], (stack[-1] if stack else None)
+            if top == "'":
+                if c == "'":
+                    stack.pop()
+                j += 1; continue
+            if c == "\\":
+                j += 2; continue
+            if top == '"':
+                if c == '"':
+                    stack.pop()
+                elif line.startswith("$(", j):
+                    stack.append("$("); j += 2; seg = j; continue
+                elif c == "`":
+                    stack.append("`"); seg = j + 1
+                j += 1; continue
+            # code: top level, $( … ), ( … ) or backticks
+            if c in "'\"":
+                stack.append(c); j += 1; continue
+            if c == "`":
+                stack.pop() if top == "`" else stack.append("`")
+                j += 1; seg = j; continue
+            if line.startswith("$(", j):
+                stack.append("$("); j += 2; seg = j; continue
+            if c == "(":
+                stack.append("("); j += 1; seg = j; continue
+            if c == ")" and top in ("$(", "("):
+                stack.pop(); j += 1; seg = j; continue
+            if c in ";&|":
+                j += 1; seg = j; continue
+            if c == "#" and (j == 0 or line[j - 1] in " \t;&|("):
+                break  # a comment: nothing after it is an operator
+            if line.startswith("<<", j) and not line.startswith("<<<", j):
+                m = HEREDOC.match(line, j)
+                if not m:
+                    raise ValueError("unreadable heredoc")
+                ops.append((m.start(), m.end(), m.group(1) == "-", bool(m.group(2)), m.group(3), seg))
+                j = m.end(); continue
+            j += 1
+        if ops and stack and stack[-1] in ("'", '"'):
+            raise ValueError("a heredoc on a line that ends inside quotes")
+        kept, prev = [], 0
+        for start, end, *_ in ops:
+            kept += [line[prev:start], " "]; prev = end
+        out.append("".join(kept) + line[prev:])
+        for start, end, tabs, quoted, delim, seg_start in ops:
             body = []
             while i < len(lines) and (lines[i].lstrip("\t") if tabs else lines[i]) != delim:
                 body.append(lines[i]); i += 1
             if i >= len(lines):
                 raise ValueError("unterminated heredoc")
             i += 1
-            segment = re.split(r"[;&|(]", line[:m.start()])[-1]
             try:
-                env, ws = strip(words(segment))
+                env, ws = strip(words(line[seg_start:start]))
             except ValueError:
                 ws = []
             bodies.append((program(ws[0]) if ws else "", "\n".join(body), quoted))
-        out[-1] = HEREDOC.sub(" ", out[-1])  # the body is checked apart: the operator alone would read as unterminated
     return "\n".join(out), bodies
 
 
@@ -494,17 +540,45 @@ def toplevel(here):
     return os.path.realpath(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else None
 
 
+def repo_root(here):
+    """The repo's toplevel, unless it is your home or above it (a dotfiles repo would cover everything)."""
+    top, home = toplevel(here), os.path.realpath(os.path.expanduser("~"))
+    return top if top and home != top and not home.startswith(top + os.sep) else None
+
+
 def safe_file(path, here):
-    """A file a commit message or a PR body may be read from: inside the repo (never .git/ nor a dotfile, except
-    .agent-run/), a temp folder or ~/.adorno. Anything else (~/.ssh/…, .env) could be published."""
+    """A file a commit message or a PR body may be read from: the agents' own folders only — the repo's .agent-run/,
+    ~/.adorno/runs/ and ~/.adorno/tmp/, a temp folder named adorno*. Anything else (~/.ssh/…, .env, another tool's
+    file in /tmp) could be published."""
     full = os.path.realpath(os.path.join(here, os.path.expanduser(path)))
-    roots = [r for r in (toplevel(here), os.path.realpath(tempfile.gettempdir()), os.path.realpath("/tmp"),
-                         os.path.realpath(os.path.expanduser("~/.adorno"))) if r]
-    for root in roots:
-        if full.startswith(root + os.sep):
-            parts = os.path.relpath(full, root).split(os.sep)
-            return all(not p.startswith(".") or p == ".agent-run" for p in parts)
+    root = repo_root(here)
+    roots = ([os.path.join(root, ".agent-run")] if root else []) + [
+        os.path.realpath(os.path.expanduser(p)) for p in ("~/.adorno/runs", "~/.adorno/tmp")]
+    if any(full.startswith(r + os.sep) for r in roots):
+        return True
+    for tmp in {os.path.realpath(tempfile.gettempdir()), os.path.realpath("/tmp")}:
+        if full.startswith(tmp + os.sep) and os.path.relpath(full, tmp).split(os.sep)[0].startswith("adorno"):
+            return True
     return False
+
+
+def safe_dir(path, here):
+    """A folder a script may work in: inside a repo (never its .git/), not your home nor above it."""
+    full = os.path.realpath(os.path.join(here, os.path.expanduser(path)))
+    root = repo_root(full)
+    return bool(root) and ".git" not in os.path.relpath(full, root).split(os.sep)
+
+
+def safe_paths(args, here):
+    """Every argument of an allowed script that names an existing file or folder passes safe_file / safe_dir:
+    `pr-edit … ~/.ssh/id_rsa` would publish it, `pr-workspace … --dir /etc` would work there."""
+    for a in args:
+        value = a.split("=", 1)[1] if a.startswith("--") and "=" in a else a
+        full = os.path.join(here, os.path.expanduser(value))
+        if value and os.path.exists(full):
+            if not (safe_dir(value, here) if os.path.isdir(full) else safe_file(value, here)):
+                return False
+    return True
 
 
 def options(args, flags, valued, here, files=()):
@@ -583,6 +657,8 @@ def allowable(command, cwd):
                 return None
             here = os.path.join(here, os.path.expanduser(args[0]))
         elif adorno_script(ws[0], here):
+            if not safe_paths(args, here):
+                return None
             wanted = True
         elif prog == "git" and ws[0] == "git":
             where, i = here, 0

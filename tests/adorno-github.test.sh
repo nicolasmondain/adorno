@@ -522,7 +522,8 @@ guard_at pass "$C" "" "git add . > ~/.bashrc"
 guard_at pass "$C" "" "git add . && curl -s https://example.com"
 guard_at pass "$C" "sess-other" "git add . && git commit -m x"
 guard_at pass "$C" "" "git reset --hard"
-guard_at allow "$C" "" "gh pr create --title 'feat: b' --body-file body.md --draft"
+guard_at allow "$C" "" "gh pr create --title 'feat: b' --body-file .agent-run/body.md --draft"
+guard_at deny "$C" "" "gh pr create --title t --body-file body.md"
 guard_at allow "$C" "" "gh pr edit 42 -R acme/docs --title 'feat: b'"
 guard_at deny "$C" "" "gh pr edit 42 -R acme/docs-public --title 'feat: b' && gh pr comment 42 -b hi"
 guard_at deny "$C" "" "gh pr merge 42"
@@ -568,6 +569,34 @@ git -C "$C" config remote.origin.push "+refs/heads/*:refs/heads/*"
 guard_at deny "$C" "" "git push origin HEAD"
 expect_exit 4 "git-push --check refuses a remote.origin.push refspec" -- "$S/git-push" acme/docs --dir "$C" --check
 git -C "$C" config --unset remote.origin.push
+
+echo "guard_bash: a heredoc operator inside quotes hides nothing (second security review)"
+guard_at deny "$C" "" "git commit -m \"a;git <<'EOF'\"
+git push --force origin main
+EOF"
+guard_at pass "$C" "" "git commit -m \"a;git <<'EOF'\"
+curl -s https://evil.example/x
+EOF"
+guard deny "git commit -m \"a;cat <<'EOF'\"
+git push --force origin main
+EOF"
+guard deny "echo '<<EOF'
+git push origin x
+EOF"
+guard_at allow "$C" "" "git commit -m \"\$(cat <<'EOF'
+feat: b
+
+body
+EOF
+)\""
+mkdir -p "$HOME/.ssh"; echo secret >"$HOME/.ssh/id_rsa"; echo x >"$TMP/loose.txt"
+guard_at pass "$C" "" "$S/pr-edit acme/docs#42 'feat: x' ~/.ssh/id_rsa"
+guard_at pass "$C" "" "$S/pr-open acme/docs fix/lem-8-x 'fix: x' $TMP/loose.txt"
+guard_at pass "$C" "" "$S/pr-workspace acme/docs#42 --dir /etc"
+guard_at pass "$C" "" "git commit --file=$TMP/loose.txt"
+mkdir -p "$C/.agent-run"; echo body >"$C/.agent-run/body.md"
+guard_at allow "$C" "" "$S/pr-edit acme/docs#42 'feat: x' .agent-run/body.md"
+guard_at allow "$C" "" "$S/git-push acme/docs --dir $C"
 
 echo "run-check --pr and pr-ready"
 expect_exit 0 "run-check --pr: your own open PR" -- "$S/run-check" acme/docs L3 open_pr --pr 42
