@@ -465,6 +465,7 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 SKILLS_ROOT = os.path.dirname(os.path.dirname(HERE))
 SAFE_READS = READ_ONLY - {"find"}
 SUBST = "__ADORNO_SUBST__"
+EXPANDS = re.compile(r"[$`*?\[\]{}\\]|^~(?!/)")  # a leading ~/ is expanded by the checks themselves
 GIT_READS = {"status", "diff", "log", "show", "rev-parse"}
 PUSH_FLAGS = {"-u", "--set-upstream", "-q", "--quiet", "-v", "--verbose", "--progress", "--no-progress"}
 # every flag not listed here sends the command back to the normal decision (git accepts abbreviated long options:
@@ -564,8 +565,12 @@ def safe_file(path, here):
     if any(full.startswith(r + os.sep) for r in roots):
         return True
     for tmp in {os.path.realpath(tempfile.gettempdir()), os.path.realpath("/tmp")}:
-        if full.startswith(tmp + os.sep) and os.path.relpath(full, tmp).split(os.sep)[0].startswith("adorno"):
-            return True
+        first = os.path.relpath(full, tmp).split(os.sep)[0]
+        if full.startswith(tmp + os.sep) and first.startswith("adorno"):
+            try:  # yours, not a folder another user of this machine created first
+                return os.stat(os.path.join(tmp, first)).st_uid == os.getuid()
+            except OSError:
+                return False
     return False
 
 
@@ -657,6 +662,9 @@ def allowable(command, cwd):
         if ws is None or not ws or "$" in ws[0]:
             return None
         if strip(ws)[1] != ws:  # an assignment or a wrapper in front: not ours to approve
+            return None
+        # the shell expands $VAR, globs, braces and ~user after the hook: what is checked here must be what runs
+        if any(EXPANDS.search(w) for w in ws[1:] if w != SUBST):
             return None
         prog, args = program(ws[0]), ws[1:]
         if prog == "cd" and ws[0] == "cd":
