@@ -139,9 +139,9 @@ expect_exit 2 "unknown step" -- "$S/notion-step" plan merged "$RD" acme/docs
 expect_exit 2 "missing run folder" -- "$S/notion-step" plan start "$TMP/nope" acme/docs
 expect_exit 3 "undeclared repo" -- "$S/notion-step" plan start "$RD" nobody/repo
 "$S/notion-step" plan start "$RD" acme/docs >/dev/null
-expect_exit 0 "done records the planned step" -- "$S/notion-step" done start "$RD"
+expect_exit 0 "done records the planned step" -- "$S/notion-step" "done" start "$RD"
 expect_jq "... with its page and properties" '.step == "start" and .page_id == "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb" and .properties.Lifecycle == "Ongoing"'
-expect_exit 2 "done twice: nothing planned any more" -- "$S/notion-step" done start "$RD"
+expect_exit 2 "done twice: nothing planned any more" -- "$S/notion-step" "done" start "$RD"
 expect_exit 0 "a resumed run" -- "$S/notion-step" plan start "$RD" acme/docs
 expect_jq "... does not redo start" '.skip | test("already done")'
 expect_exit 0 "--force" -- "$S/notion-step" plan start "$RD" acme/docs --force
@@ -157,14 +157,14 @@ expect_exit 5 "outside any run: refused" -- "$S/notion-step" plan start "$RD" ac
 "$S/notion-step" plan start "$RD" acme/docs --force >/dev/null
 cp "$TMP/run-plain/refs.json" "$RD/refs.json"   # the same run folder, now without Notion link
 expect_exit 0 "a plan that skips" -- "$S/notion-step" plan start "$RD" acme/docs --force
-expect_exit 2 "... leaves nothing for done to record" -- "$S/notion-step" done start "$RD"
+expect_exit 2 "... leaves nothing for done to record" -- "$S/notion-step" "done" start "$RD"
 "$ROOT/src/skills/adorno-inputs/scripts/input-refs" "see https://github.com/acme/docs/issues/3 then https://www.notion.so/acme/Spec-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" >"$RD/refs.json"
 expect_exit 0 "a GitHub ref before the Notion link" -- "$S/notion-step" plan start "$RD" acme/docs --force
 expect_jq "... the Notion page is still found" '.page_id == "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"'
 NDRAFT="$("$S/run-begin" --workflow workflow:pr:open --mode draft --level L3 --repo acme/docs | jq -r .id)"
 expect_exit 0 "under a draft run" -- "$S/notion-step" plan start "$RD" acme/docs --force
 expect_jq "... dry run: nothing is written" '.dry_run == true'
-expect_exit 2 "done after a dry-run plan is refused" -- "$S/notion-step" done start "$RD"
+expect_exit 2 "done after a dry-run plan is refused" -- "$S/notion-step" "done" start "$RD"
 "$S/run-end" "$NDRAFT" >/dev/null
 NL0="$("$S/run-begin" --workflow workflow:issue:fix --mode auto --level L0 --repo acme/docs | jq -r .id)"
 expect_exit 0 "under an auto run at L0 (untrusted inputs)" -- "$S/notion-step" plan start "$RD" acme/docs --force
