@@ -687,6 +687,19 @@ guard_at allow "$C" "" "git commit --message=\"\$(cat <<'EOF'
 feat: b
 EOF
 )\""
+# seventh review: quotes that close then reopen around $( … ) leave it unquoted
+guard_at pass "$C" "" "git commit -m \"A \"\$(cat <<'EOF'
+ --no-verify
+EOF
+)\" B\""
+guard_at pass "$C" "" "git commit --message=\"A \"\$(cat <<'EOF'
+ --no-verify
+EOF
+)\" B\""
+guard_at pass "$C" "" "git commit -m 'A '\"\$(cat <<'EOF'
+ --no-verify
+EOF
+)\"' B'"
 ln -s "$O" "$C/lnk"
 guard_at deny "$C" "" "cd lnk/.. && git push origin HEAD"
 guard_at deny "$C" "" "git -C lnk/.. push origin HEAD"

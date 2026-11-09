@@ -488,6 +488,30 @@ ALLOWED_SCRIPTS = {"repo-conf", "run-check", "run-end", "pr-status", "pr-areas",
                    "pr-ready"}
 
 
+def quoted_at(command, k):
+    """True when position k of command is inside quotes (so a `"` there closes a string instead of opening one).
+    Substitutions met on the way count as opaque: their own quotes are theirs."""
+    state, i = None, 0
+    while i < k:
+        c = command[i]
+        if state == "'":
+            state = None if c == "'" else state
+        elif c == "\\":
+            i += 1
+        elif state is None and c in "'\"":
+            state = c
+        elif state == '"' and c == '"':
+            state = None
+        elif command.startswith("$(", i):
+            depth, i = 1, i + 2
+            while i < k and depth:
+                depth += 1 if command.startswith("$(", i) else -1 if command[i] == ")" else 0
+                i += 1
+            continue
+        i += 1
+    return state is not None
+
+
 def blank_substitutions(command):
     """The command with every $( … ) replaced by one marker word (its content is checked apart). Only the exact
     shape "$( … )" — one double-quoted word and nothing else — reads as one argument at run time: unquoted, bash
@@ -503,7 +527,7 @@ def blank_substitutions(command):
                     depth -= 1
                 j += 1
             if command[i - 1:i] != '"' or command[j:j + 1] != '"' or command[i - 2:i - 1] not in ("", " ", "=") \
-                    or command[j + 1:j + 2] not in ("", " ", "\n", ";", "&", "|"):
+                    or command[j + 1:j + 2] not in ("", " ", "\n", ";", "&", "|") or quoted_at(command, i - 1):
                 raise ValueError("a substitution that is not one quoted word")
             out.append(SUBST); i = j
         elif command[i] == "`":
@@ -602,8 +626,10 @@ def options(args, flags, valued, here, files=(), subst_ok=()):
     value of a flag in files is "-" or a safe_file, and a "$( … )" stands only as the value of a flag in subst_ok (a
     commit message); else None."""
     if any(SUBST in a for a in args):
-        allowed = {j + 1 for j, a in enumerate(args) if a in subst_ok} | {
-            j for j, a in enumerate(args) if a.split("=", 1)[0] in subst_ok and "=" in a}
+        # the whole word, never a word that merely contains it ("A "$(…)" B" splits at run time)
+        allowed = {j + 1 for j, a in enumerate(args) if a in subst_ok and j + 1 < len(args) and args[j + 1] == SUBST}
+        allowed |= {j for j, a in enumerate(args) if "=" in a and a.split("=", 1)[0] in subst_ok
+                    and a.split("=", 1)[1] == SUBST}
         if any(SUBST in a and j not in allowed for j, a in enumerate(args)):
             return None
     pos, vals, i = [], {}, 0
