@@ -115,6 +115,62 @@ printf '{"event":"COMMENT","body":"ok","comments":[]}' >"$TMP/submit.json"
 FAKE_REVIEWS="$FAKE_FIX/reviews.json" expect_exit 0 "deny submit still allows a pending review" -- "$S/pr-review-submit" acme/docs-public#1 "$TMP/pending.json"
 expect_exit 4 "deny submit blocks a submitted review" -- "$S/pr-review-submit" acme/docs-public#1 "$TMP/submit.json"
 
+echo "notion-step (properties of the Notion spec page per workflow step)"
+RD="$TMP/run-notion"; mkdir -p "$RD"
+"$ROOT/src/skills/adorno-inputs/scripts/input-refs" \
+  "spec https://www.notion.so/acme/Spec-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, see https://www.notion.so/acme/Other-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" >"$RD/refs.json"
+today="$(date +%Y-%m-%d)"
+expect_exit 0 "plan start on a repo with notion_spec" -- "$S/notion-step" plan start "$RD" acme/docs
+expect_jq "first Notion link, repo over workspace, null dropped, today filled" \
+  ".page_id == \"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb\" and .dry_run == false
+   and .properties == {Lifecycle: \"Ongoing\", \"Working date\": \"$today\"}"
+expect_exit 0 "workspace settings alone" -- "$S/notion-step" plan start "$RD" acme/app
+expect_jq "... apply" '.properties.Lifecycle == "Planned" and .properties.Owner == "workspace"'
+expect_exit 0 "a repo without notion_spec" -- "$S/notion-step" plan start "$RD" other/thing
+expect_jq "... is skipped" '.skip | test("sets no notion_spec.start")'
+expect_exit 0 "a step the repo does not set" -- "$S/notion-step" plan pr_opened "$RD" acme/app
+expect_jq "... is skipped" '.skip | test("notion_spec.pr_opened")'
+expect_exit 2 "{{pr_url}} needs --pr-url" -- "$S/notion-step" plan pr_opened "$RD" acme/docs
+expect_exit 2 "--pr-url without a value" -- "$S/notion-step" plan pr_opened "$RD" acme/docs --pr-url
+expect_exit 2 "--pr-url that is not a PR URL" -- "$S/notion-step" plan pr_opened "$RD" acme/docs --pr-url "https://evil.example/x"
+expect_exit 0 "plan pr_opened" -- "$S/notion-step" plan pr_opened "$RD" acme/docs --pr-url https://github.com/acme/docs/pull/9
+expect_jq "... PR url filled" '.properties == {Lifecycle: "In Code Review", PR: "https://github.com/acme/docs/pull/9"}'
+expect_exit 2 "unknown step" -- "$S/notion-step" plan merged "$RD" acme/docs
+expect_exit 2 "missing run folder" -- "$S/notion-step" plan start "$TMP/nope" acme/docs
+expect_exit 3 "undeclared repo" -- "$S/notion-step" plan start "$RD" nobody/repo
+"$S/notion-step" plan start "$RD" acme/docs >/dev/null
+expect_exit 0 "done records the planned step" -- "$S/notion-step" "done" start "$RD"
+expect_jq "... with its page and properties" '.step == "start" and .page_id == "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb" and .properties.Lifecycle == "Ongoing"'
+expect_exit 2 "done twice: nothing planned any more" -- "$S/notion-step" "done" start "$RD"
+expect_exit 0 "a resumed run" -- "$S/notion-step" plan start "$RD" acme/docs
+expect_jq "... does not redo start" '.skip | test("already done")'
+expect_exit 0 "--force" -- "$S/notion-step" plan start "$RD" acme/docs --force
+expect_jq "... plans it again" '.properties.Lifecycle == "Ongoing"'
+mkdir -p "$TMP/run-plain"; "$ROOT/src/skills/adorno-inputs/scripts/input-refs" "Add an export on acme/docs" >"$TMP/run-plain/refs.json"
+expect_exit 0 "a request without Notion page" -- "$S/notion-step" plan start "$TMP/run-plain" acme/docs
+expect_jq "... is skipped" '.skip | test("no Notion page")'
+expect_exit 0 "no refs.json at all" -- "$S/notion-step" plan start "$TMP" acme/docs
+expect_jq "... is skipped, saying refs.json is missing" '.skip | test("no refs.json")'
+mkdir -p "$TMP/run-bad"; printf '{ half' >"$TMP/run-bad/refs.json"
+expect_exit 1 "a corrupt refs.json fails, not skipped" -- "$S/notion-step" plan start "$TMP/run-bad" acme/docs
+expect_exit 5 "outside any run: refused" -- "$S/notion-step" plan start "$RD" acme/anything --force
+"$S/notion-step" plan start "$RD" acme/docs --force >/dev/null
+cp "$TMP/run-plain/refs.json" "$RD/refs.json"   # the same run folder, now without Notion link
+expect_exit 0 "a plan that skips" -- "$S/notion-step" plan start "$RD" acme/docs --force
+expect_exit 2 "... leaves nothing for done to record" -- "$S/notion-step" "done" start "$RD"
+"$ROOT/src/skills/adorno-inputs/scripts/input-refs" "see https://github.com/acme/docs/issues/3 then https://www.notion.so/acme/Spec-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" >"$RD/refs.json"
+expect_exit 0 "a GitHub ref before the Notion link" -- "$S/notion-step" plan start "$RD" acme/docs --force
+expect_jq "... the Notion page is still found" '.page_id == "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"'
+NDRAFT="$("$S/run-begin" --workflow workflow:pr:open --mode draft --level L3 --repo acme/docs | jq -r .id)"
+expect_exit 0 "under a draft run" -- "$S/notion-step" plan start "$RD" acme/docs --force
+expect_jq "... dry run: nothing is written" '.dry_run == true'
+expect_exit 2 "done after a dry-run plan is refused" -- "$S/notion-step" "done" start "$RD"
+"$S/run-end" "$NDRAFT" >/dev/null
+NL0="$("$S/run-begin" --workflow workflow:issue:fix --mode auto --level L0 --repo acme/docs | jq -r .id)"
+expect_exit 0 "under an auto run at L0 (untrusted inputs)" -- "$S/notion-step" plan start "$RD" acme/docs --force
+expect_jq "... dry run too" '.dry_run == true'
+"$S/run-end" "$NL0" >/dev/null
+
 echo "pr-feedback-fetch"
 expect_exit 0 "fetches" -- "$S/pr-feedback-fetch" acme/docs#42
 expect_jq "only unresolved threads" '[.threads[].id] == ["T1","T2"]'

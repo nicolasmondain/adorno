@@ -6,7 +6,8 @@
 #   GitHub issues/PRs → {kind: "github-issue" | "github-pr" | "github-ref", repo, number}   (owner/repo#N: either)
 #   local files       → {kind: "file", path}                                  (an existing file named in the request)
 #   any other link    → {kind: "url"}
-# Prints {text, refs: [{kind, url?, …}], kinds: [...]}: `text` is the request without its links. Read only; no network.
+# Prints {text, refs: [{kind, url?, …}], kinds: [...]}: `text` is the request without its links; `refs` keep the order
+# of the request (links first, then owner/repo#N, then files). Read only; no network.
 set -euo pipefail
 die() { printf 'input-refs: %s\n' "$1" >&2; exit "${2:-1}"; }
 command -v jq >/dev/null 2>&1 || die "missing dependency: jq"
@@ -47,6 +48,8 @@ while IFS= read -r w; do
 done <<<"$words"
 
 jq -n --arg s "$input" --argjson r "$refs" --argjson f "$files" '
-  ($r + $f | unique_by([.kind, (.url // .path // "\(.repo)#\(.number)")])) as $all
+  # deduplicated in the order of the request: the first Notion link is the spec (adorno-notion-sync)
+  ($r + $f | reduce .[] as $x ([]; ($x | [.kind, (.url // .path // "\(.repo)#\(.number)")]) as $k
+     | if any(.[]; [.kind, (.url // .path // "\(.repo)#\(.number)")] == $k) then . else . + [$x] end)) as $all
   | {text: ($s | gsub("https?://[^\\s<>\"\\)\\]]+"; "") | gsub("[ \\t]+"; " ") | gsub("^\\s+|\\s+$"; "")),
      refs: $all, kinds: ($all | map(.kind) | unique)}'

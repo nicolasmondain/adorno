@@ -12,7 +12,9 @@ agent reads: `source.md`, in the run folder. `scripts/` (relative to this file) 
 ## 1. Find the sources
 
 `scripts/input-refs "<the request>"` → `{text, refs, kinds}`: the request without its links, and each thing it points
-to (`slack`, `notion`, `github-issue`, `github-pr`, `github-ref`, `file`, `url`). Read only, no network.
+to (`slack`, `notion`, `github-issue`, `github-pr`, `github-ref`, `file`, `url`), in the order of the request. Read
+only, no network. Save its output as `refs.json` in the run folder: `adorno-notion-sync` reads the spec page there
+(the first Notion link).
 
 ## 2. Read each one
 
@@ -58,4 +60,4 @@ Otherwise: "none".>
 - Faithful: no paraphrase that changes a decision. When unsure, quote.
 - No personal data beyond names and roles needed to know who decided what; no secrets (a pasted token or password
   in a thread is left out and flagged).
-- `source.md` stays in the run folder (excluded from git); it is never committed nor posted.
+- `source.md` and `refs.json` stay in the run folder (excluded from git); they are never committed nor posted.

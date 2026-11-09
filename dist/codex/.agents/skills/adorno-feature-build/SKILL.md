@@ -13,15 +13,17 @@ Input: the user’s request
 
 1. **Scope** — without a validated spec, `workflow:spec:new the user’s request` first (checkpoint 1): an idea is discussed, a
    clear prompt or links (Slack thread, Notion page, issue, plan file) are confirmed. A plan that is already written
-   goes into `spec.md` § Provided plan, and `core:planner` follows it.
+   goes into `spec.md` § Provided plan, and `core:planner` follows it. Once the spec is validated:
+   `adorno-notion-sync start <spec folder> owner/repo` (the Notion page of the request gets the repo's
+   `notion_spec.start` properties; nothing to do without a Notion page or without that setting).
 2. **Route** — `agent:core:router` reads `spec.md` and writes `run-plan.yaml`. If the router concludes that a single
    agent is enough, the plan has only one step: that is normal.
 3. **Plan** — `agent:core:planner` writes `plan.md` (slices, the `feat:*` agent of each slice, acceptance tests).
 4. **Build and verify** — you run `run-plan.yaml` yourself (skill `adorno-run-plan`: a subagent cannot launch
    others) on the branch `<type>/<slug>`: slices (test loop, three rounds; QA by `agent:test:e2e` with
    screenshots and video for visible slices), then reviewers in parallel (fix loop, two rounds).
-5. **Open** — `workflow:pr:open`, of which `agent:adorno` is the gate: it reviews the branch as you would, and the
-   PR description goes out in your voice (checkpoint 2 if planned).
+5. **Open** — `workflow:pr:open owner/repo <branch> <spec folder>`, of which `agent:adorno` is the gate: it reviews
+   the branch as you would, and the PR description goes out in your voice (checkpoint 2 if planned).
 6. **Follow** — `workflow:pr:watch` until the PR is ready (checkpoint 3: the merge, by the user).
 
 At every stop (cap, missing permission, escalation to the spec): `status.md` says where and why, and the command to

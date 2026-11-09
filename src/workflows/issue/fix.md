@@ -2,7 +2,7 @@
 description: Fix a bug from a GitHub issue, a Slack thread, a Notion page, a prompt or a validated spec — investigation, red test, minimal fix, review, PR ("Fixes #n" if there is an issue), CI and review follow-up.
 args: "<owner/repo#N | Slack / Notion links | bug description with owner/repo | .agent-run folder>"
 uses:
-  skills: [adorno-github, adorno-inputs]
+  skills: [adorno-github, adorno-inputs, adorno-notion-sync]
   agents: [agent:fix:investigate, agent:fix:patch, agent:review:code, agent:review:tests]
   workflows: [workflow:pr:open, workflow:pr:watch]
 ---
@@ -13,15 +13,17 @@ Input: {{args}}
 
 1. **What is reported**, in a new `.agent-run/` folder:
    - an issue (`owner/repo#N` or its link): `adorno-github/scripts/issue-fetch` → `issue.json`;
-   - links (Slack thread where the bug is reported, Notion page) or a file: `adorno-inputs/scripts/input-refs`, then
-     `source.md` (skill `adorno-inputs`); an issue cited in the sources is read too;
+   - links (Slack thread where the bug is reported, Notion page) or a file: `adorno-inputs/scripts/input-refs` saved
+     as `refs.json`, then `source.md` (skill `adorno-inputs`); an issue cited in the sources is read too;
    - an `.agent-run` folder with a validated `spec.md`: it stands in for the report;
    - only a description: it stands in for the report, and the repo must be named in it (or be the current clone).
 2. `agent:fix:investigate` reproduces from this report and writes `diagnosis.md`. No repro possible → draft a reply
    (on the issue or the original thread, never posted) in English asking for what is missing, handed to the user;
    stop.
-3. **Checkpoint 1**: diagnosis and level (L3 by default) validated by the user.
+3. **Checkpoint 1**: diagnosis and level (L3 by default) validated by the user. Then
+   `adorno-notion-sync start <.agent-run folder> owner/repo` (the Notion page of the report gets the repo's
+   `notion_spec.start` properties; nothing to do without a Notion page or without that setting).
 4. Branch `fix/<n>-<slug>` (no issue: `fix/<slug>`) from the base; `agent:fix:patch`: red test, fix, green suite.
 5. `agent:review:code` and `agent:review:tests` in parallel; a `blocker` → back to `fix:patch` (two rounds).
-6. `workflow:pr:open` with `Fixes #N` in the description if there is an issue (otherwise the links of the sources, if
-   the team can access them), then `workflow:pr:watch`.
+6. `workflow:pr:open owner/repo <branch> <.agent-run folder>` with `Fixes #N` in the description if there is an issue
+   (otherwise the links of the sources, if the team can access them), then `workflow:pr:watch`.

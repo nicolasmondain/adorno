@@ -27,6 +27,7 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | `ci-wait owner/repo#N [seconds]` | waits for the checks to finish (required ones only, if configured) | L0 |
 | `ci-failed owner/repo#N [lines]` | failed runs on the latest commit + log tails in files | L0 |
 | `ci-rerun owner/repo RUN_ID` | re-runs the failed jobs, once per run | L2 |
+| `notion-step plan STEP RUN_DIR [owner/repo] [--pr-url URL] [--force]` · `done STEP RUN_DIR` | the properties your repo config sets for a workflow step (`notion_spec`) on the run's Notion spec page, or why there is nothing to do; `done` records it (skill `adorno-notion-sync`) | — |
 | `run-begin --workflow ID --mode report\|draft\|pending\|comment\|auto --level Lx --repo owner/repo… [--deny a,b] [--ttl 2h]` | opens a run for the named repos: what it may write, its folder; `report`/`draft` force a dry run | — |
 | `guard_bash.py deny\|ask [--format=claude\|codex\|gemini]` | hook (Claude Code, Codex, Gemini) installed by `bin/kit install`: refuses or asks to confirm a push, a GitHub publication, a write to the registry or to runs, whatever the shape of the command; blocks everything without `python3` | — |
 | `repo-audit [owner/repo…]` | read-only: type and scope of the `gh` token, default branch protection (ruleset, branch protection), admin rights; advice | — |
