@@ -91,7 +91,7 @@ the owner's own worktrees.)
   check the call, confirm only what you reproduced. A "Severity: HIGH" label is the model's confidence, not evidence.
 - A reviewer's badge is their severity claim: weigh it, don't obey it. A `nitpick` that trips a `.claude/rules/` entry
   is blocking; an `issue` asking for an out-of-slice refactor is a tech debt ticket. Deferred = belongs to a later
-  slice of the same stack: name it.
+  slice of the same stack, or to a follow-up: name it.
 
 Confirmed → the fix goes to the family agent the workflow names; your reply cites the commit.
 

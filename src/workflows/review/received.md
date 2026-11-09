@@ -34,9 +34,9 @@ A lower repo `max_level` always wins.
 2. **Workspace** — `pr-workspace owner/repo#N`, run from your clone of the repo: the worktree of the PR's branch,
    created if it does not exist (`worktree: branch`); never a shared workspace from a previous pass. Refused (exit 4) if there are
    uncommitted changes or commits missing from GitHub. In `auto`, for commits missing from GitHub only: the error
-   names the worktree `<dir>`; list `git -C <dir> rev-list @{upstream}..HEAD`; if **every** one of these SHAs is
-   listed as reviewed in a `<dir>/.agent-run/feedback-*/status.md` (the fixes of a previous `draft` pass, step 6),
-   `pr-push owner/repo#N`, then `pr-workspace` again. Otherwise (a SHA not listed, uncommitted changes): stop on
+   names the worktree `<dir>`; list `git -C <dir> rev-list origin/<branch>..HEAD`; if **every** one of these SHAs is
+   recorded `clean` in a `<dir>/.agent-run/feedback-*/status.md` (the fixes of a previous `draft` pass, step 6),
+   `pr-push owner/repo#N`, then `pr-workspace` again. Otherwise (a SHA not listed or not `clean`, uncommitted changes): stop on
    this PR and report it. Run folder: `<workspace>/.agent-run/feedback-<date>/` (one per PR, under the open run), with
    `feedback.json`.
 3. **Triage** — `agent:core:triage` classifies each item where `needsReply` is true (thread, general comment,
@@ -54,7 +54,8 @@ A lower repo `max_level` always wins.
    `refactor:simplify`, `test:unit`, or the agent of the subject's family): one typed commit per item, message citing
    the comment, repo tests and lint green, three rounds at most. Then `review:code` and `review:ponytail` on the
    new commits only; a `blocker` → back to the fix, twice at most. Right after, each commit's SHA, its item and the review
-   outcome (reviewed or not) go in `status.md`.
+   outcome (`clean`, or `blocker left` after the caps) go in `status.md`. A `blocker left` stops this PR before
+   `pr-push`: nothing of it is pushed or replied to, and it goes to *What awaits your decision*.
 7. **Publish** (`auto` mode) — `pr-push owner/repo#N` (never forced). Then `agent:adorno` writes a reply to **every** item
    in the repo's language (`reply_language`, English by default) and in your voice, with the commit SHA, and publishes: `pr-reply` (thread) or `pr-comment` (general
    comment, review summary). Then it resolves (`pr-resolve`) every thread it replied to. Left open and listed in the
