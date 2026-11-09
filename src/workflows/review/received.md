@@ -1,6 +1,6 @@
 ---
 description: Goes over all your open PRs (or a single one) — every unanswered comment, thread or review summary is checked by the subject's specialist in a dedicated workspace, fixed if needed, then your agent replies in your voice and resolves. Modes report, draft (default), auto.
-args: "[owner/repo#N | owner/repo] [--mode report|draft|auto]"
+args: "[owner/repo#N | owner/repo] [--mode report|draft|auto] [--unattended]"
 uses:
   skills: [adorno-github, adorno-profile, adorno-voice]
   agents: [agent:core:triage, agent:adorno, agent:review:code, agent:review:ponytail, agent:review:front, agent:review:perf, agent:review:back, agent:review:mongodb, agent:review:api, agent:review:security, agent:review:tests, agent:fix:patch, agent:refactor:simplify, agent:test:unit]
@@ -52,4 +52,5 @@ A lower repo `max_level` always wins.
    `ci-wait owner/repo#N`, and `workflow:ci:red` if CI turns red (two attempts at most).
 9. **Report** — `status.md` per PR and, as the reply, a table: PR, item, what the reviewer said, verified verdict
    (right / partly / wrong / unclear), action, reply published or drafted. **At the top: what awaits
-   your decision.** In `draft`, the command to publish everything: `workflow:review:received owner/repo#N --mode auto`.
+   your decision**; under `--unattended`, only the real stop points (orchestration › Unattended runs), the
+   deferrals being ruled by `agent:adorno`. In `draft`, the command to publish everything: `workflow:review:received owner/repo#N --mode auto`.

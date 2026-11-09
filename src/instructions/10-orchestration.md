@@ -30,7 +30,18 @@ Creating or refreshing a PR workspace under `~/.adorno` is allowed from L0: it i
 user's working copies nor GitHub.
 
 A run's level is set when it is framed and never widens along the way: a need beyond it stops the run and asks the
-question.
+question (under `--unattended`: skips that item and reports it).
+
+**Unattended runs.** Every workflow accepts `--unattended`, passed by a scheduler (Takt, cron): nobody is there to
+answer, so the run never asks a question and goes to the end.
+
+- A point that would ask goes to whoever owns it: scope and cost to the workflow (everything retained, smallest
+  first, in batches of `max_parallel`); a verdict or a deferral to `agent:adorno`; a technical choice to the
+  specialist of the area.
+- A real stop point (spec or PR validation, a level beyond the run's, a refusal with code 4 or 5, L4, what the profile
+  files under "to validate") is never decided on the owner's behalf: that item is skipped, the reason goes in
+  `status.md` and at the top of the report, and the run goes on with the others.
+- `--unattended` never widens a mode or a level: they are the ones the scheduler passed.
 
 **Runs.** A workflow that writes to GitHub starts with `adorno-github/scripts/run-begin --workflow <id>
 --mode <mode> --level <Lx> --repo owner/repo` and always ends with `run-end <id>`. The granted right lives in a

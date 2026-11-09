@@ -45,6 +45,7 @@ flowchart TD
   EM -->|"no"| TC
   EM -->|"yes"| BIG
   BIG -->|"yes"| ASK --> DRY
+  BIG -->|"yes, --unattended: say so"| DRY
   BIG -->|"no"| DRY
   DRY -->|"yes: list only"| TC
   DRY -->|"no, batches of 3"| ACT

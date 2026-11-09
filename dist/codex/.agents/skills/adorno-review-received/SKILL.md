@@ -51,4 +51,5 @@ A lower repo `max_level` always wins.
    `ci-wait owner/repo#N`, and `workflow:ci:red` if CI turns red (two attempts at most).
 9. **Report** — `status.md` per PR and, as the reply, a table: PR, item, what the reviewer said, verified verdict
    (right / partly / wrong / unclear), action, reply published or drafted. **At the top: what awaits
-   your decision.** In `draft`, the command to publish everything: `workflow:review:received owner/repo#N --mode auto`.
+   your decision**; under `--unattended`, only the real stop points (orchestration › Unattended runs), the
+   deferrals being ruled by `agent:adorno`. In `draft`, the command to publish everything: `workflow:review:received owner/repo#N --mode auto`.

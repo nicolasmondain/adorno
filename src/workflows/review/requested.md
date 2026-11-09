@@ -1,6 +1,6 @@
 ---
 description: Analyzes all the PRs where your review is requested — a dedicated workspace per PR, specialized reviewers chosen by the touched code, then your agent who slices and writes. By default, a pending review per PR, that you reread and submit yourself.
-args: "[owner/repo] [--mode report|pending|auto] [--include-reviewed] [--direct-only]"
+args: "[owner/repo] [--mode report|pending|auto] [--include-reviewed] [--direct-only] [--unattended]"
 uses:
   skills: [adorno-github]
   workflows: [workflow:pr:review]
@@ -21,7 +21,8 @@ you), `auto` (submitted, never `APPROVE` if `allow_approve` is false).
    - those where you already have a pending review (`pendingReview`): it is yours, leave it alone;
    - requests made to a team only, with `--direct-only`.
 2. **Announce** — show the retained list (repo, PR, author, size) before starting. More than 10 PRs or a PR of
-   more than 1,500 lines: ask for confirmation, the analysis is expensive.
+   more than 1,500 lines: ask for confirmation, the analysis is expensive. `--unattended`: no confirmation, all
+   the retained PRs, smallest first.
 3. **Analyze** — for each PR, you run through the steps of `workflow:pr:review owner/repo#N --mode <mode>` yourself
    in the already open run (a subagent cannot launch others). PRs are independent: in batches
    of `max_parallel` (3 by default), launch in the same turn the specialists of all the PRs in the batch. Each PR has its

@@ -1,6 +1,6 @@
 ---
 description: Find the Notion documents assigned to you ("person" properties of the watched databases, status still open) and launch on each new document the agent or workflow that fits — chosen per database in your config, otherwise by the router. Read-only on Notion; report sent to you alone. Modes report (default) or run.
-argument-hint: '[--mode report|run] [--since 30d] [--dry-run] [--all]'
+argument-hint: '[--mode report|run] [--since 30d] [--dry-run] [--all] [--unattended]'
 model: sonnet
 ---
 
@@ -39,7 +39,8 @@ Run folder: `~/.adorno/runs/notion-assigned-<date>/`.
    - `report` (default): `agent:core:analyst` returns the analysis and what the chosen action would do (plan, target
      repo, permissions needed), without launching anything;
    - `run`: the chosen action, which opens its own run at the `level` level (`run-begin --level <level>`), bounded by
-     the permissions of the target repo. Steps that ask for your validation (spec, PR opening) remain stop points.
+     the permissions of the target repo. Steps that ask for your validation (spec, PR opening) remain stop points; under `--unattended`, the
+     document stops there and goes in the report.
    Documents are independent: in parallel, in batches of 3.
 6. **Remember** — `watch-seen mark notion-assigned <id>…` for each processed document, then
    `watch-seen touch notion-assigned`.

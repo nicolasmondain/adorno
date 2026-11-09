@@ -36,6 +36,7 @@ flowchart TD
   D -->|"no"| F["Announce list"]
   F --> G{"More than 10 PRs or a PR over 1500 lines?"}
   G -->|"yes"| H["Ask confirmation"]
+  G -->|"yes, --unattended: smallest first"| I
   G -->|"no"| I["For each PR: steps of workflow:pr:review in the open run"]
   H --> I
   I --> J["Batches of max_parallel: specialists in the same turn"]

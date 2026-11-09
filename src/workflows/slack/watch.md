@@ -1,6 +1,6 @@
 ---
 description: Watch one or more Slack channels according to a named rule — included words or regex, over a period, at most N messages — and launch the configured action (agent, workflow or instruction) on each message that matches, once per message. Read-only on Slack; report sent to you alone. Launch by hand or from your own scheduler.
-args: "<rule name> [--since 24h] [--max 200] [--dry-run] [--all]"
+args: "<rule name> [--since 24h] [--max 200] [--dry-run] [--all] [--unattended]"
 uses:
   skills: [adorno-watch, adorno-github]
   agents: [agent:core:analyst, agent:adorno]
@@ -35,7 +35,7 @@ Run folder: `~/.adorno/runs/slack-watch-<name>-<date>/`.
    `adorno-watch`).
 3. **Filter** — `watch-match <name> messages.json` → `matches.json`: what matches and has not been processed yet
    (`--all` reprocesses everything). No result → short report, `watch-seen touch slack-watch-<name>`, end.
-4. **Announce** — more than 20 matches: say so and ask before launching the actions (costly). `--dry-run`: stop here
+4. **Announce** — more than 20 matches: say so and ask before launching the actions (costly); `--unattended`: say so and go on. `--dry-run`: stop here
    with the list.
 5. **Act** — for each message, in chronological order, the action of the rule with the message, its link and the full
    thread as input, plus the rule's `prompt`:
