@@ -376,7 +376,22 @@ guard deny 'if true; then git push; fi'
 # $(( … )) is arithmetic, not a subshell; the quoted awk program that follows it is not a command
 guard pass "for n in 7786 7805; do awk -v s=\$((n-6)) -v e=\$((n+4)) 'NR>=s && NR<=e {printf \"%d\\t%s\\n\", NR, \$0}' f; done"
 guard deny 'echo $(( $(git push; echo 1) + 1 ))'
-guard ask 'echo $((1 + 2'
+guard pass "grep -n '\$((' f.sh"
+guard pass 'echo $(( (1+2) * 3 )) "$((4/2))"'
+guard deny 'echo $(( (1+2) * 3 )); git push'
+# $((cmd); cmd) and $((cmd) ) are a substitution holding a subshell, and a quoted $(( is text: none hides a write
+guard deny 'echo $((git push origin x); true)'
+guard deny 'echo $((git push) )'
+guard deny "echo '\$((' ; git push ; echo '))'"
+guard deny 'echo "$((" ; git push origin x; echo "))"'
+guard pass "echo '\$((1' ; git status"
+# a leading redirection is not the program, with $(( )) as its target or not
+guard deny '>$((1)) git push'
+guard deny '2>$((1)) gh pr create -t x'
+guard deny '<<<$((1)) git push'
+guard deny '> x git push'
+guard deny '2>&1 git push'
+guard pass '> out.txt echo hi'
 # an escaped backtick is a character, not a substitution
 guard pass 'python3 -c "print(\"use \`const x = 1\` here\")"'
 guard deny 'echo \\`git push`'
@@ -393,6 +408,10 @@ expect_jq "nobody answers a prompt in bypassPermissions: deny, with the reason" 
   '.hookSpecificOutput.permissionDecision == "deny" and (.hookSpecificOutput.permissionDecisionReason | startswith("adorno:"))'
 out="$(jq -n '{tool_name: "Bash", permission_mode: "bypassPermissions", tool_input: {command: "c=push; git $c"}}' | python3 "$S/guard_bash.py" deny)"
 expect_jq "an unreadable command in bypassPermissions: deny, not a prompt that hangs" '.hookSpecificOutput.permissionDecision == "deny"'
+out="$(jq -n '{tool_name: "Bash", permission_mode: "dontAsk", tool_input: {command: "c=push; git $c"}}' | python3 "$S/guard_bash.py" ask)"
+expect_jq "dontAsk has nobody to answer either: deny" '.hookSpecificOutput.permissionDecision == "deny"'
+out="$(jq -n '{tool_name: "Bash", permission_mode: "default", tool_input: {command: "c=push; git $c"}}' | python3 "$S/guard_bash.py" ask)"
+expect_jq "an interactive session still asks" '.hookSpecificOutput.permissionDecision == "ask"'
 
 echo "a registry older than the personal layer"
 printf 'repos: {}\n' >"$TMP/layer.yaml"

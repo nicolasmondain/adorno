@@ -55,24 +55,43 @@ MESSAGES = {
 }
 
 
+def arithmetic_end(command, i):
+    """Where the $(( at i ends if it is arithmetic, else None. Bash reads it as arithmetic only when it closes on `))`;
+    `$((cmd); cmd)` or `$((cmd) )` is a command substitution holding a subshell. A body with ; quotes ` \\ or a newline
+    is not left to masking either: the lexer reads it as before."""
+    depth, j, n = 2, i + 3, len(command)
+    while j < n:
+        c = command[j]
+        if c in ";'\"`\\\n":
+            return None
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth == 1:
+                return j + 2 if command.startswith(")", j + 1) else None
+        j += 1
+    return None
+
+
 def mask_arithmetic(command):
-    """$(( … )) replaced by a plain word: the shell computes it and runs nothing, and its parentheses would otherwise
-    be read as subshells (a $( … ) inside it is still found by substitutions, which scans the raw command)."""
-    out, i, n = [], 0, len(command)
+    """Unquoted $(( … )) replaced by a plain word: the shell computes it and runs nothing, and its parentheses would
+    otherwise be read as subshells (a $( … ) inside it is still found by substitutions, which scans the raw command).
+    A quoted `$((` is text, and anything that is not plain arithmetic stays as it is."""
+    out, i, n, dquote = [], 0, len(command), False
     while i < n:
-        if command.startswith("$((", i):
-            depth, j = 2, i + 3
-            while j < n and depth:
-                if command[j] == "(":
-                    depth += 1
-                elif command[j] == ")":
-                    depth -= 1
-                j += 1
-            if depth:
-                raise ValueError("unbalanced $((")
-            out.append("_arith_"); i = j
+        c = command[i]
+        if c == "\\":
+            out.append(command[i:i + 2]); i += 2
+        elif c == "'" and not dquote:
+            j = command.find("'", i + 1)
+            j = n if j < 0 else j + 1
+            out.append(command[i:j]); i = j
+        elif c == '"':
+            dquote = not dquote; out.append(c); i += 1
         else:
-            out.append(command[i]); i += 1
+            end = arithmetic_end(command, i) if command.startswith("$((", i) else None
+            out.append("_arith_" if end else c); i = end or i + 1
     return "".join(out)
 
 
@@ -112,6 +131,10 @@ def strip(cmd):
                 elif "=" in cmd[i] and not cmd[i].startswith("-"):
                     env.append(cmd[i])
                 i += 1
+        elif re.fullmatch(r"[<>&]+", w):  # a leading redirection (> f, <<< w, 2>&1) and its target: not the program
+            i += 2
+        elif w.isdigit() and i + 1 < len(cmd) and re.fullmatch(r"[<>&]+", cmd[i + 1]):
+            i += 3
         elif w in KEYWORDS:
             i += 1
         elif w in WRAPPERS or w in WRAPPER_ARGS:
