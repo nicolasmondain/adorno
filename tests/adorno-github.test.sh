@@ -128,6 +128,25 @@ expect_jq "bots never need a reply" '(.conversation[] | select(.author=="ci-bot"
 expect_jq "review summary after my reply needs one" '[.reviews[] | select(.needsReply) | .author] == ["carol"]'
 expect_jq "needsReplyCount sums threads, comments, reviews" '.needsReplyCount == 3'
 expect_jq "CI state and ownership surfaced" '.pr.ci == "FAILURE" and .pr.head == "nm/pagination" and .pr.mine'
+expect_jq "pending: what needs a reply, keyed by its last activity, plus the red CI of the head" \
+  '[.pending[].id] == ["acme/docs#42/thread/T1@C1", "acme/docs#42/comment/IC3", "acme/docs#42/review/R3", "acme/docs#42/ci@abc123"]'
+W="$ROOT/src/skills/adorno-watch/scripts"
+"$S/pr-feedback-fetch" acme/docs#42 | jq .pending >"$TMP/pending.json"
+"$W/watch-seen" mark review-received "acme/docs#42/thread/T1@C1" "acme/docs#42/ci@abc123" >/dev/null
+expect_exit 0 "watch-seen filters pending" -- "$W/watch-seen" filter review-received "$TMP/pending.json"
+expect_jq "what was handled, unchanged, is skipped on the next pass" 'map(.id) == ["acme/docs#42/comment/IC3", "acme/docs#42/review/R3"]'
+cp -R "$FAKE_FIX" "$TMP/fix-new"
+jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes += [{id: "C9", author: {login: "alice", __typename: "User"}, body: "Still null", url: "c9", createdAt: "2026-11-04T09:00:00Z"}]' \
+  "$FAKE_FIX/feedback.json" >"$TMP/fix-new/feedback.json"
+FAKE_FIX="$TMP/fix-new" "$S/pr-feedback-fetch" acme/docs#42 | jq .pending >"$TMP/pending.json"
+expect_exit 0 "watch-seen filters pending after a new reply" -- "$W/watch-seen" filter review-received "$TMP/pending.json"
+expect_jq "a new reply in a handled thread brings it back" 'map(.id) | index("acme/docs#42/thread/T1@C9") != null'
+jq '.data.repository.pullRequest.commits.nodes[0].commit.statusCheckRollup.state = "SUCCESS"' "$FAKE_FIX/feedback.json" >"$TMP/fix-new/feedback.json"
+FAKE_FIX="$TMP/fix-new" expect_exit 0 "fetches a green PR" -- "$S/pr-feedback-fetch" acme/docs#42
+expect_jq "green CI is not pending" '[.pending[].id | select(test("/ci@"))] == []'
+jq '.data.repository.pullRequest.commits.nodes[0].commit.statusCheckRollup.state = "ERROR" | .data.repository.pullRequest.headRefOid = "def456"' "$FAKE_FIX/feedback.json" >"$TMP/fix-new/feedback.json"
+FAKE_FIX="$TMP/fix-new" expect_exit 0 "fetches an errored PR on a new head" -- "$S/pr-feedback-fetch" acme/docs#42
+expect_jq "errored CI is pending, keyed by the new head" '[.pending[].id | select(test("/ci@"))] == ["acme/docs#42/ci@def456"]'
 
 echo "pr-status"
 expect_exit 0 "lists PRs" -- "$S/pr-status"
@@ -373,6 +392,28 @@ guard deny "for t in $TMP/deploy*.sh; do bash \$t; done"
 guard deny 'for c in push; do git $c; done'
 guard pass 'for c in status log; do git $c; done'
 guard deny 'if true; then git push; fi'
+# $(( … )) is arithmetic, not a subshell; the quoted awk program that follows it is not a command
+guard pass "for n in 7786 7805; do awk -v s=\$((n-6)) -v e=\$((n+4)) 'NR>=s && NR<=e {printf \"%d\\t%s\\n\", NR, \$0}' f; done"
+guard deny 'echo $(( $(git push; echo 1) + 1 ))'
+guard pass "grep -n '\$((' f.sh"
+guard pass 'echo $(( (1+2) * 3 )) "$((4/2))"'
+guard deny 'echo $(( (1+2) * 3 )); git push'
+# $((cmd); cmd) and $((cmd) ) are a substitution holding a subshell, and a quoted $(( is text: none hides a write
+guard deny 'echo $((git push origin x); true)'
+guard deny 'echo $((git push) )'
+guard deny "echo '\$((' ; git push ; echo '))'"
+guard deny 'echo "$((" ; git push origin x; echo "))"'
+guard pass "echo '\$((1' ; git status"
+# a leading redirection is not the program, with $(( )) as its target or not
+guard deny '>$((1)) git push'
+guard deny '2>$((1)) gh pr create -t x'
+guard deny '<<<$((1)) git push'
+guard deny '> x git push'
+guard deny '2>&1 git push'
+guard pass '> out.txt echo hi'
+# an escaped backtick is a character, not a substitution
+guard pass 'python3 -c "print(\"use \`const x = 1\` here\")"'
+guard deny 'echo \\`git push`'
 guard pass "$ROOT/bin/kit check"
 guard pass "$ROOT/tests/kit.test.sh"
 out="$(jq -n '{tool_name: "run_shell_command", tool_input: {command: "git push"}}' | python3 "$S/guard_bash.py" deny --format=gemini)"
@@ -381,6 +422,15 @@ out="$(jq -n '{tool_name: "Bash", tool_input: {command: "git push"}}' | python3 
 expect_jq "Codex has no ask in hooks: deny" '.hookSpecificOutput.permissionDecision == "deny"'
 out="$(jq -n '{tool_name: "Bash", tool_input: {command: "git push"}}' | python3 "$S/guard_bash.py" ask)"
 expect_jq "a global install asks instead" '.hookSpecificOutput.permissionDecision == "ask"'
+out="$(jq -n '{tool_name: "Bash", permission_mode: "bypassPermissions", tool_input: {command: "git push"}}' | python3 "$S/guard_bash.py" ask)"
+expect_jq "nobody answers a prompt in bypassPermissions: deny, with the reason" \
+  '.hookSpecificOutput.permissionDecision == "deny" and (.hookSpecificOutput.permissionDecisionReason | startswith("adorno:"))'
+out="$(jq -n '{tool_name: "Bash", permission_mode: "bypassPermissions", tool_input: {command: "c=push; git $c"}}' | python3 "$S/guard_bash.py" deny)"
+expect_jq "an unreadable command in bypassPermissions: deny, not a prompt that hangs" '.hookSpecificOutput.permissionDecision == "deny"'
+out="$(jq -n '{tool_name: "Bash", permission_mode: "dontAsk", tool_input: {command: "c=push; git $c"}}' | python3 "$S/guard_bash.py" ask)"
+expect_jq "dontAsk has nobody to answer either: deny" '.hookSpecificOutput.permissionDecision == "deny"'
+out="$(jq -n '{tool_name: "Bash", permission_mode: "default", tool_input: {command: "c=push; git $c"}}' | python3 "$S/guard_bash.py" ask)"
+expect_jq "an interactive session still asks" '.hookSpecificOutput.permissionDecision == "ask"'
 
 echo "a registry older than the personal layer"
 printf 'repos: {}\n' >"$TMP/layer.yaml"

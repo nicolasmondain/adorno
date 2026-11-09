@@ -136,12 +136,14 @@ subshells, `$( … )` and backticks, `bash -c`, `eval`, `env`, `sudo`, `timeout`
 the code passed to `python3 -c` or `node -e`, and the local scripts a command runs (`./deploy.sh`,
 `bash x.sh`). It stops any push, any GitHub publication, any write to the registry or the runs, any
 `HOME=` in front of an adorno script and any attempt to set `CLAUDE_CODE_SESSION_ID`. A command it cannot
-read (a variable as program, unclosed quotes) asks you; so does a bug in the hook. Without `python3`, or
+read (a variable as program, unclosed quotes) asks you; so does a bug in the hook. Where nobody can answer
+(`bypassPermissions` or `dontAsk`: a schedule, a headless run), every "asks" becomes a refusal carrying the reason,
+so the agent rewrites its command instead of hanging. Without `python3`, or
 if the hook file is missing, it blocks every shell command rather than let it through.
 
 | Tool | In a repo | With `--global` |
 | --- | --- | --- |
-| Claude Code | hook, refuses (`.claude/settings.local.json`) | hook, asks (`~/.claude/settings.json`) |
+| Claude Code | hook, refuses (`.claude/settings.local.json`) | hook, asks; refuses in `bypassPermissions` / `dontAsk` (`~/.claude/settings.json`) |
 | Codex | hook, refuses (`.codex/hooks.json`) | `prompt` rules (`~/.codex/rules/adorno.rules`): asks |
 | Gemini CLI | `BeforeTool` hook, refuses (`.gemini/settings.json`) | `ask_user` policy (`~/.gemini/policies/adorno.toml`): asks |
 

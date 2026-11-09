@@ -1,6 +1,6 @@
 ---
 description: Goes over all your open PRs (or a single one) — every unanswered comment, thread or review summary is checked by the subject's specialist in a dedicated workspace, fixed if needed, then your agent replies in your voice and resolves. Modes report, draft (default), auto.
-argument-hint: '[owner/repo#N | owner/repo] [--mode report|draft|auto] [--unattended]'
+argument-hint: '[owner/repo#N | owner/repo] [--mode report|draft|auto] [--all] [--unattended]'
 model: sonnet
 ---
 
@@ -17,15 +17,18 @@ Input: $ARGUMENTS — with no argument: your open, ready PRs, and only those (`p
 
 A lower repo `max_level` always wins.
 
-1. **Target** — with no argument: `pr-status --ready` (no drafts, no archived; most recently updated first), then `pr-feedback-fetch` on each `registered` PR; keep those with
-   `needsReplyCount > 0` or with red CI. PRs are independent: in batches of `max_parallel`, launch in the same
+1. **Target** — with no argument: `pr-status --ready` (no drafts, no archived; most recently updated first), then `pr-feedback-fetch` on each `registered` PR.
+   **Keep only what is new**: `pr-feedback-fetch owner/repo#N | jq .pending | adorno-watch/scripts/watch-seen filter
+   review-received -` — `pending` lists what needs a reply plus a red CI, each keyed by its last activity (a new reply
+   in a thread, a new head commit bring it back); keep the PRs with at least one entry left, and hand triage only
+   those items. An explicit `owner/repo#N` or `--all` skips this filter (that is how a draft gets published). PRs are independent: in batches of `max_parallel`, launch in the same
    turn the agents of all the PRs in the batch (you delegate: an agent does not launch agents); from each PR keep
    in context only the deliverables (`triage.json`, verdicts), never the raw exchanges.
 2. **Workspace** — `pr-workspace owner/repo#N`, run from your clone of the repo: the worktree of the PR's branch,
    created if it does not exist (`worktree: branch`); never a shared workspace from a previous pass. Refused if there are
    uncommitted changes or commits missing from GitHub: stop on this PR and report it. Run folder: `<workspace>/.agent-run/feedback-<date>/` (one per PR, under the open run), with
-   `feedback.json`.
-3. **Triage** — `agent:core:triage` classifies each item where `needsReply` is true (thread, general comment,
+   `feedback.json` and `pending.json` (the step 1 `pending` after the filter; explicit PR or `--all`: unfiltered).
+3. **Triage** — `agent:core:triage` classifies each item whose `key` is in `pending.json` (thread, general comment,
    review summary): category (`fix`, `nit`, `test`, `question`, `disagree`, `scope`, `done`), **area** (deduced
    from the targeted file with `pr-areas` on the PR diff, or from the comment's subject), specialist(s) to consult,
    likely fixer agent → `triage.json`. Bot comments do not require a reply; their findings
@@ -49,3 +52,6 @@ A lower repo `max_level` always wins.
 9. **Report** — `status.md` per PR and, as the reply, a table: PR, item, what the reviewer said, verified verdict
    (right / partly / wrong / unclear), action, reply published or drafted. **At the top: what awaits
    your decision.** In `draft`, the command to publish everything: `workflow:review:received owner/repo#N --mode auto`.
+10. **Remember** (`draft` and `auto` modes) — `watch-seen mark review-received <id>…` with the `pending` ids of each
+   PR processed past step 2 (not a PR stopped there), then `watch-seen touch review-received`: the next sweep
+   skips them until someone writes again. `report` remembers nothing.
