@@ -8,6 +8,7 @@ flowchart TD
   RB["run-begin --mode auto --level from spec"]
   SPEC{"Validated spec?"}
   SN["workflow:spec:new - checkpoint 1"]
+  NS["adorno-notion-sync start - Notion spec page properties"]
   RT["agent:core:router writes run-plan.yaml"]
   PL["agent:core:planner writes plan.md"]
   subgraph BUILD["Run plan on branch type/slug (adorno-run-plan)"]
@@ -16,14 +17,15 @@ flowchart TD
     RV["Parallel reviewers: review:code, review:security, review:tests, review:ponytail"]
     FX["Fix loop - 2 rounds"]
   end
-  PO["workflow:pr:open - agent:adorno gate, checkpoint 2 if planned"]
+  PO["workflow:pr:open with the spec folder - agent:adorno gate, checkpoint 2 if planned"]
   PW["workflow:pr:watch until ready"]
   CP3["Checkpoint 3: merge by the user"]
   ST["status.md: where, why, how to resume"]
   RE["run-end id - always"]
   IN --> RB --> SPEC
-  SPEC -->|"no"| SN --> RT
-  SPEC -->|"yes"| RT
+  SPEC -->|"no"| SN --> NS
+  SPEC -->|"yes"| NS
+  NS --> RT
   RT --> PL --> SL --> QA --> RV
   RV -->|"blocker or major"| FX --> RV
   RV -->|"pass"| PO --> PW --> CP3 --> RE

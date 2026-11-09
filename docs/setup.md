@@ -136,12 +136,14 @@ subshells, `$( … )` and backticks, `bash -c`, `eval`, `env`, `sudo`, `timeout`
 the code passed to `python3 -c` or `node -e`, and the local scripts a command runs (`./deploy.sh`,
 `bash x.sh`). It stops any push, any GitHub publication, any write to the registry or the runs, any
 `HOME=` in front of an adorno script and any attempt to set `CLAUDE_CODE_SESSION_ID`. A command it cannot
-read (a variable as program, unclosed quotes) asks you; so does a bug in the hook. Without `python3`, or
+read (a variable as program, unclosed quotes) asks you; so does a bug in the hook. Where nobody can answer
+(`bypassPermissions` or `dontAsk`: a schedule, a headless run), every "asks" becomes a refusal carrying the reason,
+so the agent rewrites its command instead of hanging. Without `python3`, or
 if the hook file is missing, it blocks every shell command rather than let it through.
 
 | Tool | In a repo | With `--global` |
 | --- | --- | --- |
-| Claude Code | hook, refuses (`.claude/settings.local.json`) | hook, asks (`~/.claude/settings.json`) |
+| Claude Code | hook, refuses (`.claude/settings.local.json`) | hook, asks; refuses in `bypassPermissions` / `dontAsk` (`~/.claude/settings.json`) |
 | Codex | hook, refuses (`.codex/hooks.json`) | `prompt` rules (`~/.codex/rules/adorno.rules`): asks |
 | Gemini CLI | `BeforeTool` hook, refuses (`.gemini/settings.json`) | `ask_user` policy (`~/.gemini/policies/adorno.toml`): asks |
 
@@ -247,6 +249,20 @@ flowchart LR
 
 Your Slack ID: your Slack profile › ⋮ › "Copy member ID". The `adorno-setup` skill can also
 find it with the connector. Commented template: `local.example/adorno.yaml`.
+
+**The Notion spec page follows the work.** When `workflow:feature:build` or `workflow:issue:fix` starts from a Notion
+page, the repo's `notion_spec` sets its properties at two steps: `start` (spec or diagnosis validated) and `pr_opened`
+(PR opened by `workflow:pr:open`). It is the only Notion write, limited to these properties of that page (the first
+Notion link of the request); a `report`, `draft` or L0 run only shows it, and nothing happens outside a run. A property or an option missing from the
+page stops the update and says so; nothing is created.
+
+```yaml
+repos:
+  acme/app:
+    notion_spec:
+      start: {Lifecycle: Ongoing, "Working date": "{{today}}"}
+      pr_opened: {Lifecycle: "In Code Review", PR: "{{pr_url}}"}
+```
 
 These workflows are launched by hand, or from your own scheduler (a scheduled task that runs
 `workflow:slack:mentions` every hour, for example): adorno schedules nothing itself.

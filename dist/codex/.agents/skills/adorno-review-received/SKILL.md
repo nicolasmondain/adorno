@@ -12,11 +12,11 @@ Input: the user’s request — with no argument: your open, ready PRs, and only
 
 **Run** — before any write: `adorno-github/scripts/run-begin --workflow workflow:review:received --mode <mode> --level L3 --repo owner/repo [--repo …]` — once the PR list is known, one `--repo` per repo to process (a run only covers the repos it names); keep `id` and `dir` (the run folder). Called by another workflow that already opened its own: reuse it. Always, even after a failure: `run-end <id>`. With no open run, the scripts refuse any write.
 
-**Never ask the owner mid-run** — this workflow often runs unattended (a scheduled job): a question blocks it. Every
-item is ruled by `agent:adorno` from the specialists' evidence, whatever its severity or category. What no agent may
-settle goes to *What awaits your decision* in the report, and never blocks the other items or PRs: a conflict to
-rebase, a refused action (exit 4 or 5) other than those steps 2 and 7 handle, a need beyond the run's level, and
-what step 7 leaves open.
+**Who decides** — every item is ruled by `agent:adorno` from the specialists' evidence, whatever its severity or
+category: none is handed back to the owner, with or without `--unattended` (orchestration › Unattended runs). What
+no agent may settle goes to *What awaits your decision* in the report, and never blocks the other items or PRs: a
+conflict to rebase, a refused action (exit 4 or 5) other than those steps 2 and 7 handle, a need beyond the run's
+level, and what step 7 leaves open.
 
 | Mode | Does | Level | Publishes |
 | --- | --- | --- | --- |
@@ -26,8 +26,11 @@ what step 7 leaves open.
 
 A lower repo `max_level` always wins.
 
-1. **Target** — with no argument: `pr-status --ready` (no drafts, no archived; most recently updated first), then `pr-feedback-fetch` on each `registered` PR; keep those with
-   `needsReplyCount > 0` or with red CI. PRs are independent: in batches of `max_parallel`, launch in the same
+1. **Target** — with no argument: `pr-status --ready` (no drafts, no archived; most recently updated first), then `pr-feedback-fetch` on each `registered` PR.
+   **Keep only what is new**: `pr-feedback-fetch owner/repo#N | jq .pending | adorno-watch/scripts/watch-seen filter
+   review-received -` — `pending` lists what needs a reply plus a red CI, each keyed by its last activity (a new reply
+   in a thread, a new head commit bring it back); keep the PRs with at least one entry left, and hand triage only
+   those items. An explicit `owner/repo#N` or `--all` skips this filter (that is how a draft gets published). PRs are independent: in batches of `max_parallel`, launch in the same
    turn the agents of all the PRs in the batch (you delegate: an agent does not launch agents); from each PR keep
    in context only the deliverables (`triage.json`, verdicts), never the raw exchanges.
 2. **Workspace** — `pr-workspace owner/repo#N`, run from your clone of the repo: the worktree of the PR's branch,
@@ -37,8 +40,8 @@ A lower repo `max_level` always wins.
    recorded `clean` in a `<dir>/.agent-run/feedback-*/status.md` (the fixes of a previous `draft` pass, step 6),
    `pr-push owner/repo#N`, then `pr-workspace` again. Otherwise (a SHA not listed or not `clean`, uncommitted changes): stop on
    this PR and report it. Run folder: `<workspace>/.agent-run/feedback-<date>/` (one per PR, under the open run), with
-   `feedback.json`.
-3. **Triage** — `agent:core:triage` classifies each item where `needsReply` is true (thread, general comment,
+   `feedback.json` and `pending.json` (the step 1 `pending` after the filter; explicit PR or `--all`: unfiltered).
+3. **Triage** — `agent:core:triage` classifies each item whose `key` is in `pending.json` (thread, general comment,
    review summary): category (`fix`, `nit`, `test`, `question`, `disagree`, `scope`, `done`), **area** (deduced
    from the targeted file with `pr-areas` on the PR diff, or from the comment's subject), specialist(s) to consult,
    likely fixer agent → `triage.json`. Bot comments do not require a reply; their findings
@@ -65,4 +68,7 @@ A lower repo `max_level` always wins.
    `ci-wait owner/repo#N`, and `workflow:ci:red` if CI turns red (two attempts at most).
 9. **Report** — `status.md` per PR and, as the reply, a table: PR, item, what the reviewer said, verified verdict
    (right / partly / wrong / unclear), action, reply published or drafted. **At the top: what awaits
-   your decision** (only the cases of "Never ask the owner mid-run"). In `draft`, the command to publish everything: `workflow:review:received owner/repo#N --mode auto`.
+   your decision** (only the cases of "Who decides"). In `draft`, the command to publish everything: `workflow:review:received owner/repo#N --mode auto`.
+10. **Remember** (`draft` and `auto` modes) — `watch-seen mark review-received <id>…` with the `pending` ids of each
+   PR processed past step 2 (not a PR stopped there), then `watch-seen touch review-received`: the next sweep
+   skips them until someone writes again. `report` remembers nothing.
