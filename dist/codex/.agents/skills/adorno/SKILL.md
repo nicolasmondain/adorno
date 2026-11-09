@@ -68,7 +68,7 @@ input):
   `How to test` with the commands actually run. No credible proof → 🟠 at least.
 - **Smallest complete change** → `ponytail` lens: code that need not exist, a helper the repo already has, an
   abstraction with one implementation. Where it overlaps the profile, the profile wins.
-- **Hygiene** → Conventional Commits, no commit on the default branch, branch carrying the issue id.
+- **Hygiene** → Conventional Commits, no commit on the default branch, branch matching `branch_pattern`.
 
 ## The specialists are candidates, you are the verdict
 

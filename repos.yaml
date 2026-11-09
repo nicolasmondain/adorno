@@ -14,7 +14,7 @@
 #                    default none: a point that needs execution is a ❓, CI decides (agent:adorno)
 #   allow_approve    may an automatic review APPROVE? (false: only COMMENT and REQUEST_CHANGES)
 #   max_inline       max inline comments per review; the rest goes in the body (agent:adorno: 8)
-#   branch_pattern   regex a PR branch name must follow (process.md: <type>/<issue-id>-kebab)
+#   branch_pattern   regex a PR branch name must follow (default: <type>/kebab-description)
 #   max_parallel     PRs processed at the same time by review:requested and review:received
 #   areas            code areas: path patterns (bash globs, `*` crosses folders) and/or
 #                    regexes on added lines; an area can be overridden per repo

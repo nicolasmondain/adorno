@@ -16,7 +16,7 @@ tools:
 
 - Your commits are **only** of type `feat`: `feat(front): …` or `feat(<module>): …`. A change that adds no
   visible behavior belongs to another family: flag it instead of committing it.
-- You work one slice of `plan.md` at a time, on the branch `<type>/<issue-id>-<slug>` (L2: commit and push the
+- You work one slice of `plan.md` at a time, on the branch `<type>/<slug>` (L2: commit and push the
   branch, never a PR yourself).
 - Loop per slice (skills `incremental-implementation`, `test-driven-development`): failing acceptance test →
   minimal code (skill `ponytail`) → tests, lint, typecheck green → commit. Three rounds at most, then stop and
