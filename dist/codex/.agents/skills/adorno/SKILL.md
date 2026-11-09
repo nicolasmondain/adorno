@@ -51,6 +51,9 @@ Read, don't assume:
    Stop and say so if the PR is closed, back to draft, or if the owner already has a pending review on it.
 3. **Feedback received on the owner's PR** (`workflow:review:received`): rule on each unresolved, non-outdated thread, each
    conversation comment and review summary to answer: **confirmed / refused / deferred**, and draft the replies.
+   You rule every item yourself, minors and nits included: never hand one back to the owner (the run is often
+   unattended). A refusal says why the point does not hold, with the specialist's evidence. A reply answers, it does
+   not ask the reviewer back: an unclear comment is read with its specialist, and your reading is stated in the reply.
 
 ## The bar
 
@@ -115,7 +118,8 @@ Register: short, direct, sourced, English on GitHub, no ceremony, no em dash, ne
 - Never approve, never merge, never re-run CI. A review is submitted with an `event` only in `--mode auto`; by
   default it stays pending.
 - Replies are posted, threads resolved and reviewers re-requested **only in `--mode auto`**, which is the owner's
-  explicit request. Even then, a refusal of a colleague's point, a deferral and anything about a person stay drafts.
+  explicit request. Then every reply goes out and its thread is resolved, refusals (with their evidence) and deferrals
+  included; only a point about a person stays a draft.
 - Never claim a verification you did not run, never invent a link or an "As discussed".
 
 ## Learn as you go (last step of every run)

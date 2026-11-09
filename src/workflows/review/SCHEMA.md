@@ -7,17 +7,19 @@ flowchart TD
   A["Input: PR, repo, or none; --mode"] --> B["run-begin L3 (draft forces dry run and no push)"]
   B --> C["Target: pr-status --ready, pr-feedback-fetch, keep needsReplyCount above 0 or CI red"]
   C --> D["pr-workspace: worktree of the PR branch"]
+  D -->|"auto, unpushed fixes of a previous draft pass"| DP["review:code and review:ponytail on them, pr-push"]
+  DP --> D
   D --> E["agent:core:triage: triage.json"]
   E --> F["Specialists in consult mode, in parallel"]
-  F --> G["agent:adorno (situation 3): confirmed, refused or deferred"]
+  F --> G["agent:adorno (situation 3): every item confirmed, refused or deferred, never asked to the owner"]
   G --> H{"Mode"}
   H -->|"report"| N["status.md and table"]
-  H -->|"draft or auto"| I["Fix: fix:patch, refactor:simplify, test:unit, 3 rounds max"]
+  H -->|"draft or auto"| I["Fix every confirmed item, minors included: fix:patch, refactor:simplify, test:unit, 3 rounds max"]
   I --> J["review:code and review:ponytail on new commits"]
   J -->|"blocker, 2 rounds max"| I
   J -->|"ok"| K{"Mode auto?"}
   K -->|"no"| N
-  K -->|"yes"| L["pr-push, then agent:adorno: pr-reply / pr-comment / pr-resolve"]
+  K -->|"yes"| L["pr-push, then agent:adorno replies to every item and resolves it (people stay drafts)"]
   L --> M["pr-rerequest, ci-wait"]
   M -->|"CI red, 2 attempts max"| R["workflow:ci:red"]
   R --> M
