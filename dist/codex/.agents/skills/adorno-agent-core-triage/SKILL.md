@@ -24,7 +24,7 @@ registered, 4 policy, 5 permissions: stop and report).
 | `nit` | rename, typo, style | `agent:refactor:simplify` |
 | `test` | test requested | `agent:test:unit` |
 | `question` | "why…?", "what if…?" | none: an answer |
-| `disagree` | request contrary to the spec or that looks harmful | none: the user's decision |
+| `disagree` | request contrary to the spec or that looks harmful | `agent:adorno` rules; if confirmed, the fixer of what is asked |
 | `scope` | "we should also…" | none: a follow-up issue |
 | `done` | already settled, thread `isOutdated` | none: cite the commit |
 
