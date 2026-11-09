@@ -1,6 +1,6 @@
 ---
 description: Goes over all your open PRs (or a single one) — every unanswered comment, thread or review summary is checked by the subject's specialist in a dedicated workspace, fixed if needed, then your agent replies in your voice and resolves. Modes report, draft (default), auto.
-args: "[owner/repo#N | owner/repo] [--mode report|draft|auto] [--all]"
+args: "[owner/repo#N | owner/repo] [--mode report|draft|auto] [--all] [--unattended]"
 uses:
   skills: [adorno-github, adorno-watch, adorno-profile, adorno-voice]
   agents: [agent:core:triage, agent:adorno, agent:review:code, agent:review:ponytail, agent:review:front, agent:review:perf, agent:review:back, agent:review:mongodb, agent:review:api, agent:review:security, agent:review:tests, agent:fix:patch, agent:refactor:simplify, agent:test:unit]

@@ -1,6 +1,6 @@
 ---
 description: Goes over all your open PRs (or a single one) — every unanswered comment, thread or review summary is checked by the subject's specialist in a dedicated workspace, fixed if needed, then your agent replies in your voice and resolves. Modes report, draft (default), auto.
-argument-hint: '[owner/repo#N | owner/repo] [--mode report|draft|auto] [--all]'
+argument-hint: '[owner/repo#N | owner/repo] [--mode report|draft|auto] [--all] [--unattended]'
 model: sonnet
 ---
 

@@ -25,7 +25,8 @@ you), `auto` (submitted, never `APPROVE` if `allow_approve` is false).
    order (not yet reviewed first, then least recently updated: the longest-waiting); the others are *deferred*:
    cited in the report.
 2. **Announce** — show the kept list (repo, PR, author, size) and the number deferred before starting. More than 10
-   PRs (raised `--max`) or a PR of more than 1,500 lines: ask for confirmation, the analysis is expensive.
+   PRs (raised `--max`) or a PR of more than 1,500 lines: ask for confirmation, the analysis is expensive;
+   `--unattended`: no confirmation.
 3. **Analyze** — for each PR, you run through the steps of `workflow:pr:review owner/repo#N --mode <mode>` yourself
    in the already open run (a subagent cannot launch others). PRs are independent: in batches
    of `max_parallel` (3 by default), launch in the same turn the specialists of all the PRs in the batch. Each PR has its
