@@ -59,6 +59,7 @@ flowchart TD
     PRQ["pr-rerequest"]
     PO["pr-open"]
     PE["pr-edit (title and description of your open PR)"]
+    PRD["pr-ready (draft to ready for review)"]
   end
   PS --> PW
   PRR --> PW

@@ -33,10 +33,10 @@ respond() {
 pr_json() {
   local fields
   fields="$(printf '%s\n' "${args[@]}" | awk 'p { print; exit } $0 == "--json" { p = 1 }')"
-  jq -n --arg author "${FAKE_PR_AUTHOR:-octocat}" --arg sha "${FAKE_HEAD_SHA:-abc123}" \
+  jq -n --arg author "${FAKE_PR_AUTHOR:-octocat}" --arg sha "${FAKE_HEAD_SHA:-abc123}" --argjson draft "${FAKE_PR_DRAFT:-false}" \
     --arg state "${FAKE_PR_STATE:-OPEN}" --argjson cross "${FAKE_CROSS:-false}" --arg fields "$fields" '
     {author: {login: $author}, headRefOid: $sha, headRefName: "nm/pagination", baseRefName: "main",
-     isCrossRepository: $cross, state: $state, number: 42, title: "feat(api): add pagination",
+     isCrossRepository: $cross, isDraft: $draft, state: $state, number: 42, title: "feat(api): add pagination",
      url: "https://github.com/acme/docs/pull/42", body: "Adds pagination.", additions: 10, deletions: 2,
      files: [{path: "api/users.ts", additions: 8, deletions: 1}, {path: "client/list.tsx", additions: 2, deletions: 1}]}
     | . as $all
@@ -108,6 +108,6 @@ case "$all" in
   search\ prs*) respond <"$FIX/search-prs.json" ;;
   api\ repos/*/pulls/*/comments*) respond <"$FIX/pr-comments.json" ;;
   pr\ create*) echo "https://github.com/acme/docs/pull/99" ;;
-  pr\ edit*) echo "https://github.com/acme/docs/pull/42" ;;
+  pr\ edit*|pr\ ready*) echo "https://github.com/acme/docs/pull/42" ;;
   *) echo "fake-gh: no route for: $all" >&2; exit 99 ;;
 esac

@@ -44,6 +44,11 @@ require_level "$REPO" L2 push
 sha="$(git -C "$dir" rev-parse "refs/heads/$branch")"
 if [ "$check" = true ]; then
   ! dry_run || die "the active run is a dry run: nothing leaves the machine" "$E_POLICY"
+  # a direct `git push origin <branch>` follows git's config: no refspec or mirror there may reroute or force it
+  if git -C "$dir" config --get-all remote.origin.push >/dev/null 2>&1 \
+      || [ "$(git -C "$dir" config --get remote.origin.mirror 2>/dev/null || true)" = "true" ]; then
+    die "remote.origin.push or remote.origin.mirror is set in $dir: push with git-push" "$E_POLICY"
+  fi
   jq -n --arg r "$REPO" --arg b "$branch" --arg s "$sha" '{allowed: true, repo: $r, branch: $b, sha: $s}'
   exit 0
 fi

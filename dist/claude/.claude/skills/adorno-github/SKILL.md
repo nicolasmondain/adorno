@@ -28,10 +28,10 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | `ci-failed owner/repo#N [lines]` | failed runs on the latest commit + log tails in files | L0 |
 | `ci-rerun owner/repo RUN_ID` | re-runs the failed jobs, once per run | L2 |
 | `run-begin --workflow ID --mode report\|draft\|pending\|comment\|auto --level Lx --repo owner/repo… [--deny a,b] [--ttl 2h]` | opens a run for the named repos: what it may write, its folder; `report` forces a dry run, `draft` refuses the conversation (code still goes out) | — |
-| `guard_bash.py deny\|ask [--format=claude\|codex\|gemini]` | hook (Claude Code, Codex, Gemini) installed by `bin/kit install`: refuses or asks to confirm a push, a GitHub publication, a write to the registry or to runs, whatever the shape of the command; blocks everything without `python3`. Inside a run (Claude Code): `allow` for `git add`, `git commit`, a plain push of the branch and `gh pr create\|edit` at the run's level, so a repo's `commit_skill` / `pr_skill` run without a prompt | — |
+| `guard_bash.py deny\|ask [--format=claude\|codex\|gemini]` | hook (Claude Code, Codex, Gemini) installed by `bin/kit install`: refuses or asks to confirm a push, a GitHub publication, a write to the registry or to runs, whatever the shape of the command; blocks everything without `python3`. Inside a run (Claude Code): `allow` for `git add` / `git commit` with listed flags, `git push origin BRANCH\|HEAD`, `gh pr create` of the current branch and `gh pr edit\|ready N` on your own PR, and a closed list of scripts (never `run-begin`), at the run's level, so a repo's `commit_skill` / `pr_skill` run without a prompt | — |
 | `repo-audit [owner/repo…]` | read-only: type and scope of the `gh` token, default branch protection (ruleset, branch protection), admin rights; advice | — |
 | `run-end ID` | closes the run (always do it, even after a failure) | — |
-| `run-check owner/repo\|--dir PATH LEVEL [action]` | read-only: would that write be allowed now (same rules as the write scripts, a dry run allows nothing)? Used by the guard | L0 |
+| `run-check owner/repo\|--dir PATH LEVEL [action] [--pr N]` | read-only: would that write be allowed now (same rules as the write scripts, a dry run allows nothing; `--pr`: N is your own open PR)? Used by the guard | L0 |
 | `git-push owner/repo [BRANCH] [--dir PATH] [--check]` | pushes a branch without a PR: never forced, never the base, name matching `branch_pattern`; `--check`: the checks only | L2 |
 | `pr-push owner/repo#N` | pushes the workspace's commits to your PR's branch, never forced | L2 |
 | `pr-reply owner/repo#N THREAD_ID FILE` | replies in a thread (`-` = stdin) | L3 |
@@ -41,6 +41,7 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | `pr-rerequest owner/repo#N [login…]` | re-requests a review (default: those who already reviewed) | L3 |
 | `pr-open owner/repo BRANCH "type(scope): title" FILE [--draft]` | opens the PR, requests the registry's reviewers | L3 |
 | `pr-edit owner/repo#N "type(scope): title" FILE` | updates the title and description of your open PR | L3 |
+| `pr-ready owner/repo#N` | marks your draft PR ready for review (once nothing 🔴 or 🟠 is left open) | L3 |
 
 \* Writes only under `~/.adorno` (no variable moves it), never in your working copies nor on GitHub.
 

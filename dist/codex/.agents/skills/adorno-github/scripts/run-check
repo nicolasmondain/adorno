@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Usage: run-check owner/repo|--dir PATH LEVEL [action]
+# Usage: run-check owner/repo|--dir PATH LEVEL [action] [--pr N]
 # Read-only: would a write at LEVEL (and ACTION) be allowed on this repo right now? Same rules as every write script
 # (require_level: the repo's max_level and permissions.deny, the active run of this session, its denied actions),
-# plus: a dry-run run allows nothing. With --dir, the repo is the GitHub origin of the git repository at PATH.
-# Used by guard_bash.py to let a repo's own commit or PR skill run `gh pr create|edit` without a prompt inside a run.
+# plus: a dry-run run allows nothing. With --dir, the repo is the GitHub origin of the git repository at PATH. With
+# --pr N, PR N must also be yours, open and not from a fork (as pr-edit and pr-ready check).
+# Used by guard_bash.py to let a repo's own commit or PR skill run `gh pr create|edit|ready` without a prompt in a run.
 # Prints {allowed, repo, level, action}; exit 0 if allowed, else the code of the refusal (4 policy, 5 level).
 . "$(dirname "$0")/_lib.sh"
 
@@ -13,8 +14,22 @@ if [ "${1:-}" = "--dir" ]; then
 else
   split_repo "${1:-}"; shift || true
 fi
-level="${1:-}"; action="${2:-}"
+level="" action="" pr=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --pr) pr="${2:-}"; [[ "$pr" =~ ^[0-9]+$ ]] || die "--pr: a PR number" "$E_USAGE"; shift 2 ;;
+    -*) die "unknown option $1" "$E_USAGE" ;;
+    *) if [ -z "$level" ]; then level="$1"; else action="$1"; fi; shift ;;
+  esac
+done
 case "$level" in L0|L1|L2|L3) ;; *) die "LEVEL: L0..L3" "$E_USAGE" ;; esac
 require_level "$REPO" "$level" "$action"
 ! dry_run || die "the active run is a dry run: nothing leaves the machine" "$E_POLICY"
-jq -n --arg r "$REPO" --arg l "$level" --arg a "$action" '{allowed: true, repo: $r, level: $l, action: $a}'
+if [ -n "$pr" ]; then
+  info="$(gh pr view "$pr" -R "$REPO" --json author,isCrossRepository,state)"
+  [ "$(jq -r .author.login <<<"$info")" = "$(viewer_login)" ] || die "$REPO#$pr is not your PR" "$E_POLICY"
+  [ "$(jq -r .isCrossRepository <<<"$info")" = "false" ] || die "$REPO#$pr comes from a fork" "$E_POLICY"
+  [ "$(jq -r .state <<<"$info")" = "OPEN" ] || die "$REPO#$pr is not open" "$E_POLICY"
+fi
+jq -n --arg r "$REPO" --arg l "$level" --arg a "$action" --arg p "$pr" \
+  '{allowed: true, repo: $r, level: $l, action: $a} + (if $p == "" then {} else {pr: ($p | tonumber)} end)'

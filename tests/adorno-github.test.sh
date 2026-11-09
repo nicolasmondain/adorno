@@ -488,7 +488,8 @@ guard_at() {  # guard_at WANT DIR SESSION COMMAND [FORMAT] — the decision for 
   if [ "$got" = "$1" ]; then ok "guard in a run: $1 · $4"; else ko "guard in a run: $1 · $4" "got $got"; fi
 }
 guard_at allow "$C" "" "git push origin fix/lem-8-x"
-guard_at allow "$C" "" "git push"
+guard_at deny "$C" "" "git push"
+guard_at deny "$C" "" "git push origin"
 guard_at allow "$C" "" "git push -u origin HEAD"
 guard_at allow "$TMP" "" "cd clone && git push origin refs/heads/fix/lem-8-x:refs/heads/fix/lem-8-x 2>&1"
 guard_at deny "$C" "" "git push --force origin fix/lem-8-x"
@@ -502,7 +503,7 @@ guard_at deny "$C" "" "git -c remote.origin.pushurl=git@github.com:evil/docs.git
 guard_at deny "$C" "" "git push && rm -rf ./x"
 guard_at deny "$C" "" "git push | tee log"
 guard_at deny "$C" "" "sudo git push"
-guard_at deny "$C" "sess-other" "git push"
+guard_at deny "$C" "sess-other" "git push origin HEAD"
 guard_at deny "$C" "" "GIT_DIR=x git push"
 guard_at allow "$C" "" "git add -A && git commit -m 'feat: b'"
 guard_at allow "$C" "" "git status && git add b.txt; git commit -q -F - <<'EOF'
@@ -531,7 +532,57 @@ guard_at allow "$C" "" "$S/repo-conf acme/docs"
 guard_at pass "$C" "" "$TMP/fake/adorno-github/scripts/repo-conf"
 guard_at deny "$C" "" "git push" codex
 guard_at pass "$C" "" "git add ." codex
-ADORNO_DRY_RUN=1 guard_at deny "$C" "" "git push"
+ADORNO_DRY_RUN=1 guard_at deny "$C" "" "git push origin HEAD"
+
+echo "guard_bash inside a run: what the security review found stays out"
+guard_at pass "$C" "" "git commit --no-verif -m x"
+guard_at pass "$C" "" "git commit --no-ver -m x"
+guard_at pass "$C" "" "git commit -m x --template=/dev/null"
+guard_at pass "$C" "" "git add -f .env"
+guard_at pass "$C" "" "git commit -F ~/.ssh/id_rsa"
+guard_at pass "$C" "" "git commit -F .env"
+guard_at allow "$C" "" "git commit -F .agent-run/msg.txt"
+guard_at pass "$C" "" "git commit -m \"\$(cat ~/.ssh/id_rsa)\""
+guard_at pass "$C" "" "git commit -F - < ~/.ssh/id_rsa"
+guard_at pass "$C" "" "git show --output=x HEAD"
+guard_at pass "$C" "" "$S/run-begin --workflow workflow:x:y --mode auto --level L3 --repo acme/docs"
+guard_at pass "$C" "" "$S/../../adorno-llm/scripts/llm-run x"
+guard_at allow "$C" "" "$S/run-end x"
+guard_at deny "$C" "" "gh pr create -Racme/readonly --title t --body b"
+guard_at deny "$C" "" "gh pr create --hostname evil.example --title t --body b"
+guard_at deny "$C" "" "gh pr create --title t --body-file ~/.ssh/id_rsa"
+guard_at deny "$C" "" "gh pr create --title t --body \"\$(cat <<'EOF'
+x
+EOF
+)\""
+guard_at deny "$C" "" "gh pr create --title t --body b --base main"
+guard_at deny "$C" "" "gh pr create --title t --body b --head main"
+guard_at allow "$C" "" "gh pr create --title t --body-file .agent-run/body.md"
+guard_at allow "$C" "" "gh pr edit 42 --title 'feat: b'"
+guard_at allow "$C" "" "gh pr ready 42"
+guard_at deny "$C" "" "gh pr ready"
+guard_at deny "$C" "" "gh pr edit 42 --add-reviewer x --base main"
+FAKE_PR_AUTHOR=alice guard_at deny "$C" "" "gh pr edit 42 --title 'feat: b'"
+FAKE_CROSS=true guard_at deny "$C" "" "gh pr ready 42"
+git -C "$C" config remote.origin.push "+refs/heads/*:refs/heads/*"
+guard_at deny "$C" "" "git push origin HEAD"
+expect_exit 4 "git-push --check refuses a remote.origin.push refspec" -- "$S/git-push" acme/docs --dir "$C" --check
+git -C "$C" config --unset remote.origin.push
+
+echo "run-check --pr and pr-ready"
+expect_exit 0 "run-check --pr: your own open PR" -- "$S/run-check" acme/docs L3 open_pr --pr 42
+expect_jq "pr 42" '.allowed and .pr == 42'
+FAKE_PR_AUTHOR=alice expect_exit 4 "run-check --pr: someone else's PR" -- "$S/run-check" acme/docs L3 open_pr --pr 42
+FAKE_PR_STATE=CLOSED expect_exit 4 "run-check --pr: a closed PR" -- "$S/run-check" acme/docs L3 open_pr --pr 42
+expect_exit 0 "pr-ready on a ready PR changes nothing" -- "$S/pr-ready" acme/docs#42
+expect_jq "unchanged" '.ready and .changed == false'
+FAKE_PR_DRAFT=true ADORNO_DRY_RUN=1 expect_exit 0 "pr-ready dry run" -- "$S/pr-ready" acme/docs#42
+expect_jq "dry run" '.dryRun and .action == "ready-pr"'
+FAKE_PR_DRAFT=true expect_exit 0 "pr-ready marks a draft ready" -- "$S/pr-ready" acme/docs#42
+expect_jq "changed" '.ready and .changed'
+grep -q "pr ready 42 -R acme/docs" "$FAKE_LOG" && ok "... through gh pr ready" || ko "... through gh pr ready" "$(tail -1 "$FAKE_LOG")"
+FAKE_PR_AUTHOR=alice FAKE_PR_DRAFT=true expect_exit 4 "pr-ready: someone else's PR" -- "$S/pr-ready" acme/docs#42
+expect_exit 5 "pr-ready needs L3" -- env ADORNO_LEVEL=L2 "$S/pr-ready" acme/docs#42
 
 [ "$(git -C "$O" rev-parse nm/pagination)" = "$(git -C "$ws" rev-parse HEAD)" ] && ok "origin branch moved" || ko "origin branch moved"
 expect_exit 0 "nothing new to push" -- "$S/pr-push" acme/docs#42

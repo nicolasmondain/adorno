@@ -141,12 +141,15 @@ read (a variable as program, unclosed quotes) asks you; so does a bug in the hoo
 if the hook file is missing, it blocks every shell command rather than let it through.
 
 **Inside a run, no prompt.** The end of a workflow (`workflow:pr:ship`) runs the repo's `commit_skill` and
-`pr_skill` without asking. For Claude Code, the guard answers `allow` to a command made only of `git add`,
-`git commit` (never `--no-verify`), a plain `git push` to `origin` (never forced, never the base, a name matching
-`branch_pattern`), `gh pr create|edit`, adorno's own scripts, `cd` and read-only commands, when the session's open run
-covers the repo at the level each needs (L2 to commit and push, L3 for the PR), within `max_level` and
-`permissions.deny`, and not in a dry run (`run-check`, `git-push --check`). Anything else, or the same outside a run:
-the decision above.
+`pr_skill` without asking. For Claude Code, the guard answers `allow` to a command made only of `git add` and
+`git commit` with listed flags (never `--no-verify` nor an abbreviation of it, never `-f`, a message read only from
+the repo or a temp folder, never a dotfile), `git push origin <branch>|HEAD` (never forced, never the base, a name
+matching `branch_pattern`, no `remote.origin.push` refspec), `gh pr create` of the current branch and `gh pr
+edit|ready <n>` on your own open PR (listed flags, no `--base`/`--head`, a body file from the repo), a closed list of
+adorno-github scripts (never `run-begin`: opening a run, and its level, stays your call), `cd` and read-only commands,
+when the session's open run covers the repo at the level each needs (L2 to commit and push, L3 for the PR), within
+`max_level` and `permissions.deny`, and not in a dry run (`run-check`, `git-push --check`). Anything else, or the same
+outside a run: the decision above. Codex and Gemini have no `allow` in their hook protocol: they keep asking.
 
 | Tool | In a repo | With `--global` |
 | --- | --- | --- |

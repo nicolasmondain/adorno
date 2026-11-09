@@ -12,10 +12,13 @@ runs (./x.sh, bash x.sh, python3 x.py). A command it cannot read (a variable as 
 so does a bug in the guard. Anything else passes untouched (no output, exit 0).
 
 Inside a run (Claude Code only), the end of a workflow goes through without a prompt: a command made only of
-`git add`, `git commit` (never --no-verify), a plain `git push` to origin (never forced, never the base), `gh pr
-create|edit`, adorno's own scripts, `cd` and read-only commands gets `allow` when the session's open run covers the
-repo at the level each needs (run-check, git-push --check: max_level, permissions.deny, denied actions, no dry run).
-That is how a repo's own commit_skill and pr_skill can push and open a PR themselves (workflow:pr:ship).
+`git add` / `git commit` with listed flags (never --no-verify, -f, a message read from outside the repo),
+`git push origin BRANCH|HEAD` (never forced, never the base), `gh pr create` for the current branch, `gh pr
+edit|ready N` on your own open PR (listed flags, a body file inside the repo), a closed list of adorno-github scripts
+(never run-begin: opening a run stays the owner's call), `cd` and read-only commands gets `allow` when the session's
+open run covers the repo at the level each needs (run-check, git-push --check: max_level, permissions.deny, denied
+actions, no dry run). That is how a repo's own commit_skill and pr_skill push and open a PR (workflow:pr:ship). Any
+other flag or shape: the decision above, unchanged.
 """
 import glob
 import json
@@ -24,6 +27,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 
 WRAPPERS = {"command", "exec", "builtin", "nohup", "time", "sudo", "doas", "nice", "xargs", "stdbuf", "setsid"}
 WRAPPER_ARGS = {"timeout": 1}
@@ -407,12 +411,29 @@ def check(command, depth=0, cwd=None):
 HERE = os.path.dirname(os.path.realpath(__file__))
 SKILLS_ROOT = os.path.dirname(os.path.dirname(HERE))
 SAFE_READS = READ_ONLY - {"find"}
+SUBST = "__ADORNO_SUBST__"
 GIT_READS = {"status", "diff", "log", "show", "rev-parse"}
 PUSH_FLAGS = {"-u", "--set-upstream", "-q", "--quiet", "-v", "--verbose", "--progress", "--no-progress"}
+# every flag not listed here sends the command back to the normal decision (git accepts abbreviated long options:
+# a blocklist would miss --no-verif)
+ADD_FLAGS = {"-A", "--all", "-u", "--update", "-N", "--intent-to-add", "-v", "--verbose", "--"}
+COMMIT_FLAGS = {"-q", "--quiet", "-a", "--all", "-s", "--signoff", "--amend", "--no-edit", "--allow-empty", "-S",
+                "-v", "--verbose"}
+COMMIT_VALUED = {"-m", "--message", "-F", "--file"}
+GH_FLAGS = {"create": {"-d", "--draft", "--fill"}, "edit": set(), "ready": set()}
+GH_VALUED = {"create": {"-t", "--title", "-F", "--body-file", "-b", "--body", "-r", "--reviewer", "-l", "--label",
+                        "-a", "--assignee"},
+             "edit": {"-t", "--title", "-F", "--body-file", "-b", "--body", "--add-label", "--remove-label"},
+             "ready": set()}
+# adorno's scripts that may run without a prompt: read-only, or checking require_level themselves. Never run-begin
+# (opening a run, and its level, is the owner's call), nor the scripts that send data out or write local/.
+ALLOWED_SCRIPTS = {"repo-conf", "run-check", "run-end", "pr-status", "pr-areas", "pr-diff", "pr-feedback-fetch",
+                   "issue-fetch", "ci-wait", "ci-failed", "pr-workspace", "git-push", "pr-push", "pr-open", "pr-edit",
+                   "pr-ready"}
 
 
 def blank_substitutions(command):
-    """The command with every $( … ) and ` … ` replaced by a plain word (their content is checked apart)."""
+    """The command with every $( … ) and ` … ` replaced by one marker word (their content is checked apart)."""
     out, i, n = [], 0, len(command)
     while i < n:
         if command.startswith("$(", i) and not command.startswith("$((", i):
@@ -423,10 +444,12 @@ def blank_substitutions(command):
                 if command[j] == ")":
                     depth -= 1
                 j += 1
-            out.append("SUBST"); i = j
+            out.append(SUBST); i = j
         elif command[i] == "`":
             j = command.find("`", i + 1)
-            out.append("SUBST"); i = j + 1
+            if j < 0:
+                raise ValueError("unbalanced backtick")
+            out.append(SUBST); i = j + 1
         else:
             out.append(command[i]); i += 1
     return "".join(out)
@@ -450,28 +473,74 @@ def without_redirects(cmd):
             if out and out[-1].isdigit():
                 out.pop()
             i += 2; continue
-        if t == "<":
-            i += 2; continue
+        if t in ("<", "<&", "<>"):  # input from a file: `-F - < ~/.ssh/key` would publish it
+            return None
         out.append(t); i += 1
     return out
 
 
 def adorno_script(word, cwd):
-    """True when the word runs one of adorno's own scripts (a file under the skills folder this guard ships in)."""
-    if not re.search(r"adorno-(github|watch|learn|llm|inputs)/scripts/", word):
-        return False
+    """True when the word runs one of ALLOWED_SCRIPTS, in the adorno-github folder this guard ships in."""
     path = os.path.realpath(os.path.join(cwd or ".", os.path.expanduser(word)))
-    return os.path.isfile(path) and path.startswith(SKILLS_ROOT + os.sep)
+    return os.path.isfile(path) and os.path.dirname(path) == HERE and os.path.basename(path) in ALLOWED_SCRIPTS
+
+
+def toplevel(here):
+    try:
+        r = subprocess.run(["git", "-C", here, "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+                           timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return os.path.realpath(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else None
+
+
+def safe_file(path, here):
+    """A file a commit message or a PR body may be read from: inside the repo (never .git/ nor a dotfile, except
+    .agent-run/), a temp folder or ~/.adorno. Anything else (~/.ssh/…, .env) could be published."""
+    full = os.path.realpath(os.path.join(here, os.path.expanduser(path)))
+    roots = [r for r in (toplevel(here), os.path.realpath(tempfile.gettempdir()), os.path.realpath("/tmp"),
+                         os.path.realpath(os.path.expanduser("~/.adorno"))) if r]
+    for root in roots:
+        if full.startswith(root + os.sep):
+            parts = os.path.relpath(full, root).split(os.sep)
+            return all(not p.startswith(".") or p == ".agent-run" for p in parts)
+    return False
+
+
+def options(args, flags, valued, here, files=()):
+    """-> (positional words, {flag: value}) when every option is listed in flags / valued (`--x=v` allowed), and every
+    value of a flag in files is "-" or a safe_file; else None."""
+    pos, vals, i = [], {}, 0
+    while i < len(args):
+        a = args[i]
+        if a.startswith("--") and "=" in a:
+            k, v = a.split("=", 1)
+        elif a in valued:
+            if i + 1 >= len(args):
+                return None
+            k, v = a, args[i + 1]; i += 1
+        elif a in flags:
+            k, v = a, True
+        elif a.startswith("-") and a != "-":
+            return None
+        else:
+            pos.append(a); i += 1; continue
+        if k not in valued and k not in flags:
+            return None
+        if k in files and v != "-" and not safe_file(str(v), here):
+            return None
+        vals[k] = v; i += 1
+    return pos, vals
 
 
 def push_branch(args):
-    """`git push [flags] [origin [BRANCH | HEAD | BRANCH:BRANCH]]` -> (True, BRANCH or None for the current one);
-    anything else (forced, another remote, a refspec that renames, --tags, --delete…) -> (False, None)."""
+    """`git push [flags] origin BRANCH | HEAD | BRANCH:BRANCH` -> (True, BRANCH or None for the current one); a bare
+    push (git config decides its refspec), another remote, a refspec that renames, forced, --tags… -> (False, None)."""
     flags = [a for a in args if a.startswith("-")]
     rest = [a for a in args if not a.startswith("-")]
-    if any(f not in PUSH_FLAGS for f in flags) or len(rest) > 2 or (rest and rest[0] != "origin"):
+    if any(f not in PUSH_FLAGS for f in flags) or len(rest) != 2 or rest[0] != "origin":
         return False, None
-    if len(rest) < 2 or rest[1] == "HEAD":
+    if rest[1] == "HEAD":
         return True, None
     ref = rest[1]
     if ":" in ref:
@@ -493,10 +562,9 @@ def allowable(command, cwd):
         if any(not quoted or prog not in ("git", "cat") for prog, _, quoted in bodies):
             return None
         for inner in substitutions(stripped):
-            for cmd in simple_commands(words(inner)):
-                ws = without_redirects(cmd)
-                if ws is None or (ws and program(ws[0]) not in SAFE_READS):
-                    return None
+            # only `$(cat <<'EOF' … EOF)`: a message written inline, never a file read into it
+            if [w for cmd in simple_commands(words(inner)) for w in cmd] not in ([], ["cat"]):
+                return None
         tokens = words(blank_substitutions(stripped))
     except ValueError:
         return None
@@ -522,11 +590,15 @@ def allowable(command, cwd):
                 where = os.path.join(where, os.path.expanduser(args[i + 1])); i += 2
             sub, rest = (args[i], args[i + 1:]) if i < len(args) else (None, [])
             if sub in GIT_READS:
+                if any(a.startswith("--output") for a in rest):
+                    return None
                 continue
             if sub == "add":
+                if options(rest, ADD_FLAGS, set(), where) is None:
+                    return None
                 checks.append(("run", where, "L2", "")); wanted = True
             elif sub == "commit":
-                if any(a == "--no-verify" or re.match(r"^-[A-Za-z]*n[A-Za-z]*$", a) for a in rest):
+                if options(rest, COMMIT_FLAGS, COMMIT_VALUED, where, files=("-F", "--file")) is None:
                     return None
                 checks.append(("run", where, "L2", "")); wanted = True
             elif sub == "push":
@@ -537,16 +609,32 @@ def allowable(command, cwd):
             else:
                 return None
         elif prog == "gh" and ws[0] == "gh":
-            repo, rest, i = None, [], 0
+            if any(SUBST in a for a in args):
+                return None
+            repos, rest, i = [], [], 0
             while i < len(args):
                 if args[i] in ("-R", "--repo") and i + 1 < len(args):
-                    repo = args[i + 1]; i += 2; continue
+                    repos.append(args[i + 1]); i += 2; continue
                 if args[i].startswith("--repo="):
-                    repo = args[i].split("=", 1)[1]; i += 1; continue
+                    repos.append(args[i].split("=", 1)[1]); i += 1; continue
                 rest.append(args[i]); i += 1
-            if rest[:1] != ["pr"] or len(rest) < 2 or rest[1] not in ("create", "edit"):
+            if len(repos) > 1 or rest[:1] != ["pr"] or len(rest) < 2 or rest[1] not in GH_FLAGS:
                 return None
-            checks.append(("pr", here, repo)); wanted = True
+            verb = rest[1]
+            parsed = options(rest[2:], GH_FLAGS[verb], GH_VALUED[verb], here, files=("-F", "--body-file"))
+            if parsed is None:
+                return None
+            pos = parsed[0]
+            repo = repos[0] if repos else None
+            if verb == "create":
+                if pos:
+                    return None
+                checks.append(("pr", here, repo))
+            else:  # edit, ready: your own open PR, named by its number
+                if len(pos) != 1 or not pos[0].isdigit():
+                    return None
+                checks.append(("own-pr", here, repo, pos[0]))
+            wanted = True
         elif prog in SAFE_READS and ws[0] == prog:
             continue
         else:
@@ -580,9 +668,15 @@ def granted(checks, session):
             got = ok([run_check, "--dir", c[1], "L2", "push"])
             if not got or not ok([git_push, got["repo"]] + ([c[2]] if c[2] else []) + ["--dir", c[1], "--check"]):
                 return False
-        elif c[0] == "pr":
+        elif c[0] == "pr":  # gh pr create: the PR of the current branch, on the repo of the clone
+            got = ok([run_check, "--dir", c[1], "L3", "open_pr"])
+            if not got or (c[2] and c[2].lower() != got["repo"].lower()):
+                return False
+            if not ok([git_push, got["repo"], "--dir", c[1], "--check"]):
+                return False
+        elif c[0] == "own-pr":  # gh pr edit|ready N: your own open PR, not a fork's
             target = [c[2]] if c[2] else ["--dir", c[1]]
-            if not ok([run_check] + target + ["L3", "open_pr"]):
+            if not ok([run_check] + target + ["L3", "open_pr", "--pr", c[3]]):
                 return False
     return True
 
@@ -622,15 +716,19 @@ def main():
     try:
         found = check(command, cwd=cwd)
         decision, reason = (mode, MESSAGES[found]) if found else (None, None)
-        if fmt == "claude" and found in (None, "push", "gh"):
+    except ValueError as e:
+        found, decision, reason = "?", "ask", f"adorno could not read this command ({e}): check it is not a direct write"
+    except Exception as e:  # a bug here must not let a write through
+        found, decision, reason = "?", "ask", f"adorno's guard failed ({type(e).__name__}): check this command yourself"
+    # the decision above stands; an allow can only replace it after every check passed, and a failure keeps it
+    if fmt == "claude" and found in (None, "push", "gh"):
+        try:
             checks = allowable(command, cwd)
             session = str(event.get("session_id") or os.environ.get("CLAUDE_CODE_SESSION_ID") or "")
             if checks is not None and granted(checks, session):
                 decision, reason = "allow", "inside the open run, at its level (workflow:pr:ship)"
-    except ValueError as e:
-        decision, reason = "ask", f"adorno could not read this command ({e}): check it is not a direct write"
-    except Exception as e:  # a bug here must not let a write through
-        decision, reason = "ask", f"adorno's guard failed ({type(e).__name__}): check this command yourself"
+        except Exception:
+            pass
     if decision:
         print(json.dumps(answer(fmt, decision, reason)))
     return 0
