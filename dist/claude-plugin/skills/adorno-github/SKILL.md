@@ -27,7 +27,7 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | `ci-wait owner/repo#N [seconds]` | waits for the checks to finish (required ones only, if configured) | L0 |
 | `ci-failed owner/repo#N [lines]` | failed runs on the latest commit + log tails in files | L0 |
 | `ci-rerun owner/repo RUN_ID` | re-runs the failed jobs, once per run | L2 |
-| `run-begin --workflow ID --mode report\|draft\|pending\|comment\|auto --level Lx --repo owner/repo… [--deny a,b] [--ttl 2h]` | opens a run for the named repos: what it may write, its folder; `report`/`draft` force a dry run | — |
+| `run-begin --workflow ID --mode report\|draft\|pending\|comment\|auto --level Lx --repo owner/repo… [--deny a,b] [--ttl 2h]` | opens a run for the named repos: what it may write, its folder; `report` forces a dry run, `draft` refuses the conversation (code still goes out) | — |
 | `guard_bash.py deny\|ask [--format=claude\|codex\|gemini]` | hook (Claude Code, Codex, Gemini) installed by `bin/kit install`: refuses or asks to confirm a push, a GitHub publication, a write to the registry or to runs, whatever the shape of the command; blocks everything without `python3`. Inside a run (Claude Code): `allow` for `git add`, `git commit`, a plain push of the branch and `gh pr create\|edit` at the run's level, so a repo's `commit_skill` / `pr_skill` run without a prompt | — |
 | `repo-audit [owner/repo…]` | read-only: type and scope of the `gh` token, default branch protection (ruleset, branch protection), admin rights; advice | — |
 | `run-end ID` | closes the run (always do it, even after a failure) | — |
@@ -50,8 +50,9 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
   (`run-begin`: level, denied actions, covered repos). Without an active run: L0, every write is refused. A run is
   valid only for the repos it names; two runs on the same repo (two sessions): the strictest applies, and the script
   says so. `ADORNO_LEVEL` can only **lower** the level.
-- **Dry run**: a run in `report` or `draft` mode, or `ADORNO_DRY_RUN=1`, makes the write scripts print what they would
-  publish, without publishing anything.
+- **Dry run**: a run in `report` mode, or `ADORNO_DRY_RUN=1`, makes the write scripts print what they would
+  publish, without publishing anything. A `draft` run pushes code and opens or updates the PR, and refuses the
+  conversation: `reply`, `comment`, `resolve`, `rerequest`, `review`, `submit`, `ci_rerun` (exit 4).
 - **Pushing**: `git-push owner/repo <branch>` (no PR) or `pr-push owner/repo#N`. A direct push only from a repo's
   own `commit_skill` / `pr_skill`, inside the run (`workflow:pr:ship`): the guard lets it through at the run's level.
 - **Language**: texts published on GitHub (replies, PR descriptions) are in the repo's `reply_language` (`en` by

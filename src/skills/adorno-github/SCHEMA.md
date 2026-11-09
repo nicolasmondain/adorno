@@ -7,7 +7,7 @@ flowchart TD
   W["Workflow that writes to GitHub"] --> RB["run-begin --workflow --mode --level --repo (names every repo)"]
   RB --> MD{"Mode"}
   MD -->|"report"| F1["Forced: L0 and dry run"]
-  MD -->|"draft"| F2["Forced: dry run, push denied"]
+  MD -->|"draft"| F2["Forced: reply, comment, resolve, rerequest, review, submit, ci_rerun denied; code goes out"]
   MD -->|"pending, comment, auto"| F3["Level as granted, max L3 (L4 never)"]
   F1 --> RF["Run file in ~/.adorno/runs/active, run folder returned"]
   F2 --> RF

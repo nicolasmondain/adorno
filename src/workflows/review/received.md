@@ -16,7 +16,7 @@ Input: {{args}} — with no argument: your open, ready PRs, and only those (`pr-
 | Mode | Does | Level | Publishes |
 | --- | --- | --- | --- |
 | `report` | steps 1 to 4 and 9: what awaits a reply, with the specialists' verified opinion | L0 | nothing |
-| `draft` (default) | + fixes committed in the workspace, replies drafted | L3, push forbidden and dry run (forced by `run-begin --mode draft`) | nothing: commits stay in the workspace |
+| `draft` (default) | + fixes committed, pushed and the PR updated (`workflow:pr:ship`), replies drafted | L3, the conversation refused (forced by `run-begin --mode draft`) | the code only: no reply, resolution nor re-request |
 | `auto` | everything: push, replies, resolutions, reviewer re-requests | L3 | yes, except what `adorno-profile` files under "to validate" |
 
 A lower repo `max_level` always wins.

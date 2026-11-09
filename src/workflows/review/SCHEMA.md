@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart TD
-  A["Input: PR, repo, or none; --mode"] --> B["run-begin L3 (draft forces dry run and no push)"]
+  A["Input: PR, repo, or none; --mode"] --> B["run-begin L3 (draft: code goes out, conversation stays local)"]
   B --> C["Target: pr-status --ready, pr-feedback-fetch, keep needsReplyCount above 0 or CI red"]
   C --> D["pr-workspace: worktree of the PR branch"]
   D --> E["agent:core:triage: triage.json"]

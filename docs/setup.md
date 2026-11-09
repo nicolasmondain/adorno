@@ -114,8 +114,9 @@ same thing with `adorno-github/scripts/repo-conf`.
 **Runs.** Every workflow that writes to GitHub opens a run (`run-begin`) that fixes its mode, its
 level, the actions it forbids itself and the repos it touches (at least one `--repo`), in a file under
 `~/.adorno/runs/active/`, and closes it (`run-end`); a forgotten run expires after 2 h. The scripts read that
-file: without a run open on the repo, any write there is refused; in `report` and `draft`, everything is simulated
-(nothing goes out) and `draft` forbids push, even if a command forgets it. A run belongs to the Claude Code
+file: without a run open on the repo, any write there is refused; in `report`, everything is simulated (nothing goes
+out); in `draft`, the code goes out (commit, push, PR) and the conversation stays local (reply, comment, resolve,
+re-request, review, submit and CI rerun refused), even if a command forgets it. A run belongs to the Claude Code
 session that opened it (`CLAUDE_CODE_SESSION_ID`, set by Claude Code in each command): another
 session does not see it, and cannot lower or raise your permissions. Outside a session (Codex, Gemini, your terminal),
 only runs opened outside a session count. After a `/clear`, the session changes: reopen the run.

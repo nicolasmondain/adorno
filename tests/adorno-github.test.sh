@@ -39,11 +39,14 @@ expect_exit 5 "L4 is never granted" -- "$S/run-begin" --workflow workflow:x:y --
 expect_exit 2 "a run names its repos" -- "$S/run-begin" --workflow workflow:x:y --mode auto --level L3
 expect_exit 2 "an unknown mode is refused (no silent L3 for a typo)" -- "$S/run-begin" --workflow workflow:x:y --mode drafty --level L3 --repo acme/docs
 expect_exit 0 "draft run" -- "$S/run-begin" --workflow workflow:review:received --mode draft --level L3 --repo acme/docs
-expect_jq "draft: push denied, dry run, run folder" '.deny == ["push"] and .dry_run == true and (.dir | test("/runs/review-received-"))'
+expect_jq "draft: the conversation denied, the code not, no dry run, run folder" \
+  '.deny == ["ci_rerun","comment","reply","rerequest","resolve","review","submit"] and .dry_run == false and (.dir | test("/runs/review-received-"))'
 DRAFT="$(jq -r .id <<<"$out")"
-expect_exit 0 "a reply in a draft run is only printed (dry run from the run file)" -- \
+expect_exit 4 "a reply in a draft run is refused (the conversation stays local)" -- \
   sh -c "ADORNO_LEVEL= \"$S/pr-reply\" acme/docs#42 T1 \"$TMP/norun.md\""
-expect_jq "dry run" '.dryRun == true'
+expect_exit 4 "a comment too" -- "$S/pr-comment" acme/docs#42 "$TMP/norun.md"
+expect_exit 0 "a push is allowed in a draft run (workflow:pr:ship)" -- "$S/run-check" acme/docs L2 push
+expect_exit 0 "and opening or updating the PR" -- "$S/run-check" acme/docs L3 open_pr
 expect_exit 0 "end the draft run" -- "$S/run-end" "$DRAFT"
 expect_exit 2 "ending twice is an error" -- "$S/run-end" "$DRAFT"
 expect_exit 0 "report run" -- "$S/run-begin" --workflow workflow:pr:review --mode report --level L3 --repo acme/docs
