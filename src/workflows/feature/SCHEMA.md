@@ -10,7 +10,7 @@ flowchart TD
   SN["workflow:spec:new - checkpoint 1"]
   RT["agent:core:router writes run-plan.yaml"]
   PL["agent:core:planner writes plan.md"]
-  subgraph BUILD["Run plan on branch type/issue-slug (adorno-run-plan)"]
+  subgraph BUILD["Run plan on branch type/slug (adorno-run-plan)"]
     SL["feat:* agent builds each slice - test loop, 3 rounds"]
     QA["agent:test:e2e - screenshots and video for visible slices"]
     RV["Parallel reviewers: review:code, review:security, review:tests, review:ponytail"]
