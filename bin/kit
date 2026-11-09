@@ -591,6 +591,33 @@ def validate_models(m, where: str, agent_ids: set, delegable: set) -> list[str]:
     return errors
 
 
+NOTION_STEPS = ("start", "pr_opened")  # the steps adorno-github/scripts/notion-step knows
+
+
+def validate_notion_spec(spec, where: str) -> list[str]:
+    """`notion_spec`: per workflow step, the properties set on the Notion page used as the spec."""
+    if spec is None:
+        return []
+    if not isinstance(spec, dict):
+        return [f"{where} must be a mapping of steps ({', '.join(NOTION_STEPS)})"]
+    errors: list[str] = []
+    for step, props in spec.items():
+        if step not in NOTION_STEPS:
+            errors.append(f"{where}: unknown step '{step}' (known: {', '.join(NOTION_STEPS)})")
+            continue
+        if props is None:
+            continue
+        if not isinstance(props, dict):
+            errors.append(f"{where}.{step} must map property names to values")
+            continue
+        for name, value in props.items():
+            if value is not None and not isinstance(value, (str, int, float, bool)):
+                errors.append(f"{where}.{step}.{name} must be a string, a number, a boolean or null")
+            elif step != "pr_opened" and isinstance(value, str) and "{{pr_url}}" in value:
+                errors.append(f"{where}.{step}.{name}: {{{{pr_url}}}} only exists once the PR is open (pr_opened)")
+    return errors
+
+
 def validate_registry(reg: dict, agent_ids: set, delegable: set) -> list[str]:
     """repos.yaml and the personal layer: references, levels, permissions, shapes."""
     errors: list[str] = []
@@ -633,6 +660,7 @@ def validate_registry(reg: dict, agent_ids: set, delegable: set) -> list[str]:
                     errors.append(f"{where}: {scope}.impact.post must be comment or none")
                 if imp.get("sources") is not None and not isinstance(imp["sources"], list):
                     errors.append(f"{where}: {scope}.impact.sources must be a list")
+        errors += validate_notion_spec(conf.get("notion_spec"), f"{where}: {scope}.notion_spec")
         if conf.get("voice") is not None and not isinstance(conf["voice"], dict):
             errors.append(f"{where}: {scope}.voice must be a mapping")
         perms = conf.get("permissions")
