@@ -23,6 +23,7 @@ flowchart TD
   GH --> RE["run-end ID (always, even after a failure)"]
   PR --> RE
   GD["guard_bash.py deny or ask hook (installed by bin/kit install)"] -.->|"refuses raw git push, gh writes, registry or run edits"| WS
+  GD -.->|"inside a run: allow commit, plain push, gh pr create or edit (run-check, git-push --check)"| RF
   RA["repo-audit (read only): token scope, branch protection, admin"] -.-> OUTA["Advice for the owner"]
 ```
 

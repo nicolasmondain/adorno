@@ -71,7 +71,8 @@ Goal: the workflows know this repo — or a whole set of repos — and act withi
    - `permissions.deny`: GitHub actions to refuse there (`push`, `reply`, `comment`, `resolve`, `rerequest`, `review`,
      `submit`, `open_pr`, `ci_rerun`);
    - `permissions.claude` (`allow`, `ask`, `deny`): native Claude Code rules for that repo, e.g. allow its test and lint
-     commands, deny `Bash(git push:*)`.
+     commands, ask `Bash(npm publish:*)` (a native `deny` on `git push` would also stop the end of the workflows:
+     `workflow:pr:ship` then pushes through `git-push` / `pr-push`).
 5. **Voice and vision for this repo** — only what differs (`voice: {formality: formal}` on public docs, a `vision`
    line…).
 6. **Show, then write** — the YAML block to add to `local/adorno.yaml`, merged by hand into the existing file

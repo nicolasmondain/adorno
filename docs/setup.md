@@ -125,9 +125,9 @@ runs are read there, and only there. The real cap remains the repo's `max_level`
 mode and level of its run, `max_level` and `permissions.deny` bound them.
 
 **The default rules.** `repos.yaml` installs Claude Code rules that forbid direct write commands:
-`git push`, `gh pr create|comment|review|merge|close|edit`, `gh issue comment|create`, `gh release`, and
-modification of the registry and the runs; any direct call to `gh api` (which writes as soon as it gets `-f`) asks
-you for confirmation. The agents publish through the scripts, which check the permissions. Your rules are added to them (lists
+`gh pr comment|review|merge|close`, `gh issue comment|create`, `gh release`, and modification of the registry and
+the runs. `git push`, `gh pr create|edit` and `gh api` have no native rule: a native rule would win over the guard,
+which decides them (below). The agents publish through the scripts, which check the permissions. Your rules are added to them (lists
 add up from one level to the next, never replace each other).
 
 **The guard hook.** The rules only compare the start of a command. `bin/kit install` also installs a hook
@@ -138,6 +138,14 @@ the code passed to `python3 -c` or `node -e`, and the local scripts a command ru
 `HOME=` in front of an adorno script and any attempt to set `CLAUDE_CODE_SESSION_ID`. A command it cannot
 read (a variable as program, unclosed quotes) asks you; so does a bug in the hook. Without `python3`, or
 if the hook file is missing, it blocks every shell command rather than let it through.
+
+**Inside a run, no prompt.** The end of a workflow (`workflow:pr:ship`) runs the repo's `commit_skill` and
+`pr_skill` without asking. For Claude Code, the guard answers `allow` to a command made only of `git add`,
+`git commit` (never `--no-verify`), a plain `git push` to `origin` (never forced, never the base, a name matching
+`branch_pattern`), `gh pr create|edit`, adorno's own scripts, `cd` and read-only commands, when the session's open run
+covers the repo at the level each needs (L2 to commit and push, L3 for the PR), within `max_level` and
+`permissions.deny`, and not in a dry run (`run-check`, `git-push --check`). Anything else, or the same outside a run:
+the decision above.
 
 | Tool | In a repo | With `--global` |
 | --- | --- | --- |

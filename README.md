@@ -218,7 +218,7 @@ stops the install before any write.
 
 Four barriers separate an agent command from GitHub (details in `docs/setup.md`, step 4):
 
-1. **Native rules** of each tool, on the start of the command (`git push`, `gh pr comment`…).
+1. **Native rules** of each tool, on the start of the command (`gh pr comment`, `gh pr merge`…).
 2. **Guard hook** (`guard_bash.py`, for Claude Code, Codex and Gemini): it reads the command the way the shell does
    (`git -C x push`, `bash -c '…'`, `$( … )`, git aliases, `python3 -c`, local scripts being run); it blocks everything if
    `python3` is missing.
@@ -228,7 +228,8 @@ Four barriers separate an agent command from GitHub (details in `docs/setup.md`,
    whether your token is too broad.
 
 In an installed repo, barriers 1 and 2 refuse; with `--global` (valid in all your projects), they ask you
-for confirmation.
+for confirmation. Inside a run, the guard lets the end of a workflow through without a prompt: commit, a plain push
+of the branch, `gh pr create|edit`, at the run's level (`docs/setup.md`, step 4).
 
 | | Skills | Agents | Workflows | Instructions |
 | --- | --- | --- | --- | --- |

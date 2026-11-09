@@ -43,7 +43,7 @@ expect_exit 0 "public check" -- env ADORNO_LOCAL="$TMP/none" "${KIT[@]}" check
 expect_exit 0 "check with the template layer" -- "${KIT[@]}" check
 expect_exit 0 "conf of a repo" -- "${KIT[@]}" conf acme/app
 expect_jq "workspace and exact entry resolved, deny lists accumulated" \
-  '(.scopes | index("workspace:acme")) != null and (.scopes | index("repos:acme/app")) != null and (.permissions.claude.deny | index("Bash(git push:*)")) != null'
+  '(.scopes | index("workspace:acme")) != null and (.scopes | index("repos:acme/app")) != null and (.permissions.claude.deny | index("Bash(gh pr merge:*)")) != null'
 expect_jq "commit_skill and pr_skill: repo override over the public defaults" \
   '.commit_skill == "/acme-commit" and .pr_skill == "/acme-pr"'
 expect_exit 0 "conf, case-insensitive" -- "${KIT[@]}" conf ACME/App
@@ -85,7 +85,7 @@ check "the registry lives in the kit home, read-only" '[ "$(ls -l "$ADORNO_HOME/
 check "no personal registry inside the repo" '! grep -rq "janedoe" "$A/.claude/skills/adorno-github/repos.json"'
 check "SCHEMA.md is neither an item nor shipped" '[ -f "$ROOT/src/agents/review/SCHEMA.md" ] && [ -z "$(find "$A/.claude" "$A/.codex" -iname "*schema*" 2>/dev/null)" ]'
 check "your own rules and keys are kept" 'jq -e ".model == \"x\" and (.permissions.allow | index(\"Bash(make:*)\")) != null" "$A/.claude/settings.local.json" >/dev/null'
-check "the repo's and the default rules are added" 'jq -e "(.permissions.allow | index(\"Bash(npm test:*)\")) != null and (.permissions.deny | index(\"Bash(git push:*)\")) != null" "$A/.claude/settings.local.json" >/dev/null'
+check "the repo's and the default rules are added" 'jq -e "(.permissions.allow | index(\"Bash(npm test:*)\")) != null and (.permissions.deny | index(\"Bash(gh pr merge:*)\")) != null" "$A/.claude/settings.local.json" >/dev/null'
 check "the guard hook refuses direct writes in this repo" 'jq -e "[.hooks.PreToolUse[].hooks[].command | select(contains(\"guard_bash.py\") and contains(\" deny --format=claude\"))] | length == 1" "$A/.claude/settings.local.json" >/dev/null'
 check "Codex gets the same hook" 'jq -e "[.hooks.PreToolUse[] | select(.matcher == \"^Bash$\") | .hooks[].command | select(contains(\"--format=codex\"))] | length == 1" "$A/.codex/hooks.json" >/dev/null'
 HOOK="$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$A/.claude/settings.local.json")"

