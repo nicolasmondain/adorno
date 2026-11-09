@@ -191,6 +191,10 @@ def heredocs(command):
     Read the way the shell reads it: a `<<` inside quotes is text, not an operator (`-m "a;git <<'EOF'"` must not hide
     the next lines), one inside $( … ) or backticks is code. The operators are removed from the command: the body is
     checked apart, and the operator alone would read as unterminated."""
+    if "<<" in command and any(t in command for t in ("${", "((", "<(", ">(", "[[", "$'", '$"', "\\\n")):
+        # forms this lexer does not model (parameter expansion, arithmetic, process substitution, ANSI-C quotes,
+        # line continuations): with a heredoc around, which lines are body is not certain, so it asks
+        raise ValueError("a heredoc next to an expansion this guard does not read")
     lines, out, bodies, stack, i = command.split("\n"), [], [], [], 0
     while i < len(lines):
         line = lines[i]; i += 1
@@ -231,6 +235,9 @@ def heredocs(command):
                 m = HEREDOC.match(line, j)
                 if not m:
                     raise ValueError("unreadable heredoc")
+                # only where bash surely reads an operator: top level, or right inside $( … ) (even within "…")
+                if stack and (stack[-1] != "$(" or any(x not in ("$(", '"') for x in stack)):
+                    raise ValueError("a heredoc inside an expansion")
                 ops.append((m.start(), m.end(), m.group(1) == "-", bool(m.group(2)), m.group(3), seg))
                 j = m.end(); continue
             j += 1
