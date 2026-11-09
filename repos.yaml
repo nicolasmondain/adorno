@@ -19,6 +19,8 @@
 #   areas            code areas: path patterns (bash globs, `*` crosses folders) and/or
 #                    regexes on added lines; an area can be overridden per repo
 #   area_reviewers   reviewer agents requested depending on the areas touched (`always` = every time)
+#   notion_spec      properties of the Notion page used as a run's spec, per step (`start`, `pr_opened`): property →
+#                    value, `{{today}}`, `{{pr_url}}`; set in local/adorno.yaml only (adorno-notion-sync)
 #   impact           impact analysis of merged PRs (workflow:pr:impact): window compared before / after the
 #                    deployment, minimum delay before analysing, sources to query (connectors and hints:
 #                    dashboards, services, projects, alert channels), whether to post as a comment

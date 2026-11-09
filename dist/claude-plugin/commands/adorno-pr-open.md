@@ -21,4 +21,6 @@ Input: $ARGUMENTS
    "yes".
 5. `adorno-github/scripts/git-push owner/repo <branch>` (never a direct `git push`), then `pr-open owner/repo <branch> "<title>" <file> --draft`: draft until
    CI is green (`process.md`), registry reviewers without the author.
-6. Return the PR URL and suggest `workflow:pr:watch owner/repo#N`.
+6. With an `.agent-run` folder: `adorno-notion-sync pr_opened <folder> owner/repo --pr-url <PR URL>` (the Notion page
+   used as the spec gets the repo's `notion_spec.pr_opened` properties; a Notion failure is reported, the PR stays).
+7. Return the PR URL and suggest `workflow:pr:watch owner/repo#N`.

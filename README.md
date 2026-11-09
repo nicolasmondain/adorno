@@ -159,7 +159,8 @@ The public repo contains no profile: only templates, in `local.example/`.
 
 **Skills**: `adorno-setup`, `adorno-profile`, `adorno-voice`, `adorno-learn` (the profile that learns from your
 corrections), `adorno-github` (`gh` scripts tested without network, runs and permissions), `adorno-watch` (settings and
-memory of the Slack and Notion watches), `adorno-llm` (a task sent to an OpenAI-compatible model),
+memory of the Slack and Notion watches), `adorno-notion-sync` (the properties of the Notion spec page at each step,
+from your repo config), `adorno-llm` (a task sent to an OpenAI-compatible model),
 `adorno-run-plan` (run a plan from the session), `adorno-commit`, and the skills imported as is: [addy/agent-skills](https://skills.addy.ie/) (method, from spec
 to deployment), [ponytail](https://ponytail.dev/) (the least code that works),
 [playwright-cli](https://github.com/microsoft/playwright-cli) and

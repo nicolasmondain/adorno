@@ -2,7 +2,7 @@
 description: Opens the PR of a ready branch — review gate first (area specialists + your agent), then title and description in English following your template, reviewers from the registry. No PR while a 🔴 or a 🟠 is unresolved or unaccepted.
 args: "<owner/repo> <branch> [.agent-run folder]"
 uses:
-  skills: [adorno-github, adorno-commit, adorno-profile, adorno-voice]
+  skills: [adorno-github, adorno-commit, adorno-profile, adorno-voice, adorno-notion-sync]
   agents: [agent:core:triage, agent:adorno, agent:review:code, agent:review:ponytail, agent:review:front, agent:review:back, agent:review:mongodb, agent:review:api, agent:review:security, agent:review:tests]
 ---
 
@@ -24,4 +24,6 @@ Input: {{args}}
    "yes".
 5. `adorno-github/scripts/git-push owner/repo <branch>` (never a direct `git push`), then `pr-open owner/repo <branch> "<title>" <file> --draft`: draft until
    CI is green (`process.md`), registry reviewers without the author.
-6. Return the PR URL and suggest `workflow:pr:watch owner/repo#N`.
+6. With an `.agent-run` folder: `adorno-notion-sync pr_opened <folder> owner/repo --pr-url <PR URL>` (the Notion page
+   used as the spec gets the repo's `notion_spec.pr_opened` properties; a Notion failure is reported, the PR stays).
+7. Return the PR URL and suggest `workflow:pr:watch owner/repo#N`.

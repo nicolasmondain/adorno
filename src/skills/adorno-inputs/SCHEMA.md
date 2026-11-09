@@ -2,8 +2,9 @@
 
 ```mermaid
 flowchart TD
-  T["Trigger: start of workflow:spec:new, workflow:feature:build, workflow:issue:fix with links or a plan"] --> IR["scripts/input-refs: text, refs, kinds (read only, no network)"]
-  IR --> K{"Kind of each ref"}
+  T["Trigger: start of workflow:spec:new, workflow:feature:build, workflow:issue:fix with links or a plan"] --> IR["scripts/input-refs: text, refs in request order, kinds (read only, no network)"]
+  IR --> RJ["Save refs.json in the run folder (read by adorno-notion-sync)"]
+  RJ --> K{"Kind of each ref"}
   K -->|"slack"| SL["Slack connector: whole thread via slack_read_thread"]
   K -->|"notion"| NO["Notion connector: notion-fetch page and comments"]
   K -->|"github-issue, github-ref"| GI["adorno-github/scripts/issue-fetch"]

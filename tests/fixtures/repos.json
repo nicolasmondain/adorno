@@ -13,7 +13,17 @@
       "reviewers": [
         "alice",
         "octocat"
-      ]
+      ],
+      "notion_spec": {
+        "start": {
+          "Lifecycle": "Ongoing",
+          "Owner": null
+        },
+        "pr_opened": {
+          "Lifecycle": "In Code Review",
+          "PR": "{{pr_url}}"
+        }
+      }
     },
     "acme/readonly": {
       "max_level": "L0"
@@ -72,7 +82,14 @@
       ],
       "context": [
         "workspace line"
-      ]
+      ],
+      "notion_spec": {
+        "start": {
+          "Lifecycle": "Planned",
+          "Working date": "{{today}}",
+          "Owner": "workspace"
+        }
+      }
     }
   }
 }
