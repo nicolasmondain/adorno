@@ -228,7 +228,7 @@ Four barriers separate an agent command from GitHub (details in `docs/setup.md`,
    whether your token is too broad.
 
 In an installed repo, barriers 1 and 2 refuse; with `--global` (valid in all your projects), they ask you
-for confirmation.
+for confirmation, and refuse where nobody can answer (`bypassPermissions`, `dontAsk`: a schedule, a headless run).
 
 | | Skills | Agents | Workflows | Instructions |
 | --- | --- | --- | --- | --- |
