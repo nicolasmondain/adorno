@@ -6,10 +6,12 @@ Usage (bin/kit install writes it into the settings of Claude Code, Codex and Gem
 Reads the hook event on stdin. A command that pushes, publishes on GitHub, edits adorno's registry or runs, or moves
 HOME for an adorno script gets `deny` (in a repo install) or `ask` (in a global install, which applies to every
 project). Permission rules only compare the start of a command; this reads it the way a shell does: chained
-commands (; && || |), subshells, $( … ) and backticks, `bash -c '…'`, `eval`, `env`/`sudo`/`command` wrappers,
-`git -C dir`, git aliases, quotes, heredocs; it reads the code given to python -c / node -e and the local scripts a command
-runs (./x.sh, bash x.sh, python3 x.py). A command it cannot read (a variable as program, unbalanced quotes) asks, and
-so does a bug in the guard. Anything else passes untouched (no output, exit 0).
+commands (; && || |), subshells, $( … ) and backticks, $(( … )) arithmetic, `bash -c '…'`, `eval`,
+`env`/`sudo`/`command` wrappers, `git -C dir`, git aliases, quotes, heredocs; it reads the code given to python -c /
+node -e and the local scripts a command runs (./x.sh, bash x.sh, python3 x.py). A command it cannot read (a variable as
+program, unbalanced quotes) asks, and so does a bug in the guard. Where nobody answers a prompt (permission_mode
+`bypassPermissions` or `dontAsk`: a schedule, a headless run), every `ask` becomes a `deny` carrying the reason, so the
+agent rewrites its command instead of hanging. Anything else passes untouched (no output, exit 0).
 """
 import glob
 import json
@@ -53,7 +55,48 @@ MESSAGES = {
 }
 
 
+def arithmetic_end(command, i):
+    """Where the $(( at i ends if it is arithmetic, else None. Bash reads it as arithmetic only when it closes on `))`;
+    `$((cmd); cmd)` or `$((cmd) )` is a command substitution holding a subshell. A body with ; quotes ` \\ or a newline
+    is not left to masking either: the lexer reads it as before."""
+    depth, j, n = 2, i + 3, len(command)
+    while j < n:
+        c = command[j]
+        if c in ";'\"`\\\n":
+            return None
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth == 1:
+                return j + 2 if command.startswith(")", j + 1) else None
+        j += 1
+    return None
+
+
+def mask_arithmetic(command):
+    """Unquoted $(( … )) replaced by a plain word: the shell computes it and runs nothing, and its parentheses would
+    otherwise be read as subshells (a $( … ) inside it is still found by substitutions, which scans the raw command).
+    A quoted `$((` is text, and anything that is not plain arithmetic stays as it is."""
+    out, i, n, dquote = [], 0, len(command), False
+    while i < n:
+        c = command[i]
+        if c == "\\":
+            out.append(command[i:i + 2]); i += 2
+        elif c == "'" and not dquote:
+            j = command.find("'", i + 1)
+            j = n if j < 0 else j + 1
+            out.append(command[i:j]); i = j
+        elif c == '"':
+            dquote = not dquote; out.append(c); i += 1
+        else:
+            end = arithmetic_end(command, i) if command.startswith("$((", i) else None
+            out.append("_arith_" if end else c); i = end or i + 1
+    return "".join(out)
+
+
 def words(command):
+    command = mask_arithmetic(command)
     lex = shlex.shlex(command.replace("\r", " ").replace("\n", " ; "), posix=True, punctuation_chars=";&|()<>")
     lex.whitespace_split = True
     lex.commenters = ""
@@ -88,6 +131,10 @@ def strip(cmd):
                 elif "=" in cmd[i] and not cmd[i].startswith("-"):
                     env.append(cmd[i])
                 i += 1
+        elif re.fullmatch(r"[<>&]+", w):  # a leading redirection (> f, <<< w, 2>&1) and its target: not the program
+            i += 2
+        elif w.isdigit() and i + 1 < len(cmd) and re.fullmatch(r"[<>&]+", cmd[i + 1]):
+            i += 3
         elif w in KEYWORDS:
             i += 1
         elif w in WRAPPERS or w in WRAPPER_ARGS:
@@ -202,7 +249,9 @@ def substitutions(command):
     """The commands inside $( … ) and ` … ` (nested ones included), which the shell runs before the rest."""
     out, i, n = [], 0, len(command)
     while i < n:
-        if command.startswith("$(", i) and not command.startswith("$((", i):
+        if command[i] == "\\":  # \` and \$( are literal characters, not a substitution
+            i += 2
+        elif command.startswith("$(", i) and not command.startswith("$((", i):
             depth, j = 1, i + 2
             while j < n and depth:
                 if command.startswith("$(", j):
@@ -429,6 +478,8 @@ def main():
         command = " ".join(shlex.quote(str(c)) for c in command)
     command = str(command or "")
     cwd = event.get("cwd") or tool_input.get("directory") or os.getcwd()
+    # bypassPermissions (a schedule, an agent profile) and dontAsk: no one answers a prompt, the tool call would hang
+    unattended = event.get("permission_mode") in ("bypassPermissions", "dontAsk")
     try:
         found = check(command, cwd=cwd)
         decision, reason = (mode, MESSAGES[found]) if found else (None, None)
@@ -436,6 +487,8 @@ def main():
         decision, reason = "ask", f"adorno could not read this command ({e}): check it is not a direct write"
     except Exception as e:  # a bug here must not let a write through
         decision, reason = "ask", f"adorno's guard failed ({type(e).__name__}): check this command yourself"
+    if decision == "ask" and unattended:
+        decision = "deny"
     if decision:
         print(json.dumps(answer(fmt, decision, reason)))
     return 0
