@@ -13,15 +13,16 @@ Input: the user’s request — with no argument: your open, ready PRs, and only
 **Run** — before any write: `adorno-github/scripts/run-begin --workflow workflow:review:received --mode <mode> --level L3 --repo owner/repo [--repo …]` — once the PR list is known, one `--repo` per repo to process (a run only covers the repos it names); keep `id` and `dir` (the run folder). Called by another workflow that already opened its own: reuse it. Always, even after a failure: `run-end <id>`. With no open run, the scripts refuse any write.
 
 **Never ask the owner mid-run** — this workflow often runs unattended (a scheduled job): a question blocks it. Every
-item is ruled by `agent:adorno` from the specialists' evidence, whatever its severity or category. Only what no agent
-may do (a conflict to rebase, a refused action, exit code 4 or 5, a need beyond the run's level) goes to *What awaits
-your decision* in the report, and it never blocks the other items or PRs.
+item is ruled by `agent:adorno` from the specialists' evidence, whatever its severity or category. What no agent may
+settle goes to *What awaits your decision* in the report, and never blocks the other items or PRs: a conflict to
+rebase, a refused action (exit 4 or 5) other than those steps 2 and 7 handle, a need beyond the run's level, and
+what step 7 leaves open.
 
 | Mode | Does | Level | Publishes |
 | --- | --- | --- | --- |
 | `report` | steps 1 to 4 and 9: what awaits a reply, with the specialists' verified opinion | L0 | nothing |
 | `draft` (default) | + fixes committed in the workspace, replies drafted | L3, push forbidden and dry run (forced by `run-begin --mode draft`) | nothing: commits stay in the workspace |
-| `auto` | everything: push, replies, resolutions, reviewer re-requests | L3 | yes: every settled item is replied to and resolved |
+| `auto` | everything: push, replies, resolutions, reviewer re-requests | L3 | yes (step 7) |
 
 A lower repo `max_level` always wins.
 
@@ -30,11 +31,12 @@ A lower repo `max_level` always wins.
    turn the agents of all the PRs in the batch (you delegate: an agent does not launch agents); from each PR keep
    in context only the deliverables (`triage.json`, verdicts), never the raw exchanges.
 2. **Workspace** — `pr-workspace owner/repo#N`, run from your clone of the repo: the worktree of the PR's branch,
-   created if it does not exist (`worktree: branch`); never a shared workspace from a previous pass. Refused if there are
-   uncommitted changes or commits missing from GitHub. In `auto`, when those commits are the fixes of a previous
-   `draft` pass (their SHAs are listed in a previous `status.md` of this PR): `review:code` and `review:ponytail` on
-   them, `pr-push owner/repo#N`, then `pr-workspace` again. Otherwise (unknown commits, uncommitted changes): stop
-   on this PR and report it. Run folder: `<workspace>/.agent-run/feedback-<date>/` (one per PR, under the open run), with
+   created if it does not exist (`worktree: branch`); never a shared workspace from a previous pass. Refused (exit 4) if there are
+   uncommitted changes or commits missing from GitHub. In `auto`, for commits missing from GitHub only: the error
+   names the worktree `<dir>`; list `git -C <dir> rev-list @{upstream}..HEAD`; if **every** one of these SHAs is
+   listed as reviewed in a `<dir>/.agent-run/feedback-*/status.md` (the fixes of a previous `draft` pass, step 6),
+   `pr-push owner/repo#N`, then `pr-workspace` again. Otherwise (a SHA not listed, uncommitted changes): stop on
+   this PR and report it. Run folder: `<workspace>/.agent-run/feedback-<date>/` (one per PR, under the open run), with
    `feedback.json`.
 3. **Triage** — `agent:core:triage` classifies each item where `needsReply` is true (thread, general comment,
    review summary): category (`fix`, `nit`, `test`, `question`, `disagree`, `scope`, `done`), **area** (deduced
@@ -45,20 +47,19 @@ A lower repo `max_level` always wins.
    specialist(s) of its area in **consult** mode, in parallel: is the reviewer right? evidence required
    (code read, command run in the workspace) → `consult/<item>-<agent>.json`.
 5. **Decide** — `agent:adorno`, situation 3: loads the area (repo rules, profile, the repo's `repo-conf`), reads triage and opinions, consults another specialist if an opinion does not hold, and rules
-   **confirmed / refused / deferred** for each item, with no exception: a `minor`, a `nit`, a `question`, a
-   `disagree` are ruled like the rest, never handed back to the owner; `scope` → deferred, follow-up named. A colleague: no evidence against them → confirmed. A bot: not
-   reproduced → refused. Deferred: the next slice of the stack, named.
-6. **Fix** (`draft` and `auto` modes) — every confirmed item, minors and nits included (none is left for the owner
-   to pick), in the workspace, each fix by the designated agent (`fix:patch`,
+   **confirmed / refused / deferred** for each item. A colleague: no evidence against them → confirmed. A bot: not
+   reproduced → refused. Deferred (`scope` included): the next slice of the stack or a follow-up, named.
+6. **Fix** (`draft` and `auto` modes) — every confirmed item, in the workspace, each fix by the designated agent (`fix:patch`,
    `refactor:simplify`, `test:unit`, or the agent of the subject's family): one typed commit per item, message citing
    the comment, repo tests and lint green, three rounds at most. Then `review:code` and `review:ponytail` on the
-   new commits only; a `blocker` → back to the fix, twice at most. Each commit's SHA and item go in `status.md`.
+   new commits only; a `blocker` → back to the fix, twice at most. Right after, each commit's SHA, its item and the review
+   outcome (reviewed or not) go in `status.md`.
 7. **Publish** (`auto` mode) — `pr-push owner/repo#N` (never forced). Then `agent:adorno` writes a reply to **every** item
    in the repo's language (`reply_language`, English by default) and in your voice, with the commit SHA, and publishes: `pr-reply` (thread) or `pr-comment` (general
-   comment, review summary). Then it resolves (`pr-resolve`) every thread it replied to: confirmed (the commit SHA),
-   refused (why the point does not hold, with the specialist's evidence, `file:line` or rule), deferred (where it
-   goes), question (the answer). A reply answers, it does not ask the reviewer back. Only two cases stay open and
-   unpublished, listed in the report: a point about a person (draft), and a fix still failing after its caps.
+   comment, review summary). Then it resolves (`pr-resolve`) every thread it replied to. Left open and listed in the
+   report: a point about a person and a confirmed item with no fix commit (failing after its caps), both
+   unpublished drafts; a thread `pr-resolve` refuses (exit 4: the repo's `resolve_threads` leaves it to the
+   reviewer, or the PR is not yours), reply published, resolution left to the reviewer.
 8. **Re-request** — `pr-rerequest owner/repo#N` for each reviewer whose points are all handled;
    `ci-wait owner/repo#N`, and `workflow:ci:red` if CI turns red (two attempts at most).
 9. **Report** — `status.md` per PR and, as the reply, a table: PR, item, what the reviewer said, verified verdict
