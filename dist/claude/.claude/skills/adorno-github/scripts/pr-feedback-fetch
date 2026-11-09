@@ -4,6 +4,9 @@
 #   threads       unresolved review threads; `needsReply` = the last comment is not yours
 #   conversation  PR comments by others; `needsReply` = posted after your last PR comment
 #   reviews       review summaries by others; `needsReply` = non-empty, posted after your last PR comment
+#   pending       [{id, kind}] of what needs handling: every `needsReply` item, plus the red CI of the head commit.
+#                 `id` changes with new activity (thread: its last comment; CI: the head SHA), so
+#                 `watch-seen filter review-received` drops only what was already handled, unchanged.
 # `bot: true` marks authors that are GitHub Apps (CI reports, AI reviewers): verify, rarely answer.
 . "$(dirname "$0")/_lib.sh"
 
@@ -15,8 +18,8 @@ query='query($owner:String!,$name:String!,$num:Int!){
   repository(owner:$owner, name:$name){ pullRequest(number:$num){
     number title url isDraft reviewDecision headRefName headRefOid baseRefName isCrossRepository
     author{ login }
-    reviews(last:30){ nodes{ author{ login __typename } state submittedAt body url } }
-    comments(last:50){ nodes{ author{ login __typename } body url createdAt } }
+    reviews(last:30){ nodes{ id author{ login __typename } state submittedAt body url } }
+    comments(last:50){ nodes{ id author{ login __typename } body url createdAt } }
     reviewThreads(first:100){ pageInfo{ hasNextPage } nodes{
       id isResolved isOutdated path line
       comments(first:30){ nodes{ id author{ login __typename } body url createdAt } } } }
@@ -29,6 +32,7 @@ gh api graphql -f query="$query" -F owner="$OWNER" -F name="$NAME" -F num="$NUM"
   .data.viewer.login as $me
   | .data.repository.pullRequest as $p
   | ([$p.comments.nodes[] | select(who == $me) | .createdAt] | max // "") as $lastMine
+  | "\($repo)#\($p.number)" as $ref
   | {
       repo: $repo, viewer: $me,
       pr: { number: $p.number, title: $p.title, url: $p.url, isDraft: $p.isDraft,
@@ -38,14 +42,20 @@ gh api graphql -f query="$query" -F owner="$OWNER" -F name="$NAME" -F num="$NUM"
             ci: ($p.commits.nodes[0].commit.statusCheckRollup.state // "NONE") },
       threads: [ $p.reviewThreads.nodes[] | select(.isResolved | not)
                  | {id, path, line, isOutdated,
+                    key: "\($ref)/thread/\(.id)@\(.comments.nodes[-1].id // "")",
                     comments: [ .comments.nodes[] | {id, author: who, bot: bot, body, url, createdAt} ]}
                  | .needsReply = ((.comments | length) > 0 and .comments[-1].author != $me) ],
       conversation: [ $p.comments.nodes[] | select(who != $me)
-                      | {author: who, bot: bot, body, url, createdAt,
+                      | {id, key: "\($ref)/comment/\(.id)", author: who, bot: bot, body, url, createdAt,
                          needsReply: ((bot | not) and .createdAt > $lastMine)} ],
       reviews: [ $p.reviews.nodes[] | select(who != $me)
-                 | {author: who, bot: bot, state, submittedAt, body, url,
+                 | {id, key: "\($ref)/review/\(.id)", author: who, bot: bot, state, submittedAt, body, url,
                     needsReply: ((bot | not) and .body != "" and .submittedAt > $lastMine)} ],
       truncated: $p.reviewThreads.pageInfo.hasNextPage
     }
-  | .needsReplyCount = ([.threads[], .conversation[], .reviews[] | select(.needsReply)] | length)'
+  | .needsReplyCount = ([.threads[], .conversation[], .reviews[] | select(.needsReply)] | length)
+  | .pending = ([ (.threads[] | select(.needsReply) | {id: .key, kind: "thread"}),
+                  (.conversation[] | select(.needsReply) | {id: .key, kind: "comment"}),
+                  (.reviews[] | select(.needsReply) | {id: .key, kind: "review"}) ]
+                + (if (.pr.ci == "FAILURE" or .pr.ci == "ERROR")
+                   then [{id: "\($ref)/ci@\(.pr.headSha)", kind: "ci"}] else [] end))'

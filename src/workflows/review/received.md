@@ -1,8 +1,8 @@
 ---
 description: Goes over all your open PRs (or a single one) — every unanswered comment, thread or review summary is checked by the subject's specialist in a dedicated workspace, fixed if needed, then your agent replies in your voice and resolves. Modes report, draft (default), auto.
-args: "[owner/repo#N | owner/repo] [--mode report|draft|auto]"
+args: "[owner/repo#N | owner/repo] [--mode report|draft|auto] [--all]"
 uses:
-  skills: [adorno-github, adorno-profile, adorno-voice]
+  skills: [adorno-github, adorno-watch, adorno-profile, adorno-voice]
   agents: [agent:core:triage, agent:adorno, agent:review:code, agent:review:ponytail, agent:review:front, agent:review:perf, agent:review:back, agent:review:mongodb, agent:review:api, agent:review:security, agent:review:tests, agent:fix:patch, agent:refactor:simplify, agent:test:unit]
   workflows: [workflow:ci:red]
 model: balanced
@@ -21,8 +21,11 @@ Input: {{args}} — with no argument: your open, ready PRs, and only those (`pr-
 
 A lower repo `max_level` always wins.
 
-1. **Target** — with no argument: `pr-status --ready` (no drafts, no archived; most recently updated first), then `pr-feedback-fetch` on each `registered` PR; keep those with
-   `needsReplyCount > 0` or with red CI. PRs are independent: in batches of `max_parallel`, launch in the same
+1. **Target** — with no argument: `pr-status --ready` (no drafts, no archived; most recently updated first), then `pr-feedback-fetch` on each `registered` PR.
+   **Keep only what is new**: `pr-feedback-fetch owner/repo#N | jq .pending | adorno-watch/scripts/watch-seen filter
+   review-received -` — `pending` lists what needs a reply plus a red CI, each keyed by its last activity (a new reply
+   in a thread, a new head commit bring it back); keep the PRs with at least one entry left, and hand triage only
+   those items. An explicit `owner/repo#N` or `--all` skips this filter (that is how a draft gets published). PRs are independent: in batches of `max_parallel`, launch in the same
    turn the agents of all the PRs in the batch (you delegate: an agent does not launch agents); from each PR keep
    in context only the deliverables (`triage.json`, verdicts), never the raw exchanges.
 2. **Workspace** — `pr-workspace owner/repo#N`, run from your clone of the repo: the worktree of the PR's branch,
@@ -53,3 +56,6 @@ A lower repo `max_level` always wins.
 9. **Report** — `status.md` per PR and, as the reply, a table: PR, item, what the reviewer said, verified verdict
    (right / partly / wrong / unclear), action, reply published or drafted. **At the top: what awaits
    your decision.** In `draft`, the command to publish everything: `workflow:review:received owner/repo#N --mode auto`.
+10. **Remember** (`draft` and `auto` modes) — `watch-seen mark review-received <id>…` with the `pending` ids of each
+   PR that got its verdicts (not a PR stopped at step 2), then `watch-seen touch review-received`: the next sweep
+   skips them until someone writes again. `report` remembers nothing.

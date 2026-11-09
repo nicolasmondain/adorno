@@ -38,7 +38,8 @@ never scrape, never ask for a token.
 | `watch-seen mark KEY ID…` | records items as processed — **only after** their action and report are done |
 | `watch-seen last KEY` / `touch KEY` | time of the last run / record this run |
 
-State keys: `slack-watch-<name>`, `slack-mentions`, `notion-assigned`.
+State keys: `slack-watch-<name>`, `slack-mentions`, `notion-assigned`, `review-received` (the `pending` ids of
+`adorno-github/scripts/pr-feedback-fetch`).
 Exit codes: 2 usage, 3 not configured (point the owner to the `adorno-setup` skill).
 
 ## Normalised message
