@@ -4,9 +4,10 @@
 
 ```mermaid
 flowchart TD
-  A["Input: PR, repo, or none; --mode"] --> B["run-begin L3 (draft forces dry run and no push)"]
-  B --> C["Target: pr-status --ready, pr-feedback-fetch, keep needsReplyCount above 0 or CI red"]
-  C --> D["pr-workspace: worktree of the PR branch"]
+  A["Input: PR, repo, or none; --mode; --all"] --> B["run-begin L3 (draft forces dry run and no push)"]
+  B --> C["Target: pr-status --ready, pr-feedback-fetch, pending"]
+  C --> S["watch-seen filter review-received (skipped for an explicit PR or --all)"]
+  S -->|"something new"| D["pr-workspace: worktree of the PR branch"]
   D --> E["agent:core:triage: triage.json"]
   E --> F["Specialists in consult mode, in parallel"]
   F --> G["agent:adorno (situation 3): confirmed, refused or deferred"]
@@ -22,7 +23,9 @@ flowchart TD
   M -->|"CI red, 2 attempts max"| R["workflow:ci:red"]
   R --> M
   M --> N
-  N --> O["run-end"]
+  N -->|"draft or auto"| P["watch-seen mark + touch review-received"]
+  N -->|"report"| O
+  P --> O["run-end"]
 ```
 
 ## workflow:review:requested
