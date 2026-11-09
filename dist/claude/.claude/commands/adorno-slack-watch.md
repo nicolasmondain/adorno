@@ -32,7 +32,7 @@ Run folder: `~/.adorno/runs/slack-watch-<name>-<date>/`.
    `adorno-watch`).
 3. **Filter** — `watch-match <name> messages.json` → `matches.json`: what matches and has not been processed yet
    (`--all` reprocesses everything). No result → short report, `watch-seen touch slack-watch-<name>`, end.
-4. **Announce** — more than 20 matches: say so and ask before launching the actions (costly); `--unattended`: say so and go on. `--dry-run`: stop here
+4. **Announce** — more than 20 matches: say so and ask before launching the actions (costly). `--dry-run`: stop here
    with the list.
 5. **Act** — for each message, in chronological order, the action of the rule with the message, its link and the full
    thread as input, plus the rule's `prompt`:
