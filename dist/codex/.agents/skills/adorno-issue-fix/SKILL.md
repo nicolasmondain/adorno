@@ -13,8 +13,8 @@ Input: the user’s request
 
 1. **What is reported**, in a new `.agent-run/` folder:
    - an issue (`owner/repo#N` or its link): `adorno-github/scripts/issue-fetch` → `issue.json`;
-   - links (Slack thread where the bug is reported, Notion page) or a file: `adorno-inputs/scripts/input-refs`, then
-     `source.md` (skill `adorno-inputs`); an issue cited in the sources is read too;
+   - links (Slack thread where the bug is reported, Notion page) or a file: `adorno-inputs/scripts/input-refs` saved
+     as `refs.json`, then `source.md` (skill `adorno-inputs`); an issue cited in the sources is read too;
    - an `.agent-run` folder with a validated `spec.md`: it stands in for the report;
    - only a description: it stands in for the report, and the repo must be named in it (or be the current clone).
 2. `agent:fix:investigate` reproduces from this report and writes `diagnosis.md`. No repro possible → draft a reply
