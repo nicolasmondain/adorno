@@ -373,6 +373,13 @@ guard deny "for t in $TMP/deploy*.sh; do bash \$t; done"
 guard deny 'for c in push; do git $c; done'
 guard pass 'for c in status log; do git $c; done'
 guard deny 'if true; then git push; fi'
+# $(( … )) is arithmetic, not a subshell; the quoted awk program that follows it is not a command
+guard pass "for n in 7786 7805; do awk -v s=\$((n-6)) -v e=\$((n+4)) 'NR>=s && NR<=e {printf \"%d\\t%s\\n\", NR, \$0}' f; done"
+guard deny 'echo $(( $(git push; echo 1) + 1 ))'
+guard ask 'echo $((1 + 2'
+# an escaped backtick is a character, not a substitution
+guard pass 'python3 -c "print(\"use \`const x = 1\` here\")"'
+guard deny 'echo \\`git push`'
 guard pass "$ROOT/bin/kit check"
 guard pass "$ROOT/tests/kit.test.sh"
 out="$(jq -n '{tool_name: "run_shell_command", tool_input: {command: "git push"}}' | python3 "$S/guard_bash.py" deny --format=gemini)"
@@ -381,6 +388,11 @@ out="$(jq -n '{tool_name: "Bash", tool_input: {command: "git push"}}' | python3 
 expect_jq "Codex has no ask in hooks: deny" '.hookSpecificOutput.permissionDecision == "deny"'
 out="$(jq -n '{tool_name: "Bash", tool_input: {command: "git push"}}' | python3 "$S/guard_bash.py" ask)"
 expect_jq "a global install asks instead" '.hookSpecificOutput.permissionDecision == "ask"'
+out="$(jq -n '{tool_name: "Bash", permission_mode: "bypassPermissions", tool_input: {command: "git push"}}' | python3 "$S/guard_bash.py" ask)"
+expect_jq "nobody answers a prompt in bypassPermissions: deny, with the reason" \
+  '.hookSpecificOutput.permissionDecision == "deny" and (.hookSpecificOutput.permissionDecisionReason | startswith("adorno:"))'
+out="$(jq -n '{tool_name: "Bash", permission_mode: "bypassPermissions", tool_input: {command: "c=push; git $c"}}' | python3 "$S/guard_bash.py" deny)"
+expect_jq "an unreadable command in bypassPermissions: deny, not a prompt that hangs" '.hookSpecificOutput.permissionDecision == "deny"'
 
 echo "a registry older than the personal layer"
 printf 'repos: {}\n' >"$TMP/layer.yaml"
