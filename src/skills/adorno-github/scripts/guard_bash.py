@@ -463,7 +463,9 @@ def check(command, depth=0, cwd=None):
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 SKILLS_ROOT = os.path.dirname(os.path.dirname(HERE))
-SAFE_READS = READ_ONLY - {"find"}
+# the only other programs a command allowed in a run may hold: no option of theirs runs a program or writes a file
+# (rg --pre, less, file -C and the like would)
+SAFE_READS = {"echo", "printf", "true", "test", "["}
 SUBST = "__ADORNO_SUBST__"
 EXPANDS = re.compile(r"[$`*?\[\]{}\\]|^~(?!/)")  # a leading ~/ is expanded by the checks themselves
 GIT_READS = {"status", "diff", "log", "show", "rev-parse"}
@@ -510,25 +512,25 @@ def blank_substitutions(command):
 
 
 def without_redirects(cmd):
-    """-> the words without their redirections, or None when one writes to anything but /dev/null or a descriptor."""
+    """-> the words without their redirections, or None for any redirection but `> /dev/null`, `>> /dev/null`,
+    `N>&M` and `>&-`. Listed, not guessed: `>|`, `&>`, `&>>`, `>&file` all write a file, and an input (`< file`)
+    could feed a secret to `-F -`."""
     out, i = [], 0
     while i < len(cmd):
         t = cmd[i]
-        if t in (">", ">>"):
-            if out and out[-1].isdigit():
-                out.pop()
-            target = cmd[i + 1] if i + 1 < len(cmd) else ""
-            if target == "&" and i + 2 < len(cmd) and cmd[i + 2].isdigit():
-                i += 3; continue
-            if target != "/dev/null":
+        nxt = cmd[i + 1] if i + 1 < len(cmd) else ""
+        if set(t) <= set("<>&|;()") and ("<" in t or ">" in t):  # a redirection operator, as shlex splits them
+            if t in (">", ">>") and nxt == "/dev/null":
+                pass
+            elif t == ">&" and (nxt.isdigit() or nxt == "-"):
+                pass
+            elif t in (">", ">>") and nxt == "&" and i + 2 < len(cmd) and cmd[i + 2].isdigit():
+                i += 1
+            else:
                 return None
-            i += 2; continue
-        if t == ">&" and i + 1 < len(cmd) and cmd[i + 1].isdigit():
             if out and out[-1].isdigit():
                 out.pop()
             i += 2; continue
-        if t in ("<", "<&", "<>"):  # input from a file: `-F - < ~/.ssh/key` would publish it
-            return None
         out.append(t); i += 1
     return out
 
@@ -681,7 +683,7 @@ def allowable(command, cwd):
                 where = os.path.join(where, os.path.expanduser(args[i + 1])); i += 2
             sub, rest = (args[i], args[i + 1:]) if i < len(args) else (None, [])
             if sub in GIT_READS:
-                if any(a.startswith("--output") for a in rest):
+                if any(a.startswith(("--output", "--ext-diff", "--textconv", "--no-index")) for a in rest):
                     return None
                 continue
             if sub == "add":
