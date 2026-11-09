@@ -12,7 +12,7 @@
 
 ## Git & pull requests
 
-- Conventional Commits; branch `<type>/<issue-id>-description`; never commit on the default branch.
+- Conventional Commits; branch `<type>/kebab-description`; never commit on the default branch.
 - Small PRs, stacked when needed; a description with What / Why / How / How to test.
 - **Proof before merge**: tests on what changed and the commands actually run.
 

@@ -47,7 +47,7 @@ of the chain to run without them up to the PR.
 
 4. **Write `spec.md`** (skill `spec-driven-development`): goal in one sentence, scope and out of scope, numbered
    testable acceptance criteria, constraints (perf, security, compatibility), repo and branch
-   (`<type>/<issue-id>-<slug>`), risks, assumptions, and **Sources** (the links from `source.md`, the decision each
+   (`<type>/<slug>`), risks, assumptions, and **Sources** (the links from `source.md`, the decision each
    one carries).
 
 5. **Provided plan** — `source.md` contains an implementation plan: copy it into `spec.md` § Provided plan, with its
