@@ -32,15 +32,34 @@ flowchart TD
   D --> E["Reviewers in parallel: review:code, ponytail, front, back, mongodb, api, security, tests"]
   E --> F["agent:adorno: recheck and verdict (situation 1)"]
   F --> G{"Red or orange point unresolved?"}
-  G -->|"yes"| X
+  G -->|"yes"| GH["They head the description, PR stays draft"]
   G -->|"no"| H["agent:adorno: title + description (What / How / mermaid / Verification)"]
-  H --> I{"gates contains open_pr?"}
-  I -->|"yes"| J["Checkpoint 2: wait for yes"]
-  I -->|"no"| K["git-push owner/repo branch"]
-  J --> K
+  GH --> H
+  H --> K["git-push owner/repo branch (no checkpoint)"]
   K --> L["pr-open --draft with registry reviewers"]
   L --> M["Return PR URL, suggest workflow:pr:watch"]
   M --> N["run-end"]
+```
+
+## workflow:pr:ship
+
+```mermaid
+flowchart TD
+  A["Called last by every workflow that touched code: owner/repo, branch"] --> B["Reuse the caller's run (L3; L2: push only)"]
+  B --> C["repo-conf: commit_skill, pr_skill"]
+  C --> D{"Uncommitted changes?"}
+  D -->|"yes"| E["commit_skill (default adorno-commit), hooks run"]
+  D -->|"no"| F{"Anything ahead of origin?"}
+  E --> G["pr-status: PR of this branch?"]
+  F -->|"no"| X["Nothing to ship: say so"]
+  F -->|"yes"| G
+  G -->|"none"| H["pr_skill (default workflow:pr:open)"]
+  G -->|"open"| I["pr-push, then pr_skill update: agent:adorno and pr-edit if the scope moved"]
+  H --> J["Report: commits, PR URL, opened, updated or unchanged, open findings"]
+  I --> J
+  K["Repo skill pushes or runs gh pr create or edit itself"] -.->|"guard: allow inside the run, at its level"| H
+  K -.-> I
+  J --> L["A refusal (exit 4 or 5, guard deny): reported, never worked around"]
 ```
 
 ## workflow:pr:review
@@ -94,7 +113,7 @@ flowchart TD
   D -->|"ci-running"| G["ci-wait"]
   D -->|"conflicts"| X["Stop: user decides the rebase"]
   D -->|"waiting-review"| Y["Stop"]
-  D -->|"ready"| Z["Checkpoint 3: link and summary, merge is the user's"]
+  D -->|"ready"| Z["Checkpoint 2: link and summary, merge is the user's"]
   E --> H{"Anything moved and rounds left?"}
   F --> H
   G --> H

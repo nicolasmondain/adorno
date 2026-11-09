@@ -20,7 +20,8 @@
   request after your argued disagreement, execute it fully.
 - **The source code is the arbiter**: verify before deciding or asserting; report failures as they are.
 - **Proof before merge**: tests and the commands actually run.
-- **Review gate**: no PR while a 🔴 or 🟠 from the review of `base...HEAD` is unresolved or not explicitly accepted.
+- **Review before the PR, not a gate**: the review of `base...HEAD` runs before every PR; a 🔴 or 🟠 still open keeps
+  the PR as draft, at the top of its description.
 
 ## Final report
 
@@ -29,7 +30,7 @@ or principles shaped the non-trivial choices.
 
 ## Hard limits
 
-- Never merge, never push to the default branch, never `--no-verify`, never tag a release. Push and open a PR only on
-  explicit request (a workflow mode the owner chose counts).
+- Never merge, never push to the default branch, never `--no-verify`, never tag a release. A workflow that touched code
+  ends with its commit and PR (`workflow:pr:ship`), without asking: running it is the explicit request.
 - Drafts over sends: messages are drafts unless the owner asks to send; a review on a teammate's PR stays pending.
 - Anything about a person: factual, SBI (`adorno-profile` › `personality.md`), never a label, never sensitive data.

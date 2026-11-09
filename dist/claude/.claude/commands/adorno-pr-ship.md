@@ -1,0 +1,39 @@
+---
+description: Ends every workflow that touched code — the repo's commit_skill commits what is left, then its pr_skill opens the PR, or pushes and updates the title and description of the one already open. No confirmation and no permission prompt, within the run's level. Last step of feature:build, issue:fix, ci:red, review:received and repo:onboard.
+argument-hint: <owner/repo> <branch> [worktree path] [.agent-run folder]
+---
+
+Input: $ARGUMENTS
+
+**Run** — reuse the caller's run: it needs L3 to open or update the PR (L2: commit and push, then stop and say the
+PR is beyond the run's level). Called alone: `adorno-github/scripts/run-begin --workflow workflow:pr:ship --mode auto
+--level L3 --repo owner/repo`, then always `run-end <id>`, even after a failure.
+
+Nothing here waits for a "yes": running the workflow that touched the code is the explicit request. What stops it is
+a refusal (exit 4 or 5 from a script, `deny` from the guard): report it, never work around it, never reword a refused
+command.
+
+1. **Settings** — `repo-conf owner/repo` → `commit_skill` (default `adorno-commit`) and `pr_skill` (default
+   `adorno-pr-open`). A value starting with `/` is a command of the repo, otherwise a skill: load it and follow it.
+2. **Commit** — in the branch's worktree (the given path, else the current clone; on the base or a shared branch:
+   stop). `git status --porcelain` not empty → `commit_skill`: typed Conventional Commits, one intent each, never
+   `.agent-run/`, a secret or a file the workflow did not touch, hooks run (never `--no-verify`). A hook fails → the
+   family agent of the change fixes it, two rounds at most, then stop and report. Nothing to commit and nothing
+   ahead of `origin/<branch>` → nothing to ship: say so and stop.
+3. **Which PR** — `pr-status owner/repo` → the line whose `branch` is this one.
+4. **No PR yet** → `pr_skill`:
+   - default `adorno-pr-open`: `workflow:pr:open owner/repo <branch> [.agent-run folder]`;
+   - a repo skill: run it in the worktree, as it is written. It may push and run `gh pr create` itself: inside the
+     run the guard lets a plain push and `gh pr create|edit` through (never forced, never the base, at the run's
+     level). Then `pr-status owner/repo` again: no PR for the branch → stop and report what the skill did.
+5. **PR already open** → push, then update:
+   - push: `pr-push owner/repo#N` (or the repo skill pushes itself, as above);
+   - default update: `agent:adorno` compares the title and description to `git diff origin/<base>...HEAD`. The scope
+     moved (a new What or How, a new risk, a verification that no longer matches) → new title and description in
+     English, in the owner's voice (`adorno-voice`), published by `pr-edit owner/repo#N "<title>" <file>`. Unchanged
+     → nothing;
+   - a repo skill: run it in update mode (it receives `#N`); it may run `gh pr edit` itself.
+6. **Open findings** — a 🔴 or 🟠 still open in the run's `reviews/*.json` never blocks: the PR is opened (or stays)
+   as draft and they head its description (`Impact / Risks`), never hidden.
+7. **Report** — commits (SHA, message), push, PR URL and `opened | updated | unchanged`, open findings, and what
+   stopped the workflow if anything did. Suggest `workflow:pr:watch owner/repo#N` when the caller does not run it.

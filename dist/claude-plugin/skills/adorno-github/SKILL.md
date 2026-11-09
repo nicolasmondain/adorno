@@ -14,7 +14,7 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | Script | Does | Level |
 | --- | --- | --- |
 | `repo-conf owner/repo` | the repo's merged settings (base, commands, thread policy…) | L0 |
-| `pr-status [--ready] [owner/repo]` | all your open PRs: review, CI, threads, `blocker`; `--ready`: without drafts, most recent first | L0 |
+| `pr-status [--ready] [owner/repo]` | all your open PRs: branch, review, CI, threads, `blocker`; `--ready`: without drafts, most recent first | L0 |
 | `pr-review-requested [owner/repo]` | PRs where your review is requested (directly or via a team), `reviewedHead` | L0 |
 | `pr-feedback-fetch owner/repo#N` | threads, comments and review summaries to handle (`needsReply`, `bot`), CI | L0 |
 | `pr-workspace owner/repo#N` | your PR, run from your clone: its branch's worktree (created if missing); otherwise a dedicated workspace under `~/.adorno` (separate clone, detached at the head commit) | L0 * |

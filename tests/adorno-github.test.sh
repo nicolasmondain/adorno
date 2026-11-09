@@ -138,6 +138,7 @@ expect_jq "blocker: unresolved threads before review" '(.[] | select(.number==42
 expect_jq "blocker: red CI first" '(.[] | select(.number==7) | .blocker) == "ci-red"'
 expect_jq "team and user reviewers listed" '(.[] | select(.number==7) | .waitingOn) == ["carol","core-team"]'
 expect_jq "unregistered repos flagged" '(.[] | select(.repo=="someone/else") | .registered) == false'
+expect_jq "the branch of each PR (workflow:pr:ship finds the PR of a branch)" '(.[] | select(.number==42) | .branch) == "nm/pagination"'
 grep -q "q=is:pr author:@me state:open archived:false$" "$FAKE_LOG" && ok "default query keeps drafts" || ko "default query keeps drafts" "$(tail -1 "$FAKE_LOG")"
 expect_exit 0 "--ready lists PRs" -- "$S/pr-status" --ready
 grep -q "q=is:pr author:@me state:open archived:false draft:false sort:updated-desc$" "$FAKE_LOG" \

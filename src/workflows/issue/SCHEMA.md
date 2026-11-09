@@ -18,7 +18,7 @@ flowchart TD
   PT["Branch fix/n-slug: agent:fix:patch - red test, fix, green suite"]
   RV["agent:review:code + agent:review:tests in parallel"]
   BL{"blocker?"}
-  PO["workflow:pr:open - Fixes #N if issue"]
+  PO["workflow:pr:ship - commit_skill, pr_skill, Fixes #N if issue"]
   PW["workflow:pr:watch"]
   RE["run-end id - always"]
   IN --> SRC

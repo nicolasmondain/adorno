@@ -42,8 +42,12 @@ A lower repo `max_level` always wins.
 6. **Fix** (`draft` and `auto` modes) — in the workspace, each fix by the designated agent (`fix:patch`,
    `refactor:simplify`, `test:unit`, or the agent of the subject's family): one typed commit per item, message citing
    the comment, repo tests and lint green, three rounds at most. Then `review:code` and `review:ponytail` on the
-   new commits only; a `blocker` → back to the fix, twice at most.
-7. **Publish** (`auto` mode) — `pr-push owner/repo#N` (never forced). Then `agent:adorno` writes each reply
+   new commits only; a `blocker` → back to the fix, twice at most (still open after that: it does not block, it
+   goes to the report and the description).
+   **Ship** (`draft` and `auto` modes), without asking: `workflow:pr:ship owner/repo <branch> <workspace>` — the
+   repo's `commit_skill` for what is left, `pr-push` (never forced) or the repo's `pr_skill` pushing itself, the title
+   and description updated if the fixes moved the scope.
+7. **Publish** (`auto` mode) — `agent:adorno` writes each reply
    in the repo's language (`reply_language`, English by default) and in your voice, with the commit SHA, and publishes: `pr-reply` (thread) or `pr-comment` (general
    comment, review summary). It resolves (`pr-resolve`) the settled threads; it leaves open those where it asks a
    question or disputes, and keeps as a draft everything that is "to validate".

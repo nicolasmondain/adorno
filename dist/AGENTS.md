@@ -160,8 +160,9 @@ Each one is a command of the same name (without native commands: the skill of th
 - `workflow:issue:fix` (`/adorno-issue-fix`) — Fix a bug from a GitHub issue, a Slack thread, a Notion page, a prompt or a validated spec
 - `workflow:notion:assigned` (`/adorno-notion-assigned`) — Find the Notion documents assigned to you ("person" properties of the watched databases, status still open) an
 - `workflow:pr:impact` (`/adorno-pr-impact`) — Analyzes the impact of the PRs you merged on a repo
-- `workflow:pr:open` (`/adorno-pr-open`) — Opens the PR of a ready branch
+- `workflow:pr:open` (`/adorno-pr-open`) — Opens the PR of a ready branch, without asking
 - `workflow:pr:review` (`/adorno-pr-review`) — Reviews a colleague's PR in a dedicated workspace
+- `workflow:pr:ship` (`/adorno-pr-ship`) — Ends every workflow that touched code
 - `workflow:pr:status` (`/adorno-pr-status`) — Status of all your open PRs (or those of one repo)
 - `workflow:pr:watch` (`/adorno-pr-watch`) — Accompanies an open PR until it is ready to merge
 - `workflow:profile:learn` (`/adorno-profile-learn`) — Evolve your profile and your voice

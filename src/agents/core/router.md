@@ -38,11 +38,12 @@ steps:
   - {per: slice, agent: from_plan, loop: {evaluator: tests, max: 3}}
   - {parallel: [agent:review:code, agent:review:ponytail], merge: strictest,
      loop: {fix_with: same_agent, until: no_blocker, max: 2}}
-  - {workflow: workflow:pr:open}
+  - {workflow: workflow:pr:ship}
   - {workflow: workflow:pr:watch, mode: auto}
 permissions: L3
 budget: {max_agents: 4, max_iterations: 3}
-gates: [spec, open_pr, merge]
+gates: [spec, merge]
 ```
 
-The level never exceeds the one validated in the spec.
+The level never exceeds the one validated in the spec. A plan that changes code always ends with
+`workflow:pr:ship` (commit and PR, never a gate before it); the only gates are the spec and the merge.

@@ -19,5 +19,6 @@ Input: $ARGUMENTS
 3. **Checkpoint 1**: diagnosis and level (L3 by default) validated by the user.
 4. Branch `fix/<n>-<slug>` (no issue: `fix/<slug>`) from the base; `agent:fix:patch`: red test, fix, green suite.
 5. `agent:review:code` and `agent:review:tests` in parallel; a `blocker` → back to `fix:patch` (two rounds).
-6. `workflow:pr:open` with `Fixes #N` in the description if there is an issue (otherwise the links of the sources, if
+6. `workflow:pr:ship owner/repo <branch>`, without asking: `commit_skill`, then `pr_skill` with `Fixes #N` in the
+   description if there is an issue (otherwise the links of the sources, if
    the team can access them), then `workflow:pr:watch`.

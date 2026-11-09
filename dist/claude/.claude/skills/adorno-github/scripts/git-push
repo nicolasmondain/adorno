@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Usage: git-push owner/repo [BRANCH] [--dir PATH] [--check]
-# How agents push a branch that has no PR yet (workflow:pr:open, workflow:ci:red, family agents): pushes BRANCH
+# How agents push a branch that has no PR yet (workflow:pr:open, workflow:pr:ship, family agents): pushes BRANCH
 # (default: the current one) of the git repository at PATH (default: .) to `origin`, which must be owner/repo. Never
 # forced, never the base or a default branch, never a name outside `branch_pattern`. Needs L2 and the `push` action.
 # ADORNO_DRY_RUN=1 or a dry-run run only prints. Pushing to the branch of an existing PR: pr-push.
