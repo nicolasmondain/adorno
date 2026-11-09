@@ -175,6 +175,28 @@ expect_jq "the author is never requested as reviewer" '.reviewers == ["alice"]'
 expect_exit 0 "open" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" "$TMP/body.md"
 expect_jq "returns the url" '.opened and (.url | test("/pull/99$"))'
 
+echo "pr-edit"
+expect_exit 2 "non-conventional title refused" -- "$S/pr-edit" acme/docs#42 "Add stuff" "$TMP/body.md"
+FAKE_PR_AUTHOR=alice expect_exit 4 "someone else's PR refused" -- "$S/pr-edit" acme/docs#42 "feat: x" "$TMP/body.md"
+FAKE_CROSS=true expect_exit 4 "a fork refused" -- "$S/pr-edit" acme/docs#42 "feat: x" "$TMP/body.md"
+FAKE_PR_STATE=MERGED expect_exit 4 "a merged PR refused" -- "$S/pr-edit" acme/docs#42 "feat: x" "$TMP/body.md"
+expect_exit 5 "needs L3" -- env ADORNO_LEVEL=L2 "$S/pr-edit" acme/docs#42 "feat: x" "$TMP/body.md"
+ADORNO_DRY_RUN=1 expect_exit 0 "dry run only prints" -- "$S/pr-edit" acme/docs#42 "feat(api): add pagination" "$TMP/body.md"
+expect_jq "dry run" '.dryRun and .number == 42'
+expect_exit 0 "edits" -- "$S/pr-edit" acme/docs#42 "feat(api): add pagination" "$TMP/body.md"
+expect_jq "edited" '.edited and .title == "feat(api): add pagination"'
+grep -q "pr edit 42 -R acme/docs --title" "$FAKE_LOG" && ok "... through gh pr edit" || ko "... through gh pr edit" "$(tail -1 "$FAKE_LOG")"
+
+echo "run-check"
+expect_exit 0 "L3 open_pr inside the suite's run" -- "$S/run-check" acme/docs L3 open_pr
+expect_jq "allowed" '.allowed and .repo == "acme/docs"'
+expect_exit 5 "lowered by ADORNO_LEVEL" -- env ADORNO_LEVEL=L2 "$S/run-check" acme/docs L3 open_pr
+expect_exit 4 "a dry run allows nothing" -- env ADORNO_DRY_RUN=1 "$S/run-check" acme/docs L2 push
+expect_exit 5 "no run in another session" -- env CLAUDE_CODE_SESSION_ID=nobody "$S/run-check" acme/docs L2 push
+expect_exit 3 "an unregistered repo" -- "$S/run-check" foo/bar L2 push
+expect_exit 4 "the repo's permissions.deny wins" -- "$S/run-check" acme/docs-public L3 reply
+expect_exit 5 "the repo's max_level wins" -- "$S/run-check" acme/readonly L2 push
+
 echo "ci"
 FAKE_CHECKS="$ROOT/tests/fixtures/checks-pass.json" expect_exit 0 "green checks pass" -- "$S/ci-wait" acme/docs#42 0
 expect_jq "state pass" '.state == "pass"'
@@ -445,6 +467,13 @@ git -C "$C" checkout -qb fix/lem-8-x
 expect_exit 5 "needs L2" -- env ADORNO_LEVEL=L1 "$S/git-push" acme/docs --dir "$C"
 ADORNO_DRY_RUN=1 expect_exit 0 "dry run only prints" -- "$S/git-push" acme/docs --dir "$C"
 expect_jq "dry run" '.dryRun and .branch == "fix/lem-8-x"'
+expect_exit 0 "--check: every check, no push" -- "$S/git-push" acme/docs --dir "$C" --check
+expect_jq "allowed" '.allowed and .branch == "fix/lem-8-x"'
+git -C "$O" rev-parse --verify -q fix/lem-8-x >/dev/null && ko "--check pushed nothing" || ok "--check pushed nothing"
+ADORNO_DRY_RUN=1 expect_exit 4 "--check refuses in a dry run" -- "$S/git-push" acme/docs --dir "$C" --check
+expect_exit 4 "--check refuses the base branch" -- "$S/git-push" acme/docs main --dir "$C" --check
+expect_exit 0 "run-check --dir: the repo from the origin" -- "$S/run-check" --dir "$C" L2 push
+expect_jq "acme/docs" '.repo == "acme/docs"'
 
 [ "$(git -C "$O" rev-parse nm/pagination)" = "$(git -C "$ws" rev-parse HEAD)" ] && ok "origin branch moved" || ko "origin branch moved"
 expect_exit 0 "nothing new to push" -- "$S/pr-push" acme/docs#42

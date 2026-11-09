@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
-# Usage: git-push owner/repo [BRANCH] [--dir PATH]
+# Usage: git-push owner/repo [BRANCH] [--dir PATH] [--check]
 # How agents push a branch that has no PR yet (workflow:pr:open, workflow:ci:red, family agents): pushes BRANCH
 # (default: the current one) of the git repository at PATH (default: .) to `origin`, which must be owner/repo. Never
 # forced, never the base or a default branch, never a name outside `branch_pattern`. Needs L2 and the `push` action.
 # ADORNO_DRY_RUN=1 or a dry-run run only prints. Pushing to the branch of an existing PR: pr-push.
+# --check: every check, no push; a dry-run run refuses (guard_bash.py lets a direct `git push` through only then).
 . "$(dirname "$0")/_lib.sh"
 
 split_repo "${1:-}"; shift || true
-branch="" dir="."
+branch="" dir="." check=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --dir) dir="${2:-}"; shift 2 ;;
+    --check) check=true; shift ;;
     -*) die "unknown option $1" "$E_USAGE" ;;
     *) branch="$1"; shift ;;
   esac
@@ -40,6 +42,11 @@ fi
 require_level "$REPO" L2 push
 
 sha="$(git -C "$dir" rev-parse "refs/heads/$branch")"
+if [ "$check" = true ]; then
+  ! dry_run || die "the active run is a dry run: nothing leaves the machine" "$E_POLICY"
+  jq -n --arg r "$REPO" --arg b "$branch" --arg s "$sha" '{allowed: true, repo: $r, branch: $b, sha: $s}'
+  exit 0
+fi
 if dry_run; then
   jq -n --arg r "$REPO" --arg b "$branch" --arg s "$sha" '{dryRun: true, repo: $r, branch: $b, sha: $s}'
   exit 0

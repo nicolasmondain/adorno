@@ -31,7 +31,8 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | `guard_bash.py deny\|ask [--format=claude\|codex\|gemini]` | hook (Claude Code, Codex, Gemini) installed by `bin/kit install`: refuses or asks to confirm a push, a GitHub publication, a write to the registry or to runs, whatever the shape of the command; blocks everything without `python3` | — |
 | `repo-audit [owner/repo…]` | read-only: type and scope of the `gh` token, default branch protection (ruleset, branch protection), admin rights; advice | — |
 | `run-end ID` | closes the run (always do it, even after a failure) | — |
-| `git-push owner/repo [BRANCH] [--dir PATH]` | pushes a branch without a PR: never forced, never the base, name matching `branch_pattern` | L2 |
+| `run-check owner/repo\|--dir PATH LEVEL [action]` | read-only: would that write be allowed now (same rules as the write scripts, a dry run allows nothing)? Used by the guard | L0 |
+| `git-push owner/repo [BRANCH] [--dir PATH] [--check]` | pushes a branch without a PR: never forced, never the base, name matching `branch_pattern`; `--check`: the checks only | L2 |
 | `pr-push owner/repo#N` | pushes the workspace's commits to your PR's branch, never forced | L2 |
 | `pr-reply owner/repo#N THREAD_ID FILE` | replies in a thread (`-` = stdin) | L3 |
 | `pr-resolve owner/repo#N THREAD_ID` | resolves a thread if `resolve_threads: author` and you are the author | L3 |
@@ -39,6 +40,7 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | `pr-review-submit owner/repo#N JSON_FILE` | publishes a review with inline comments; `APPROVE` only if `allow_approve` | L3 |
 | `pr-rerequest owner/repo#N [login…]` | re-requests a review (default: those who already reviewed) | L3 |
 | `pr-open owner/repo BRANCH "type(scope): title" FILE [--draft]` | opens the PR, requests the registry's reviewers | L3 |
+| `pr-edit owner/repo#N "type(scope): title" FILE` | updates the title and description of your open PR | L3 |
 
 \* Writes only under `~/.adorno` (no variable moves it), never in your working copies nor on GitHub.
 

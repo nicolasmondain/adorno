@@ -32,6 +32,7 @@ flowchart TD
 flowchart TD
   subgraph L0["Read, L0"]
     RC["repo-conf"]
+    RCK["run-check (would this write be allowed?)"]
     PS["pr-status"]
     PRR["pr-review-requested"]
     PFF["pr-feedback-fetch"]
@@ -45,7 +46,7 @@ flowchart TD
     CF["ci-failed"]
   end
   subgraph L2["Push and CI, L2"]
-    GP["git-push (branch without PR, never forced)"]
+    GP["git-push (branch without PR, never forced; --check: checks only)"]
     PP["pr-push (PR branch, never forced)"]
     CR["ci-rerun (once per run)"]
   end
@@ -56,6 +57,7 @@ flowchart TD
     PRV["pr-review-submit (APPROVE only if allow_approve)"]
     PRQ["pr-rerequest"]
     PO["pr-open"]
+    PE["pr-edit (title and description of your open PR)"]
   end
   PS --> PW
   PRR --> PW

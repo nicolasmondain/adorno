@@ -108,5 +108,6 @@ case "$all" in
   search\ prs*) respond <"$FIX/search-prs.json" ;;
   api\ repos/*/pulls/*/comments*) respond <"$FIX/pr-comments.json" ;;
   pr\ create*) echo "https://github.com/acme/docs/pull/99" ;;
+  pr\ edit*) echo "https://github.com/acme/docs/pull/42" ;;
   *) echo "fake-gh: no route for: $all" >&2; exit 99 ;;
 esac
