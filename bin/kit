@@ -613,6 +613,8 @@ def validate_notion_spec(spec, where: str) -> list[str]:
         for name, value in props.items():
             if value is not None and not isinstance(value, (str, int, float, bool)):
                 errors.append(f"{where}.{step}.{name} must be a string, a number, a boolean or null")
+            elif isinstance(value, str) and set(re.findall(r"\{\{(.*?)\}\}", value)) - {"today", "pr_url"}:
+                errors.append(f"{where}.{step}.{name}: unknown placeholder (known: {{{{today}}}}, {{{{pr_url}}}})")
             elif step != "pr_opened" and isinstance(value, str) and "{{pr_url}}" in value:
                 errors.append(f"{where}.{step}.{name}: {{{{pr_url}}}} only exists once the PR is open (pr_opened)")
     return errors

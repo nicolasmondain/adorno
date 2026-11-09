@@ -251,7 +251,7 @@ find it with the connector. Commented template: `local.example/adorno.yaml`.
 **The Notion spec page follows the work.** When `workflow:feature:build` or `workflow:issue:fix` starts from a Notion
 page, the repo's `notion_spec` sets its properties at two steps: `start` (spec or diagnosis validated) and `pr_opened`
 (PR opened by `workflow:pr:open`). It is the only Notion write, limited to these properties of that page (the first
-Notion link of the request), and a `report` or `draft` run only shows it. A property or an option missing from the
+Notion link of the request); a `report`, `draft` or L0 run only shows it, and nothing happens outside a run. A property or an option missing from the
 page stops the update and says so; nothing is created.
 
 ```yaml

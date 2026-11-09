@@ -10,7 +10,8 @@
 #          already done for this run (RUN_DIR/notion.json; --force plans it again).
 #   done → appends what `plan` returned ({step, page_id, at, properties}) to RUN_DIR/notion.json, once the connector
 #          has written it.
-# No level check: the repo config is the opt-in. A report or draft run makes dry_run true: nothing is written.
+# No level check above L0: the repo config is the opt-in. But never outside a run (exit 5), and a report, draft or L0
+# run (untrusted inputs run at L0) makes dry_run true: nothing is written.
 . "$(dirname "$0")/_lib.sh"
 
 STEPS="start pr_opened"
@@ -24,7 +25,10 @@ shift 3
 repo="" pr_url="" force=false
 while [ $# -gt 0 ]; do
   case "$1" in
-    --pr-url) pr_url="${2:-}"; shift 2 ;;
+    --pr-url)
+      [[ "${2:-}" =~ ^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/[0-9]+$ ]] \
+        || die "--pr-url: a GitHub PR URL (https://github.com/owner/repo/pull/N)" "$E_USAGE"
+      pr_url="$2"; shift 2 ;;
     --force) force=true; shift ;;
     -*) die "unknown option $1" "$E_USAGE" ;;
     *) [ -z "$repo" ] || die "$usage" "$E_USAGE"; repo="$1"; shift ;;
@@ -32,13 +36,17 @@ while [ $# -gt 0 ]; do
 done
 
 refs="$dir/refs.json" log_file="$dir/notion.json"
-page="$( [ -f "$refs" ] && jq -c '[.refs[]? | select(.kind == "notion")] | first // empty' "$refs" || true)"
+page=""
+if [ -f "$refs" ]; then
+  page="$(jq -c '[.refs[]? | select(.kind == "notion")] | first // empty' "$refs")" || die "cannot read $refs"
+fi
 done_entry() { [ -f "$log_file" ] && jq -e --arg s "$step" 'any(.[]; .step == $s)' "$log_file" >/dev/null; }
 skip() { jq -n --arg s "$step" --arg r "$1" '{step: $s, skip: $r}'; exit 0; }
 
 if [ "$cmd" = "done" ]; then
   planned="$dir/.notion-$step.json"
   [ -f "$planned" ] || die "nothing planned for $step in $dir: run notion-step plan first" "$E_USAGE"
+  ! jq -e '.dry_run' "$planned" >/dev/null || die "the $step plan was a dry run: nothing was written to record" "$E_USAGE"
   [ -f "$log_file" ] || echo '[]' >"$log_file"
   jq --arg s "$step" --slurpfile p "$planned" \
     '. + [{step: $s, page_id: $p[0].page_id, at: (now | todate), properties: $p[0].properties}]' "$log_file" >"$log_file.tmp"
@@ -48,16 +56,20 @@ if [ "$cmd" = "done" ]; then
   exit 0
 fi
 
+rm -f "$dir/.notion-$step.json"   # `done` records only what this plan returns
 split_repo "${repo:-$(current_repo)}"
 props="$(repo_conf "$REPO" | jq -c --arg s "$step" '.notion_spec[$s] // empty | with_entries(select(.value != null))')"
 [ -n "$props" ] && [ "$props" != "{}" ] || skip "$REPO sets no notion_spec.$step"
+[ -f "$refs" ] || skip "no refs.json in $dir (adorno-inputs saves the output of input-refs there)"
 [ -n "$page" ] || skip "the request has no Notion page ($refs)"
 if ! $force && done_entry; then skip "already done for this run ($log_file; --force to redo)"; fi
 if jq -e 'any(.[]; type == "string" and contains("{{pr_url}}"))' >/dev/null <<<"$props" && [ -z "$pr_url" ]; then
   die "notion_spec.$step uses {{pr_url}}: pass --pr-url" "$E_USAGE"
 fi
 
-dry=false; dry_run && dry=true
+g="$(grant "$REPO")"
+[ "$(jq -r .runs <<<"$g")" != 0 ] || die "no active run covers $REPO: start the workflow with run-begin" "$E_LEVEL"
+dry="$(jq '.dry_run or .level == "L0"' <<<"$g")"
 jq -n --arg s "$step" --argjson p "$page" --argjson props "$props" --arg today "$(date +%Y-%m-%d)" \
   --arg pr "$pr_url" --argjson dry "$dry" '
   {step: $s, page_id: $p.page_id, url: $p.url, dry_run: $dry,
