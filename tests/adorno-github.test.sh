@@ -129,19 +129,24 @@ expect_jq "review summary after my reply needs one" '[.reviews[] | select(.needs
 expect_jq "needsReplyCount sums threads, comments, reviews" '.needsReplyCount == 3'
 expect_jq "CI state and ownership surfaced" '.pr.ci == "FAILURE" and .pr.head == "nm/pagination" and .pr.mine'
 expect_jq "pending: what needs a reply, keyed by its last activity, plus the red CI of the head" \
-  '.pending == [{id: "acme/docs#42/thread/T1@C1", kind: "thread"}, {id: "acme/docs#42/comment/IC3", kind: "comment"},
-                {id: "acme/docs#42/review/R3", kind: "review"}, {id: "acme/docs#42/ci@abc123", kind: "ci"}]'
+  '[.pending[].id] == ["acme/docs#42/thread/T1@C1", "acme/docs#42/comment/IC3", "acme/docs#42/review/R3", "acme/docs#42/ci@abc123"]'
 W="$ROOT/src/skills/adorno-watch/scripts"
 "$S/pr-feedback-fetch" acme/docs#42 | jq .pending >"$TMP/pending.json"
 "$W/watch-seen" mark review-received "acme/docs#42/thread/T1@C1" "acme/docs#42/ci@abc123" >/dev/null
 expect_exit 0 "watch-seen filters pending" -- "$W/watch-seen" filter review-received "$TMP/pending.json"
-expect_jq "what was handled, unchanged, is skipped on the next pass" '[.[].kind] == ["comment", "review"]'
+expect_jq "what was handled, unchanged, is skipped on the next pass" 'map(.id) == ["acme/docs#42/comment/IC3", "acme/docs#42/review/R3"]'
 cp -R "$FAKE_FIX" "$TMP/fix-new"
 jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes += [{id: "C9", author: {login: "alice", __typename: "User"}, body: "Still null", url: "c9", createdAt: "2026-11-04T09:00:00Z"}]' \
   "$FAKE_FIX/feedback.json" >"$TMP/fix-new/feedback.json"
 FAKE_FIX="$TMP/fix-new" "$S/pr-feedback-fetch" acme/docs#42 | jq .pending >"$TMP/pending.json"
 expect_exit 0 "watch-seen filters pending after a new reply" -- "$W/watch-seen" filter review-received "$TMP/pending.json"
 expect_jq "a new reply in a handled thread brings it back" 'map(.id) | index("acme/docs#42/thread/T1@C9") != null'
+jq '.data.repository.pullRequest.commits.nodes[0].commit.statusCheckRollup.state = "SUCCESS"' "$FAKE_FIX/feedback.json" >"$TMP/fix-new/feedback.json"
+FAKE_FIX="$TMP/fix-new" expect_exit 0 "fetches a green PR" -- "$S/pr-feedback-fetch" acme/docs#42
+expect_jq "green CI is not pending" '[.pending[].id | select(test("/ci@"))] == []'
+jq '.data.repository.pullRequest.commits.nodes[0].commit.statusCheckRollup.state = "ERROR" | .data.repository.pullRequest.headRefOid = "def456"' "$FAKE_FIX/feedback.json" >"$TMP/fix-new/feedback.json"
+FAKE_FIX="$TMP/fix-new" expect_exit 0 "fetches an errored PR on a new head" -- "$S/pr-feedback-fetch" acme/docs#42
+expect_jq "errored CI is pending, keyed by the new head" '[.pending[].id | select(test("/ci@"))] == ["acme/docs#42/ci@def456"]'
 
 echo "pr-status"
 expect_exit 0 "lists PRs" -- "$S/pr-status"

@@ -4,7 +4,7 @@
 #   threads       unresolved review threads; `needsReply` = the last comment is not yours
 #   conversation  PR comments by others; `needsReply` = posted after your last PR comment
 #   reviews       review summaries by others; `needsReply` = non-empty, posted after your last PR comment
-#   pending       [{id, kind}] of what needs handling: every `needsReply` item, plus the red CI of the head commit.
+#   pending       [{id}] of what needs handling: every `needsReply` item, plus the red CI of the head commit.
 #                 `id` changes with new activity (thread: its last comment; CI: the head SHA), so
 #                 `watch-seen filter review-received` drops only what was already handled, unchanged.
 # `bot: true` marks authors that are GitHub Apps (CI reports, AI reviewers): verify, rarely answer.
@@ -22,7 +22,7 @@ query='query($owner:String!,$name:String!,$num:Int!){
     comments(last:50){ nodes{ id author{ login __typename } body url createdAt } }
     reviewThreads(first:100){ pageInfo{ hasNextPage } nodes{
       id isResolved isOutdated path line
-      comments(first:30){ nodes{ id author{ login __typename } body url createdAt } } } }
+      comments(last:30){ nodes{ id author{ login __typename } body url createdAt } } } }
     commits(last:1){ nodes{ commit{ statusCheckRollup{ state } } } } } } }'
 
 gh api graphql -f query="$query" -F owner="$OWNER" -F name="$NAME" -F num="$NUM" \
@@ -54,8 +54,5 @@ gh api graphql -f query="$query" -F owner="$OWNER" -F name="$NAME" -F num="$NUM"
       truncated: $p.reviewThreads.pageInfo.hasNextPage
     }
   | .needsReplyCount = ([.threads[], .conversation[], .reviews[] | select(.needsReply)] | length)
-  | .pending = ([ (.threads[] | select(.needsReply) | {id: .key, kind: "thread"}),
-                  (.conversation[] | select(.needsReply) | {id: .key, kind: "comment"}),
-                  (.reviews[] | select(.needsReply) | {id: .key, kind: "review"}) ]
-                + (if (.pr.ci == "FAILURE" or .pr.ci == "ERROR")
-                   then [{id: "\($ref)/ci@\(.pr.headSha)", kind: "ci"}] else [] end))'
+  | .pending = ([.threads[], .conversation[], .reviews[] | select(.needsReply) | {id: .key}]
+                + (if (.pr.ci == "FAILURE" or .pr.ci == "ERROR") then [{id: "\($ref)/ci@\(.pr.headSha)"}] else [] end))'
