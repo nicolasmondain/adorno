@@ -2,7 +2,7 @@
 name: adorno-agent-review-mongodb
 description: MongoDB reviewer — queries and aggregations, indexes, N+1, projections, bulk writes, migrations. Called when a diff contains queries or a migration, or to verify a review comment about the database.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 ## Rules of the `review` family

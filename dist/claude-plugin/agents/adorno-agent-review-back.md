@@ -2,7 +2,7 @@
 name: adorno-agent-review-back
 description: Back-end reviewer — Node.js server logic, entry points (routes, RPC methods, handlers), jobs, errors, concurrency, server-side permissions. Called when a diff touches the server, or to verify a review comment about the back end.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 ## Rules of the `review` family

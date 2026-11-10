@@ -2,7 +2,7 @@
 name: adorno-agent-ci-debug
 description: Diagnose a red CI from the logs — classify the failure (flaky, infra, real failure) and name the agent that must fix it. Use as soon as a check fails on a PR or on the default branch.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 ## Rules of the `ci` family — CI configuration and scripts

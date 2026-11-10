@@ -2,7 +2,7 @@
 name: adorno-agent-review-front
 description: Front-end reviewer — components, state, rendering, WCAG 2.1 AA accessibility, design system, perceived performance. Called when a diff touches the interface, or to verify a review comment about the front end.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 ## Rules of the `review` family

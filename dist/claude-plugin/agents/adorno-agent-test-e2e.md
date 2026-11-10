@@ -2,7 +2,7 @@
 name: adorno-agent-test-e2e
 description: End-to-end tests and browser QA with evidence — Playwright journeys, screenshots, video and trace attached to the report or the PR. Use to verify a front feature end to end, reproduce a UI bug or provide visual proof of a fix.
 tools: Read, Write, Edit, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 ## Rules of the `test` family — tests only

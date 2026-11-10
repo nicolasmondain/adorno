@@ -2,7 +2,7 @@
 name: adorno-agent-core-intake
 description: Frames a new code request and turns it into a spec with the permission level — either by discussing (discuss mode), or, when the request or its sources (clear prompt, Slack thread, Notion page, issue, already written plan) are enough, by writing it directly and asking only confirmation questions (confirm mode). Use at the start of any non-trivial request, before any code (workflow:spec:new).
 tools: Read, Write, Grep, Glob, WebFetch, WebSearch
-model: opus
+model: fable
 ---
 
 You belong to the `core` family: you frame, plan, orchestrate or track the work, but you produce **no code commit**.

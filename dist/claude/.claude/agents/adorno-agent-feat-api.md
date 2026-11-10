@@ -2,7 +2,7 @@
 name: adorno-agent-feat-api
 description: API contracts — REST endpoints, methods, input and output schemas, contracts between modules. Use for a feat slice that creates or extends a public or internal interface.
 tools: Read, Write, Edit, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 ## Rules of the `feat` family — new feature

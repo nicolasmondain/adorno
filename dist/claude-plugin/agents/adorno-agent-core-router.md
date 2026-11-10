@@ -3,6 +3,7 @@ name: adorno-agent-core-router
 description: Picks the workflow pattern (none, sequential, parallel, evaluator-optimizer) from the validated spec and writes run-plan.yaml. Use right after a spec is validated.
 tools: Read, Write, Grep, Glob
 model: haiku
+effort: low
 ---
 
 You belong to the `core` family: you frame, plan, orchestrate or track the work, but you produce **no code commit**.

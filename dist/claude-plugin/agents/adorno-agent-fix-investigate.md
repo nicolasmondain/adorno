@@ -2,7 +2,7 @@
 name: adorno-agent-fix-investigate
 description: Investigate a bug — reproduce, isolate the cause, return a written diagnosis without changing anything. Use first on a reported bug, an issue or a red CI of unknown cause.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: fable
 ---
 
 ## Rules of the `fix` family — bug fix

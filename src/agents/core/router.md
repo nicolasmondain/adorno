@@ -2,6 +2,7 @@
 description: Picks the workflow pattern (none, sequential, parallel, evaluator-optimizer) from the validated spec and writes run-plan.yaml. Use right after a spec is validated.
 tools: [read, write, search]
 model: fast
+effort: low
 delegable: true
 ---
 

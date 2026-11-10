@@ -1,6 +1,6 @@
 ---
 tools: [read, search, shell]
-model: balanced
+model: deep
 delegable: true
 ---
 
