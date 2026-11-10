@@ -1264,18 +1264,24 @@ def migrate_areas(public: dict, loc: dict) -> list[dict]:
         for area, old in legacy.items():
             old = list(old or [])
             if area == "always":
-                parts = ["always"]
+                targets = [["always"]]
             elif area == "mongodb" and "mongodb" not in public_areas:
-                parts = ["back", "sub", "mongodb"]
+                # the legacy area covered query content and schema paths: both sub-areas now
+                targets = [["back", "sub", "query"], ["back", "sub", "mongodb"]]
             else:
-                parts = [area]
-            node = public_areas
-            for part in parts:
-                node = (node.get(part) if isinstance(node, dict) else None) or {}
-            pub = list(node.get("review") or []) if isinstance(node, dict) else []
-            new = [x for x in old if x not in pub] + ["-" + x for x in pub if x not in old]
-            out.append({"scope": scope, "area_path": "areas." + ".".join(parts) + ".review",
-                        "old": old, "public": pub, "new": new})
+                targets = [[area]]
+            for parts in targets:
+                node = public_areas
+                inherited: list = []
+                for part in parts:
+                    node = (node.get(part) if isinstance(node, dict) else None) or {}
+                    if part == "sub":
+                        inherited = list(parent.get("review") or [])
+                    parent = node
+                pub = list(node.get("review") or []) if isinstance(node, dict) else []
+                new = [x for x in old if x not in inherited + pub] + ["-" + x for x in pub if x not in old]
+                out.append({"scope": scope, "area_path": "areas." + ".".join(parts) + ".review",
+                            "old": old, "public": pub, "new": new})
     return out
 
 

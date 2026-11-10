@@ -241,14 +241,19 @@ echo "migrate areas"
 MIG="$TMP/mig"; mkdir -p "$MIG"
 printf '%s\n' 'owner: {name: T, github: t, language: fr}' 'repos:' '  acme/app:' '    area_reviewers:' \
   '      docs: [agent:review:security]' '      api: [agent:review:api, agent:review:security]' \
-  '      mongodb: [agent:review:mongodb, agent:review:back]' >"$MIG/adorno.yaml"
+  '      mongodb: [agent:review:mongodb, agent:review:back]' '      always: [agent:review:code]' \
+  '      front: [agent:review:code]' >"$MIG/adorno.yaml"
 cp "$MIG/adorno.yaml" "$TMP/mig-before.yaml"
 out="$(ADORNO_LOCAL="$MIG" "${KIT[@]}" migrate areas 2>"$TMP/err")"; got=$?
 check "migrate areas succeeds although check fails" '[ "$got" = 0 ] && ! ADORNO_LOCAL="$MIG" "${KIT[@]}" check >/dev/null 2>&1'
 expect_jq "docs: the old list is all additions" '[.[] | select(.area_path == "areas.docs.review")][0].new == ["agent:review:security"]'
 expect_jq "api: only the addition remains" '[.[] | select(.area_path == "areas.api.review")][0].new == ["agent:review:security"]'
-expect_jq "mongodb maps to the back sub-area, extra reviewer added" \
-  '[.[] | select(.area_path == "areas.back.sub.mongodb.review")][0] | .new == ["agent:review:back"] and .scope == "repos.acme/app"'
+expect_jq "mongodb maps to both back sub-areas, nothing to add over the inherited reviewers" \
+  '([.[] | select(.area_path == "areas.back.sub.mongodb.review" or .area_path == "areas.back.sub.query.review")] | length == 2 and all(.new == [] and .scope == "repos.acme/app"))'
+expect_jq "always: a public reviewer missing from the old list becomes a removal" \
+  '[.[] | select(.area_path == "areas.always.review")][0].new == ["-agent:review:ponytail"]'
+expect_jq "an area omitting a public reviewer gets its -x" \
+  '[.[] | select(.area_path == "areas.front.review")][0].new == ["agent:review:code", "-agent:review:front", "-agent:review:perf"]'
 check "migrate prints a YAML snippet per scope" 'grep -q "repos:" "$TMP/err" && grep -q "areas:" "$TMP/err"'
 check "migrate writes nothing" 'cmp -s "$MIG/adorno.yaml" "$TMP/mig-before.yaml" && [ "$(ls "$MIG")" = "adorno.yaml" ]'
 
