@@ -33,7 +33,10 @@ flowchart TD
   GH --> H
   H --> K["git-push owner/repo branch (no checkpoint)"]
   K --> L["pr-open: ready for review if clean, --draft otherwise"]
-  L --> M["Return PR URL, ready or draft, suggest workflow:pr:watch"]
+  L --> NS{"agent-run folder given?"}
+  NS -->|"yes"| NP["adorno-notion-sync pr_opened --pr-url"]
+  NS -->|"no"| M["Return PR URL, ready or draft, suggest workflow:pr:watch"]
+  NP --> M
 ```
 
 ## workflow:pr:ship

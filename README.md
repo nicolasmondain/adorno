@@ -159,7 +159,8 @@ The public repo contains no profile: only templates, in `local.example/`.
 
 **Skills**: `adorno-setup`, `adorno-profile`, `adorno-voice`, `adorno-learn` (the profile that learns from your
 corrections), `adorno-github` (`gh` scripts tested without network, runs and permissions), `adorno-watch` (settings and
-memory of the Slack and Notion watches), `adorno-llm` (a task sent to an OpenAI-compatible model),
+memory of the Slack and Notion watches), `adorno-notion-sync` (the properties of the Notion spec page at each step,
+from your repo config), `adorno-llm` (a task sent to an OpenAI-compatible model),
 `adorno-run-plan` (run a plan from the session), `adorno-commit`, and the skills imported as is: [addy/agent-skills](https://skills.addy.ie/) (method, from spec
 to deployment), [ponytail](https://ponytail.dev/) (the least code that works),
 [playwright-cli](https://github.com/microsoft/playwright-cli) and
@@ -228,8 +229,9 @@ Four barriers separate an agent command from GitHub (details in `docs/setup.md`,
    whether your token is too broad.
 
 In an installed repo, barriers 1 and 2 refuse; with `--global` (valid in all your projects), they ask you
-for confirmation. Inside a run, the guard lets the end of a workflow through without a prompt: commit, a plain push
-of the branch, `gh pr create|edit`, at the run's level (`docs/setup.md`, step 4).
+for confirmation, and refuse where nobody can answer (`bypassPermissions`, `dontAsk`: a schedule, a headless run).
+Inside a run, the guard lets the end of a workflow through without a prompt: commit, a plain push of the branch,
+`gh pr create|edit`, at the run's level (`docs/setup.md`, step 4).
 
 | | Skills | Agents | Workflows | Instructions |
 | --- | --- | --- | --- | --- |

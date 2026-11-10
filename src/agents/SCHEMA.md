@@ -26,5 +26,5 @@ flowchart TD
   RP --> L
   L --> M{"Mode auto?"}
   M -->|"no (default)"| D["Everything stays a draft or pending, L0 on code"]
-  M -->|"yes"| PU["Post replies, resolve threads, re-request; refusals, deferrals, people stay drafts"]
+  M -->|"yes"| PU["Post replies, resolve threads, re-request; refusals and deferrals with evidence; people and unfixed items stay drafts"]
 ```

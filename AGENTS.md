@@ -48,4 +48,15 @@ bin/kit check && bin/kit build && for t in tests/*.test.sh; do $t || break; done
 ```
 
 Commit `src/`, `dist/`, `vendor/`, `kit.yaml`, `kit.lock` and `repos.yaml` together: CI rejects a stale `dist/`.
-Message in Conventional Commits format, e.g. `feat(agents): add perf:redis`.
+
+## Branches and pull requests
+
+`master` only changes through a pull request, squash-merged by the owner (a ruleset enforces it, without bypass).
+
+1. A branch `<type>/kebab-description` from `master` (`<type>` = a Conventional Commit type, no issue id).
+2. Commits in Conventional Commits format (`adorno-commit` skill), then the checks above.
+3. `/adorno-pr-open`: review gate, push, PR. The PR title is a Conventional Commit header, e.g.
+   `feat(agents): add perf:redis`: the squash merge makes it the commit on `master` (checked by the `pr` workflow).
+4. CI green (`check`, `macos-bash-3-2`, `pr-title`), conversations resolved; `/adorno-pr-watch` if needed.
+5. The owner squash-merges; the branch is deleted. A child PR in a stack is retargeted to `master`: rebase it with
+   `git rebase --onto master <old parent tip>`.

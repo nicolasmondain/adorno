@@ -31,7 +31,7 @@
 
 ## Git
 
-- Branch `<type>/<issue-id>-kebab-description` (`<type>` = Conventional Commit type), never a commit on the default
+- Branch `<type>/kebab-description` (`<type>` = Conventional Commit type), never a commit on the default
   branch, never `--no-verify`.
 - Commits in Conventional Commits format (`adorno-commit` skill), numbered in a stack. An `agent:<type>:*` agent only
   produces commits of its type.

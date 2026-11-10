@@ -1,0 +1,27 @@
+name: pr
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-title:
+    # the squash merge turns the PR title into the commit on master: same rules as pr-open and git-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Conventional Commit title, branch matching branch_pattern
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          skill=dist/claude/.claude/skills/adorno-github
+          . "$skill/scripts/_lib.sh"
+          [[ "$TITLE" =~ $CC_TITLE_RE ]] || die "PR title is not a Conventional Commit header: $TITLE"
+          pattern="$(jq -r .defaults.branch_pattern "$skill/repos.json")"
+          [[ "$BRANCH" =~ $pattern ]] || die "branch $BRANCH does not match branch_pattern ($pattern)"
