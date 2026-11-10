@@ -496,6 +496,7 @@ def validate(cfg: Config, items: dict[str, dict[str, Item]]) -> list[str]:
     reg = registry()
     errors += validate_registry(reg, {i.id for i in items["agent"].values()} | set(items["agent"]), delegable,
                                 {i.name for i in items["skill"].values()} | set(items["skill"]))
+    errors += validate_roles(reg, items)
     if not local_on():   # the public registry must leave no agent unreachable
         for orphan in orphan_agents(reg, items):
             errors.append(f"orphan agent '{orphan}': no area role, fallback or entry names it")
@@ -533,6 +534,33 @@ def area_refs(conf: dict) -> list[tuple[str, str]]:
     for key, v in (conf.get("fallbacks") or {}).items():
         one(f"fallbacks.{key}", v.get("agent") if isinstance(v, dict) else v)
     return refs
+
+
+def validate_roles(reg: dict, items: dict) -> list[str]:
+    """`roles:` of a dispatcher workflow: known roles, and `uses.agents` covers every agent the areas give them."""
+    errors: list[str] = []
+    scopes = [reg.get("defaults") or {}, *(c or {} for c in (reg.get("presets") or {}).values()),
+              *(c or {} for c in (reg.get("workspaces") or {}).values()), *(c or {} for c in (reg.get("repos") or {}).values())]
+    refs = [(path, ref) for conf in scopes if isinstance(conf, dict) for path, ref in area_refs(conf)]
+    for it in sorted(items["workflow"].values(), key=lambda w: w.id):
+        roles = it.meta.get("roles")
+        if roles is None:
+            continue
+        where = rel(it.path)
+        if not (isinstance(roles, list) and all(isinstance(r, str) for r in roles)):
+            errors.append(f"{where}: roles must be a list of roles")
+            continue
+        for r in roles:
+            if r not in ROLE_FAMILIES:
+                errors.append(f"{where}: roles: unknown role '{r}' (known: {', '.join(ROLE_FAMILIES)})")
+        used = set((it.meta.get("uses") or {}).get("agents") or [])
+        for r in (r for r in roles if r in ROLE_FAMILIES):
+            wanted = {ref for path, ref in refs if path.endswith(f".{r}")}
+            if r in ("fix", "perf"):
+                wanted |= {ref for path, ref in refs if path.startswith("fallbacks.")}
+            for ref in sorted(wanted - used):
+                errors.append(f"{it.id} dispatches role '{r}' but uses.agents lacks '{ref}' ({where})")
+    return errors
 
 
 def orphan_agents(reg: dict, items: dict) -> list[str]:

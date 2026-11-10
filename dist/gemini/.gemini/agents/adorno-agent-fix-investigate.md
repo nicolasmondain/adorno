@@ -26,6 +26,7 @@ tools:
 2. Isolate: reduce to the smallest case, read the code of the path involved, look at the history (`git log -p`,
    `git blame`); a recent regression is confirmed with `git bisect run` on the repro command.
 3. Write `diagnosis.md`: symptom, repro, cause (file:line, culprit commit if known), proposed fix with its test,
-   risks.
+   risks, the **nature** (`bug` | `perf`) and the **area** (`adorno-github/scripts/pr-areas owner/repo --files <implicated
+   files>`: main area, `by_area` keys).
 
-You commit nothing: `agent:fix:patch` will fix from your diagnosis.
+You commit nothing: the `fix` (bug) or `perf` (perf) agent of that area will fix from your diagnosis.

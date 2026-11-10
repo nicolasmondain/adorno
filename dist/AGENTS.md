@@ -158,7 +158,7 @@ A conflict is settled at the highest level and reported.
 
 - Any PR analysis happens in its workspace (`adorno-github/scripts/pr-workspace`): agents read the full code there, run
   the repo's commands there, and fixes on the user's PRs are committed there then pushed by `pr-push`.
-- The reviewers to call depend on the areas touched: `pr-areas` + the repo's `area_reviewers`.
+- The reviewers to call depend on the areas touched: `pr-areas` (`review`) from the repo's `areas`.
 - What is published in the user's name (review, reply, resolution) goes last through `agent:adorno`, which verifies,
   decides and writes in their voice. A specialist finds and argues; `agent:adorno` decides.
 - Severities: `blocker` 🔴, `major` 🟠, `minor` 🟡, `question` ❓. A point that cannot be anchored on `file:line`, or

@@ -19,18 +19,19 @@ command.
 2. **Commit** — in the branch's worktree (the given path, else the current clone; on the base or a shared branch:
    stop). `git status --porcelain` not empty → `commit_skill`: typed Conventional Commits, one intent each, never
    `.agent-run/`, a secret or a file the workflow did not touch, hooks run (never `--no-verify`). A hook fails → the
-   family agent of the change fixes it, two rounds at most, then stop and report. Nothing to commit and nothing
+   `fix` of the area of the failing files (`pr-areas --files`; lint: `fallbacks.nit`) fixes it, two rounds at most, then
+   stop and report. Nothing to commit and nothing
    ahead of `origin/<branch>` → nothing to ship: say so and stop.
 3. **Which PR** — `pr-status owner/repo` → the line whose `branch` is this one (`isDraft` says how it stands).
 4. **Review and fix, until clean** — the scope: `origin/<base>...HEAD` with no PR yet **or a PR still in draft**
    (a draft goes ready only on a verdict about the whole branch, never on its last commits alone), the commits not
    yet on `origin/<branch>` when it is open and ready.
-   - `pr-areas owner/repo` on that diff → the area reviewers, in parallel, read-only, each into `reviews/<agent>.json`;
+   - `pr-areas owner/repo` on that diff → their `review` agents, in parallel, read-only, each into `reviews/<agent>.json`;
      then `agent:adorno` (situation 1) rechecks them and judges as the owner: the repo's rules and `context`, the
      profile, and **the request** — the run's `spec.md`, the issue or the plan: an acceptance criterion missed or
      half done is a 🟠 anchored on its line there. `review-merge` → the verdict.
-   - A 🔴 or a 🟠 → fixed in the flow: each by the family agent of its subject (`fix:patch`, `refactor:simplify`,
-     `test:unit`, the `feat:*` or `perf:*` agent of the area), tests and lint green, committed with `commit_skill`;
+   - A 🔴 or a 🟠 → fixed in the flow: each by `by_area.<a>.fix` (or `.perf` for a performance point) of its file's
+     area (`pr-areas --files <file>`; nit: `fallbacks.nit`, missing test: `fallbacks.test`), tests and lint green, committed with `commit_skill`;
      then the reviewers again on the new commits and on the points still open. Two fix rounds at most.
    - Clean (no 🔴 nor 🟠, the request met) → **ready for review**. The cap reached with a 🔴 or 🟠 still open:
      no PR yet → it is opened as **draft**, those points at the top of its description with `file:line`; a PR already

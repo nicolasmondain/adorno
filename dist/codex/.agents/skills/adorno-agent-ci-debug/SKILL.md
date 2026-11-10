@@ -22,8 +22,9 @@ When this skill is invoked, take on the role below for the current task, then re
    - **flaky**: the same test passes on the previous commit with no related change, random timeouts, ordering →
      one single re-run (`ci-rerun`); if it fails again, it is a real failure or a test to stabilize.
    - **real failure**: the diff breaks a test, the build, the lint or the typecheck → reproduce locally.
-3. Name the fixer: `agent:fix:patch` (code), `agent:test:unit` (wrong test), `agent:ci:*` (pipeline),
-   `agent:refactor:simplify` (lint).
+3. Name the fixer from the failure class and the area of the failing files (`pr-areas owner/repo --files …`):
+   pipeline or infra config → `agent:ci:fix`; timeout or slowness in an area with a `perf` → that `perf`; wrong test →
+   `fallbacks.test`; lint → `fallbacks.nit`; code → the area's `fix`.
 
 ## What you return
 

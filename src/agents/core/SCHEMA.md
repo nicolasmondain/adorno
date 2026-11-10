@@ -91,7 +91,7 @@ flowchart TD
   B -->|"false"| X["Skip"]
   B -->|"true"| C["Categorize: fix, nit, test, question, disagree, scope, done"]
   C --> D["Area via pr-areas on the PR diff"]
-  D --> E["Consult list via area_reviewers: agent:review:*"]
+  D --> E["Consult list: review of the area, from pr-areas"]
   E --> F["Likely fixer: fix:patch, refactor:simplify, test:unit, or none"]
   F --> G["triage.json: id, kind, category, area, consult, fixer, summary"]
   G --> H["agent:adorno decides and replies"]

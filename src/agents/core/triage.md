@@ -13,19 +13,20 @@ registered, 4 policy, 5 permissions: stop and report).
 
 ## Sorting a piece of feedback (thread, general comment, review summary)
 
-| Category | Sign | Likely fixer |
+| Category | Sign | Likely fixer (`pr-areas` of the targeted file) |
 | --- | --- | --- |
-| `fix` | real defect reported | `agent:fix:patch`, or the agent of the subject's family |
-| `nit` | rename, typo, style | `agent:refactor:simplify` |
-| `test` | test requested | `agent:test:unit` |
+| `fix` | real defect reported | `by_area.<a>.fix` |
+| `perf` | slowness, cost, scale reported | `by_area.<a>.perf` |
+| `nit` | rename, typo, style | `fallbacks.nit` |
+| `test` | test requested | `fallbacks.test` |
 | `question` | "why…?", "what if…?" | none: an answer |
 | `disagree` | request contrary to the spec or that looks harmful | `agent:adorno` rules; if confirmed, the fixer of what is asked |
 | `scope` | "we should also…" | none: a follow-up issue |
 | `done` | already settled, thread `isOutdated` | none: cite the commit |
 
-For each one, add the **area** (front, back, mongodb, api, security…: `pr-areas` on the PR diff for the targeted file,
-otherwise the subject of the comment) and the `agent:review:*` reviewer(s) to consult to verify what is said
-(`area_reviewers` of the repo). An item whose `needsReply` is false is not reprocessed.
+For each one, add the **area** (`pr-areas owner/repo --files <targeted file>`; `by_area` keys). A file in several
+areas: the one matching the comment's subject (a security finding: `security`), else the main area. The specialists to
+consult to verify what is said are `by_area.<a>.review`. An item whose `needsReply` is false is not reprocessed.
 
 You neither write nor publish the replies: that is `agent:adorno`. You provide the sorting.
 

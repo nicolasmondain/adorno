@@ -1,9 +1,10 @@
 ---
 description: Fix a bug from a GitHub issue, a Slack thread, a Notion page, a prompt or a validated spec — investigation, red test, minimal fix, review and fix until clean, PR ready for review ("Fixes #n" if there is an issue) without asking, CI and review follow-up.
 args: "<owner/repo#N | Slack / Notion links | bug description with owner/repo | .agent-run folder>"
+roles: [fix, perf, review]
 uses:
   skills: [adorno-github, adorno-inputs, adorno-notion-sync]
-  agents: [agent:fix:investigate, agent:fix:patch]
+  agents: [agent:fix:investigate, agent:fix:patch, agent:chore:deps, agent:ci:fix, agent:docs:write, agent:fix:security, agent:refactor:simplify, agent:test:e2e, agent:test:unit, agent:perf:front, agent:perf:mongodb, agent:perf:nodejs, agent:review:api, agent:review:back, agent:review:code, agent:review:front, agent:review:mongodb, agent:review:perf, agent:review:perf-back, agent:review:ponytail, agent:review:security, agent:review:tests]
   workflows: [workflow:pr:ship, workflow:pr:watch]
 model: balanced
 ---
@@ -24,8 +25,9 @@ Input: {{args}}
 3. **Checkpoint 1**: diagnosis and level (L3 by default) validated by the user. Then
    `adorno-notion-sync start <.agent-run folder> owner/repo` (the Notion page of the report gets the repo's
    `notion_spec.start` properties; nothing to do without a Notion page or without that setting).
-4. Branch `fix/<n>-<slug>` (no issue: `fix/<slug>`) from the base; `agent:fix:patch`: red test, fix, green suite.
+4. Branch `fix/<n>-<slug>` (no issue: `fix/<slug>`) from the base; the agent of the diagnosis's area (`pr-areas`
+   `by_area.<a>.fix` for a `bug`, `.perf` for a `perf`): red test, fix, green suite.
 5. `workflow:pr:ship owner/repo <branch> <worktree> <.agent-run folder>`, without asking: `commit_skill`, the review
-   loop (area reviewers and `agent:adorno` against the diagnosis and the report: every 🔴 or 🟠 back to `fix:patch`,
-   two rounds), then `pr_skill`, ready for review once clean, with `Fixes #N` in the description if there is an issue
+   loop (area reviewers and `agent:adorno` against the diagnosis and the report: every 🔴 or 🟠 back to the `fix` or `perf`
+   of its file's area, two rounds), then `pr_skill`, ready for review once clean, with `Fixes #N` in the description if there is an issue
    (otherwise the links of the sources, if the team can access them), then `workflow:pr:watch`.

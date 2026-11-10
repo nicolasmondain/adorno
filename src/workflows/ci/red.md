@@ -1,9 +1,10 @@
 ---
 description: Handles a red CI on a PR — diagnosis from the logs, a single rerun if flaky, otherwise a fix by the designated agent, committed and pushed without asking (workflow:pr:ship), the PR description updated if the scope moved. Use as soon as a check fails.
 args: "<owner/repo#N>"
+roles: [fix, perf]
 uses:
   skills: [adorno-github]
-  agents: [agent:ci:debug, agent:fix:patch, agent:test:unit, agent:refactor:simplify]
+  agents: [agent:ci:debug, agent:fix:patch, agent:test:unit, agent:refactor:simplify, agent:chore:deps, agent:ci:fix, agent:docs:write, agent:fix:security, agent:test:e2e, agent:perf:front, agent:perf:mongodb, agent:perf:nodejs]
   workflows: [workflow:pr:ship]
 model: balanced
 ---

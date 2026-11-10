@@ -333,6 +333,7 @@ if [ -f "$REAL" ]; then
   printf 'diff --git a/server/services/x.js b/server/services/x.js\n--- a/server/services/x.js\n+++ b/server/services/x.js\n@@ -1 +1 @@\n+db.c.aggregate([])\n' >"$TMP/back-agg.diff"
   expect_exit 0 "a back file with an aggregate" -- "$S/pr-areas" acme/app "$TMP/back-agg.diff"
   expect_jq "inside the back family the sub-area wins perf, build stays back" '.perf == "agent:perf:mongodb" and .build == "agent:feat:back"'
+  expect_jq "a perf finding on that query routes to perf:mongodb through by_area" '.by_area["back.query"].perf == "agent:perf:mongodb" and .fallbacks.nit == "agent:refactor:simplify" and .fallbacks.test == "agent:test:unit"'
   printf 'diff --git a/server/services/a.js b/server/services/a.js\n--- a/server/services/a.js\n+++ b/server/services/a.js\n@@ -1 +1 @@\n+a\ndiff --git a/server/services/b.js b/server/services/b.js\n--- a/server/services/b.js\n+++ b/server/services/b.js\n@@ -1 +1 @@\n+b\ndiff --git a/client/c.css b/client/c.css\n--- a/client/c.css\n+++ b/client/c.css\n@@ -1 +1 @@\n+c\n' >"$TMP/two-back.diff"
   expect_exit 0 "two back files and one front file" -- "$S/pr-areas" acme/app "$TMP/two-back.diff"
   expect_jq "most files wins the family" '.build == "agent:feat:back"'

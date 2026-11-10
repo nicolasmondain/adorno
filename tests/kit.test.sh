@@ -222,6 +222,18 @@ out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
 if [ "$got" != 0 ] && grep -q "entry names unknown workflow 'workflow:spec:ghost'" <<<"$out"; then ok "an entry naming no workflow fails"; else ko "an entry naming no workflow fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
 out="$(ADORNO_LOCAL="$TMP/none" "${KIT[@]}" list --orphans 2>&1)"; got=$?
 check "list --orphans is empty on the real registry" '[ "$got" = 0 ] && [ -z "$out" ]'
+rm -f "$SB/src/agents/feat/lonely.md"
+sed -i.bak 's/agent:fix:security, //' "$SB/src/workflows/pr/ship.md"; rm -f "$SB/src/workflows/pr/ship.md.bak"
+out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
+if [ "$got" != 0 ] && grep -q "workflow:pr:ship dispatches role 'fix' but uses.agents lacks 'agent:fix:security'" <<<"$out"; then ok "a dispatcher missing an agent of its roles fails"; else ko "a dispatcher missing an agent of its roles fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
+cp "$ROOT/src/workflows/pr/ship.md" "$SB/src/workflows/pr/ship.md"
+sed -i.bak 's/^roles: \[.*\]/roles: [fix, deploy]/' "$SB/src/workflows/pr/ship.md"; rm -f "$SB/src/workflows/pr/ship.md.bak"
+out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
+if [ "$got" != 0 ] && grep -q "roles: unknown role 'deploy'" <<<"$out"; then ok "an unknown role value fails"; else ko "an unknown role value fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
+cp "$ROOT/src/workflows/pr/ship.md" "$SB/src/workflows/pr/ship.md"
+expect_exit 0 "the real registry passes with every dispatcher's roles covered" -- env ADORNO_LOCAL="$TMP/none" "${KIT[@]}" check
+check "no area_reviewers reader is left in src/" '! grep -rn "area_reviewers" "$ROOT/src" "$ROOT/bin/kit" | grep -v -e "src/skills/adorno-setup/" -e "bin/kit:.*AREA_REVIEWERS_MSG\|bin/kit:.*area_reviewers" -e SCHEMA.md | grep .'
+check "pr:ship leaves no family agent of its subject" '! grep -q "family agent of its subject" "$ROOT/src/workflows/pr/ship.md"'
 check "entry never reaches a rendered agent" '! grep -rq "^entry:" "$ROOT/dist" --include=*.md --include=*.toml'
 
 echo "migrate areas"
