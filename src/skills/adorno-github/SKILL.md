@@ -19,7 +19,7 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | `pr-feedback-fetch owner/repo#N` | threads, comments and review summaries to handle (`needsReply`, `bot`), CI; `pending`: their ids keyed by last activity, for `watch-seen` | L0 |
 | `pr-workspace owner/repo#N` | your PR, run from your clone: its branch's worktree (created if missing); otherwise a dedicated workspace under `~/.adorno` (separate clone, detached at the head commit) | L0 * |
 | `pr-workspace --clean` | deletes the workspaces of closed PRs | L0 * |
-| `pr-areas owner/repo DIFF_FILE` | code areas touched (front, back, mongodb…) and the reviewers to call | L0 |
+| `pr-areas owner/repo DIFF_FILE` or `owner/repo --files PATH…` | code areas touched (front, back, back.query…) and the agents to use: `build`, `fix`, `perf`, `qa`, `review`, and `skills` | L0 |
 | `pr-diff owner/repo#N` | metadata + diff saved to a file | L0 |
 | `issue-fetch owner/repo#N` | issue + comments | L0 |
 | `pr-merged owner/repo [--since 14d] [--author LOGIN] [--pr N]` | merged PRs (yours by default): merge commit, files, whether an impact report was already posted | L0 |

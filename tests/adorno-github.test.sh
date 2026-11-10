@@ -301,17 +301,38 @@ expect_jq "my pending review is surfaced" '(.[] | select(.number==10) | .pending
 echo "pr-areas (public default rules from repos.yaml)"
 REAL="$ROOT/dist/claude/.claude/skills/adorno-github/repos.json"
 if [ -f "$REAL" ]; then
-  jq '.repos = {"acme/app": {}, "acme/docs": {"area_reviewers": {"docs": ["agent:review:security"]}}}' "$REAL" >"$TMP/areas-repos.json"
+  jq '.repos = {"acme/app": {}, "acme/docs": {"areas": {"back": {"review": ["-agent:review:tests", "agent:review:security"]}}}}' "$REAL" >"$TMP/areas-repos.json"
   reg "$TMP/areas-repos.json"
   expect_exit 0 "classifies a diff" -- "$S/pr-areas" acme/app "$ROOT/tests/fixtures/sample.diff"
-  expect_jq "front by extension" '.areas.front == ["client/app.tsx"]'
-  expect_jq "mongodb by added-line content" '.areas.mongodb == ["server/users.js"] and .areas.back == ["server/users.js"]'
+  expect_jq "front by extension, with typescript" '.areas.front == ["client/app.tsx"] and .areas.typescript == ["client/app.tsx"] and (.skills | index("typescript-pro"))'
+  expect_jq "a query is the sub-area back.query, and its files also go to back" \
+    '.areas["back.query"] == ["server/users.js"] and .areas.back == ["server/users.js"]'
   expect_jq "deps and docs" '.areas.deps == ["package.json"] and .areas.docs == ["README.md"]'
   expect_jq "unmatched files land in other" '.other == ["notes/weird.txt"]'
-  expect_jq "reviewers: always + per area, deduplicated" \
-    '(.reviewers | sort) == (["agent:review:code","agent:review:ponytail","agent:review:front","agent:review:perf","agent:review:back","agent:review:tests","agent:review:mongodb","agent:review:security"] | sort)'
+  expect_jq "perf comes from the sub-area, build from the parent" '.perf == "agent:perf:mongodb" and .build == "agent:feat:back"'
+  expect_jq "review: always + every area, deduplicated" \
+    '(.review | sort) == (["agent:review:code","agent:review:ponytail","agent:review:front","agent:review:perf","agent:review:back","agent:review:tests","agent:review:perf-back","agent:review:mongodb","agent:review:security"] | sort) and (.review | length) == (.review | unique | length)'
+  expect_jq "no reviewers key, always is not an area" '(has("reviewers") | not) and (.areas | has("always") | not)'
+  expect_jq "by_area carries the roles" '.by_area["back.query"].perf == "agent:perf:mongodb" and .by_area.front.perf == "agent:perf:front" and .by_area.docs.perf == "agent:fix:patch"'
+  expect_jq "no perf fallback when an area has one" '.skills | index("performance-optimization") | not'
   expect_exit 0 "per-repo override" -- "$S/pr-areas" acme/docs "$ROOT/tests/fixtures/sample.diff"
-  expect_jq "override merges with default areas" '.areas.front == ["client/app.tsx"] and (.reviewers | index("agent:review:security"))'
+  expect_jq "override adds a reviewer and removes one" \
+    '.areas.front == ["client/app.tsx"] and (.review | index("agent:review:security")) and (.review | index("agent:review:tests") | not) and (.review | index("agent:review:back"))'
+  expect_jq "no removal marker leaks" '[.review[] | select(startswith("-"))] == []'
+
+  printf 'diff --git a/x/migrations/1.js b/x/migrations/1.js\n--- a/x/migrations/1.js\n+++ b/x/migrations/1.js\n@@ -1 +1 @@\n+module.exports = 1\ndiff --git a/x/auth/login.js b/x/auth/login.js\n--- a/x/auth/login.js\n+++ b/x/auth/login.js\n@@ -1 +1 @@\n+const a = 1\ndiff --git a/docs/api-reference/x.mdx b/docs/api-reference/x.mdx\n--- a/docs/api-reference/x.mdx\n+++ b/docs/api-reference/x.mdx\n@@ -1 +1 @@\n+hello\n' >"$TMP/mixed.diff"
+  expect_exit 0 "migration, auth and api reference" -- "$S/pr-areas" acme/app "$TMP/mixed.diff"
+  expect_jq "migration is back.mongodb, and back" '.areas["back.mongodb"] == ["x/migrations/1.js"] and .areas.back == ["x/migrations/1.js"]'
+  expect_jq "auth is security" '.areas.security == ["x/auth/login.js"] and .by_area.security.fix == "agent:fix:security" and .by_area.security.review == ["agent:review:security"]'
+  expect_jq "api reference is api and docs, not back" \
+    '.areas.api == ["docs/api-reference/x.mdx"] and .areas.docs == ["docs/api-reference/x.mdx"] and (.areas.back == ["x/migrations/1.js"]) and .by_area.api.build == "agent:feat:api"'
+
+  expect_exit 0 "--files mode, no content rules" -- "$S/pr-areas" acme/app --files server/services/x.js client/a.tsx
+  expect_jq "--files detects by path" '.files == 2 and .areas.back == ["server/services/x.js"] and .areas.front == ["client/a.tsx"] and (.areas | has("back.query") | not)'
+  expect_exit 2 "--files needs paths" -- "$S/pr-areas" acme/app --files
+  expect_exit 0 "docs only" -- "$S/pr-areas" acme/app --files docs/guide.md
+  expect_jq "perf falls back to the fallback agent and its skills" \
+    '.perf == "agent:fix:patch" and (.skills | index("performance-optimization")) and .by_area.docs.perf == "agent:fix:patch" and .build == "agent:docs:write"'
   jq -e '.repos == {}' "$REAL" >/dev/null && ok "public registry has no repos" || ko "public registry has no repos"
   reg "$ROOT/tests/fixtures/repos.json"
 else

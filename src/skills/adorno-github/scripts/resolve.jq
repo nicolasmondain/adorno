@@ -7,6 +7,10 @@
 # Merge: objects merge key by key, arrays and scalars are replaced, except `context` and `vision`, which accumulate,
 # and `permissions`, whose lists (`deny`, `claude.allow|ask|deny`) accumulate too: a more specific scope can add a
 # restriction, never silently drop one. Repo names match case-insensitively, as on GitHub.
+# `areas` and `fallbacks` merge per area (and per sub-area under `sub`): `paths`, `content` and single roles (`build`,
+# `fix`, `perf`, `qa`) are replaced; list roles (`review`, `skills`) accumulate, and an entry `-x` in the newer layer
+# removes `x` (the markers never appear in the result). Once every layer is merged, each sub-area inherits its parent's
+# roles: single role = its own else the parent's, list = parent's + its own; `paths` and `content` are not inherited.
 # Shared by adorno-github/scripts/_lib.sh and bin/kit (kit conf, kit install): keep it the single source of truth.
 
 def glob_re: "^" + (gsub("(?<c>[.+?^${}()|\\[\\]\\\\])"; "\\\(.c)") | gsub("\\*\\*"; "\u0001") | gsub("\\*"; "[^/]*")
@@ -25,10 +29,50 @@ def merge_permissions($a; $b):
       ((($a.claude // {}) * (($b.claude // {}) | del(.allow, .ask, .deny)));
        .[$k] = union($a.claude[$k]; $b.claude[$k])));
 
+def list_roles: ["review", "skills"];
+
+# a list of an area: union of both layers, then every `-x` of the newer layer removes `x`
+def merge_list($a; $b):
+  ($b // []) as $nb
+  | ([$nb[] | select(type == "string" and startswith("-")) | .[1:]]) as $drop
+  | union($a; $nb) | map(select(type != "string" or (startswith("-") | not)) | select(. as $x | $drop | index([$x]) | not));
+
+# one area (or sub-area, or `always`, or a fallback): lists accumulate, everything else is replaced
+def merge_area($a; $b):
+  if ($a | type) != "object" or ($b | type) != "object" then $b
+  else reduce ($b | to_entries[] | select(.value != null)) as $e ($a;
+    if $e.key == "sub" and ($e.value | type) == "object"
+      then .sub = reduce ($e.value | to_entries[]) as $s (.sub // {}; .[$s.key] = merge_area(.[$s.key]; $s.value))
+    elif (list_roles | index([$e.key])) and ($e.value | type) == "array"
+      then .[$e.key] = merge_list(.[$e.key]; $e.value)
+    else .[$e.key] = $e.value end)
+  end;
+
+def merge_areas($a; $b):
+  if ($b | type) != "object" then $b
+  else reduce ($b | to_entries[]) as $e (($a | if type == "object" then . else {} end);
+    .[$e.key] = (if $e.value == null then null else merge_area(.[$e.key]; $e.value) end)) | with_entries(select(.value != null))
+  end;
+
+# the sub-areas of an area take the roles of their parent
+def inherit_roles:
+  if type != "object" then .
+  else with_entries(
+    .value as $p
+    | if ($p | type) == "object" and ($p.sub | type) == "object" then
+        .value.sub |= with_entries(.value |= (
+          . as $s
+          | reduce ("build", "fix", "perf", "qa") as $r ($s; if $s[$r] == null and $p[$r] != null then .[$r] = $p[$r] else . end)
+          | reduce list_roles[] as $r (.; if ($p[$r] // []) + ($s[$r] // []) | length > 0 then .[$r] = union($p[$r]; $s[$r]) else . end)))
+      else . end)
+  end;
+
 # merge2(a; b): b over a
 def merge2($a; $b):
   reduce ($b | to_entries[] | select(.value != null)) as $e ($a;
-    if $e.key == "permissions" and ($e.value | type) == "object"
+    if ($e.key == "areas" or $e.key == "fallbacks") and ($e.value | type) == "object"
+      then .[$e.key] = merge_areas(.[$e.key]; $e.value)
+    elif $e.key == "permissions" and ($e.value | type) == "object"
       then .permissions = merge_permissions(.permissions // {}; $e.value)
     elif (accumulating | index([$e.key])) and ($e.value | type) == "array"
       then .[$e.key] = ((.[$e.key] // []) + $e.value | uniq_keep_order)
@@ -58,5 +102,6 @@ def expand($presets):
 | ($ws + $globs + $exact) as $layers
 | select($layers | length > 0)
 | reduce $layers[] as $l (($reg.defaults // {}) | expand($presets); merge2(.; $l.layer | expand($presets)))
+| (if .areas then .areas |= inherit_roles else . end)
 | .repo = $r
 | .scopes = ["defaults"] + [$layers[].scope]
