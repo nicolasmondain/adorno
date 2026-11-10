@@ -32,7 +32,7 @@ flowchart TD
   E --> F
   F --> G{"Plan in source.md?"}
   G -->|"yes"| H["Copy into spec.md Provided plan and check against code"]
-  G -->|"no"| I["Propose permissions: minimum L0-L3, checkpoints spec, open_pr, merge"]
+  G -->|"no"| I["Propose permissions: minimum L0-L3 (L3 for code, so ship opens the PR), checkpoints spec, merge"]
   H --> I
   I --> J["Summary of 10 lines max + validation question"]
   J --> K{"User says yes?"}

@@ -25,8 +25,9 @@ command.
    family agent of the change fixes it, two rounds at most, then stop and report. Nothing to commit and nothing
    ahead of `origin/<branch>` → nothing to ship: say so and stop.
 3. **Which PR** — `pr-status owner/repo` → the line whose `branch` is this one (`isDraft` says how it stands).
-4. **Review and fix, until clean** — the scope: `origin/<base>...HEAD` with no PR yet, the commits not yet on
-   `origin/<branch>` when it is open.
+4. **Review and fix, until clean** — the scope: `origin/<base>...HEAD` with no PR yet **or a PR still in draft**
+   (a draft goes ready only on a verdict about the whole branch, never on its last commits alone), the commits not
+   yet on `origin/<branch>` when it is open and ready.
    - `pr-areas owner/repo` on that diff → the area reviewers, in parallel, read-only, each into `reviews/<agent>.json`;
      then `agent:adorno` (situation 1) rechecks them and judges as the owner: the repo's rules and `context`, the
      profile, and **the request** — the run's `spec.md`, the issue or the plan: an acceptance criterion missed or
@@ -49,7 +50,7 @@ command.
      moved (a new What or How, a new risk, a verification that no longer matches) → new title and description in
      English, in the owner's voice (`adorno-voice`), published by `pr-edit owner/repo#N "<title>" <file>`. Unchanged
      → nothing. A repo skill: run it in update mode (it receives `#N`); it may run `gh pr edit` itself;
-   - still a draft and the verdict is clean → `pr-ready owner/repo#N`.
+   - still a draft and the verdict on the whole branch is clean → `pr-ready owner/repo#N`.
 7. **Report** — commits (SHA, message), review rounds and what they fixed, push, PR URL and `opened | updated |
    unchanged`, `ready | draft` (and why), and what stopped the workflow if anything did. Suggest
    `workflow:pr:watch owner/repo#N` when the caller does not run it.

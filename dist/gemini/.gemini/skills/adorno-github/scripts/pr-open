@@ -12,8 +12,7 @@ head="${2:-}"; title="${3:-}"; body="${4:-}"; draft="${5:-}"
 [ -s "$body" ] || die "empty PR body: $body" "$E_USAGE"
 require_level "$REPO" L3 open_pr
 
-type_re='^(feat|fix|perf|refactor|test|docs|style|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: .+'
-[[ "$title" =~ $type_re ]] || die "title is not a Conventional Commit header: $title" "$E_USAGE"
+require_cc_title "$title"
 
 pattern="$(conf_get "$REPO" branch_pattern)"
 [ -z "$pattern" ] || [[ "$head" =~ $pattern ]] || die "branch '$head' does not match branch_pattern ($pattern)" "$E_POLICY"

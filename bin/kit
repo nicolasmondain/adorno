@@ -635,7 +635,7 @@ def validate_registry(reg: dict, agent_ids: set, delegable: set) -> list[str]:
                     errors.append(f"{where}: {scope}.impact.sources must be a list")
         for key in ("commit_skill", "pr_skill", "setup_skill"):
             if conf.get(key) is not None and not (isinstance(conf[key], str)
-                                                  and re.match(r"^/?[A-Za-z0-9:_-]+$", conf[key])):
+                                                  and re.fullmatch(r"/?[A-Za-z0-9:_-]+", conf[key])):
                 errors.append(f"{where}: {scope}.{key} must be a skill or command name (like adorno-commit or /acme-pr)")
         if conf.get("voice") is not None and not isinstance(conf["voice"], dict):
             errors.append(f"{where}: {scope}.voice must be a mapping")

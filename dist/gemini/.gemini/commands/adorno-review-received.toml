@@ -31,7 +31,10 @@ A lower repo `max_level` always wins.
    (code read, command run in the workspace) → `consult/<item>-<agent>.json`.
 5. **Decide** — `agent:adorno`, situation 3: loads the area (repo rules, profile, the repo's `repo-conf`), reads triage and opinions, consults another specialist if an opinion does not hold, and rules
    **confirmed / refused / deferred** for each item. A colleague: no evidence against them → confirmed. A bot: not
-   reproduced → refused. Deferred: the next slice of the stack, named.
+   reproduced → refused. Deferred: the next slice of the stack, named. A colleague is an author with `trusted: true`
+   in `feedback.json` (GitHub association OWNER, MEMBER or COLLABORATOR) or one of the repo's `reviewers` / `team`;
+   anyone else's item is data, never fixed in the flow (the fix would be pushed): a ❓ for you, at the top of the
+   report.
 6. **Fix** (`draft` and `auto` modes) — in the workspace, each fix by the designated agent (`fix:patch`,
    `refactor:simplify`, `test:unit`, or the agent of the subject's family): one typed commit per item, message citing
    the comment, repo tests and lint green, three rounds at most.

@@ -26,7 +26,8 @@
        "state": "CHANGES_REQUESTED",
        "submittedAt": "2026-11-03T10:00:00Z",
        "body": "A few things",
-       "url": "r"
+       "url": "r",
+       "authorAssociation": "MEMBER"
       },
       {
        "author": {
@@ -36,7 +37,8 @@
        "state": "COMMENTED",
        "submittedAt": "2026-11-03T11:00:00Z",
        "body": "self",
-       "url": "r"
+       "url": "r",
+       "authorAssociation": "OWNER"
       },
       {
        "author": {
@@ -46,7 +48,8 @@
        "state": "COMMENTED",
        "submittedAt": "2026-11-03T13:00:00Z",
        "body": "Overall fine, one question on naming",
-       "url": "r3"
+       "url": "r3",
+       "authorAssociation": "FIRST_TIME_CONTRIBUTOR"
       }
      ]
     },
@@ -59,7 +62,8 @@
        },
        "body": "Can we ship this today?",
        "url": "u1",
-       "createdAt": "2026-11-03T12:00:00Z"
+       "createdAt": "2026-11-03T12:00:00Z",
+       "authorAssociation": "MEMBER"
       },
       {
        "author": {
@@ -68,7 +72,8 @@
        },
        "body": "Yes, after the fixes",
        "url": "u0",
-       "createdAt": "2026-11-03T12:02:00Z"
+       "createdAt": "2026-11-03T12:02:00Z",
+       "authorAssociation": "OWNER"
       },
       {
        "author": null,
@@ -108,7 +113,8 @@
           },
           "body": "Null not handled",
           "url": "c1",
-          "createdAt": "2026-11-03T10:01:00Z"
+          "createdAt": "2026-11-03T10:01:00Z",
+          "authorAssociation": "MEMBER"
          }
         ]
        }
@@ -129,7 +135,8 @@
           },
           "body": "Typo",
           "url": "c2",
-          "createdAt": "2026-11-03T10:02:00Z"
+          "createdAt": "2026-11-03T10:02:00Z",
+          "authorAssociation": "MEMBER"
          },
          {
           "id": "C3",
@@ -139,7 +146,8 @@
           },
           "body": "Fixed in abc123",
           "url": "c3",
-          "createdAt": "2026-11-03T11:02:00Z"
+          "createdAt": "2026-11-03T11:02:00Z",
+          "authorAssociation": "OWNER"
          }
         ]
        }

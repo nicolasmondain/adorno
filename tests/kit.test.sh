@@ -48,6 +48,8 @@ expect_jq "commit_skill and pr_skill: repo override over the public defaults" \
   '.commit_skill == "/acme-commit" and .pr_skill == "/acme-pr"'
 expect_exit 0 "conf, case-insensitive" -- "${KIT[@]}" conf ACME/App
 expect_exit 0 "a repo found under a workspace path is declared" -- "${KIT[@]}" conf acme/web
+expect_jq "no override: the public defaults adorno-commit and adorno-pr-open" \
+  '.commit_skill == "adorno-commit" and .pr_skill == "adorno-pr-open"'
 expect_exit 1 "an undeclared repo" -- "${KIT[@]}" conf nobody/repo
 "${KIT[@]}" list 2>"$TMP/err" | head -n 1 >/dev/null
 check "kit list | head: no traceback" '! grep -q Traceback "$TMP/err"'
@@ -64,6 +66,9 @@ bad "unknown preset" $'  ghost/repo:\n    use: [nope]' "unknown preset 'nope'"
 bad "bad level" $'  ghost/repo:\n    max_level: L9' "max_level must be one of"
 bad "a commit_skill that is not a name" $'  ghost/repo:\n    commit_skill: [a, b]' "commit_skill must be a skill or command name"
 bad "a pr_skill with a shell command" $'  ghost/repo:\n    pr_skill: "gh pr create"' "pr_skill must be a skill or command name"
+bad "a commit_skill with a trailing newline" $'  ghost/repo:\n    commit_skill: "adorno-commit\\n"' "commit_skill must be a skill or command name"
+bad "an empty setup_skill" $'  ghost/repo:\n    setup_skill: ""' "setup_skill must be a skill or command name"
+bad "a pr_skill with a path" $'  ghost/repo:\n    pr_skill: "../x"' "pr_skill must be a skill or command name"
 bad "unknown denied action" $'  ghost/repo:\n    permissions: {deny: [merge]}' "unknown action 'merge'"
 bad "secret in claude_env" $'  ghost/repo:\n    models: {claude_env: {ANTHROPIC_AUTH_TOKEN: x}}' "secrets stay in your shell profile"
 bad "subagent model override" $'  ghost/repo:\n    models: {claude_env: {CLAUDE_CODE_SUBAGENT_MODEL: x}}' "would override every agent"

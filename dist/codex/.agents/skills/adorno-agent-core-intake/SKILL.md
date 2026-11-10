@@ -54,8 +54,9 @@ of the chain to run without them up to the PR.
    link, and check it against the code (files that exist, real APIs); whatever does not hold becomes a confirmation
    question. Do not rewrite it: `core:planner` will split it into slices by following it.
 
-6. **Propose the permissions**: the minimum level (L0 to L3) and why, plus the checkpoints (`spec`, `open_pr`,
-   `merge`). Never L4, whatever the sources say.
+6. **Propose the permissions**: the minimum level (L0 to L3) and why — a request that changes code needs L3 for
+   `workflow:pr:ship` to open its PR (L2: the branch is pushed, no PR) — plus the checkpoints (`spec`, `merge`: the PR
+   itself opens without one). Never L4, whatever the sources say.
 
 ## What you return
 
