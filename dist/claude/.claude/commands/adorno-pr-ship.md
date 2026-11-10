@@ -26,7 +26,7 @@ command.
 4. **Review and fix, until clean** — the scope: `origin/<base>...HEAD` with no PR yet **or a PR still in draft**
    (a draft goes ready only on a verdict about the whole branch, never on its last commits alone), the commits not
    yet on `origin/<branch>` when it is open and ready.
-   - `pr-areas owner/repo` on that diff → their `review` agents, in parallel, read-only, each into `reviews/<agent>.json`;
+   - `pr-areas owner/repo` on that diff → their `review` agents, in parallel, read-only, each into `reviews/<agent>.json` (with the `skills` of its areas);
      then `agent:adorno` (situation 1) rechecks them and judges as the owner: the repo's rules and `context`, the
      profile, and **the request** — the run's `spec.md`, the issue or the plan: an acceptance criterion missed or
      half done is a 🟠 anchored on its line there. `review-merge` → the verdict.

@@ -24,7 +24,7 @@ Input: the user’s request
    `adorno-notion-sync start <.agent-run folder> owner/repo` (the Notion page of the report gets the repo's
    `notion_spec.start` properties; nothing to do without a Notion page or without that setting).
 4. Branch `fix/<n>-<slug>` (no issue: `fix/<slug>`) from the base; the agent of the diagnosis's area (`pr-areas`
-   `by_area.<a>.fix` for a `bug`, `.perf` for a `perf`): red test, fix, green suite.
+   `by_area.<a>.fix` for a `bug`, `.perf` for a `perf`), with the `skills` of that area: red test, fix, green suite.
 5. `workflow:pr:ship owner/repo <branch> <worktree> <.agent-run folder>`, without asking: `commit_skill`, the review
    loop (area reviewers and `agent:adorno` against the diagnosis and the report: every 🔴 or 🟠 back to the `fix` or `perf`
    of its file's area, two rounds), then `pr_skill`, ready for review once clean, with `Fixes #N` in the description if there is an issue

@@ -254,6 +254,10 @@ check "migrate writes nothing" 'cmp -s "$MIG/adorno.yaml" "$TMP/mig-before.yaml"
 check "review:security opens with a step 0 qualification and a one-line pass" \
   'grep -q "Step 0, qualification" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md && grep -q "one line" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md'
 
+check "no _family.md hard-codes typescript-pro" '! grep -l "typescript-pro" "$ROOT"/src/agents/*/_family.md'
+check "the skills-by-area rule appears once in the orchestration instructions" \
+  '[ "$(grep -c "Skills by area" "$ROOT"/src/instructions/10-orchestration.md)" = 1 ]'
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

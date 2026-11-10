@@ -31,7 +31,7 @@ flowchart TD
   G -->|"no, 3 rounds"| STOP["Stop and report"]
   G -->|"yes"| C["Commit fix(module): what was broken; body: cause + Refs #issue or thread link"]
   C --> OUT["Test and fix in the same commit (L2)"]
-  SK["skills debugging-and-error-recovery, test-driven-development, typescript-pro"] -.-> FX
+  SK["skills debugging-and-error-recovery, test-driven-development"] -.-> FX
 ```
 
 ## `agent:fix:security`
