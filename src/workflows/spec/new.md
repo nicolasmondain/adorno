@@ -4,6 +4,7 @@ args: "<the request, and/or Slack, Notion, GitHub links, a plan file> [owner/rep
 uses:
   skills: [adorno-inputs, adorno-github]
   agents: [agent:core:intake]
+model: balanced
 ---
 
 Request: {{args}}

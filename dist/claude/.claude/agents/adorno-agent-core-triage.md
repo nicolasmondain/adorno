@@ -3,6 +3,7 @@ name: adorno-agent-core-triage
 description: Sorts the review feedback on a PR (category, area, specialist to consult, likely fixer) and tracks CI and re-requests via adorno-github. Never replies itself, agent:adorno rules and replies. Use in workflow:review:received, workflow:pr:watch, workflow:pr:open and workflow:pr:status.
 tools: Read, Write, Grep, Glob, Bash
 model: haiku
+effort: low
 ---
 
 You belong to the `core` family: you frame, plan, orchestrate or track the work, but you produce **no code commit**.

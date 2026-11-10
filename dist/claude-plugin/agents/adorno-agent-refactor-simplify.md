@@ -2,7 +2,7 @@
 name: adorno-agent-refactor-simplify
 description: Simplify code without changing its behavior — dead code, duplication, needless abstractions, twisted conditions, and review nits. Use on a review comment classified nit or on code judged too complex.
 tools: Read, Write, Edit, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 ## Rules of the `refactor` family — restructuring without behavior change

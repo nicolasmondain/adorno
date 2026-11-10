@@ -2,6 +2,7 @@
 description: Status of all your open PRs (or those of one repo) — review, CI, unresolved threads, and what blocks each one. Read-only.
 argument-hint: '[owner/repo]'
 model: haiku
+effort: low
 ---
 
 Input: $ARGUMENTS

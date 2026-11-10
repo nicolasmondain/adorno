@@ -1,7 +1,7 @@
 ---
 description: Frames a new code request and turns it into a spec with the permission level — either by discussing (discuss mode), or, when the request or its sources (clear prompt, Slack thread, Notion page, issue, already written plan) are enough, by writing it directly and asking only confirmation questions (confirm mode). Use at the start of any non-trivial request, before any code (workflow:spec:new).
 tools: [read, write, search, web]
-model: deep
+model: frontier
 ---
 
 ## Role

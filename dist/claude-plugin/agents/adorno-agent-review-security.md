@@ -2,7 +2,7 @@
 name: adorno-agent-review-security
 description: Security audit of a diff — OWASP Top 10, secrets, authentication and authorization, sensitive data, dependencies. Use whenever a diff touches user inputs, auth, data or dependencies.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 # Security Auditor

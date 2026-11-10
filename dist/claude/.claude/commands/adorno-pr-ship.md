@@ -1,6 +1,7 @@
 ---
 description: Ends every workflow that touched code — commit (the repo's commit_skill), review and fix until no 🔴 or 🟠 is left and the change meets the request, then the PR (the repo's pr_skill) opened ready for review, or pushed and updated when it is already open. No confirmation and no permission prompt, within the run's level. Last step of feature:build, issue:fix, ci:red, review:received and repo:onboard.
 argument-hint: <owner/repo> <branch> [worktree path] [.agent-run folder]
+model: sonnet
 ---
 
 Input: $ARGUMENTS

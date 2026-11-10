@@ -282,27 +282,30 @@ These workflows are launched by hand, or from your own scheduler (a scheduled ta
 ## 9. Models and providers
 
 A workflow chains agents; each one runs on the model that is enough for its task. Sorting comments or choosing
-a pattern does not need the same model as deciding a review in your name.
+a pattern does not need the same model as deciding a review in your name. The pattern, and the choice for every
+step of every workflow: [models.md](models.md).
 
 ```mermaid
 flowchart LR
-  W["workflow:review:received"] --> T["triage<br/>fast"]
-  W --> S["specialists<br/>balanced"]
+  W["workflow:review:received<br/>session: balanced"] --> T["triage<br/>fast"]
+  W --> S["specialists<br/>deep"]
   W --> A(("Adorno<br/>deep"))
   T -.->|"external route"| O["OpenRouter<br/>or your models"]
 ```
 
-**Three neutral tiers.** Each agent declares `fast`, `balanced` or `deep` (and `inherit` = the session's model). The
-install translates them for each tool:
+**Four neutral tiers.** Each agent and workflow declares `fast`, `balanced`, `deep` or `frontier` (and `inherit` =
+the session's model), and optionally an `effort` (`low` … `max`, Claude Code only). The install translates them for
+each tool:
 
 | Tool | Default | Configurable |
 | --- | --- | --- |
-| Claude Code | `haiku`, `sonnet`, `opus` (subagents and workflow commands) | `models.tiers.claude`, or a specific identifier per agent |
+| Claude Code | `haiku`, `sonnet`, `opus`, `fable` (subagents and workflow commands) | `models.tiers.claude`, or a specific identifier per agent |
 | Gemini CLI | the session's model (`inherit`) | `models.tiers.gemini` (e.g. `gemini-2.5-flash` / `gemini-2.5-pro`) |
 | Codex | the session's model: Codex has no subagents, the agents are skills there | the session's model (`.codex/config.toml`) |
 
-The repo's defaults: `triage` and `router` on `fast`; the specialists on `balanced`;
-`adorno`, `intake`, `analyst`, `review:ponytail`, `review:impact` and `perf:*` on `deep`.
+The repo's defaults: `triage`, `router` and `workflow:pr:status` on `fast`; the sessions that orchestrate the other
+workflows on `balanced`; every other agent on `deep`; `intake`, `planner` and `fix:investigate` on `frontier`. A capped
+loop's last round climbs one tier (`adorno-run-plan` › Loops).
 
 **Setting it**, at any level of `local/adorno.yaml` (defaults, preset, workspace, repo):
 
@@ -310,9 +313,9 @@ The repo's defaults: `triage` and `router` on `fast`; the specialists on `balanc
 defaults:
   models:
     tiers:
-      claude: {fast: haiku, balanced: sonnet, deep: opus}
+      claude: {fast: haiku, balanced: sonnet, deep: opus, frontier: fable}
     agents:
-      agent:review:mongodb: deep                     # another tier
+      agent:review:mongodb: balanced                 # another tier
       agent:core:analyst: claude-opus-5-5            # a specific model
       agent:core:triage: {route: openrouter-small}   # an external model
     workflows:
@@ -322,7 +325,7 @@ defaults:
       ours: {base_url: https://llm.acme.internal/v1, model: acme-coder, api_key_env: ACME_LLM_KEY}
 repos:
   acme/payments:
-    models: {external: false, agents: {agent:review:security: deep}}
+    models: {external: false, agents: {agent:review:security: frontier}}
 ```
 
 A repo's setting takes effect with `bin/kit install <repo>` (or `--workspace`): the agents installed in the repo

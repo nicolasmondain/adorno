@@ -5,6 +5,7 @@ uses:
   skills: [adorno-github, adorno-commit, adorno-voice]
   agents: [agent:adorno, agent:review:code, agent:review:ponytail, agent:review:front, agent:review:back, agent:review:mongodb, agent:review:api, agent:review:security, agent:review:tests, agent:review:perf, agent:fix:patch, agent:refactor:simplify, agent:test:unit, agent:feat:api, agent:feat:back, agent:feat:front, agent:perf:mongodb, agent:perf:nodejs]
   workflows: [workflow:pr:open]
+model: balanced
 ---
 
 Input: {{args}}

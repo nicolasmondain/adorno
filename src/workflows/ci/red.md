@@ -5,6 +5,7 @@ uses:
   skills: [adorno-github]
   agents: [agent:ci:debug, agent:fix:patch, agent:test:unit, agent:refactor:simplify]
   workflows: [workflow:pr:ship]
+model: balanced
 ---
 
 Input: {{args}}

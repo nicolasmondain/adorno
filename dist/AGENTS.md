@@ -118,9 +118,13 @@ refused action (code 4 or 5) is never worked around: stop and say so.
 
 ## Models: each task on the model that suffices
 
-Each agent has a tier (`fast`, `balanced`, `deep`) that the install translates into the tool's model, adjustable per
-repo in the personal layer (`models`). For that choice to pay off:
+Each agent and workflow has a tier that the install translates into the tool's model (Claude Code: `fast` haiku,
+`balanced` sonnet, `deep` opus, `frontier` fable), adjustable per repo in the personal layer (`models`); the pattern
+and the choice for each step: `docs/models.md` in the adorno repo. For that choice to pay off:
 
+- **The session orchestrates, agents judge**: a workflow's session (`balanced`, `fast` for a script and a table) runs
+  the scripts and delegates; any verdict, diagnosis, plan or code goes to an agent (`deep` by default, `frontier` to
+  frame, plan and find a root cause).
 - **Delegate** each step of a workflow to its agent (subagent), rather than doing it in the orchestrating session: it
   is the only way it runs on the intended model. The mechanical parts (list, filter, publish) stay with the scripts,
   which cost no tokens.
@@ -144,7 +148,9 @@ A conflict is settled at the highest level and reported.
   `spec.md`, `run-plan.yaml`, `plan.md`, `slices.log`, `reviews/*.json`, `status.md`. Add `.agent-run/` to the repo's
   `.git/info/exclude`, never to the shared `.gitignore`.
 - Agents do not talk to each other: each reads the previous step's deliverable and writes its own.
-- Every loop has a cap (3 build rounds, 2 fix rounds after review); beyond it, stop and report in `status.md`.
+- Every loop has a cap (3 build rounds, 2 fix rounds after review); beyond it, stop and report in `status.md`. Within
+  the cap, a round that fails again climbs: the middle rounds at `effort: high`, the last one tier up (`deep` →
+  `frontier`), through the delegation's `model` and `effort` (`adorno-run-plan` › Loops).
 - GitHub only through the `adorno-github` skill (scripts); a repo that your local config does not declare (`repos`,
   `workspaces`) is never handled.
 

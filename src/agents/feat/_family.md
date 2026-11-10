@@ -1,6 +1,6 @@
 ---
 tools: [read, write, edit, search, shell]
-model: balanced
+model: deep
 ---
 
 ## Rules of the `feat` family — new feature

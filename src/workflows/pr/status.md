@@ -4,6 +4,7 @@ args: "[owner/repo]"
 uses:
   skills: [adorno-github]
 model: fast
+effort: low
 ---
 
 Input: {{args}}

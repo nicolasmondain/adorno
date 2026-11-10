@@ -7,12 +7,12 @@
 # global     install into ~ (`kit install --global`): instructions file,
 #            folder remapping (map) and unsupported folders (skip)
 # tools      neutral capabilities -> native tool names
-# models     neutral tiers (fast | balanced | deep | inherit) -> native models
+# models     neutral tiers (fast | balanced | deep | frontier | inherit) -> native models (docs/models.md)
 #
 # `verified: false` : paths taken from the public docs, not yet tested on your machine.
 
 capabilities: [read, write, edit, search, shell, web, agent]
-model_tiers: [inherit, fast, balanced, deep]
+model_tiers: [inherit, fast, balanced, deep, frontier]
 
 targets:
   claude:
@@ -31,7 +31,7 @@ targets:
       shell: [Bash]
       web: [WebFetch, WebSearch]
       agent: [Agent]
-    models: {inherit: inherit, fast: haiku, balanced: sonnet, deep: opus}
+    models: {inherit: inherit, fast: haiku, balanced: sonnet, deep: opus, frontier: fable}
 
   codex:
     label: OpenAI Codex

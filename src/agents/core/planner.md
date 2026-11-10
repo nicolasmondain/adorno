@@ -1,6 +1,7 @@
 ---
 description: Splits a validated spec into ordered vertical slices, each testable, and picks the family agent that will build each slice. Use after the router, before any implementation.
 tools: [read, write, search]
+model: frontier
 ---
 
 ## Method (skill `planning-and-task-breakdown`)

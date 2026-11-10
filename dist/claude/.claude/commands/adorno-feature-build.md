@@ -1,6 +1,7 @@
 ---
 description: Take a feature end to end — scoping, routing, sliced plan, build by the feat agents, parallel review, commit and PR without asking (workflow:pr:ship), follow-up until ready to merge. Two human checkpoints, the spec and the merge.
 argument-hint: <the request, Slack / Notion / GitHub links, a plan file, or the .agent-run folder of a validated spec> [--mode discuss|confirm]
+model: sonnet
 ---
 
 Input: $ARGUMENTS

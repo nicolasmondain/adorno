@@ -74,6 +74,10 @@ bad "a commit_skill with a trailing newline" $'  ghost/repo:\n    commit_skill: 
 bad "an empty setup_skill" $'  ghost/repo:\n    setup_skill: ""' "setup_skill must be a skill or command name"
 bad "a pr_skill with a path" $'  ghost/repo:\n    pr_skill: "../x"' "pr_skill must be a skill or command name"
 bad "unknown denied action" $'  ghost/repo:\n    permissions: {deny: [merge]}' "unknown action 'merge'"
+bad "an unknown tier" $'  ghost/repo:\n    models: {tiers: {claude: {huge: x}}}' "tiers are inherit, fast, balanced, deep, frontier"
+mkdir -p "$TMP/bad/src/agents/feat"
+printf -- '---\ndescription: x\neffort: extreme\n---\nx\n' >"$TMP/bad/src/agents/feat/odd.md"
+bad "an unknown effort" '' "effort 'extreme' must be one of"
 bad "secret in claude_env" $'  ghost/repo:\n    models: {claude_env: {ANTHROPIC_AUTH_TOKEN: x}}' "secrets stay in your shell profile"
 bad "subagent model override" $'  ghost/repo:\n    models: {claude_env: {CLAUDE_CODE_SUBAGENT_MODEL: x}}' "would override every agent"
 bad "plain http route" $'  ghost/repo:\n    models: {routes: {r: {base_url: "http://llm.example/v1", model: m}}}' "plain http for localhost only"
@@ -103,6 +107,9 @@ check "the installed hook runs and refuses" '[ "$got" = deny ]'
 printf '%s' '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | PATH=/nonexistent /bin/sh -c "$HOOK" 2>/dev/null; got=$?
 check "without python3 the hook blocks (exit 2), it does not let commands through" '[ "$got" = 2 ]'
 check "tiers become Claude models" 'grep -q "^model: opus" "$A/.claude/agents/adorno.md"'
+check "frontier becomes fable" 'grep -q "^model: fable" "$A/.claude/agents/adorno-agent-core-planner.md"'
+check "an agent's effort reaches Claude" 'grep -q "^effort: low" "$A/.claude/agents/adorno-agent-core-triage.md"'
+check "a workflow's tier and effort reach its command" 'grep -q "^model: haiku" "$A/.claude/commands/adorno-pr-status.md" && grep -q "^effort: low" "$A/.claude/commands/adorno-pr-status.md"'
 check "the vision is in every agent" 'grep -q "owner.s vision" "$A/.claude/agents/adorno-agent-fix-patch.md"'
 check "the private profile is installed" '[ -f "$A/.claude/skills/adorno-profile/references/product.md" ] || [ -d "$A/.claude/skills/adorno-profile" ]'
 expect_exit 0 "reinstall" -- "${KIT[@]}" install "$A" --targets claude,codex

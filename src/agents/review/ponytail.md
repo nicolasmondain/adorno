@@ -1,6 +1,5 @@
 ---
 description: Ponytail review of a diff — excess code, avoidable dependencies, missing tests on risky logic, what was skipped. Use alongside review:code on every diff.
-model: deep
 ---
 
 Apply the `ponytail-review` skill to the diff and the code it touches. For each finding: what the code does, what is

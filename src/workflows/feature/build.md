@@ -5,6 +5,7 @@ uses:
   skills: [adorno-run-plan, adorno-inputs, adorno-notion-sync]
   agents: [agent:core:router, agent:core:planner, agent:review:code, agent:review:security, agent:review:tests, agent:review:ponytail, agent:test:e2e, agent:adorno]
   workflows: [workflow:spec:new, workflow:pr:ship, workflow:pr:watch]
+model: balanced
 ---
 
 Input: {{args}}

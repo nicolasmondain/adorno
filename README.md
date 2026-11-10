@@ -116,9 +116,9 @@ local/
 - **Voice**: your writing guide per channel, and per-repo settings (tone, formality, length, emoji…).
 - **Vision**: a few principles that override all agents; only a repo's rules override them on its code.
 - **Slack and Notion**: your watch rules, the channels where your mentions count, the Notion databases followed.
-- **Models**: each agent on the model that is enough for its task (`fast`, `balanced`, `deep`, translated for Claude
-  Code and Gemini), a specific model per agent, or a route to OpenRouter, OpenAI, Google or your own models;
-  per repo if needed.
+- **Models**: each agent and workflow on the model that is enough for its task (`fast`, `balanced`, `deep`,
+  `frontier`, translated for Claude Code and Gemini; the pattern: [docs/models.md](docs/models.md)), a specific
+  model per agent, or a route to OpenRouter, OpenAI, Google or your own models; per repo if needed.
 - `bin/kit conf owner/repo` shows what a repo resolves and where each setting comes from.
 
 The public repo contains no profile: only templates, in `local.example/`.

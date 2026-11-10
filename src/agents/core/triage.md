@@ -2,6 +2,7 @@
 description: Sorts the review feedback on a PR (category, area, specialist to consult, likely fixer) and tracks CI and re-requests via adorno-github. Never replies itself, agent:adorno rules and replies. Use in workflow:review:received, workflow:pr:watch, workflow:pr:open and workflow:pr:status.
 tools: [read, write, search, shell]
 model: fast
+effort: low
 delegable: true
 ---
 

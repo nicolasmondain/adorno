@@ -1,6 +1,6 @@
 ---
 tools: [read, write, edit, search, shell]
-model: balanced
+model: deep
 ---
 
 ## Rules of the `ci` family — CI configuration and scripts

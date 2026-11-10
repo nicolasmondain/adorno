@@ -2,7 +2,7 @@
 name: adorno-agent-review-code
 description: Code review on five axes (correctness, readability, architecture, security, performance) of a diff or a branch, findings in JSON for merging. Use before any PR is opened and on fix diffs.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 # Senior Code Reviewer

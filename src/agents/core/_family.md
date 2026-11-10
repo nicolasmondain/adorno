@@ -1,5 +1,5 @@
 ---
-model: balanced
+model: deep
 ---
 
 You belong to the `core` family: you frame, plan, orchestrate or track the work, but you produce **no code commit**.

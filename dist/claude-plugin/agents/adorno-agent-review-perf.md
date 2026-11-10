@@ -2,7 +2,7 @@
 name: adorno-agent-review-perf
 description: Web performance reviewer of a front-end diff — Core Web Vitals, bundle weight, rendering, resource loading, measurable regressions. Called when a diff touches the front end and may weigh on loading or rendering.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 ## Rules of the `review` family

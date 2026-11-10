@@ -1,6 +1,7 @@
 ---
 description: Fix a bug from a GitHub issue, a Slack thread, a Notion page, a prompt or a validated spec — investigation, red test, minimal fix, review and fix until clean, PR ready for review ("Fixes
 argument-hint: <owner/repo#N | Slack / Notion links | bug description with owner/repo | .agent-run folder>
+model: sonnet
 ---
 
 Input: $ARGUMENTS

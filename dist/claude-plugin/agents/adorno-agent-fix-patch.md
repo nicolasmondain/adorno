@@ -2,7 +2,7 @@
 name: adorno-agent-fix-patch
 description: Fix a bug from a diagnosis or a review comment — red test that reproduces, then minimal fix. Use after fix:investigate, or on a review thread classified fix.
 tools: Read, Write, Edit, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 ## Rules of the `fix` family — bug fix

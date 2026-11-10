@@ -2,7 +2,7 @@
 name: adorno-agent-review-api
 description: API reviewer — endpoint and method contracts, input validation, error codes and formats, pagination, compatibility, public documentation. Called when a diff touches an interface, or to verify a review comment about an API.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 ## Rules of the `review` family

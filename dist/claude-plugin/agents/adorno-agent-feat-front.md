@@ -2,7 +2,7 @@
 name: adorno-agent-feat-front
 description: Interface-side features — components, pages, state, forms, WCAG 2.1 AA accessibility. Use for a feat slice that touches the UI.
 tools: Read, Write, Edit, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 ## Rules of the `feat` family — new feature

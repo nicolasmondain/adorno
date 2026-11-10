@@ -5,6 +5,7 @@ uses:
   skills: [adorno-github, adorno-setup]
   agents: [agent:chore:repo]
   workflows: [workflow:pr:ship]
+model: balanced
 ---
 
 Input: {{args}}
