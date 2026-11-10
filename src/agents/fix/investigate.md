@@ -2,6 +2,7 @@
 description: Investigate a bug — reproduce, isolate the cause, return a written diagnosis without changing anything. Use first on a reported bug, an issue or a red CI of unknown cause.
 tools: [read, search, shell]
 model: frontier
+entry: [workflow:issue:fix]
 ---
 
 ## Specialty: investigate (L0, changes nothing)

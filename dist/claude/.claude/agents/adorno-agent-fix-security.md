@@ -2,7 +2,7 @@
 name: adorno-agent-fix-security
 description: Fix a security finding — vulnerable code path, missing authorization, leaked secret or personal data, vulnerable dependency. Use on a finding from review:security or a security report, after the cause is understood.
 tools: Read, Write, Edit, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 ## Rules of the `fix` family — bug fix

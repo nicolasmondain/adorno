@@ -2,7 +2,7 @@
 name: adorno-agent-ci-fix
 description: Fix the CI pipeline itself — workflow file, job configuration, cache, matrix, pinned action, check script. Use when ci:debug classified a red check as a pipeline problem, not a code or test failure.
 tools: Read, Write, Edit, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 ## Rules of the `ci` family — CI configuration and scripts

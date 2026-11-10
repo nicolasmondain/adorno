@@ -2,7 +2,7 @@
 name: adorno-agent-chore-deps
 description: Update dependencies — outdated packages, advisories, lockfile drift. Use on a dependency bump request or a vulnerable or outdated package report; changes manifests and lockfile only.
 tools: Read, Write, Edit, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 ## Rules of the `chore` family — maintenance

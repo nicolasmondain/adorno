@@ -1,6 +1,7 @@
 ---
 description: Diagnose a red CI from the logs — classify the failure (flaky, infra, real failure) and name the agent that must fix it. Use as soon as a check fails on a PR or on the default branch.
 tools: [read, search, shell]
+entry: [workflow:ci:red]
 ---
 
 ## Specialty: debug

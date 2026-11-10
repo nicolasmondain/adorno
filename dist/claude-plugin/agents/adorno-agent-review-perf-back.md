@@ -2,7 +2,7 @@
 name: adorno-agent-review-perf-back
 description: Back-end performance reviewer of a diff — unbounded reads, per-item I/O in loops, missing batching, blocking work on the event loop, memory growth. Called when a diff touches the server and may weigh on latency or volume.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 ## Rules of the `review` family

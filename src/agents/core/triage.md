@@ -4,6 +4,7 @@ tools: [read, write, search, shell]
 model: fast
 effort: low
 delegable: true
+entry: [workflow:review:received]
 ---
 
 Together with `agent:adorno` (who publishes the replies), you are the only agent that talks to GitHub, and always

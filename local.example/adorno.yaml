@@ -99,8 +99,9 @@ repos:                                 # a specific repo, or a glob (`acme/docs-
     voice: {formality: formal}         # public documentation: more formal register
     context:
       - "Public documentation: examples use obvious placeholders only, never real data."
-    area_reviewers:                    # reviewers per code area (areas: repos.yaml › areas)
-      docs: [agent:review:security]
+    areas:                             # roles per code area, added to repos.yaml › areas (`-x` removes x)
+      docs:
+        review: [agent:review:security]
 
 slack:                                 # workflow:slack:watch and workflow:slack:mentions (Slack connector, read-only)
   user_id: U0123ABCD                   # your Slack ID: recipient of reports, target of mentions
