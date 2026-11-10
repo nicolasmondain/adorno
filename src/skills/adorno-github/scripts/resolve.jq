@@ -42,7 +42,7 @@ def merge_area($a; $b):
   if ($a | type) != "object" or ($b | type) != "object" then $b
   else reduce ($b | to_entries[] | select(.value != null)) as $e ($a;
     if $e.key == "sub" and ($e.value | type) == "object"
-      then .sub = reduce ($e.value | to_entries[]) as $s (.sub // {}; .[$s.key] = merge_area(.[$s.key]; $s.value))
+      then .sub = reduce ($e.value | to_entries[] | select(.value != null)) as $s (.sub // {}; .[$s.key] = merge_area(.[$s.key]; $s.value))
     elif (list_roles | index([$e.key])) and ($e.value | type) == "array"
       then .[$e.key] = merge_list(.[$e.key]; $e.value)
     else .[$e.key] = $e.value end)
@@ -50,9 +50,15 @@ def merge_area($a; $b):
 
 def merge_areas($a; $b):
   if ($b | type) != "object" then $b
-  else reduce ($b | to_entries[]) as $e (($a | if type == "object" then . else {} end);
-    .[$e.key] = (if $e.value == null then null else merge_area(.[$e.key]; $e.value) end)) | with_entries(select(.value != null))
+  else reduce ($b | to_entries[] | select(.value != null)) as $e (($a | if type == "object" then . else {} end);
+    .[$e.key] = merge_area(.[$e.key]; $e.value))
   end;
+
+# once every layer is merged, no `-x` marker may remain (an area absent from the lower layers keeps its own)
+def strip_markers:
+  walk(if type == "object"
+    then reduce list_roles[] as $r (.; if (.[$r] | type) == "array" then .[$r] |= map(select(type != "string" or (startswith("-") | not))) else . end)
+    else . end);
 
 # the sub-areas of an area take the roles of their parent
 def inherit_roles:
@@ -102,6 +108,7 @@ def expand($presets):
 | ($ws + $globs + $exact) as $layers
 | select($layers | length > 0)
 | reduce $layers[] as $l (($reg.defaults // {}) | expand($presets); merge2(.; $l.layer | expand($presets)))
-| (if .areas then .areas |= inherit_roles else . end)
+| (if .areas then .areas |= (strip_markers | inherit_roles) else . end)
+| (if .fallbacks then .fallbacks |= strip_markers else . end)
 | .repo = $r
 | .scopes = ["defaults"] + [$layers[].scope]

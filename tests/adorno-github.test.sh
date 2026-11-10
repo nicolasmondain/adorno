@@ -301,7 +301,7 @@ expect_jq "my pending review is surfaced" '(.[] | select(.number==10) | .pending
 echo "pr-areas (public default rules from repos.yaml)"
 REAL="$ROOT/dist/claude/.claude/skills/adorno-github/repos.json"
 if [ -f "$REAL" ]; then
-  jq '.repos = {"acme/app": {}, "acme/docs": {"areas": {"back": {"review": ["-agent:review:tests", "agent:review:security"]}}}}' "$REAL" >"$TMP/areas-repos.json"
+  jq '.repos = {"acme/app": {}, "acme/leak": {"areas": {"back": {"sub": {"n": {"review": ["-agent:review:tests", "agent:review:code"], "skills": ["-typescript-pro"]}}}, "newa": {"review": ["-agent:review:api", "agent:review:code"]}}}, "acme/docs": {"areas": {"back": {"review": ["-agent:review:tests", "agent:review:security"]}}}}' "$REAL" >"$TMP/areas-repos.json"
   reg "$TMP/areas-repos.json"
   expect_exit 0 "classifies a diff" -- "$S/pr-areas" acme/app "$ROOT/tests/fixtures/sample.diff"
   expect_jq "front by extension, with typescript" '.areas.front == ["client/app.tsx"] and .areas.typescript == ["client/app.tsx"] and (.skills | index("typescript-pro"))'
@@ -319,6 +319,9 @@ if [ -f "$REAL" ]; then
   expect_jq "override adds a reviewer and removes one" \
     '.areas.front == ["client/app.tsx"] and (.review | index("agent:review:security")) and (.review | index("agent:review:tests") | not) and (.review | index("agent:review:back"))'
   expect_jq "no removal marker leaks" '[.review[] | select(startswith("-"))] == []'
+  expect_exit 0 "removals in a new area and a new sub-area" -- "$S/repo-conf" acme/leak
+  expect_jq "no -x marker leaks from an area without a lower layer" \
+    '[.areas, .fallbacks | .. | strings | select(startswith("-"))] == [] and (.areas.back.sub.n.review | index("agent:review:code")) and (.areas.newa.review == ["agent:review:code"])'
 
   printf 'diff --git a/x/migrations/1.js b/x/migrations/1.js\n--- a/x/migrations/1.js\n+++ b/x/migrations/1.js\n@@ -1 +1 @@\n+module.exports = 1\ndiff --git a/x/auth/login.js b/x/auth/login.js\n--- a/x/auth/login.js\n+++ b/x/auth/login.js\n@@ -1 +1 @@\n+const a = 1\ndiff --git a/docs/api-reference/x.mdx b/docs/api-reference/x.mdx\n--- a/docs/api-reference/x.mdx\n+++ b/docs/api-reference/x.mdx\n@@ -1 +1 @@\n+hello\n' >"$TMP/mixed.diff"
   expect_exit 0 "migration, auth and api reference" -- "$S/pr-areas" acme/app "$TMP/mixed.diff"
