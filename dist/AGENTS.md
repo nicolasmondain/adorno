@@ -74,7 +74,7 @@ every workflow the run launches: nobody is there to answer, so the run never ask
 - A point that would ask goes to whoever owns it: scope and cost to the workflow (it goes on with everything
   retained and says so in the report); a verdict or a deferral to `agent:adorno`; a technical choice to the
   specialist of the area.
-- A real stop point (spec or PR validation, a level beyond the run's, a refusal with code 4 or 5, L4, what the profile
+- A real stop point (spec validation, a level beyond the run's, a refusal with code 4 or 5, L4, what the profile
   files under "to validate") is never decided on the owner's behalf: that item is skipped, the reason goes at the
   top of the report, and the run goes on with the others.
 - `--unattended` never widens a mode or a level: they are the ones the scheduler passed.

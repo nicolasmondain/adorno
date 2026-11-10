@@ -64,18 +64,22 @@ A lower repo `max_level` always wins.
    pushing itself, the title and description updated if the fixes moved the scope, a draft PR marked ready once the
    whole branch is clean. Each commit's SHA, its item and the review outcome (`clean`, or `blocker left` after the
    caps) go in `status.md`. A `blocker left` stops this PR before the push: nothing of it is pushed or replied to,
-   and it goes to *What awaits your decision*.
+   and it goes to *What awaits your decision* with the worktree and the unpushed SHAs (to resume: fix, then
+   `pr-push owner/repo#N`, or rerun on `owner/repo#N`).
 7. **Publish** (`auto` mode) — `agent:adorno` writes a reply to **every** item
    in the repo's language (`reply_language`, English by default) and in your voice, with the commit SHA, and publishes: `pr-reply` (thread) or `pr-comment` (general
    comment, review summary). Then it resolves (`pr-resolve`) every thread it replied to. Left open and listed in the
    report: a point about a person and a confirmed item with no fix commit (failing after its caps), both
    unpublished drafts; a thread `pr-resolve` refuses (exit 4: the repo's `resolve_threads` leaves it to the
    reviewer, or the PR is not yours), reply published, resolution left to the reviewer.
-8. **Re-request** — `pr-rerequest owner/repo#N` for each reviewer whose points are all handled;
-   `ci-wait owner/repo#N`, and `workflow:ci:red` if CI turns red (two attempts at most).
+8. **Re-request and CI** — `auto` mode: `pr-rerequest owner/repo#N` for each reviewer whose points are all handled.
+   `draft` and `auto`: `ci-wait owner/repo#N`, and `workflow:ci:red` if CI is or turns red (the `/ci@` key of
+   `pending`: it is not triaged), two attempts at most; in `draft` a rerun is refused by the mode, so a flaky check
+   is only reported, not counted as awaiting your decision.
 9. **Report** — `status.md` per PR and, as the reply, a table: PR, item, what the reviewer said, verified verdict
    (right / partly / wrong / unclear), action, reply published or drafted. **At the top: what awaits
    your decision** (only the cases of "Who decides"). In `draft`, the command to publish everything: `workflow:review:received owner/repo#N --mode auto`.
 10. **Remember** (`draft` and `auto` modes) — `watch-seen mark review-received <id>…` with the `pending` ids of each
-   PR processed past step 2 (not a PR stopped there), then `watch-seen touch review-received`: the next sweep
-   skips them until someone writes again. `report` remembers nothing.
+   PR processed past step 6 (not a PR stopped at step 2, nor one whose ship left a blocker: the next sweep must see
+   it again), then `watch-seen touch review-received`: the next sweep skips them until someone writes again.
+   `report` remembers nothing.

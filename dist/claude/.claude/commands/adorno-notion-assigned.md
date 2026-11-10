@@ -39,7 +39,8 @@ Run folder: `~/.adorno/runs/notion-assigned-<date>/`.
    - `report` (default): `agent:core:analyst` returns the analysis and what the chosen action would do (plan, target
      repo, permissions needed), without launching anything;
    - `run`: the chosen action, which opens its own run at the `level` level (`run-begin --level <level>`), bounded by
-     the permissions of the target repo. Steps that ask for your validation (spec, PR opening) remain stop points.
+     the permissions of the target repo. Steps that ask for your validation (the spec) remain stop points; the PR opens
+     without one (`workflow:pr:ship`).
    Documents are independent: in parallel, in batches of 3.
 6. **Remember** — `watch-seen mark notion-assigned <id>…` for each processed document, then
    `watch-seen touch notion-assigned`.

@@ -46,6 +46,7 @@ command.
      → nothing. A repo skill: run it in update mode (it receives `#N`); it may run `gh pr edit` itself;
    - still a draft and the verdict on the whole branch is clean → `pr-ready owner/repo#N`.
 7. **Report** — commits (SHA, message), review rounds and what they fixed, push, PR URL and `opened | updated |
-   unchanged`, `ready | draft` (and why), and what stopped the workflow if anything did. Suggest
+   unchanged`, `ready | draft` (and why), and what stopped the workflow if anything did — commits the cap held back:
+   the worktree and their SHAs, and how to resume (fix, then `pr-push owner/repo#N`). Suggest
    `workflow:pr:watch owner/repo#N` when the caller does not run it.
 '''
