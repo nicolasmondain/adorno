@@ -98,9 +98,73 @@ flowchart LR
 From left to right, each level overrides the previous one; each one expands its `use:` first. Objects
 merge key by key; lists and values are replaced, except `context`, `vision` and the permissions
 (`permissions.deny`, `permissions.claude.*`) which add up: a more specific level adds denials, never removes any.
+The `review` and `skills` lists of `areas` add up too, with an explicit removal (below).
 
 `bin/kit conf acme/app` shows the result, with `scopes`: the list of levels that played a part. The agents read the
 same thing with `adorno-github/scripts/repo-conf`.
+
+### Areas and roles
+
+One table, `repos.yaml` › `defaults.areas`, decides which agent builds, fixes, optimizes, reviews and checks each part
+of the code, and which skills it loads. Every dispatcher (planner, triage, `ci:debug`, `pr:ship`, `pr:review`,
+`review:received`, `issue:fix`) reads it through `adorno-github/scripts/pr-areas`, never a list of its own.
+
+| Area | Detected by (excerpt) | `build` | `fix` | `perf` | `review` | `qa` | `skills` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `always` | every change | | | | `review:code`, `review:ponytail` | | |
+| `front` | `*.tsx`, `*.css`, `*/components/*`… | `feat:front` | `fix:patch` | `perf:front` | `review:front`, `review:perf` | `test:e2e` | `frontend-ui-engineering` |
+| `back` | `server/*`, `*/services/*`, `*/jobs/*`… | `feat:back` | `fix:patch` | `perf:nodejs` | `review:back`, `review:tests`, `review:perf-back` | | |
+| `back.query` | added lines with `.find(`, `.aggregate(`, `$lookup`… | | | `perf:mongodb` | + `review:mongodb` | | |
+| `back.mongodb` | `*/migrations/*`, `*/models/*`, `.createIndex(`… | | | `perf:mongodb` | + `review:mongodb` | | + `deprecation-and-migration` |
+| `api` | `*/api/*`, `*/routes/*`, `*openapi*`… | `feat:api` | | | `review:api` | | `api-and-interface-design` |
+| `security` | `*/auth/*`, `*.env*`, words like `token`, `role` | | `fix:security` | | `review:security` | | `security-and-hardening` |
+| `typescript` | `*.ts`, `*.tsx`, `tsconfig*.json` | | | | | | `typescript-pro` |
+| `tests` | `*.test.*`, `*/tests/*`… | `test:unit` | `test:unit` | | `review:tests` | | `test-driven-development` |
+| `e2e` | `*.e2e.*`, `*/e2e/*`, `*playwright*` | `test:e2e` | `test:e2e` | | `review:tests` | | `webapp-testing`, `playwright-cli` |
+| `deps` | `package.json`, lockfiles, `go.mod`… | `chore:deps` | `chore:deps` | | `review:security`, `review:ponytail` | | |
+| `ci` | `.github/*`, `*Dockerfile*`… | | `ci:fix` | | `review:security` | | `ci-cd-and-automation` |
+| `docs` | `*.md`, `*.mdx`, `docs/*` | `docs:write` | `docs:write` | | | | `documentation-and-adrs` |
+
+Agents without their `agent:` prefix; the exact patterns are in `repos.yaml`. `paths` are bash globs (`*` crosses
+folders), `content` a regex on the diff's added lines (`pr-areas --files`, used before any code exists, has no
+`content`). `build`, `fix`, `perf` and `qa` name one agent, `review` and `skills` are lists. `bin/kit check` refuses an
+agent outside its role's families (`build`: feat, test, docs, chore; `fix`: fix, test, refactor, ci, docs, chore;
+`perf`: perf; `review`: review; `qa`: test), an unknown agent, skill or key, and an invalid regex.
+
+- **Sub-areas** (`sub`, one level only: `back.query`, `back.mongodb`) are detected on their own patterns, anywhere,
+  and a hit also activates the parent. They inherit its roles: a single role of their own replaces the parent's
+  (`back.query` gives `perf:mongodb`, not `perf:nodejs`), a list adds to it. Detection is not inherited.
+- **The main area** gives the top-level `build`, `fix`, `perf` and `qa`: the top-level area with the most files (its
+  sub-areas' files included), then config order; inside it, a sub-area beats its parent (most files, then config
+  order). An area without the role is skipped. `review` and `skills` are the union of every touched area plus
+  `always`. `by_area` gives each area's roles, for a fixer chosen by the file a finding is on.
+- **`fallbacks`** cover work outside any area: `nit` → `refactor:simplify`, `test` → `test:unit`, and `perf` →
+  `fix:patch` with the skill `performance-optimization` when no touched area has a `perf`.
+
+**Overriding an area for a repo**, at any level of `local/adorno.yaml`: `paths`, `content` and the single roles
+replace; `review` and `skills` add to the public list, and an entry `-x` removes `x`.
+
+```yaml
+repos:
+  acme/app:
+    areas:
+      back:
+        review: ["-agent:review:perf-back"]   # this repo's server is a thin proxy
+        sub:
+          query: {review: [agent:review:security]}
+      always:
+        skills: [observability-and-instrumentation]
+```
+
+`bin/kit conf acme/app` shows the effective `areas`, sub-areas with their inherited roles. An agent named in a role must
+also be in the `uses.agents` of the workflows that dispatch that role (their `roles:` front-matter): `bin/kit check`
+names the missing ones.
+
+**Migrating from `area_reviewers`.** The old per-area reviewer lists are gone: `bin/kit check` refuses the key and
+points to the migration. `bin/kit migrate areas` (read-only, runs even when `check` fails) prints, per scope, the
+equivalent `areas.<area>.review` in the additive form, with a `-x` for each public reviewer the old list left out. The
+`adorno-setup` skill does it for you at its start: it shows the diff of `local/adorno.yaml` and writes only after your
+yes, then `bin/kit check` and `bin/kit install`.
 
 ## 4. Permissions
 

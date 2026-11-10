@@ -53,7 +53,7 @@ flowchart TD
   F -->|"yes"| G
   G --> R["Agents of pr-areas `review` in parallel, agent:adorno checks code rules and the request (spec, issue)"]
   R --> V{"Red or orange left?"}
-  V -->|"yes, under 2 rounds"| FX["Family agent fixes, commit_skill commits"]
+  V -->|"yes, under 2 rounds"| FX["pr-areas --files: by_area fix or perf of the file (nit, test: fallbacks), commit_skill commits"]
   FX --> R
   V -->|"no"| OK["Clean: ready for review"]
   V -->|"cap reached"| DR["No PR yet: draft, open points first; PR open: not pushed; status.md"]

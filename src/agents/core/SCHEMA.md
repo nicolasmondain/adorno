@@ -50,9 +50,9 @@ flowchart TD
   C -->|"no"| E["Design the order"]
   D --> F["Split into vertical slices under ~150 diff lines, repo stays green"]
   E --> F
-  F --> G["Per slice: goal, files, acceptance test, family agent matching commit type"]
+  F --> G["Per slice: goal, files, acceptance test, build agent from pr-areas --files"]
   G --> H{"UI-visible slice?"}
-  H -->|"yes"| I["Add agent:test:e2e check"]
+  H -->|"yes"| I["Add the qa agent of pr-areas"]
   H -->|"no"| J["Mark parallel slices and dependencies"]
   I --> J
   J --> K{"Deviation from provided plan?"}
@@ -89,10 +89,10 @@ flowchart TD
 flowchart TD
   A["PR feedback: threads, comments, review summaries"] --> B{"needsReply?"}
   B -->|"false"| X["Skip"]
-  B -->|"true"| C["Categorize: fix, nit, test, question, disagree, scope, done"]
+  B -->|"true"| C["Categorize: fix, perf, nit, test, question, disagree, scope, done"]
   C --> D["Area via pr-areas on the PR diff"]
   D --> E["Consult list: review of the area, from pr-areas"]
-  E --> F["Likely fixer: fix:patch, refactor:simplify, test:unit, or none"]
+  E --> F["Likely fixer: by_area fix or perf, fallbacks nit or test, or none"]
   F --> G["triage.json: id, kind, category, area, consult, fixer, summary"]
   G --> H["agent:adorno decides and replies"]
   A --> I["CI and re-request tracking via adorno-github scripts only"]
