@@ -767,6 +767,7 @@ guard_at allow "$C" "" "$S/pr-edit acme/docs#42 'feat: x' .agent-run/body.md"
 guard_at allow "$C" "" "$S/git-push acme/docs --dir $C"
 
 echo "guard_bash: what the shell expands after the hook never gets allow (fourth security review)"
+# shellcheck disable=SC2088  # the tildes are literal on purpose: the guard must see them unexpanded
 for arg in '$HOME/.ssh/id_rsa' '${HOME}/.ssh/id_rsa' '~/.ss?/id_rsa' '~/.ssh/id_r*' '~/.ssh/{id_rsa}' \
     '"$HOME/.ssh/id_rsa"' '~root/x' '.agent-run/[b]ody.md' '`echo x`'; do
   guard_at pass "$C" "" "$S/pr-edit acme/docs#42 'feat: x' $arg"
