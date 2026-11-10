@@ -59,7 +59,9 @@ LEVELS = ("L0", "L1", "L2", "L3", "L4")
 ACTIONS = ("push", "reply", "comment", "resolve", "rerequest", "review", "submit", "open_pr", "ci_rerun")
 CLAUDE_RULES = ("allow", "ask", "deny")
 VISION_MAX_LINES = 60
-TIERS = ("inherit", "fast", "balanced", "deep")   # neutral model tiers (adapters/targets.yaml maps them per tool)
+# neutral model tiers, declared once in adapters/targets.yaml (which also maps them per tool)
+TIERS = tuple(yaml.safe_load((ROOT / "adapters" / "targets.yaml").read_text())["model_tiers"])
+EFFORTS = ("low", "medium", "high", "max")   # reasoning effort an agent or workflow may declare (Claude Code)
 MODELS: dict = {}   # `models` of the repo being installed (local/adorno.yaml); empty for the public build
 SECRET_ENV_RE = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD)", re.I)
 LOCK = ROOT / "kit.lock"
@@ -70,7 +72,7 @@ BEGIN = "<!-- adorno:begin (managed by kit — edits inside this block are overw
 END = "<!-- adorno:end -->"
 BLOCK_RE = re.compile(r"<!-- adorno:begin.*?-->.*?<!-- adorno:end -->\n?", re.S)
 KINDS = {"skill": "skills", "agent": "agents", "workflow": "workflows"}
-NEUTRAL_AGENT_KEYS = {"name", "description", "tools", "model", "targets", "delegable"}
+NEUTRAL_AGENT_KEYS = {"name", "description", "tools", "model", "effort", "targets", "delegable"}
 ARGS_TOKEN = "{{args}}"
 
 
@@ -466,6 +468,9 @@ def validate(cfg: Config, items: dict[str, dict[str, Item]]) -> list[str]:
                 if model is not None and model not in cfg.tiers:
                     errors.append(f"{where}: model '{model}' must be one of {cfg.tiers} "
                                   f"(put native model names under targets.<tool>.model)")
+            effort = it.meta.get("effort")
+            if kind != "skill" and effort is not None and effort not in EFFORTS:
+                errors.append(f"{where}: effort '{effort}' must be one of {list(EFFORTS)}")
             if kind == "workflow":
                 if it.meta.get("model") is not None and it.meta["model"] not in cfg.tiers:
                     errors.append(f"{where}: model '{it.meta['model']}' must be one of {cfg.tiers}")
@@ -797,6 +802,8 @@ def render_agent(cfg: Config, it: Item, target: str, tcfg: dict, fmt: str) -> st
             meta["tools"] = ", ".join(tools)
         if model:
             meta["model"] = model
+        if it.meta.get("effort"):
+            meta["effort"] = it.meta["effort"]
         # keep Claude-specific keys from imported agents (color, permissionMode…)
         meta.update({k: v for k, v in it.meta.items() if k not in NEUTRAL_AGENT_KEYS})
     elif fmt == "gemini":
@@ -830,6 +837,8 @@ def render_workflow(it: Item, target: str, fmt: str, tcfg: dict | None = None) -
         model = map_model(tcfg or {}, it.meta.get("model"), target)
         if model:
             meta["model"] = model
+        if it.meta.get("effort"):
+            meta["effort"] = it.meta["effort"]
         meta.update(over)
         return dump_md(meta, body.replace(ARGS_TOKEN, "$ARGUMENTS"))
     if fmt == "gemini-command":
@@ -1086,7 +1095,8 @@ description: What this skill does and WHEN to use it (this text is what triggers
 name: {name}
 description: The agent's specialty and WHEN to delegate a task to it.
 tools: [read, search]        # read, write, edit, search, shell, web, agent — omit to allow everything
-model: inherit               # inherit, fast, balanced, deep
+model: inherit               # inherit, fast, balanced, deep, frontier (docs/models.md)
+# effort: low                # optional: low, medium, high, max (Claude Code; default: the model's)
 ---
 
 You are …

@@ -25,9 +25,9 @@ defaults:                              # your settings for all repos (on top of 
   vision:                              # vision lines valid everywhere (added to local/vision.md)
     - "Prefer deleting code to adding it."
   models:                              # which model for which task (details: docs/setup.md › Models)
-    tiers:                             # each tier (fast, balanced, deep) → one model, per tool
-      claude: {fast: haiku, balanced: sonnet, deep: opus}
-      gemini: {fast: gemini-2.5-flash, balanced: gemini-2.5-pro, deep: gemini-2.5-pro}
+    tiers:                             # each tier (fast, balanced, deep, frontier) → one model, per tool
+      claude: {fast: haiku, balanced: sonnet, deep: opus, frontier: fable}
+      gemini: {fast: gemini-2.5-flash, balanced: gemini-2.5-pro, deep: gemini-2.5-pro, frontier: gemini-2.5-pro}
     agents:                            # an agent on another tier, a specific model, or an external route
       agent:review:mongodb: deep
       # agent:core:triage: {route: openrouter-small}   # sends triage to OpenRouter: only if you want it
