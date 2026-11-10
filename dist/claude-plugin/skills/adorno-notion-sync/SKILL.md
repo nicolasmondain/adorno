@@ -29,7 +29,7 @@ in `defaults`, a preset or a workspace and be overridden per repo; `null` remove
 3. **Map** each value to the connector's format, from the property's type in the fetch: date → `date:<name>:start`
    with `date:<name>:is_datetime: 0`; checkbox → `__YES__` / `__NO__`; number → a number; a property named `id` or
    `url` → `userDefined:<name>`; anything else as is.
-4. `dry_run: true` (a `report` or L0 run; a `draft` run writes it: its code and PR go out) → show the payload, do not call; stop. Otherwise
+4. `dry_run: true` (a `report` or L0 run, or `ADORNO_DRY_RUN=1`; a `draft` run writes) → show the payload, do not call; stop. Otherwise
    `notion-update-page`, command `update_properties`, with only these properties.
 5. Success → `notion-step done <step> <run folder>` (a resumed run will not redo it). Failure → the error in
    `status.md` and in the final report; the workflow goes on (an open PR is not undone because Notion failed).

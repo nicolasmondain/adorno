@@ -86,8 +86,8 @@ grant() {
        runs: length, ids: map("\(.id) (\(.workflow), \(.mode))")}'
 }
 
-# dry_run — true when every write must only be printed (a report or draft run applies, or ADORNO_DRY_RUN=1); uses
-# $REPO when the script has parsed one
+# dry_run — true when every write must only be printed (a report run applies, or ADORNO_DRY_RUN=1); uses $REPO when
+# the script has parsed one
 dry_run() { [ "$(grant "${REPO:-}" | jq -r .dry_run)" = "true" ]; }
 
 # split_repo owner/repo -> sets OWNER NAME REPO
@@ -248,6 +248,34 @@ with_lock() {
 }
 
 viewer_login() { gh api user --jq .login; }
+
+# require_own_open_pr owner/repo N [field,…] — dies unless PR N is yours, from this repository (not a fork) and open;
+# prints its JSON (author, isCrossRepository, state and the extra fields). The one rule pr-edit, pr-ready and
+# run-check --pr (what the guard trusts) share.
+require_own_open_pr() {
+  local info
+  info="$(gh pr view "$2" -R "$1" --json "author,isCrossRepository,state${3:+,$3}")"
+  [ "$(jq -r .author.login <<<"$info")" = "$(viewer_login)" ] || die "$1#$2 is not your PR" "$E_POLICY"
+  [ "$(jq -r .isCrossRepository <<<"$info")" = "false" ] || die "$1#$2 comes from a fork" "$E_POLICY"
+  [ "$(jq -r .state <<<"$info")" = "OPEN" ] || die "$1#$2 is not open" "$E_POLICY"
+  printf '%s\n' "$info"
+}
+
+# require_cc_title "title" — dies unless it is a Conventional Commit header (pr-open, pr-edit)
+require_cc_title() {
+  [[ "$1" =~ $CC_TITLE_RE ]] || die "title is not a Conventional Commit header: $1" "$E_USAGE"
+}
+
+# require_work_branch owner/repo BRANCH — dies on the base or a shared branch: nothing is committed nor pushed there
+# by an agent (git-push, run-check --work-branch)
+require_work_branch() {
+  local base
+  base="$(conf_get "$1" base)"
+  [ -n "$base" ] || base="$(gh repo view "$1" --json defaultBranchRef --jq .defaultBranchRef.name)"
+  case "$2" in
+    ""|"$base"|main|master|develop|production|staging) die "refusing ${2:-a detached HEAD}: a base or shared branch" "$E_POLICY" ;;
+  esac
+}
 
 # thread_of owner/repo N THREAD_ID — dies unless the review thread belongs to that PR (a thread id is global: without
 # this, a write gated on repo A could land on a thread of repo B)

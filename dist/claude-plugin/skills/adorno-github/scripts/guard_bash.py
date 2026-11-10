@@ -814,12 +814,12 @@ def allowable(command, cwd):
             if sub == "add":
                 if options(rest, ADD_FLAGS, set(), where) is None:
                     return None
-                checks.append(("run", where, "L2", "")); wanted = True
+                checks.append(("run", where)); wanted = True
             elif sub == "commit":
                 if options(rest, COMMIT_FLAGS, COMMIT_VALUED, where, files=("-F", "--file"),
                            subst_ok=("-m", "--message")) is None:
                     return None
-                checks.append(("run", where, "L2", "")); wanted = True
+                checks.append(("run", where)); wanted = True
             elif sub == "push":
                 fine, branch = push_branch(rest)
                 if not fine:
@@ -880,8 +880,8 @@ def granted(checks, session):
             return None
 
     for c in checks:
-        if c[0] == "run":
-            if not ok([run_check, "--dir", c[1], c[2]] + ([c[3]] if c[3] else [])):
+        if c[0] == "run":  # git add|commit: L2, on a working branch (never the base, a shared branch, detached)
+            if not ok([run_check, "--dir", c[1], "L2", "--work-branch"]):
                 return False
         elif c[0] == "push":
             got = ok([run_check, "--dir", c[1], "L2", "push"])

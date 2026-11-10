@@ -20,8 +20,7 @@ Input: $ARGUMENTS
    `adorno-notion-sync start <.agent-run folder> owner/repo` (the Notion page of the report gets the repo's
    `notion_spec.start` properties; nothing to do without a Notion page or without that setting).
 4. Branch `fix/<n>-<slug>` (no issue: `fix/<slug>`) from the base; `agent:fix:patch`: red test, fix, green suite.
-5. `workflow:pr:ship owner/repo <branch> <worktree> <run folder>`, without asking: `commit_skill`, the review loop
-   (area reviewers and `agent:adorno` against the diagnosis and the report: every 🔴 or 🟠 back to `fix:patch`, two
-   rounds), then `pr_skill`, ready for review once clean, with `Fixes #N` in the
-   description if there is an issue (otherwise the links of the sources, if
-   the team can access them), then `workflow:pr:watch`.
+5. `workflow:pr:ship owner/repo <branch> <worktree> <.agent-run folder>`, without asking: `commit_skill`, the review
+   loop (area reviewers and `agent:adorno` against the diagnosis and the report: every 🔴 or 🟠 back to `fix:patch`,
+   two rounds), then `pr_skill`, ready for review once clean, with `Fixes #N` in the description if there is an issue
+   (otherwise the links of the sources, if the team can access them), then `workflow:pr:watch`.

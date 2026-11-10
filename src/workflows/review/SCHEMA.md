@@ -8,7 +8,7 @@ flowchart TD
   B --> C["Target: pr-status --ready, pr-feedback-fetch, pending"]
   C --> S["watch-seen filter review-received (skipped for an explicit PR or --all)"]
   S -->|"something new"| D["pr-workspace: worktree of the PR branch"]
-  D -->|"auto, unpushed fixes of a previous draft pass, all clean"| DP["pr-push"]
+  D -->|"draft or auto, unpushed fixes of a previous pass, all clean"| DP["pr-push"]
   DP --> D
   D -->|"unknown commits or uncommitted changes"| N
   D --> E["agent:core:triage: triage.json"]
@@ -16,10 +16,11 @@ flowchart TD
   F --> G["agent:adorno (situation 3): every item confirmed, refused or deferred, never asked to the owner"]
   G --> H{"Mode"}
   H -->|"report"| N["status.md and table"]
+  G -->|"untrusted author"| N
   H -->|"draft or auto"| I["Fix every confirmed item, minors included: fix:patch, refactor:simplify, test:unit, 3 rounds max"]
-  I --> SH["workflow:pr:ship: commit_skill, review loop on new commits, pr-push, description updated, ready once clean (no prompt)"]
-  SH -->|"blocker left at the cap"| N
-  SH -->|"clean"| K{"Mode auto?"}
+  I --> SH["workflow:pr:ship: commit_skill, review loop on new commits (2 rounds), pr-push, description updated, ready once clean (no prompt)"]
+  SH -->|"blocker left after the caps: nothing pushed"| N
+  SH -->|"pushed"| K{"Mode auto?"}
   K -->|"no"| N
   K -->|"yes"| L["agent:adorno replies to every item and resolves it (people and unfixed items stay drafts)"]
   L --> M["pr-rerequest, ci-wait"]

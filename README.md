@@ -231,7 +231,7 @@ Four barriers separate an agent command from GitHub (details in `docs/setup.md`,
 In an installed repo, barriers 1 and 2 refuse; with `--global` (valid in all your projects), they ask you
 for confirmation, and refuse where nobody can answer (`bypassPermissions`, `dontAsk`: a schedule, a headless run).
 Inside a run, the guard lets the end of a workflow through without a prompt: commit, a plain push of the branch,
-`gh pr create|edit`, at the run's level (`docs/setup.md`, step 4).
+`gh pr create|edit|ready`, at the run's level (`docs/setup.md`, step 4).
 
 | | Skills | Agents | Workflows | Instructions |
 | --- | --- | --- | --- | --- |

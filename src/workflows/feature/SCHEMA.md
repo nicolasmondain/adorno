@@ -17,7 +17,7 @@ flowchart TD
     RV["Parallel reviewers: review:code, review:security, review:tests, review:ponytail"]
     FX["Fix loop - 2 rounds"]
   end
-  PO["workflow:pr:ship - commit_skill then pr_skill, without asking"]
+  PO["workflow:pr:ship with the spec folder - commit_skill, review loop, pr_skill, without asking"]
   PW["workflow:pr:watch until ready"]
   CP3["Checkpoint 2: merge by the user"]
   ST["status.md: where, why, how to resume"]

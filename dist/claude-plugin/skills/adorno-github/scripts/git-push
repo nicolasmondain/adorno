@@ -29,12 +29,8 @@ fi
 git check-ref-format --branch "$branch" >/dev/null 2>&1 || die "invalid branch name '$branch'" "$E_USAGE"
 git -C "$dir" rev-parse --verify --quiet "refs/heads/$branch" >/dev/null || die "no local branch $branch" "$E_USAGE"
 
+require_work_branch "$REPO" "$branch"
 conf="$(repo_conf "$REPO")"
-base="$(jq -r '.base // empty' <<<"$conf")"
-[ -n "$base" ] || base="$(gh repo view "$REPO" --json defaultBranchRef --jq .defaultBranchRef.name)"
-case "$branch" in
-  "$base"|main|master|develop|production|staging) die "refusing to push $branch: a base or shared branch" "$E_POLICY" ;;
-esac
 pattern="$(jq -r '.branch_pattern // empty' <<<"$conf")"
 if [ -n "$pattern" ] && ! jq -en --arg b "$branch" --arg p "$pattern" '$b | test($p)' >/dev/null; then
   die "branch $branch does not match the repo's branch_pattern ($pattern)" "$E_POLICY"

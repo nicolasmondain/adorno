@@ -187,6 +187,11 @@ expect_jq "bots never need a reply" '(.conversation[] | select(.author=="ci-bot"
 expect_jq "review summary after my reply needs one" '[.reviews[] | select(.needsReply) | .author] == ["carol"]'
 expect_jq "needsReplyCount sums threads, comments, reviews" '.needsReplyCount == 3'
 expect_jq "CI state and ownership surfaced" '.pr.ci == "FAILURE" and .pr.head == "nm/pagination" and .pr.mine'
+expect_jq "members are trusted" '(.reviews[] | select(.author=="alice") | .association == "MEMBER" and .trusted)
+  and (.threads[] | select(.id=="T1") | .comments[0].trusted)'
+expect_jq "an outside contributor is not (their items never drive a pushed fix)" \
+  '(.reviews[] | select(.author=="carol") | .association == "FIRST_TIME_CONTRIBUTOR" and (.trusted | not))'
+expect_jq "no association known: not trusted" '(.conversation[] | select(.author=="ghost") | .association == "NONE" and (.trusted | not))'
 expect_jq "pending: what needs a reply, keyed by its last activity, plus the red CI of the head" \
   '[.pending[].id] == ["acme/docs#42/thread/T1@C1", "acme/docs#42/comment/IC3", "acme/docs#42/review/R3", "acme/docs#42/ci@abc123"]'
 W="$ROOT/src/skills/adorno-watch/scripts"
@@ -851,6 +856,40 @@ expect_jq "changed" '.ready and .changed'
 grep -q "pr ready 42 -R acme/docs" "$FAKE_LOG" && ok "... through gh pr ready" || ko "... through gh pr ready" "$(tail -1 "$FAKE_LOG")"
 FAKE_PR_AUTHOR=alice FAKE_PR_DRAFT=true expect_exit 4 "pr-ready: someone else's PR" -- "$S/pr-ready" acme/docs#42
 expect_exit 5 "pr-ready needs L3" -- env ADORNO_LEVEL=L2 "$S/pr-ready" acme/docs#42
+FAKE_CROSS=true FAKE_PR_DRAFT=true expect_exit 4 "pr-ready: a fork" -- "$S/pr-ready" acme/docs#42
+FAKE_PR_STATE=MERGED FAKE_PR_DRAFT=true expect_exit 4 "pr-ready: a merged PR" -- "$S/pr-ready" acme/docs#42
+FAKE_CROSS=true expect_exit 4 "run-check --pr: a fork" -- "$S/run-check" acme/docs L3 open_pr --pr 42
+: >"$TMP/empty.md"
+expect_exit 2 "pr-edit: an empty body" -- "$S/pr-edit" acme/docs#42 "feat: x" "$TMP/empty.md"
+expect_exit 2 "pr-edit: no title nor body" -- "$S/pr-edit" acme/docs#42
+
+echo "run-check usage errors fail closed"
+expect_exit 2 "an L4 level" -- "$S/run-check" acme/docs L4
+expect_exit 2 "no level" -- "$S/run-check" acme/docs
+expect_exit 2 "an unknown option" -- "$S/run-check" acme/docs L3 --bogus
+expect_exit 2 "--pr without a number" -- "$S/run-check" acme/docs L3 open_pr --pr x
+expect_exit 2 "--dir on a missing path" -- "$S/run-check" --dir "$TMP/nowhere" L2
+expect_exit 2 "--work-branch without --dir" -- "$S/run-check" acme/docs L2 --work-branch
+
+echo "run-check --work-branch and the guard: no commit on the base, a shared branch or a detached HEAD"
+expect_exit 0 "a working branch" -- "$S/run-check" --dir "$C" L2 --work-branch
+git -C "$C" checkout -q main
+expect_exit 4 "the base" -- "$S/run-check" --dir "$C" L2 --work-branch
+guard_at pass "$C" "" "git commit -m x"
+guard_at pass "$C" "" "git add b.txt"
+git -C "$C" checkout -q --detach
+expect_exit 4 "a detached HEAD" -- "$S/run-check" --dir "$C" L2 --work-branch
+guard_at pass "$C" "" "git commit -m x"
+git -C "$C" checkout -q -B develop
+guard_at pass "$C" "" "git commit -m x"
+git -C "$C" checkout -q fix/lem-8-x; git -C "$C" branch -q -D develop
+guard_at allow "$C" "" "git commit -m x"
+
+echo "git-push --check: a mirror remote"
+git -C "$C" config remote.origin.mirror true
+expect_exit 4 "git-push --check refuses a mirror remote" -- "$S/git-push" acme/docs --dir "$C" --check
+guard_at deny "$C" "" "git push origin HEAD"
+git -C "$C" config --unset remote.origin.mirror
 
 [ "$(git -C "$O" rev-parse nm/pagination)" = "$(git -C "$ws" rev-parse HEAD)" ] && ok "origin branch moved" || ko "origin branch moved"
 expect_exit 0 "nothing new to push" -- "$S/pr-push" acme/docs#42

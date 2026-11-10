@@ -10,8 +10,9 @@
 #          already done for this run (RUN_DIR/notion.json; --force plans it again).
 #   done → appends what `plan` returned ({step, page_id, at, properties}) to RUN_DIR/notion.json, once the connector
 #          has written it.
-# No level check above L0: the repo config is the opt-in. But never outside a run (exit 5), and a report or L0
-# run (untrusted inputs run at L0) makes dry_run true: nothing is written.
+# No level check above L0: the repo config is the opt-in. But never outside a run (exit 5), and a report or L0 run
+# (untrusted inputs run at L0) makes dry_run true: nothing is written. A draft run writes (draft only keeps the GitHub
+# conversation local).
 . "$(dirname "$0")/_lib.sh"
 
 STEPS="start pr_opened"

@@ -8,10 +8,7 @@
 parse_ref "${1:-}"
 require_level "$REPO" L3 open_pr
 
-info="$(gh pr view "$NUM" -R "$REPO" --json author,isCrossRepository,state,isDraft)"
-[ "$(jq -r .author.login <<<"$info")" = "$(viewer_login)" ] || die "$REPO#$NUM is not your PR" "$E_POLICY"
-[ "$(jq -r .isCrossRepository <<<"$info")" = "false" ] || die "$REPO#$NUM comes from a fork" "$E_POLICY"
-[ "$(jq -r .state <<<"$info")" = "OPEN" ] || die "$REPO#$NUM is not open" "$E_POLICY"
+info="$(require_own_open_pr "$REPO" "$NUM" isDraft)"
 if [ "$(jq -r .isDraft <<<"$info")" != "true" ]; then
   jq -n --arg repo "$REPO" --argjson n "$NUM" '{ready: true, changed: false, repo: $repo, number: $n}'
   exit 0

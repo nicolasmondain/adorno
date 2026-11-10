@@ -19,7 +19,7 @@ flowchart TD
   PT["Branch fix/n-slug: agent:fix:patch - red test, fix, green suite"]
   RV["workflow:pr:ship review loop: area reviewers + agent:adorno vs the diagnosis"]
   BL{"red or orange?"}
-  PO["pr_skill: PR ready for review once clean (draft at the cap), Fixes #N if issue"]
+  PO["pr_skill with the run folder: PR ready for review once clean (draft at the cap), Fixes #N if issue"]
   PW["workflow:pr:watch"]
   RE["run-end id - always"]
   IN --> SRC
