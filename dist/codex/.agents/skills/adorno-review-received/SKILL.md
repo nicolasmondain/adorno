@@ -21,7 +21,7 @@ level, and what step 7 leaves open.
 | Mode | Does | Level | Publishes |
 | --- | --- | --- | --- |
 | `report` | steps 1 to 4 and 9: what awaits a reply, with the specialists' verified opinion | L0 | nothing |
-| `draft` (default) | + fixes committed in the workspace, replies drafted | L3, push forbidden and dry run (forced by `run-begin --mode draft`) | nothing: commits stay in the workspace |
+| `draft` (default) | + fixes committed, pushed and the PR updated (`workflow:pr:ship`), replies drafted | L3, the conversation refused (forced by `run-begin --mode draft`) | the code only: no reply, resolution nor re-request |
 | `auto` | everything: push, replies, resolutions, reviewer re-requests | L3 | yes (step 7) |
 
 A lower repo `max_level` always wins.
@@ -54,11 +54,15 @@ A lower repo `max_level` always wins.
    reproduced → refused. Deferred (`scope` included): the next slice of the stack or a follow-up, named.
 6. **Fix** (`draft` and `auto` modes) — every confirmed item, in the workspace, each fix by the designated agent (`fix:patch`,
    `refactor:simplify`, `test:unit`, or the agent of the subject's family): one typed commit per item, message citing
-   the comment, repo tests and lint green, three rounds at most. Then `review:code` and `review:ponytail` on the
-   new commits only; a `blocker` → back to the fix, twice at most. Right after, each commit's SHA, its item and the review
-   outcome (`clean`, or `blocker left` after the caps) go in `status.md`. A `blocker left` stops this PR before
-   `pr-push`: nothing of it is pushed or replied to, and it goes to *What awaits your decision*.
-7. **Publish** (`auto` mode) — `pr-push owner/repo#N` (never forced). Then `agent:adorno` writes a reply to **every** item
+   the comment, repo tests and lint green, three rounds at most. Right after each commit, its SHA and its item go in
+   `status.md`.
+   **Ship** (`draft` and `auto` modes), without asking: `workflow:pr:ship owner/repo <branch> <workspace>` — the
+   repo's `commit_skill` for what is left, the review loop on the new commits (a 🔴 or 🟠 is fixed in the flow, two
+   rounds), `pr-push` (never forced) or the repo's `pr_skill` pushing itself, the title and description updated if
+   the fixes moved the scope, and a draft PR marked ready for review once clean. Its outcome goes next to each SHA in
+   `status.md`: `clean`, or `blocker left` (a 🔴 or 🟠 still open at the cap). A `blocker left`: no reply on this PR,
+   it goes to *What awaits your decision*.
+7. **Publish** (`auto` mode) — `agent:adorno` writes a reply to **every** item
    in the repo's language (`reply_language`, English by default) and in your voice, with the commit SHA, and publishes: `pr-reply` (thread) or `pr-comment` (general
    comment, review summary). Then it resolves (`pr-resolve`) every thread it replied to. Left open and listed in the
    report: a point about a person and a confirmed item with no fix commit (failing after its caps), both

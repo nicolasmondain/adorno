@@ -7,7 +7,8 @@
 # there is refused; it counts only in the session that opened it (CLAUDE_CODE_SESSION_ID, set by Claude Code);
 # several runs of one session for a repo → the strictest wins. Prints {id, dir, level, deny, dry_run, repos, expires_at}.
 # End with run-end.
-# Modes have fixed floors: report → L0 and dry run; draft → push denied and dry run (nothing leaves the machine).
+# Modes have fixed floors: report → L0 and dry run; draft → the code goes out (commit, push, PR: workflow:pr:ship),
+# the conversation does not (reply, comment, resolve, rerequest, review, submit, ci_rerun denied).
 . "$(dirname "$0")/_lib.sh"
 
 workflow="" mode="" level="" deny="" dry=false ttl="2h" dir=""; repos=()
@@ -37,7 +38,7 @@ esac
 
 case "$mode" in
   report) level="L0"; dry=true ;;
-  draft) dry=true; deny="${deny:+$deny,}push" ;;
+  draft) deny="${deny:+$deny,}reply,comment,resolve,rerequest,review,submit,ci_rerun" ;;
 esac
 
 id="$(date -u +%Y%m%dT%H%M%S)-$$-$RANDOM"

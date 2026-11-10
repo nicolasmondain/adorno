@@ -114,8 +114,9 @@ same thing with `adorno-github/scripts/repo-conf`.
 **Runs.** Every workflow that writes to GitHub opens a run (`run-begin`) that fixes its mode, its
 level, the actions it forbids itself and the repos it touches (at least one `--repo`), in a file under
 `~/.adorno/runs/active/`, and closes it (`run-end`); a forgotten run expires after 2 h. The scripts read that
-file: without a run open on the repo, any write there is refused; in `report` and `draft`, everything is simulated
-(nothing goes out) and `draft` forbids push, even if a command forgets it. A run belongs to the Claude Code
+file: without a run open on the repo, any write there is refused; in `report`, everything is simulated (nothing goes
+out); in `draft`, the code goes out (commit, push, PR) and the conversation stays local (reply, comment, resolve,
+re-request, review, submit and CI rerun refused), even if a command forgets it. A run belongs to the Claude Code
 session that opened it (`CLAUDE_CODE_SESSION_ID`, set by Claude Code in each command): another
 session does not see it, and cannot lower or raise your permissions. Outside a session (Codex, Gemini, your terminal),
 only runs opened outside a session count. After a `/clear`, the session changes: reopen the run.
@@ -125,9 +126,9 @@ runs are read there, and only there. The real cap remains the repo's `max_level`
 mode and level of its run, `max_level` and `permissions.deny` bound them.
 
 **The default rules.** `repos.yaml` installs Claude Code rules that forbid direct write commands:
-`git push`, `gh pr create|comment|review|merge|close|edit`, `gh issue comment|create`, `gh release`, and
-modification of the registry and the runs; any direct call to `gh api` (which writes as soon as it gets `-f`) asks
-you for confirmation. The agents publish through the scripts, which check the permissions. Your rules are added to them (lists
+`gh pr comment|review|merge|close`, `gh issue comment|create`, `gh release`, and modification of the registry and
+the runs. `git push`, `gh pr create|edit` and `gh api` have no native rule: a native rule would win over the guard,
+which decides them (below). The agents publish through the scripts, which check the permissions. Your rules are added to them (lists
 add up from one level to the next, never replace each other).
 
 **The guard hook.** The rules only compare the start of a command. `bin/kit install` also installs a hook
@@ -140,6 +141,17 @@ read (a variable as program, unclosed quotes) asks you; so does a bug in the hoo
 (`bypassPermissions` or `dontAsk`: a schedule, a headless run), every "asks" becomes a refusal carrying the reason,
 so the agent rewrites its command instead of hanging. Without `python3`, or
 if the hook file is missing, it blocks every shell command rather than let it through.
+
+**Inside a run, no prompt.** The end of a workflow (`workflow:pr:ship`) runs the repo's `commit_skill` and
+`pr_skill` without asking. For Claude Code, the guard answers `allow` to a command made only of `git add` and
+`git commit` with listed flags (never `--no-verify` nor an abbreviation of it, never `-f`, a message read only from
+the repo or a temp folder, never a dotfile), `git push origin <branch>|HEAD` (never forced, never the base, a name
+matching `branch_pattern`, no `remote.origin.push` refspec), `gh pr create` of the current branch and `gh pr
+edit|ready <n>` on your own open PR (listed flags, no `--base`/`--head`, a body file from the repo), a closed list of
+adorno-github scripts (never `run-begin`: opening a run, and its level, stays your call), `cd` and read-only commands,
+when the session's open run covers the repo at the level each needs (L2 to commit and push, L3 for the PR), within
+`max_level` and `permissions.deny`, and not in a dry run (`run-check`, `git-push --check`). Anything else, or the same
+outside a run: the decision above. Codex and Gemini have no `allow` in their hook protocol: they keep asking.
 
 | Tool | In a repo | With `--global` |
 | --- | --- | --- |

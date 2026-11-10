@@ -16,6 +16,10 @@
 #   max_inline       max inline comments per review; the rest goes in the body (agent:adorno: 8)
 #   branch_pattern   regex a PR branch name must follow (default: <type>/kebab-description)
 #   max_parallel     PRs processed at the same time by review:requested and review:received
+#   commit_skill     skill that commits what a workflow changed (the repo's own, or adorno-commit)
+#   pr_skill         skill that opens the PR of a branch, or updates its title and description when it is open
+#                    (the repo's own, or adorno-pr-open). workflow:pr:ship runs both, without asking, at the end of
+#                    every workflow that touched code; a repo skill may push and run `gh pr create|edit` itself
 #   areas            code areas: path patterns (bash globs, `*` crosses folders) and/or
 #                    regexes on added lines; an area can be overridden per repo
 #   area_reviewers   reviewer agents requested depending on the areas touched (`always` = every time)
@@ -36,6 +40,8 @@ defaults:
   allow_approve: false
   max_inline: 8
   max_parallel: 3
+  commit_skill: adorno-commit
+  pr_skill: adorno-pr-open
 
   # Native Claude Code rules installed everywhere (your user settings with --global, the repo's local settings with a
   # repo install). Agents publish through the adorno-github scripts, which check levels and permissions; these rules
@@ -44,13 +50,10 @@ defaults:
     deny: []
     claude:
       deny:
-        - "Bash(git push:*)"
-        - "Bash(gh pr create:*)"
         - "Bash(gh pr comment:*)"
         - "Bash(gh pr review:*)"
         - "Bash(gh pr merge:*)"
         - "Bash(gh pr close:*)"
-        - "Bash(gh pr edit:*)"
         - "Bash(gh issue comment:*)"
         - "Bash(gh issue create:*)"
         - "Bash(gh release:*)"
@@ -61,6 +64,9 @@ defaults:
       # No rule on `gh api`: a native rule cannot tell a read from a write and asks even in bypassPermissions,
       # which blocks unattended runs. The shell guard (guard_bash.py) asks only for a write: a GraphQL mutation,
       # -f/-F/--input on REST, or a method other than GET/HEAD.
+      # No rule on `git push` nor `gh pr create|edit` either: a native rule wins over the guard's `allow`, and the end
+      # of a workflow (workflow:pr:ship) must push and open the PR without a prompt. The guard refuses (or asks) them
+      # outside a run, forced, to the base, or beyond the run's level, max_level or permissions.deny.
 
   impact:
     window: 7d            # same duration compared before and after the deployment

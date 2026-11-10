@@ -22,7 +22,7 @@ read **in full** when the task calls for it:
 | `references/personality.md` | any text that mentions a person (SBI charter, non-negotiable) |
 
 Then the current repo's settings: `adorno-github/scripts/repo-conf` (no argument = the repo of the current directory),
-from the git-ignored `local/adorno.yaml`: `team`, default `reviewers`, `pr_skill` / `setup_skill`, `context` (facts
+from the git-ignored `local/adorno.yaml`: `team`, default `reviewers`, `commit_skill` / `pr_skill` / `setup_skill`, `context` (facts
 that bind like rules), `vision` (the owner's vision lines for this repo) and `voice`. `scopes` says which workspace,
 preset or repo entry each came from. Repo not registered → this profile only, and say so.
 

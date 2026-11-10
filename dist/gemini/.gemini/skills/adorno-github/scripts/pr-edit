@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Usage: pr-edit owner/repo#N "type(scope): title" BODY_FILE
+# Updates the title and description of your open PR (workflow:pr:ship, when a workflow pushed new commits to it).
+# Only your own PR, from the same repository (not a fork), still open. The title must be a Conventional Commit header.
+# Needs L3 and the `open_pr` action. ADORNO_DRY_RUN=1 or a dry-run run only prints.
+. "$(dirname "$0")/_lib.sh"
+
+parse_ref "${1:-}"
+title="${2:-}"; body="${3:-}"
+[ -n "$title" ] && [ -n "$body" ] || die 'usage: pr-edit owner/repo#N "type(scope): title" BODY_FILE' "$E_USAGE"
+[ -s "$body" ] || die "empty PR body: $body" "$E_USAGE"
+type_re='^(feat|fix|perf|refactor|test|docs|style|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: .+'
+[[ "$title" =~ $type_re ]] || die "title is not a Conventional Commit header: $title" "$E_USAGE"
+require_level "$REPO" L3 open_pr
+
+info="$(gh pr view "$NUM" -R "$REPO" --json author,isCrossRepository,state)"
+[ "$(jq -r .author.login <<<"$info")" = "$(viewer_login)" ] || die "$REPO#$NUM is not your PR" "$E_POLICY"
+[ "$(jq -r .isCrossRepository <<<"$info")" = "false" ] || die "$REPO#$NUM comes from a fork" "$E_POLICY"
+[ "$(jq -r .state <<<"$info")" = "OPEN" ] || die "$REPO#$NUM is not open" "$E_POLICY"
+
+if dry_run; then
+  jq -n --arg repo "$REPO" --argjson n "$NUM" --arg title "$title" \
+    '{dryRun: true, action: "edit-pr", repo: $repo, number: $n, title: $title}'
+  exit 0
+fi
+gh pr edit "$NUM" -R "$REPO" --title "$title" --body-file "$body" >/dev/null
+jq -n --arg repo "$REPO" --argjson n "$NUM" --arg title "$title" '{edited: true, repo: $repo, number: $n, title: $title}'

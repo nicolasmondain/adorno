@@ -21,5 +21,5 @@ On each round:
    - `ready` → stop: CI green and review approved.
 3. Nothing moved since the previous round → stop, to avoid spinning idle.
 
-**Checkpoint 3**: with the PR ready, return the link and a summary of the rounds. The merge is the user's, never
+**Checkpoint 2** (of workflow:feature:build): with the PR ready, return the link and a summary of the rounds. The merge is the user's, never
 automatic.

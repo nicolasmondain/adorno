@@ -7,7 +7,7 @@ flowchart TD
   W["Workflow that writes to GitHub"] --> RB["run-begin --workflow --mode --level --repo (names every repo)"]
   RB --> MD{"Mode"}
   MD -->|"report"| F1["Forced: L0 and dry run"]
-  MD -->|"draft"| F2["Forced: dry run, push denied"]
+  MD -->|"draft"| F2["Forced: reply, comment, resolve, rerequest, review, submit, ci_rerun denied; code goes out"]
   MD -->|"pending, comment, auto"| F3["Level as granted, max L3 (L4 never)"]
   F1 --> RF["Run file in ~/.adorno/runs/active, run folder returned"]
   F2 --> RF
@@ -23,6 +23,7 @@ flowchart TD
   GH --> RE["run-end ID (always, even after a failure)"]
   PR --> RE
   GD["guard_bash.py deny or ask hook (installed by bin/kit install)"] -.->|"refuses raw git push, gh writes, registry or run edits"| WS
+  GD -.->|"inside a run: allow commit, plain push, gh pr create or edit (run-check, git-push --check)"| RF
   RA["repo-audit (read only): token scope, branch protection, admin"] -.-> OUTA["Advice for the owner"]
 ```
 
@@ -32,6 +33,7 @@ flowchart TD
 flowchart TD
   subgraph L0["Read, L0"]
     RC["repo-conf"]
+    RCK["run-check (would this write be allowed?)"]
     PS["pr-status"]
     PRR["pr-review-requested"]
     PFF["pr-feedback-fetch"]
@@ -45,7 +47,7 @@ flowchart TD
     CF["ci-failed"]
   end
   subgraph L2["Push and CI, L2"]
-    GP["git-push (branch without PR, never forced)"]
+    GP["git-push (branch without PR, never forced; --check: checks only)"]
     PP["pr-push (PR branch, never forced)"]
     CR["ci-rerun (once per run)"]
   end
@@ -56,6 +58,8 @@ flowchart TD
     PRV["pr-review-submit (APPROVE only if allow_approve)"]
     PRQ["pr-rerequest"]
     PO["pr-open"]
+    PE["pr-edit (title and description of your open PR)"]
+    PRD["pr-ready (draft to ready for review)"]
   end
   PS --> PW
   PRR --> PW

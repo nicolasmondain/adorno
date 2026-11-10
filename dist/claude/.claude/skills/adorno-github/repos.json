@@ -10,17 +10,16 @@
     "allow_approve": false,
     "max_inline": 8,
     "max_parallel": 3,
+    "commit_skill": "adorno-commit",
+    "pr_skill": "adorno-pr-open",
     "permissions": {
       "deny": [],
       "claude": {
         "deny": [
-          "Bash(git push:*)",
-          "Bash(gh pr create:*)",
           "Bash(gh pr comment:*)",
           "Bash(gh pr review:*)",
           "Bash(gh pr merge:*)",
           "Bash(gh pr close:*)",
-          "Bash(gh pr edit:*)",
           "Bash(gh issue comment:*)",
           "Bash(gh issue create:*)",
           "Bash(gh release:*)",

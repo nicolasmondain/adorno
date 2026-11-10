@@ -1,5 +1,5 @@
 {"data": {"search": {"nodes": [
-  {"number": 42, "title": "feat(api): add pagination", "url": "u42", "isDraft": false, "updatedAt": "2026-11-03T12:00:00Z",
+  {"number": 42, "title": "feat(api): add pagination", "headRefName": "nm/pagination", "url": "u42", "isDraft": false, "updatedAt": "2026-11-03T12:00:00Z",
    "reviewDecision": "CHANGES_REQUESTED", "mergeable": "MERGEABLE", "repository": {"nameWithOwner": "acme/docs"},
    "reviewRequests": {"nodes": []}, "reviewThreads": {"nodes": [{"isResolved": false}, {"isResolved": true}]},
    "commits": {"nodes": [{"commit": {"statusCheckRollup": {"state": "SUCCESS"}}}]}},

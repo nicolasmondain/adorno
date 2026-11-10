@@ -24,6 +24,10 @@
 - Minimal, surgical changes (`ponytail` skill, at the repo's `ponytail` level, `full` by default); where it overlaps
   the profile, the profile wins, and the repo wins over both.
 - No secret (key, token, password) in a file, a command, a log, a commit or a published text.
+- Shell commands the permission rules can read: the program written literally (`node /abs/path/cdp.mjs 58624 open …`),
+  never a variable or alias as program (`C="node …"; $C …`), no `eval`; one action per call rather than a chain of
+  `$( … )` captures, reusing a printed value (port, target id, path) as a literal in the next call. A command the guard
+  or the allow rules cannot read stops on a permission prompt, and nobody answers it in a scheduled run.
 
 ## Git
 

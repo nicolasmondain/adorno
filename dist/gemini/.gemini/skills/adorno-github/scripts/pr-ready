@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Usage: pr-ready owner/repo#N
+# Marks your draft PR ready for review (workflow:pr:ship, once the review loop left no 🔴 or 🟠 open). Only your own
+# PR, from the same repository (not a fork), still open. Needs L3 and the `open_pr` action. ADORNO_DRY_RUN=1 or a
+# dry-run run only prints. Already ready: says so, changes nothing.
+. "$(dirname "$0")/_lib.sh"
+
+parse_ref "${1:-}"
+require_level "$REPO" L3 open_pr
+
+info="$(gh pr view "$NUM" -R "$REPO" --json author,isCrossRepository,state,isDraft)"
+[ "$(jq -r .author.login <<<"$info")" = "$(viewer_login)" ] || die "$REPO#$NUM is not your PR" "$E_POLICY"
+[ "$(jq -r .isCrossRepository <<<"$info")" = "false" ] || die "$REPO#$NUM comes from a fork" "$E_POLICY"
+[ "$(jq -r .state <<<"$info")" = "OPEN" ] || die "$REPO#$NUM is not open" "$E_POLICY"
+if [ "$(jq -r .isDraft <<<"$info")" != "true" ]; then
+  jq -n --arg repo "$REPO" --argjson n "$NUM" '{ready: true, changed: false, repo: $repo, number: $n}'
+  exit 0
+fi
+if dry_run; then
+  jq -n --arg repo "$REPO" --argjson n "$NUM" '{dryRun: true, action: "ready-pr", repo: $repo, number: $n}'
+  exit 0
+fi
+gh pr ready "$NUM" -R "$REPO" >/dev/null
+jq -n --arg repo "$REPO" --argjson n "$NUM" '{ready: true, changed: true, repo: $repo, number: $n}'

@@ -7,6 +7,8 @@ description: End-to-end tests and browser QA with evidence — Playwright journe
 - Tool, in order: the `playwright-cli` skill (screenshots, WebM video, traces, test generation; `@playwright/cli`
   CLI), otherwise `webapp-testing` (Python Playwright, screenshots and console logs, no video). Neither installed:
   say so, do not install it without approval.
+- Browser drivers (`playwright-cli`, a repo's `cdp.mjs`…): one literal call per step (`node <abs path> <port> <cmd> …`),
+  the port and target ids copied from the previous output, never stored in a shell variable used as program.
 - A local app starts on an explicit free port, never on a port already taken; stop it when you leave.
 - Each journey returns its evidence in `.agent-run/<id>/qa/`: one screenshot per key step, the video of the full
   journey, the trace on failure, and `qa.md` (journey, expected, observed, verdict). None of this is committed.

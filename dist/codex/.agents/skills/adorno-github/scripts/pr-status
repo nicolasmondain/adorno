@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage: pr-status [--ready] [owner/repo]
 # Every open PR you authored (optionally one repo), in one GraphQL call, as a JSON array:
-# review decision, CI state, unresolved threads, and the single thing blocking it, sorted by repo and number.
+# branch, review decision, CI state, unresolved threads, and the single thing blocking it, sorted by repo and number.
 # --ready: drafts left out, most recently updated first (is:pr author:@me state:open archived:false draft:false
 # sort:updated-desc), the PRs workflow:review:received works on.
 . "$(dirname "$0")/_lib.sh"
@@ -12,7 +12,7 @@ filter="${1:-}"
 [ -z "$filter" ] || split_repo "$filter"
 
 query='query($q:String!){ search(query:$q, type:ISSUE, first:100){ issueCount nodes{ ... on PullRequest{
-  number title url isDraft updatedAt reviewDecision mergeable
+  number title url isDraft updatedAt reviewDecision mergeable headRefName
   repository{ nameWithOwner }
   reviewRequests(first:20){ nodes{ requestedReviewer{ ... on User{login} ... on Team{slug} } } }
   reviewThreads(first:100){ nodes{ isResolved } }
@@ -32,7 +32,7 @@ jq --argjson reg "$reg" --argjson ready "$ready" '
     | ([.reviewThreads.nodes[] | select(.isResolved | not)] | length) as $open
     | .repository.nameWithOwner as $repo
     | {
-        repo: $repo, number, title, url, isDraft, updatedAt,
+        repo: $repo, number, title, url, isDraft, updatedAt, branch: .headRefName,
         reviewDecision: (.reviewDecision // "NONE"), ci: $ci, mergeable,
         unresolvedThreads: $open,
         waitingOn: [.reviewRequests.nodes[].requestedReviewer | (.login // .slug)],

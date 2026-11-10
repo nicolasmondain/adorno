@@ -1,5 +1,5 @@
 ---
-description: agent:adorno — Adorno, the agent that speaks and decides like you. Last step of every workflow that acts in your name (final pass on the reviews you issue, gate on your branch before a PR, verdict and replies on feedback received on your PRs), with your standards, your verification discipline, your severities, your vision and your voice (skills adorno-profile, adorno-voice and the current repo's settings). Use at the end of workflow:pr:review, workflow:review:requested and workflow:review:received, and in workflow:pr:open.
+description: agent:adorno — Adorno, the agent that speaks and decides like you. Last step of every workflow that acts in your name (final pass on the reviews you issue, review of your branch and its PR description, verdict and replies on feedback received on your PRs), with your standards, your verification discipline, your severities, your vision and your voice (skills adorno-profile, adorno-voice and the current repo's settings). Use at the end of workflow:pr:review, workflow:review:requested and workflow:review:received, and in workflow:pr:open and workflow:pr:ship.
 argument-hint: <request>
 ---
 

@@ -14,7 +14,7 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | Script | Does | Level |
 | --- | --- | --- |
 | `repo-conf owner/repo` | the repo's merged settings (base, commands, thread policy…) | L0 |
-| `pr-status [--ready] [owner/repo]` | all your open PRs: review, CI, threads, `blocker`; `--ready`: without drafts, most recent first | L0 |
+| `pr-status [--ready] [owner/repo]` | all your open PRs: branch, review, CI, threads, `blocker`; `--ready`: without drafts, most recent first | L0 |
 | `pr-review-requested [owner/repo]` | PRs where your review is requested (directly or via a team), `reviewedHead` | L0 |
 | `pr-feedback-fetch owner/repo#N` | threads, comments and review summaries to handle (`needsReply`, `bot`), CI; `pending`: their ids keyed by last activity, for `watch-seen` | L0 |
 | `pr-workspace owner/repo#N` | your PR, run from your clone: its branch's worktree (created if missing); otherwise a dedicated workspace under `~/.adorno` (separate clone, detached at the head commit) | L0 * |
@@ -28,11 +28,12 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | `ci-failed owner/repo#N [lines]` | failed runs on the latest commit + log tails in files | L0 |
 | `ci-rerun owner/repo RUN_ID` | re-runs the failed jobs, once per run | L2 |
 | `notion-step plan STEP RUN_DIR [owner/repo] [--pr-url URL] [--force]` · `done STEP RUN_DIR` | the properties your repo config sets for a workflow step (`notion_spec`) on the run's Notion spec page, or why there is nothing to do; `done` records it (skill `adorno-notion-sync`) | — |
-| `run-begin --workflow ID --mode report\|draft\|pending\|comment\|auto --level Lx --repo owner/repo… [--deny a,b] [--ttl 2h]` | opens a run for the named repos: what it may write, its folder; `report`/`draft` force a dry run | — |
-| `guard_bash.py deny\|ask [--format=claude\|codex\|gemini]` | hook (Claude Code, Codex, Gemini) installed by `bin/kit install`: refuses or asks to confirm a push, a GitHub publication, a write to the registry or to runs, whatever the shape of the command; blocks everything without `python3` | — |
+| `run-begin --workflow ID --mode report\|draft\|pending\|comment\|auto --level Lx --repo owner/repo… [--deny a,b] [--ttl 2h]` | opens a run for the named repos: what it may write, its folder; `report` forces a dry run, `draft` refuses the conversation (code still goes out) | — |
+| `guard_bash.py deny\|ask [--format=claude\|codex\|gemini]` | hook (Claude Code, Codex, Gemini) installed by `bin/kit install`: refuses or asks to confirm a push, a GitHub publication, a write to the registry or to runs, whatever the shape of the command; blocks everything without `python3`. Inside a run (Claude Code): `allow` for `git add` / `git commit` with listed flags, `git push origin BRANCH\|HEAD`, `gh pr create` of the current branch and `gh pr edit\|ready N` on your own PR, and a closed list of scripts (never `run-begin`), at the run's level, so a repo's `commit_skill` / `pr_skill` run without a prompt | — |
 | `repo-audit [owner/repo…]` | read-only: type and scope of the `gh` token, default branch protection (ruleset, branch protection), admin rights; advice | — |
 | `run-end ID` | closes the run (always do it, even after a failure) | — |
-| `git-push owner/repo [BRANCH] [--dir PATH]` | pushes a branch without a PR: never forced, never the base, name matching `branch_pattern` | L2 |
+| `run-check owner/repo\|--dir PATH LEVEL [action] [--pr N]` | read-only: would that write be allowed now (same rules as the write scripts, a dry run allows nothing; `--pr`: N is your own open PR)? Used by the guard | L0 |
+| `git-push owner/repo [BRANCH] [--dir PATH] [--check]` | pushes a branch without a PR: never forced, never the base, name matching `branch_pattern`; `--check`: the checks only | L2 |
 | `pr-push owner/repo#N` | pushes the workspace's commits to your PR's branch, never forced | L2 |
 | `pr-reply owner/repo#N THREAD_ID FILE` | replies in a thread (`-` = stdin) | L3 |
 | `pr-resolve owner/repo#N THREAD_ID` | resolves a thread if `resolve_threads: author` and you are the author | L3 |
@@ -40,6 +41,8 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | `pr-review-submit owner/repo#N JSON_FILE` | publishes a review with inline comments; `APPROVE` only if `allow_approve` | L3 |
 | `pr-rerequest owner/repo#N [login…]` | re-requests a review (default: those who already reviewed) | L3 |
 | `pr-open owner/repo BRANCH "type(scope): title" FILE [--draft]` | opens the PR, requests the registry's reviewers | L3 |
+| `pr-edit owner/repo#N "type(scope): title" FILE` | updates the title and description of your open PR | L3 |
+| `pr-ready owner/repo#N` | marks your draft PR ready for review (once nothing 🔴 or 🟠 is left open) | L3 |
 
 \* Writes only under `~/.adorno` (no variable moves it), never in your working copies nor on GitHub.
 
@@ -49,9 +52,11 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
   (`run-begin`: level, denied actions, covered repos). Without an active run: L0, every write is refused. A run is
   valid only for the repos it names; two runs on the same repo (two sessions): the strictest applies, and the script
   says so. `ADORNO_LEVEL` can only **lower** the level.
-- **Dry run**: a run in `report` or `draft` mode, or `ADORNO_DRY_RUN=1`, makes the write scripts print what they would
-  publish, without publishing anything.
-- **Pushing**: `git-push owner/repo <branch>` (no PR) or `pr-push owner/repo#N`; never a direct `git push`.
+- **Dry run**: a run in `report` mode, or `ADORNO_DRY_RUN=1`, makes the write scripts print what they would
+  publish, without publishing anything. A `draft` run pushes code and opens or updates the PR, and refuses the
+  conversation: `reply`, `comment`, `resolve`, `rerequest`, `review`, `submit`, `ci_rerun` (exit 4).
+- **Pushing**: `git-push owner/repo <branch>` (no PR) or `pr-push owner/repo#N`. A direct push only from a repo's
+  own `commit_skill` / `pr_skill`, inside the run (`workflow:pr:ship`): the guard lets it through at the run's level.
 - **Language**: texts published on GitHub (replies, PR descriptions) are in the repo's `reply_language` (`en` by
   default), whatever the language of the conversation.
 - **Working files**: each script has its own temporary folder, readable only by you (`~/.adorno/tmp/<pid>`, purged
