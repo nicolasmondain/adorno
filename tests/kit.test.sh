@@ -199,7 +199,11 @@ bad "an unknown area key" $'  ghost/repo:\n    areas: {back: {reviewers: []}}' "
 bad "a nested sub-area" $'  ghost/repo:\n    areas: {back: {sub: {q: {sub: {x: {}}}}}}' "areas.back.sub.q.sub: unknown key"
 bad "a role in always other than review and skills" $'  ghost/repo:\n    areas: {always: {build: "agent:feat:back"}}' "areas.always.build: unknown key"
 bad "an invalid content regex" $'  ghost/repo:\n    areas: {back: {content: "(unclosed"}}' "areas.back.content is an invalid regex"
-bad "a content regex awk cannot run" $'  ghost/repo:\n    areas: {back: {content: "(?i)token"}}' "areas.back.content is an invalid regex"
+# (?i) is Oniguruma-only: BWK awk (macOS) rejects it, gawk / mawk (Linux CI) accept it. kit check runs the awk that
+# pr-areas will run on the same machine, so the case only applies where that awk rejects it.
+if ! AREA_RE='(?i)token' awk 'BEGIN { if ("" ~ ENVIRON["AREA_RE"]) {} }' 2>/dev/null; then
+  bad "a content regex awk cannot run" $'  ghost/repo:\n    areas: {back: {content: "(?i)token"}}' "areas.back.content is an invalid regex"
+fi
 bad "an unknown fallback" $'  ghost/repo:\n    fallbacks: {lint: "agent:fix:patch"}' "fallbacks.lint: unknown key"
 bad "area_reviewers is refused with the migration hint" $'  ghost/repo:\n    area_reviewers: {docs: ["agent:review:security"]}' "bin/kit migrate areas"
 OKL="$TMP/okl"; mkdir -p "$OKL"
