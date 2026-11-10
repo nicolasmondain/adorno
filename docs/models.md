@@ -10,12 +10,12 @@ The setting of each item is in its frontmatter (`model:`, `effort:`). Change it 
 
 ## The four tiers
 
-| Tier | Claude Code | API price in / out (per M tokens, 2026-11) | In adorno |
-| --- | --- | --- | --- |
-| `fast` | haiku | $0.10 / $0.50 | classify, route, format the output of a script: `core:triage`, `core:router`, `workflow:pr:status` |
-| `balanced` | sonnet | $2 / $10 | the session that orchestrates a workflow: runs the scripts, delegates, merges by script, never judges |
-| `deep` | opus | $4 / $20 | every agent that judges, investigates, reviews or writes code (the default) |
-| `frontier` | fable | $8 / $40 | the thinking phases: frame the spec (`core:intake`), slice the plan (`core:planner`), find a root cause (`fix:investigate`); the last round of a capped loop |
+| Tier | Claude Code | In adorno |
+| --- | --- | --- |
+| `fast` | haiku | classify, route, format the output of a script: `core:triage`, `core:router`, `workflow:pr:status` |
+| `balanced` | sonnet | the session that orchestrates a workflow: runs the scripts, delegates, merges by script, never judges |
+| `deep` | opus | every agent that judges, investigates, reviews or writes code (the default) |
+| `frontier` | fable | the thinking phases: frame the spec (`core:intake`), slice the plan (`core:planner`), find a root cause (`fix:investigate`); the last round of a capped loop |
 
 `inherit` keeps the session's model. Gemini CLI and Codex run everything on the session's model unless
 `models.tiers.<tool>` maps the tiers (Codex has no subagents).
@@ -54,12 +54,14 @@ flowchart LR
    climb. This is the guide's "run cheap, re-run only the failures higher" pattern.
 7. **Lean context for expensive models.** An agent receives the previous deliverable and the files of its area, never
    the history. Verbose reading (logs, threads, full documents) happens in the agent that needs it, not in the
-   session.
+   session. Exception: the Slack and Notion connectors belong to the session alone (agents have no MCP tools), so
+   `notion:assigned`, `slack:mentions` and `slack:watch` read the document or thread in the session and pass it to
+   the agent.
 
 **A deliberate departure from the guide.** The guide puts well-scoped coding (bug fix, spec-driven feature) and
 repeated reviews on Sonnet. The owner of this setup chose Opus for every agent that writes or judges code
-(`feat:*`, `fix:patch`, `test:*`, `refactor:simplify`, `review:*`). That roughly doubles the cost of building and
-reviewing. To go back to the guide on a repo, set `models.agents.<id>: balanced` for those agents.
+(`feat:*`, `fix:patch`, `test:*`, `refactor:simplify`, `review:*`). That costs more per token on building and
+reviewing (the guide's price table). To go back to the guide on a repo, set `models.agents.<id>: balanced` for those agents.
 
 ## Step by step
 
