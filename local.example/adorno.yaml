@@ -29,7 +29,7 @@ defaults:                              # your settings for all repos (on top of 
       claude: {fast: haiku, balanced: sonnet, deep: opus, frontier: fable}
       gemini: {fast: gemini-2.5-flash, balanced: gemini-2.5-pro, deep: gemini-2.5-pro, frontier: gemini-2.5-pro}
     agents:                            # an agent on another tier, a specific model, or an external route
-      agent:review:mongodb: deep
+      agent:review:mongodb: balanced
       # agent:core:triage: {route: openrouter-small}   # sends triage to OpenRouter: only if you want it
     workflows:                         # the model of the session that orchestrates a workflow (Claude Code)
       workflow:pr:status: fast
@@ -95,7 +95,7 @@ repos:                                 # a specific repo, or a glob (`acme/docs-
     use: [careful]
     models:
       external: false                  # nothing goes to an external model for this repo (routes ignored)
-      agents: {agent:review:security: deep}
+      agents: {agent:review:security: frontier}
     voice: {formality: formal}         # public documentation: more formal register
     context:
       - "Public documentation: examples use obvious placeholders only, never real data."

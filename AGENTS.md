@@ -15,7 +15,7 @@ adorno is a portable, reusable agent setup. Agents, workflows and skills are wri
 | a diagram of an agent family, workflow domain or skill | `SCHEMA.md` in that folder (mermaid only; ignored by `bin/kit` as an item and not shipped to `dist/`) |
 | a GitHub access | a script in `src/skills/adorno-github/scripts/` + its test in `tests/adorno-github.test.sh` |
 | a Slack or Notion watch | a workflow `src/workflows/slack/…` or `src/workflows/notion/…`; the deterministic part in `src/skills/adorno-watch/scripts/` + `tests/adorno-watch.test.sh`; read through the connectors, only write: the report to oneself |
-| an agent's model | its `model:` tier (`fast`, `balanced`, `deep`); `delegable: true` if it can judge on inputs gathered in advance (external route); the actual choice per tool and per repo is in `local/` › `models` |
+| an agent's or workflow's model | its `model:` tier (`fast`, `balanced`, `deep`, `frontier`) and, if needed, `effort:` (`low` … `max`), chosen by [docs/models.md](docs/models.md); `delegable: true` if it can judge on inputs gathered in advance (external route); the actual choice per tool and per repo is in `local/` › `models` |
 | a repo, a workspace, permissions, a voice, a vision | `local/` (ignored by git; template: `local.example/`) — never in the repo |
 | a default public setting | `repos.yaml` (+ its validation in `bin/kit` › `validate_registry`) |
 | a settings resolution rule | `src/skills/adorno-github/scripts/resolve.jq` (shared by the scripts and `kit conf`) + its tests |
@@ -34,7 +34,7 @@ adorno is a portable, reusable agent setup. Agents, workflows and skills are wri
 - An agent of a family only produces commits of its type; `core` and `review` do not commit.
 - The `description` says what the item does and when to use it: it is what gets it chosen.
 - `tools`: neutral capabilities `read`, `write`, `edit`, `search`, `shell`, `web`, `agent`. `model`: `inherit`,
-  `fast`, `balanced`, `deep`. A tool-specific setting goes under `targets: { claude: { … } }`.
+  `fast`, `balanced`, `deep`, `frontier`; `effort`: `low`, `medium`, `high`, `max`. A tool-specific setting goes under `targets: { claude: { … } }`.
 - A workflow's `uses:`: logical identifiers (`agent:fix:patch`, `workflow:ci:red`, `adorno-github`), checked by
   `kit check`.
 - Scripts: bash compatible with macOS 3.2, `set -euo pipefail`, JSON on stdout, exit codes from `adorno-github/SKILL.md`,
