@@ -577,15 +577,11 @@ def validate_areas(conf: dict, where: str, scope: str, agent_ids: set, skill_nam
     def regex(path: str, rx) -> None:
         if not isinstance(rx, str):
             errors.append(f"{where}: {path} must be a regex string")
-        elif shutil.which("jq"):
-            res = subprocess.run(["jq", "-n", "--arg", "r", rx, '"" | test($r)'], capture_output=True, text=True)
+        else:  # the engine pr-areas runs: awk, POSIX ERE
+            res = subprocess.run(["awk", 'BEGIN { if ("" ~ ENVIRON["AREA_RE"]) {} }'],
+                                 env={**os.environ, "AREA_RE": rx}, capture_output=True, text=True)
             if res.returncode != 0:
-                errors.append(f"{where}: {path} is an invalid regex: {res.stderr.strip()[:200]}")
-        else:
-            try:
-                re.compile(rx)
-            except re.error as e:
-                errors.append(f"{where}: {path} is an invalid regex: {e}")
+                errors.append(f"{where}: {path} is an invalid regex (not a valid awk POSIX ERE): {res.stderr.strip()[:200]}")
 
     def agent(path: str, ref, families: tuple | None) -> None:
         if not isinstance(ref, str):

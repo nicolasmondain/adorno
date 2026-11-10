@@ -21,7 +21,7 @@
 #                    (the repo's own, or adorno-pr-open). workflow:pr:ship runs both, without asking, at the end of
 #                    every workflow that touched code; a repo skill may push and run `gh pr create|edit` itself
 #   areas            code areas, each with detection and roles. Detection: `paths` (bash globs, `*` crosses folders)
-#                    and/or `content` (regex on added lines). Roles: `build`, `fix`, `perf`, `qa` (one agent each) and
+#                    and/or `content` (POSIX ERE run by awk on added lines: no `(?i)`, no `\d`). Roles: `build`, `fix`, `perf`, `qa` (one agent each) and
 #                    `review`, `skills` (lists). `sub` holds sub-areas, one level only (`back.query`, `back.mongodb`):
 #                    detected on their own `paths`/`content`, they add their files to the parent and inherit its roles
 #                    (single role: own else parent's; list: parent's + own). `always` (`review`, `skills`) applies to
