@@ -309,7 +309,7 @@ if [ -f "$REAL" ]; then
     '.areas["back.query"] == ["server/users.js"] and .areas.back == ["server/users.js"]'
   expect_jq "deps and docs" '.areas.deps == ["package.json"] and .areas.docs == ["README.md"]'
   expect_jq "unmatched files land in other" '.other == ["notes/weird.txt"]'
-  expect_jq "perf comes from the sub-area, build from the parent" '.perf == "agent:perf:mongodb" and .build == "agent:feat:back"'
+  expect_jq "a files tie goes to config order (front before back)" '.perf == "agent:perf:front" and .build == "agent:feat:front"'
   expect_jq "review: always + every area, deduplicated" \
     '(.review | sort) == (["agent:review:code","agent:review:ponytail","agent:review:front","agent:review:perf","agent:review:back","agent:review:tests","agent:review:perf-back","agent:review:mongodb","agent:review:security"] | sort) and (.review | length) == (.review | unique | length)'
   expect_jq "no reviewers key, always is not an area" '(has("reviewers") | not) and (.areas | has("always") | not)'
@@ -326,6 +326,16 @@ if [ -f "$REAL" ]; then
   expect_jq "auth is security" '.areas.security == ["x/auth/login.js"] and .by_area.security.fix == "agent:fix:security" and .by_area.security.review == ["agent:review:security"]'
   expect_jq "api reference is api and docs, not back" \
     '.areas.api == ["docs/api-reference/x.mdx"] and .areas.docs == ["docs/api-reference/x.mdx"] and (.areas.back == ["x/migrations/1.js"]) and .by_area.api.build == "agent:feat:api"'
+
+  printf 'diff --git a/client/List.tsx b/client/List.tsx\n--- a/client/List.tsx\n+++ b/client/List.tsx\n@@ -1 +1 @@\n+const a = items.find(x => x.id)\n' >"$TMP/front-find.diff"
+  expect_exit 0 "a front file with a find call" -- "$S/pr-areas" acme/app "$TMP/front-find.diff"
+  expect_jq "the main family is front, not back.query" '.build == "agent:feat:front" and .perf == "agent:perf:front"'
+  printf 'diff --git a/server/services/x.js b/server/services/x.js\n--- a/server/services/x.js\n+++ b/server/services/x.js\n@@ -1 +1 @@\n+db.c.aggregate([])\n' >"$TMP/back-agg.diff"
+  expect_exit 0 "a back file with an aggregate" -- "$S/pr-areas" acme/app "$TMP/back-agg.diff"
+  expect_jq "inside the back family the sub-area wins perf, build stays back" '.perf == "agent:perf:mongodb" and .build == "agent:feat:back"'
+  printf 'diff --git a/server/services/a.js b/server/services/a.js\n--- a/server/services/a.js\n+++ b/server/services/a.js\n@@ -1 +1 @@\n+a\ndiff --git a/server/services/b.js b/server/services/b.js\n--- a/server/services/b.js\n+++ b/server/services/b.js\n@@ -1 +1 @@\n+b\ndiff --git a/client/c.css b/client/c.css\n--- a/client/c.css\n+++ b/client/c.css\n@@ -1 +1 @@\n+c\n' >"$TMP/two-back.diff"
+  expect_exit 0 "two back files and one front file" -- "$S/pr-areas" acme/app "$TMP/two-back.diff"
+  expect_jq "most files wins the family" '.build == "agent:feat:back"'
 
   expect_exit 0 "--files mode, no content rules" -- "$S/pr-areas" acme/app --files server/services/x.js client/a.tsx
   expect_jq "--files detects by path" '.files == 2 and .areas.back == ["server/services/x.js"] and .areas.front == ["client/a.tsx"] and (.areas | has("back.query") | not)'

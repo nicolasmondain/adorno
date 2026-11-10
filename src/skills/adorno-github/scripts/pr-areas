@@ -8,9 +8,11 @@
 # Prints JSON {files, areas: {area: [paths]}, other: [paths],
 #              by_area: {area: {build, fix, perf, qa, review, skills}},
 #              build, fix, perf, qa, review, skills, fallbacks}.
-#   build, fix, perf, qa  one agent (or null): taken from the main area = a sub-area before its parent, then the area
-#                         with the most files, then config order, skipping areas without that role. `perf` missing
-#                         everywhere: fallbacks.perf.agent, whose skills join `skills` (same fallback in by_area).
+#   build, fix, perf, qa  one agent (or null), taken from the main area, skipping areas without that role. Main area:
+#                         first the main family (a top-level area, counting the files of its sub-areas): most files,
+#                         then config order; only inside that family does a sub-area beat its parent (sub with the
+#                         most files, then config order). `perf` missing everywhere: fallbacks.perf.agent, whose
+#                         skills join `skills` (same fallback in by_area).
 #   review, skills        union over every detected area, plus `always`, deduplicated, in order.
 . "$(dirname "$0")/_lib.sh"
 
@@ -86,8 +88,10 @@ jq -n --rawfile files "$tmp/files" --rawfile hits "$tmp/hits" --argjson conf "$c
   | ($order | map(. as $u | {key: $u, value: [$h[] | select(.area == $u) | .file]} | select(.value | length > 0))
      | from_entries) as $areas
   | ($areas | keys_unsorted) as $found
-  | ($found | map(. as $u | {u: $u, sub: contains("."), n: ($areas[$u] | length), i: ($order | index($u))})
-     | sort_by([(if .sub then 0 else 1 end), -.n, .i]) | map(.u)) as $rank
+  | ($found | map(. as $u | ($u | split(".")[0]) as $f
+       | {u: $u, sub: contains("."), n: ($areas[$u] | length), i: ($order | index($u)),
+          fn: ($areas[$f] | length), fi: ($order | index($f))})
+     | sort_by([-.fn, .fi, (if .sub then 0 else 1 end), -.n, .i]) | map(.u)) as $rank
   | ($cfg.always // {}) as $always
   | ($conf.fallbacks // {}) as $fb
   | def pick($r): [$rank[] | rules | select(.[$r] != null) | .[$r]] | first;
