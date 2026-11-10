@@ -33,3 +33,22 @@ flowchart TD
   C --> OUT["Test and fix in the same commit (L2)"]
   SK["skills debugging-and-error-recovery, test-driven-development, typescript-pro"] -.-> FX
 ```
+
+## `agent:fix:security`
+
+```mermaid
+flowchart TD
+  IN["Finding from review:security or security report"] --> T["Write failing test: missing permission, hostile input, secret in log; or audit output"]
+  T --> F{"Reproduced?"}
+  F -->|"no"| T
+  F -->|"yes"| FX["Fix at the cause: schema validation, server-side authorization, remove exposed data, patched dependency"]
+  FX --> S["Run full suite"]
+  S --> G{"Green?"}
+  G -->|"no, round under 3"| FX
+  G -->|"no, 3 rounds"| STOP["Stop and report"]
+  G -->|"yes"| C["Commit fix(module): what was exposed; no secret or personal data written"]
+  C --> LEAK{"Secret leaked?"}
+  LEAK -->|"yes"| ROT["Report to owner for rotation"]
+  LEAK -->|"no"| OUT["Test and fix in the same commit (L2)"]
+  ROT --> OUT
+```

@@ -1,0 +1,6 @@
+description = "agent:docs:write — Write or update documentation — README, guides, API reference, decision records — from the code and the change. Use when a feature, a behavior or a setting changed and its docs must follow."
+prompt = '''
+Delegate the request below to the `adorno-agent-docs-write` sub-agent (agent:docs:write) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-docs-write`) to handle the request.
+
+Request: {{args}}
+'''

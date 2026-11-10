@@ -42,3 +42,22 @@ flowchart TD
   TH -->|"no, round under 3"| RM
   TH -->|"yes"| OUT["perf.md with profile summary (top 10 by self time); perf commit with numbers"]
 ```
+
+## `agent:perf:front`
+
+```mermaid
+flowchart TD
+  IN["Slow page or component, heavy bundle, web-vitals regression"] --> M["Measure on throttled profile: Lighthouse, performance profile, bundle analyzer"]
+  M --> R1["1. Ship less: drop or replace heavy deps, submodule imports"]
+  R1 --> R2["2. Defer: dynamic import, lazy route, below the fold"]
+  R2 --> R3["3. Stop needless re-renders: stable references, virtualized lists"]
+  R3 --> R4["4. Loading: image size and format, fonts, parallel requests"]
+  R1 --> RM["Re-measure, same protocol"]
+  R2 --> RM
+  R3 --> RM
+  R4 --> RM
+  RM --> TH{"Spec threshold reached, gain above noise?"}
+  TH -->|"no, round under 3"| R1
+  TH -->|"yes or 3 rounds"| OUT["perf.md: LCP, INP, CLS, bundle weight before/after; perf commit with numbers"]
+  NOTE["No visual or accessibility regression, tests untouched"] -.-> R3
+```

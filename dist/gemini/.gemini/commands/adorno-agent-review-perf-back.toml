@@ -1,0 +1,6 @@
+description = "agent:review:perf-back — Back-end performance reviewer of a diff — unbounded reads, per-item I/O in loops, missing batching, blocking work on the event loop, memory growth. Called when a diff touches the server and may weigh on latency or volume."
+prompt = '''
+Delegate the request below to the `adorno-agent-review-perf-back` sub-agent (agent:review:perf-back) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-review-perf-back`) to handle the request.
+
+Request: {{args}}
+'''

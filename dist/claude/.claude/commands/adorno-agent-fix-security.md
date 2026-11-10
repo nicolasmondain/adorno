@@ -1,0 +1,8 @@
+---
+description: agent:fix:security — Fix a security finding — vulnerable code path, missing authorization, leaked secret or personal data, vulnerable dependency. Use on a finding from review:security or a security report, after the cause is understood.
+argument-hint: <request>
+---
+
+Delegate the request below to the `adorno-agent-fix-security` sub-agent (agent:fix:security) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-fix-security`) to handle the request.
+
+Request: $ARGUMENTS
