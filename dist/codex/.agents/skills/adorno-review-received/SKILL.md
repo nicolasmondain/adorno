@@ -43,7 +43,7 @@ A lower repo `max_level` always wins.
    `feedback.json` and `pending.json` (the step 1 `pending` after the filter; explicit PR or `--all`: unfiltered).
 3. **Triage** — `agent:core:triage` classifies each item whose `key` is in `pending.json` (thread, general comment,
    review summary): category (`fix`, `nit`, `test`, `question`, `disagree`, `scope`, `done`), **area** (from `pr-areas --files <targeted file>`), specialist(s) to consult (`by_area.<a>.review`),
-   fixer (`by_area.<a>.fix` or `.perf`; nit and test: `fallbacks`) and the area's `skills` for each agent called → `triage.json`. Bot comments do not require a reply; their findings
+   fixer (`by_area.<a>.fix` or `.perf`, null: `fallbacks.perf` with its `skills`; nit and test: `fallbacks`) and the area's `skills` for each agent called → `triage.json`. Bot comments do not require a reply; their findings
    are checked like the others when they target code (AI reviewer).
 4. **Verify what is said** — for each item that claims something about the code (everything except `done`), the
    specialist(s) of its area in **consult** mode, in parallel: is the reviewer right? evidence required

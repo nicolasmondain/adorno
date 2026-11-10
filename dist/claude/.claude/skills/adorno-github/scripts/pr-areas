@@ -11,8 +11,9 @@
 #   build, fix, perf, qa  one agent (or null), taken from the main area, skipping areas without that role. Main area:
 #                         first the main family (a top-level area, counting the files of its sub-areas): most files,
 #                         then config order; only inside that family does a sub-area beat its parent (sub with the
-#                         most files, then config order). `perf` missing everywhere: fallbacks.perf.agent, whose
-#                         skills join `skills` (same fallback in by_area).
+#                         most files, then config order). Top-level `perf` missing everywhere: fallbacks.perf.agent,
+#                         whose skills join `skills`. `by_area.<a>.perf` is the area's own perf or null: a dispatcher
+#                         reads `fallbacks.perf` (agent and skills) when it is null.
 #   review, skills        union over every detected area, plus `always`, deduplicated, in order.
 . "$(dirname "$0")/_lib.sh"
 
@@ -95,15 +96,14 @@ jq -n --rawfile files "$tmp/files" --rawfile hits "$tmp/hits" --argjson conf "$c
   | ($cfg.always // {}) as $always
   | ($conf.fallbacks // {}) as $fb
   | def pick($r): [$rank[] | rules | select(.[$r] != null) | .[$r]] | first;
-    def perf_of($x): $x.perf // $fb.perf.agent;
-    ([$found[] | rules | .perf // empty] | length > 0) as $has_perf
+    pick("perf") as $perf
   | { files: ($all | length),
       areas: $areas,
       other: [$all[] | select(. as $f | $h | map(.file) | index($f) | not)],
       by_area: ($areas | with_entries(.value = (.key | rules
-          | {build, fix, perf: perf_of(.), qa, review: lst("review"), skills: lst("skills")}))),
-      build: pick("build"), fix: pick("fix"), perf: (pick("perf") // $fb.perf.agent), qa: pick("qa"),
+          | {build, fix, perf, qa, review: lst("review"), skills: lst("skills")}))),
+      build: pick("build"), fix: pick("fix"), perf: ($perf // $fb.perf.agent), qa: pick("qa"),
       review: ([$always | lst("review")] + [$found[] | rules | lst("review")] | add // [] | uniq),
       skills: ([$always | lst("skills")] + [$found[] | rules | lst("skills")]
-               + [if $has_perf then empty else ($fb.perf.skills // []) end] | add // [] | uniq),
+               + [if $perf != null then empty else ($fb.perf.skills // []) end] | add // [] | uniq),
       fallbacks: $fb }'

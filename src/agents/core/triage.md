@@ -16,7 +16,7 @@ registered, 4 policy, 5 permissions: stop and report).
 | Category | Sign | Likely fixer (`pr-areas` of the targeted file) |
 | --- | --- | --- |
 | `fix` | real defect reported | `by_area.<a>.fix` |
-| `perf` | slowness, cost, scale reported | `by_area.<a>.perf` |
+| `perf` | slowness, cost, scale reported | `by_area.<a>.perf`, null: `fallbacks.perf` (agent and `skills`) |
 | `nit` | rename, typo, style | `fallbacks.nit` |
 | `test` | test requested | `fallbacks.test` |
 | `question` | "why…?", "what if…?" | none: an answer |

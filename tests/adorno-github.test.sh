@@ -313,7 +313,7 @@ if [ -f "$REAL" ]; then
   expect_jq "review: always + every area, deduplicated" \
     '(.review | sort) == (["agent:review:code","agent:review:ponytail","agent:review:front","agent:review:perf","agent:review:back","agent:review:tests","agent:review:perf-back","agent:review:mongodb","agent:review:security"] | sort) and (.review | length) == (.review | unique | length)'
   expect_jq "no reviewers key, always is not an area" '(has("reviewers") | not) and (.areas | has("always") | not)'
-  expect_jq "by_area carries the roles" '.by_area["back.query"].perf == "agent:perf:mongodb" and .by_area.front.perf == "agent:perf:front" and .by_area.docs.perf == "agent:fix:patch"'
+  expect_jq "by_area carries the roles" '.by_area["back.query"].perf == "agent:perf:mongodb" and .by_area.front.perf == "agent:perf:front" and .by_area.docs.perf == null'
   expect_jq "no perf fallback when an area has one" '.skills | index("performance-optimization") | not'
   expect_exit 0 "per-repo override" -- "$S/pr-areas" acme/docs "$ROOT/tests/fixtures/sample.diff"
   expect_jq "override adds a reviewer and removes one" \
@@ -346,7 +346,7 @@ if [ -f "$REAL" ]; then
   expect_exit 2 "--files needs paths" -- "$S/pr-areas" acme/app --files
   expect_exit 0 "docs only" -- "$S/pr-areas" acme/app --files docs/guide.md
   expect_jq "perf falls back to the fallback agent and its skills" \
-    '.perf == "agent:fix:patch" and (.skills | index("performance-optimization")) and .by_area.docs.perf == "agent:fix:patch" and .build == "agent:docs:write"'
+    '.perf == "agent:fix:patch" and (.skills | index("performance-optimization")) and .by_area.docs.perf == null and .fallbacks.perf.agent == "agent:fix:patch" and (.fallbacks.perf.skills | index("performance-optimization")) and .build == "agent:docs:write"'
   jq -e '.repos == {}' "$REAL" >/dev/null && ok "public registry has no repos" || ko "public registry has no repos"
   reg "$ROOT/tests/fixtures/repos.json"
 else

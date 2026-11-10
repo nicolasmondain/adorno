@@ -35,7 +35,7 @@ command.
      then `agent:adorno` (situation 1) rechecks them and judges as the owner: the repo's rules and `context`, the
      profile, and **the request** — the run's `spec.md`, the issue or the plan: an acceptance criterion missed or
      half done is a 🟠 anchored on its line there. `review-merge` → the verdict.
-   - A 🔴 or a 🟠 → fixed in the flow: each by `by_area.<a>.fix` (or `.perf` for a performance point) of its file's
+   - A 🔴 or a 🟠 → fixed in the flow: each by `by_area.<a>.fix` (or `.perf` for a performance point; null: `fallbacks.perf`, agent and its `skills`) of its file's
      area (`pr-areas --files <file>`; nit: `fallbacks.nit`, missing test: `fallbacks.test`), with that area's `skills`, tests and lint green, committed with `commit_skill`;
      then the reviewers again on the new commits and on the points still open. Two fix rounds at most.
    - Clean (no 🔴 nor 🟠, the request met) → **ready for review**. The cap reached with a 🔴 or 🟠 still open:
