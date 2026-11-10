@@ -453,6 +453,10 @@ guard deny "gh api repos/acme/docs/issues/42/comments -f body=hi"
 guard deny "gh api graphql -f query='mutation { resolveReviewThread(input: {}) { clientMutationId } }'"
 guard deny "curl -X POST https://api.github.com/repos/acme/docs/issues"
 guard deny "echo '{}' > ~/.adorno/runs/active/x.json"
+guard deny "rm -rf ~/.adorno/runs"
+guard pass "git diff origin/master...HEAD > ~/.adorno/runs/pr-open-1-2/diff.patch"
+guard pass "$(printf "mkdir -p ~/.adorno/runs/pr-open-1-2/reviews && cat > ~/.adorno/runs/pr-open-1-2/reviews/code.json <<'EOF'\n{}\nEOF")"
+guard pass "cd ~/.adorno/runs/pr-open-1-2 && echo '{}' > reviews/code.json"
 guard deny "HOME=/tmp/h ~/.claude/skills/adorno-github/scripts/pr-comment acme/docs#42 f.md"
 guard pass "git commit -m 'push the fix'"
 guard pass "$(printf "mkdir -p x && cat > x/status.md <<'EOF'\nthe wrapper's tools, lem-pr's docs\nEOF\necho done")"
@@ -503,6 +507,25 @@ guard pass 'python3 -c "print(\"use \`const x = 1\` here\")"'
 guard deny 'echo \\`git push`'
 guard pass "$ROOT/bin/kit check"
 guard pass "$ROOT/tests/kit.test.sh"
+guard pass "$(printf "mkdir -p .agent-run/f && cat > .agent-run/f/r.json <<'JSON'\n{\"fix\": \"use \`\${a}\` and ((n))\"}\nJSON")"
+guard ask "$(printf 'x=${y}; cat > f <<EOF\nbody\nEOF')"
+guard ask "$(printf 'cat > f <<EOF\nline \\\nEOF\ngit push\nEOF')"
+guard pass "awk '/^\`\`\`bash/{f++} f==1' SKILL.md | sed -n 1,60p"
+guard deny "echo 'text' \"\$(git push)\""
+guard deny "$(printf "cat > notes.md <<EOF\n'\$(git push origin fix/x)'\nEOF")"
+guard pass 'for id in 1 2; do gh api repos/acme/docs/actions/runs/$id/jobs --jq .jobs; done'
+guard ask 'gh $verb 42'
+guard pass "for n in \$(gh pr list --json number --jq '.[] | select(.number > 1) | .number'); do echo \$n; done"
+guard deny "x=\$(jq '.a | select(.b)' f.json; git push origin fix/x)"
+guard pass 'cd ~/.adorno/runs && for d in r-*/; do echo "$d"; done | sort'
+guard deny "cd ~/.adorno/runs/active && echo '{}' > x.json"
+guard deny "cd ~/.adorno && cp x runs/active/y.json"
+guard pass "cd ~/.adorno/worktrees/acme__docs/fix/x && git status && npm test"
+guard pass 'cd ~/.adorno/runs && for d in r-*/; do for p in "$d"pr-*/; do echo "$p"; done; done'
+guard ask 'C="node cdp.mjs 9222"; $C open http://localhost:8000'
+out="$(jq -n '{tool_name: "Bash", permission_mode: "bypassPermissions", tool_input: {command: "$C open x"}}' | python3 "$S/guard_bash.py" ask)"
+expect_jq "nobody answers in bypassPermissions: deny with the reason" \
+  '.hookSpecificOutput.permissionDecision == "deny" and (.hookSpecificOutput.permissionDecisionReason | test("variable"))'
 out="$(jq -n '{tool_name: "run_shell_command", tool_input: {command: "git push"}}' | python3 "$S/guard_bash.py" deny --format=gemini)"
 expect_jq "Gemini's protocol" '.decision == "deny" and (.reason | startswith("adorno:"))'
 out="$(jq -n '{tool_name: "Bash", tool_input: {command: "git push"}}' | python3 "$S/guard_bash.py" ask --format=codex)"
@@ -749,6 +772,7 @@ guard_at allow "$C" "" "$S/pr-edit acme/docs#42 'feat: x' .agent-run/body.md"
 guard_at allow "$C" "" "$S/git-push acme/docs --dir $C"
 
 echo "guard_bash: what the shell expands after the hook never gets allow (fourth security review)"
+# shellcheck disable=SC2088  # the tildes are literal on purpose: the guard must see them unexpanded
 for arg in '$HOME/.ssh/id_rsa' '${HOME}/.ssh/id_rsa' '~/.ss?/id_rsa' '~/.ssh/id_r*' '~/.ssh/{id_rsa}' \
     '"$HOME/.ssh/id_rsa"' '~root/x' '.agent-run/[b]ody.md' '`echo x`'; do
   guard_at pass "$C" "" "$S/pr-edit acme/docs#42 'feat: x' $arg"
