@@ -1,6 +1,6 @@
 ---
 description: Find the Notion documents assigned to you ("person" properties of the watched databases, status still open) and launch on each new document the agent or workflow that fits — chosen per database in your config, otherwise by the router. Read-only on Notion; report sent to you alone. Modes report (default) or run.
-argument-hint: '[--mode report|run] [--since 30d] [--dry-run] [--all]'
+argument-hint: '[--mode report|run] [--since 30d] [--dry-run] [--all] [--unattended]'
 model: sonnet
 ---
 

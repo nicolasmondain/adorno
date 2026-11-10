@@ -48,6 +48,8 @@ expect_exit 0 "a file name that does not exist" -- "$S/input-refs" "voir docs/no
 expect_jq "no file" '.refs == []'
 out="$(printf 'from stdin %s' "$NOTION" | "$S/input-refs")"
 expect_jq "the request on stdin" '.kinds == ["notion"]'
+expect_exit 0 "two Notion pages" -- "$S/input-refs" "spec https://www.notion.so/acme/B-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, context https://www.notion.so/acme/A-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+expect_jq "refs keep the order of the request (the first one is the spec)" '[.refs[].page_id] == ["bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"]'
 expect_exit 2 "nothing to read" -- "$S/input-refs" "   "
 
 echo

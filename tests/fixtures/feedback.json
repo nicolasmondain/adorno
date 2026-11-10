@@ -19,6 +19,7 @@
     "reviews": {
      "nodes": [
       {
+       "id": "R1",
        "author": {
         "login": "alice",
         "__typename": "User"
@@ -30,6 +31,7 @@
        "authorAssociation": "MEMBER"
       },
       {
+       "id": "R2",
        "author": {
         "login": "octocat",
         "__typename": "User"
@@ -41,6 +43,7 @@
        "authorAssociation": "OWNER"
       },
       {
+       "id": "R3",
        "author": {
         "login": "carol",
         "__typename": "User"
@@ -56,6 +59,7 @@
     "comments": {
      "nodes": [
       {
+       "id": "IC1",
        "author": {
         "login": "bob",
         "__typename": "User"
@@ -66,6 +70,7 @@
        "authorAssociation": "MEMBER"
       },
       {
+       "id": "IC2",
        "author": {
         "login": "octocat",
         "__typename": "User"
@@ -76,12 +81,14 @@
        "authorAssociation": "OWNER"
       },
       {
+       "id": "IC3",
        "author": null,
        "body": "ghost comment",
        "url": "u2",
        "createdAt": "2026-11-03T12:05:00Z"
       },
       {
+       "id": "IC4",
        "author": {
         "login": "ci-bot",
         "__typename": "Bot"

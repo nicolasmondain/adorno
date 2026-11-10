@@ -25,7 +25,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A["Called by workflow:pr:ship: owner/repo, branch (alone: run workflow:pr:ship)"] --> C["Local checks: branch_pattern, diff vs base, commits, tests, lint, typecheck"]
+  A["Called by workflow:pr:ship: owner/repo, branch, optional .agent-run folder (alone: run workflow:pr:ship)"] --> C["Local checks: branch_pattern, diff vs base, commits, tests, lint, typecheck"]
   C -->|"fail"| X["Stop and report"]
   C -->|"ok"| G{"Verdict of the review loop clean?"}
   G -->|"yes"| H["agent:adorno: title + description (What / How / mermaid / Verification)"]
@@ -33,7 +33,10 @@ flowchart TD
   GH --> H
   H --> K["git-push owner/repo branch (no checkpoint)"]
   K --> L["pr-open: ready for review if clean, --draft otherwise"]
-  L --> M["Return PR URL, ready or draft, suggest workflow:pr:watch"]
+  L --> NS{"agent-run folder given?"}
+  NS -->|"yes"| NP["adorno-notion-sync pr_opened --pr-url"]
+  NS -->|"no"| M["Return PR URL, ready or draft, suggest workflow:pr:watch"]
+  NP --> M
 ```
 
 ## workflow:pr:ship
@@ -53,7 +56,7 @@ flowchart TD
   V -->|"yes, under 2 rounds"| FX["Family agent fixes, commit_skill commits"]
   FX --> R
   V -->|"no"| OK["Clean: ready for review"]
-  V -->|"cap reached"| DR["Draft, open points first, status.md"]
+  V -->|"cap reached"| DR["No PR yet: draft, open points first; PR open: not pushed; status.md"]
   OK --> P{"PR open?"}
   DR --> P
   P -->|"no"| H["pr_skill (default workflow:pr:open)"]

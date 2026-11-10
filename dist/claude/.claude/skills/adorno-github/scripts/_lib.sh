@@ -29,6 +29,9 @@ fi
 # Exit codes shared by every script (documented in SKILL.md).
 E_USAGE=2 E_UNREGISTERED=3 E_POLICY=4 E_LEVEL=5
 
+# A Conventional Commit header: the title of a PR, which a squash merge turns into the commit on the base branch.
+CC_TITLE_RE='^(feat|fix|perf|refactor|test|docs|style|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: .+'
+
 die()  { printf '%s: %s\n' "$SELF" "$1" >&2; exit "${2:-1}"; }
 log()  { printf '%s: %s\n' "$SELF" "$*" >&2; }
 need() { command -v "$1" >/dev/null 2>&1 || die "missing dependency: $1"; }
@@ -260,8 +263,7 @@ require_own_open_pr() {
 
 # require_cc_title "title" — dies unless it is a Conventional Commit header (pr-open, pr-edit)
 require_cc_title() {
-  local re='^(feat|fix|perf|refactor|test|docs|style|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: .+'
-  [[ "$1" =~ $re ]] || die "title is not a Conventional Commit header: $1" "$E_USAGE"
+  [[ "$1" =~ $CC_TITLE_RE ]] || die "title is not a Conventional Commit header: $1" "$E_USAGE"
 }
 
 # require_work_branch owner/repo BRANCH — dies on the base or a shared branch: nothing is committed nor pushed there

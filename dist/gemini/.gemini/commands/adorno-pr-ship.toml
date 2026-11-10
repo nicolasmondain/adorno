@@ -28,9 +28,10 @@ command.
    - A 🔴 or a 🟠 → fixed in the flow: each by the family agent of its subject (`fix:patch`, `refactor:simplify`,
      `test:unit`, the `feat:*` or `perf:*` agent of the area), tests and lint green, committed with `commit_skill`;
      then the reviewers again on the new commits and on the points still open. Two fix rounds at most.
-   - Clean (no 🔴 nor 🟠, the request met) → **ready for review**. The cap reached with a 🔴 or 🟠 still open → the
-     PR is opened (or stays) as **draft**, those points at the top of its description with `file:line`, and
-     `status.md` says what waits for the owner. 🟡 and ❓ never hold it: they go in the description.
+   - Clean (no 🔴 nor 🟠, the request met) → **ready for review**. The cap reached with a 🔴 or 🟠 still open:
+     no PR yet → it is opened as **draft**, those points at the top of its description with `file:line`; a PR already
+     open → those commits are not pushed (reviewers would see known 🔴 or 🟠 land on it). Either way `status.md` says
+     what waits for the owner. 🟡 and ❓ never hold it: they go in the description.
 5. **No PR yet** → `pr_skill`, told whether the PR goes out ready or draft:
    - default `adorno-pr-open`: `workflow:pr:open owner/repo <branch> [.agent-run folder]`;
    - a repo skill: run it in the worktree, as it is written. It may push and run `gh pr create` itself: inside the

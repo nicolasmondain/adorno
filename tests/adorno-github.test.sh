@@ -118,6 +118,62 @@ printf '{"event":"COMMENT","body":"ok","comments":[]}' >"$TMP/submit.json"
 FAKE_REVIEWS="$FAKE_FIX/reviews.json" expect_exit 0 "deny submit still allows a pending review" -- "$S/pr-review-submit" acme/docs-public#1 "$TMP/pending.json"
 expect_exit 4 "deny submit blocks a submitted review" -- "$S/pr-review-submit" acme/docs-public#1 "$TMP/submit.json"
 
+echo "notion-step (properties of the Notion spec page per workflow step)"
+RD="$TMP/run-notion"; mkdir -p "$RD"
+"$ROOT/src/skills/adorno-inputs/scripts/input-refs" \
+  "spec https://www.notion.so/acme/Spec-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, see https://www.notion.so/acme/Other-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" >"$RD/refs.json"
+today="$(date +%Y-%m-%d)"
+expect_exit 0 "plan start on a repo with notion_spec" -- "$S/notion-step" plan start "$RD" acme/docs
+expect_jq "first Notion link, repo over workspace, null dropped, today filled" \
+  ".page_id == \"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb\" and .dry_run == false
+   and .properties == {Lifecycle: \"Ongoing\", \"Working date\": \"$today\"}"
+expect_exit 0 "workspace settings alone" -- "$S/notion-step" plan start "$RD" acme/app
+expect_jq "... apply" '.properties.Lifecycle == "Planned" and .properties.Owner == "workspace"'
+expect_exit 0 "a repo without notion_spec" -- "$S/notion-step" plan start "$RD" other/thing
+expect_jq "... is skipped" '.skip | test("sets no notion_spec.start")'
+expect_exit 0 "a step the repo does not set" -- "$S/notion-step" plan pr_opened "$RD" acme/app
+expect_jq "... is skipped" '.skip | test("notion_spec.pr_opened")'
+expect_exit 2 "{{pr_url}} needs --pr-url" -- "$S/notion-step" plan pr_opened "$RD" acme/docs
+expect_exit 2 "--pr-url without a value" -- "$S/notion-step" plan pr_opened "$RD" acme/docs --pr-url
+expect_exit 2 "--pr-url that is not a PR URL" -- "$S/notion-step" plan pr_opened "$RD" acme/docs --pr-url "https://evil.example/x"
+expect_exit 0 "plan pr_opened" -- "$S/notion-step" plan pr_opened "$RD" acme/docs --pr-url https://github.com/acme/docs/pull/9
+expect_jq "... PR url filled" '.properties == {Lifecycle: "In Code Review", PR: "https://github.com/acme/docs/pull/9"}'
+expect_exit 2 "unknown step" -- "$S/notion-step" plan merged "$RD" acme/docs
+expect_exit 2 "missing run folder" -- "$S/notion-step" plan start "$TMP/nope" acme/docs
+expect_exit 3 "undeclared repo" -- "$S/notion-step" plan start "$RD" nobody/repo
+"$S/notion-step" plan start "$RD" acme/docs >/dev/null
+expect_exit 0 "done records the planned step" -- "$S/notion-step" "done" start "$RD"
+expect_jq "... with its page and properties" '.step == "start" and .page_id == "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb" and .properties.Lifecycle == "Ongoing"'
+expect_exit 2 "done twice: nothing planned any more" -- "$S/notion-step" "done" start "$RD"
+expect_exit 0 "a resumed run" -- "$S/notion-step" plan start "$RD" acme/docs
+expect_jq "... does not redo start" '.skip | test("already done")'
+expect_exit 0 "--force" -- "$S/notion-step" plan start "$RD" acme/docs --force
+expect_jq "... plans it again" '.properties.Lifecycle == "Ongoing"'
+mkdir -p "$TMP/run-plain"; "$ROOT/src/skills/adorno-inputs/scripts/input-refs" "Add an export on acme/docs" >"$TMP/run-plain/refs.json"
+expect_exit 0 "a request without Notion page" -- "$S/notion-step" plan start "$TMP/run-plain" acme/docs
+expect_jq "... is skipped" '.skip | test("no Notion page")'
+expect_exit 0 "no refs.json at all" -- "$S/notion-step" plan start "$TMP" acme/docs
+expect_jq "... is skipped, saying refs.json is missing" '.skip | test("no refs.json")'
+mkdir -p "$TMP/run-bad"; printf '{ half' >"$TMP/run-bad/refs.json"
+expect_exit 1 "a corrupt refs.json fails, not skipped" -- "$S/notion-step" plan start "$TMP/run-bad" acme/docs
+expect_exit 5 "outside any run: refused" -- "$S/notion-step" plan start "$RD" acme/anything --force
+"$S/notion-step" plan start "$RD" acme/docs --force >/dev/null
+cp "$TMP/run-plain/refs.json" "$RD/refs.json"   # the same run folder, now without Notion link
+expect_exit 0 "a plan that skips" -- "$S/notion-step" plan start "$RD" acme/docs --force
+expect_exit 2 "... leaves nothing for done to record" -- "$S/notion-step" "done" start "$RD"
+"$ROOT/src/skills/adorno-inputs/scripts/input-refs" "see https://github.com/acme/docs/issues/3 then https://www.notion.so/acme/Spec-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" >"$RD/refs.json"
+expect_exit 0 "a GitHub ref before the Notion link" -- "$S/notion-step" plan start "$RD" acme/docs --force
+expect_jq "... the Notion page is still found" '.page_id == "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"'
+NDRAFT="$("$S/run-begin" --workflow workflow:pr:open --mode report --level L3 --repo acme/docs | jq -r .id)"
+expect_exit 0 "under a report run" -- "$S/notion-step" plan start "$RD" acme/docs --force
+expect_jq "... dry run: nothing is written" '.dry_run == true'
+expect_exit 2 "done after a dry-run plan is refused" -- "$S/notion-step" "done" start "$RD"
+"$S/run-end" "$NDRAFT" >/dev/null
+NL0="$("$S/run-begin" --workflow workflow:issue:fix --mode auto --level L0 --repo acme/docs | jq -r .id)"
+expect_exit 0 "under an auto run at L0 (untrusted inputs)" -- "$S/notion-step" plan start "$RD" acme/docs --force
+expect_jq "... dry run too" '.dry_run == true'
+"$S/run-end" "$NL0" >/dev/null
+
 echo "pr-feedback-fetch"
 expect_exit 0 "fetches" -- "$S/pr-feedback-fetch" acme/docs#42
 expect_jq "only unresolved threads" '[.threads[].id] == ["T1","T2"]'
@@ -136,6 +192,25 @@ expect_jq "members are trusted" '(.reviews[] | select(.author=="alice") | .assoc
 expect_jq "an outside contributor is not (their items never drive a pushed fix)" \
   '(.reviews[] | select(.author=="carol") | .association == "FIRST_TIME_CONTRIBUTOR" and (.trusted | not))'
 expect_jq "no association known: not trusted" '(.conversation[] | select(.author=="ghost") | .association == "NONE" and (.trusted | not))'
+expect_jq "pending: what needs a reply, keyed by its last activity, plus the red CI of the head" \
+  '[.pending[].id] == ["acme/docs#42/thread/T1@C1", "acme/docs#42/comment/IC3", "acme/docs#42/review/R3", "acme/docs#42/ci@abc123"]'
+W="$ROOT/src/skills/adorno-watch/scripts"
+"$S/pr-feedback-fetch" acme/docs#42 | jq .pending >"$TMP/pending.json"
+"$W/watch-seen" mark review-received "acme/docs#42/thread/T1@C1" "acme/docs#42/ci@abc123" >/dev/null
+expect_exit 0 "watch-seen filters pending" -- "$W/watch-seen" filter review-received "$TMP/pending.json"
+expect_jq "what was handled, unchanged, is skipped on the next pass" 'map(.id) == ["acme/docs#42/comment/IC3", "acme/docs#42/review/R3"]'
+cp -R "$FAKE_FIX" "$TMP/fix-new"
+jq '.data.repository.pullRequest.reviewThreads.nodes[0].comments.nodes += [{id: "C9", author: {login: "alice", __typename: "User"}, body: "Still null", url: "c9", createdAt: "2026-11-04T09:00:00Z"}]' \
+  "$FAKE_FIX/feedback.json" >"$TMP/fix-new/feedback.json"
+FAKE_FIX="$TMP/fix-new" "$S/pr-feedback-fetch" acme/docs#42 | jq .pending >"$TMP/pending.json"
+expect_exit 0 "watch-seen filters pending after a new reply" -- "$W/watch-seen" filter review-received "$TMP/pending.json"
+expect_jq "a new reply in a handled thread brings it back" 'map(.id) | index("acme/docs#42/thread/T1@C9") != null'
+jq '.data.repository.pullRequest.commits.nodes[0].commit.statusCheckRollup.state = "SUCCESS"' "$FAKE_FIX/feedback.json" >"$TMP/fix-new/feedback.json"
+FAKE_FIX="$TMP/fix-new" expect_exit 0 "fetches a green PR" -- "$S/pr-feedback-fetch" acme/docs#42
+expect_jq "green CI is not pending" '[.pending[].id | select(test("/ci@"))] == []'
+jq '.data.repository.pullRequest.commits.nodes[0].commit.statusCheckRollup.state = "ERROR" | .data.repository.pullRequest.headRefOid = "def456"' "$FAKE_FIX/feedback.json" >"$TMP/fix-new/feedback.json"
+FAKE_FIX="$TMP/fix-new" expect_exit 0 "fetches an errored PR on a new head" -- "$S/pr-feedback-fetch" acme/docs#42
+expect_jq "errored CI is pending, keyed by the new head" '[.pending[].id | select(test("/ci@"))] == ["acme/docs#42/ci@def456"]'
 
 echo "pr-status"
 expect_exit 0 "lists PRs" -- "$S/pr-status"
@@ -404,6 +479,28 @@ guard deny "for t in $TMP/deploy*.sh; do bash \$t; done"
 guard deny 'for c in push; do git $c; done'
 guard pass 'for c in status log; do git $c; done'
 guard deny 'if true; then git push; fi'
+# $(( … )) is arithmetic, not a subshell; the quoted awk program that follows it is not a command
+guard pass "for n in 7786 7805; do awk -v s=\$((n-6)) -v e=\$((n+4)) 'NR>=s && NR<=e {printf \"%d\\t%s\\n\", NR, \$0}' f; done"
+guard deny 'echo $(( $(git push; echo 1) + 1 ))'
+guard pass "grep -n '\$((' f.sh"
+guard pass 'echo $(( (1+2) * 3 )) "$((4/2))"'
+guard deny 'echo $(( (1+2) * 3 )); git push'
+# $((cmd); cmd) and $((cmd) ) are a substitution holding a subshell, and a quoted $(( is text: none hides a write
+guard deny 'echo $((git push origin x); true)'
+guard deny 'echo $((git push) )'
+guard deny "echo '\$((' ; git push ; echo '))'"
+guard deny 'echo "$((" ; git push origin x; echo "))"'
+guard pass "echo '\$((1' ; git status"
+# a leading redirection is not the program, with $(( )) as its target or not
+guard deny '>$((1)) git push'
+guard deny '2>$((1)) gh pr create -t x'
+guard deny '<<<$((1)) git push'
+guard deny '> x git push'
+guard deny '2>&1 git push'
+guard pass '> out.txt echo hi'
+# an escaped backtick is a character, not a substitution
+guard pass 'python3 -c "print(\"use \`const x = 1\` here\")"'
+guard deny 'echo \\`git push`'
 guard pass "$ROOT/bin/kit check"
 guard pass "$ROOT/tests/kit.test.sh"
 out="$(jq -n '{tool_name: "run_shell_command", tool_input: {command: "git push"}}' | python3 "$S/guard_bash.py" deny --format=gemini)"
@@ -412,6 +509,15 @@ out="$(jq -n '{tool_name: "Bash", tool_input: {command: "git push"}}' | python3 
 expect_jq "Codex has no ask in hooks: deny" '.hookSpecificOutput.permissionDecision == "deny"'
 out="$(jq -n '{tool_name: "Bash", tool_input: {command: "git push"}}' | python3 "$S/guard_bash.py" ask)"
 expect_jq "a global install asks instead" '.hookSpecificOutput.permissionDecision == "ask"'
+out="$(jq -n '{tool_name: "Bash", permission_mode: "bypassPermissions", tool_input: {command: "git push"}}' | python3 "$S/guard_bash.py" ask)"
+expect_jq "nobody answers a prompt in bypassPermissions: deny, with the reason" \
+  '.hookSpecificOutput.permissionDecision == "deny" and (.hookSpecificOutput.permissionDecisionReason | startswith("adorno:"))'
+out="$(jq -n '{tool_name: "Bash", permission_mode: "bypassPermissions", tool_input: {command: "c=push; git $c"}}' | python3 "$S/guard_bash.py" deny)"
+expect_jq "an unreadable command in bypassPermissions: deny, not a prompt that hangs" '.hookSpecificOutput.permissionDecision == "deny"'
+out="$(jq -n '{tool_name: "Bash", permission_mode: "dontAsk", tool_input: {command: "c=push; git $c"}}' | python3 "$S/guard_bash.py" ask)"
+expect_jq "dontAsk has nobody to answer either: deny" '.hookSpecificOutput.permissionDecision == "deny"'
+out="$(jq -n '{tool_name: "Bash", permission_mode: "default", tool_input: {command: "c=push; git $c"}}' | python3 "$S/guard_bash.py" ask)"
+expect_jq "an interactive session still asks" '.hookSpecificOutput.permissionDecision == "ask"'
 
 echo "a registry older than the personal layer"
 printf 'repos: {}\n' >"$TMP/layer.yaml"

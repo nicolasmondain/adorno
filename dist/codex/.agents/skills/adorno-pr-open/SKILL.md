@@ -26,4 +26,6 @@ No checkpoint: the PR opens without waiting for a "yes" (running the workflow is
      🟡 and ❓ left (`Impact / Risks`). No real data.
 4. `adorno-github/scripts/git-push owner/repo <branch>`, then `pr-open owner/repo <branch> "<title>" <file>`
    (`--draft` only when the verdict is not clean): registry reviewers without the author.
-5. Return the PR URL, ready or draft, and suggest `workflow:pr:watch owner/repo#N`.
+5. With an `.agent-run` folder: `adorno-notion-sync pr_opened <folder> owner/repo --pr-url <PR URL>` (the Notion page
+   used as the spec gets the repo's `notion_spec.pr_opened` properties; a Notion failure is reported, the PR stays).
+6. Return the PR URL, ready or draft, and suggest `workflow:pr:watch owner/repo#N`.

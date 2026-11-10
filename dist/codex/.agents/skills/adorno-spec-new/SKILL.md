@@ -23,7 +23,7 @@ that are off; "let's discuss" switches back to `discuss`.
 1. **Repo and folder** — the target repo: given, read from the sources (issue, PR), or the current clone. It must be
    declared (`repo-conf` answers); otherwise, first offer `workflow:repo:onboard`. Create the run folder
    `.agent-run/<date>-<slug>/` in the repo (and add `.agent-run/` to `.git/info/exclude`).
-2. **Sources** — `adorno-inputs/scripts/input-refs "the user’s request"`. Links or a file: read each with its connector and
+2. **Sources** — `adorno-inputs/scripts/input-refs "the user’s request" > <run folder>/refs.json`. Links or a file: read each with its connector and
    write `source.md` (skill `adorno-inputs`). A connector is missing or a page is unreadable: say which, and ask to
    connect it or paste the content; never guess what a link says.
 3. **Mode** — `--mode` if given. Otherwise `confirm` if `source.md` exists or if the request already says what to do

@@ -14,7 +14,7 @@
 #                    default none: a point that needs execution is a ❓, CI decides (agent:adorno)
 #   allow_approve    may an automatic review APPROVE? (false: only COMMENT and REQUEST_CHANGES)
 #   max_inline       max inline comments per review; the rest goes in the body (agent:adorno: 8)
-#   branch_pattern   regex a PR branch name must follow (process.md: <type>/<issue-id>-kebab)
+#   branch_pattern   regex a PR branch name must follow (default: <type>/kebab-description)
 #   max_parallel     PRs processed at the same time by review:requested and review:received
 #   commit_skill     skill that commits what a workflow changed (the repo's own, or adorno-commit)
 #   pr_skill         skill that opens the PR of a branch, or updates its title and description when it is open
@@ -23,6 +23,8 @@
 #   areas            code areas: path patterns (bash globs, `*` crosses folders) and/or
 #                    regexes on added lines; an area can be overridden per repo
 #   area_reviewers   reviewer agents requested depending on the areas touched (`always` = every time)
+#   notion_spec      properties of the Notion page used as a run's spec, per step (`start`, `pr_opened`): property →
+#                    value, `{{today}}`, `{{pr_url}}`; set in local/adorno.yaml only (adorno-notion-sync)
 #   impact           impact analysis of merged PRs (workflow:pr:impact): window compared before / after the
 #                    deployment, minimum delay before analysing, sources to query (connectors and hints:
 #                    dashboards, services, projects, alert channels), whether to post as a comment
