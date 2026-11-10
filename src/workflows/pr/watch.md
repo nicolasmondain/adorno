@@ -4,6 +4,7 @@ args: "<owner/repo#N> [--mode draft|auto] [--rounds 5]"
 uses:
   skills: [adorno-github]
   workflows: [workflow:ci:red, workflow:review:received]
+model: balanced
 ---
 
 Input: {{args}}

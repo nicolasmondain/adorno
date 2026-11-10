@@ -1,7 +1,7 @@
 ---
 description: Watch one or more Slack channels according to a named rule — included words or regex, over a period, at most N messages — and launch the configured action (agent, workflow or instruction) on each message that matches, once per message. Read-only on Slack; report sent to you alone. Launch by hand or from your own scheduler.
 argument-hint: <rule name> [--since 24h] [--max 200] [--dry-run] [--all] [--unattended]
-model: haiku
+model: sonnet
 ---
 
 Input: $ARGUMENTS. Rules are declared in your personal layer (`local/adorno.yaml` › `slack.watches`):

@@ -5,6 +5,7 @@ uses:
   skills: [adorno-github, adorno-profile, adorno-voice, adorno-notion-sync]
   agents: [agent:adorno]
   workflows: [workflow:pr:ship]
+model: balanced
 ---
 
 Input: {{args}}

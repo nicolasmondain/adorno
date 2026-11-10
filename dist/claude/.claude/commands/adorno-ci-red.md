@@ -1,6 +1,7 @@
 ---
 description: Handles a red CI on a PR — diagnosis from the logs, a single rerun if flaky, otherwise a fix by the designated agent, committed and pushed without asking (workflow:pr:ship), the PR description updated if the scope moved. Use as soon as a check fails.
 argument-hint: <owner/repo#N>
+model: sonnet
 ---
 
 Input: $ARGUMENTS

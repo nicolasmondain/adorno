@@ -1,6 +1,7 @@
 ---
 description: Prepare a repo for the agents — detect stack, commands and checks, write AGENTS.md and CONSTRAINTS.md, propose its complete entry in local/adorno.yaml, then commit them and open the PR without asking (workflow:pr:ship). Do it once per repo.
 argument-hint: <owner/repo> [path of the local clone]
+model: sonnet
 ---
 
 Input: $ARGUMENTS

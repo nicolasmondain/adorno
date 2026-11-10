@@ -5,6 +5,7 @@ uses:
   skills: [adorno-github, adorno-inputs, adorno-notion-sync]
   agents: [agent:fix:investigate, agent:fix:patch]
   workflows: [workflow:pr:ship, workflow:pr:watch]
+model: balanced
 ---
 
 Input: {{args}}

@@ -1,7 +1,7 @@
 ---
 description: Evolve your profile and your voice — reviews the points noted by adorno-learn during work (tech, product logic, code logic, method, writing), shows you each with its evidence and the proposed sentence in the right file, and writes only what you validate, in your personal layer. Launched by hand when Adorno signals ready points.
 args: "[--all] [--kind tech|product|code|process|voice|personality]"
-model: balanced
+model: deep
 uses:
   skills: [adorno-learn, adorno-setup, adorno-profile, adorno-voice]
 ---

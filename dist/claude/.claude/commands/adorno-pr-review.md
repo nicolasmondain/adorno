@@ -1,6 +1,7 @@
 ---
 description: Reviews a colleague's PR in a dedicated workspace — specialized reviewers chosen by the touched code areas (front, back, mongodb, api, security…), in parallel, then your agent who rechecks, slices and writes. By default, a pending review that you reread and submit yourself.
 argument-hint: <owner/repo#N> [--mode report|pending|auto]
+model: sonnet
 ---
 
 Input: $ARGUMENTS

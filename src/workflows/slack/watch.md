@@ -4,7 +4,7 @@ args: "<rule name> [--since 24h] [--max 200] [--dry-run] [--all] [--unattended]"
 uses:
   skills: [adorno-watch, adorno-github]
   agents: [agent:core:analyst, agent:adorno]
-model: fast
+model: balanced
 ---
 
 Input: {{args}}. Rules are declared in your personal layer (`local/adorno.yaml` › `slack.watches`):

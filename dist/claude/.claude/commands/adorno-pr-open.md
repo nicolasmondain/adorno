@@ -1,6 +1,7 @@
 ---
 description: Opens the PR of a ready branch, without asking — title and description in English following your template, in your voice, reviewers from the registry. Ready for review when the review loop of workflow:pr:ship left nothing 🔴 or 🟠, draft otherwise. Default pr_skill of workflow:pr:ship.
 argument-hint: <owner/repo> <branch> [.agent-run folder]
+model: sonnet
 ---
 
 Input: $ARGUMENTS

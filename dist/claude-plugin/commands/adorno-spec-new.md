@@ -1,6 +1,7 @@
 ---
 description: Scope a code request with the intake agent until you validate — by discussing (discuss), or from an already clear prompt, a Slack thread, a Notion page, an issue or a written plan, asking only the confirmation questions (confirm). First step of any non-trivial feature or fix.
 argument-hint: <the request, and/or Slack, Notion, GitHub links, a plan file> [owner/repo] [--mode discuss|confirm]
+model: sonnet
 ---
 
 Request: $ARGUMENTS

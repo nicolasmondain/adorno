@@ -1,6 +1,7 @@
 ---
 description: Accompanies an open PR until it is ready to merge — loops on red CI and new review threads, with a cap. The merge stays yours.
 argument-hint: <owner/repo#N> [--mode draft|auto] [--rounds 5]
+model: sonnet
 ---
 
 Input: $ARGUMENTS
