@@ -19,7 +19,7 @@
 
 split_repo "${1:-}"
 usage="usage: pr-areas owner/repo DIFF_FILE | pr-areas owner/repo --files PATH [PATH…]"
-mode=diff; diff="${2:-}"
+mode="diff"; diff="${2:-}"
 if [ "${2:-}" = "--files" ]; then
   mode=files; [ $# -ge 3 ] || die "$usage" "$E_USAGE"
 else
