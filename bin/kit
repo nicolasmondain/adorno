@@ -1109,6 +1109,7 @@ You are …
 name: {name}
 description: What this workflow accomplishes end to end.
 args: "<expected input>"
+model: balanced              # the session that orchestrates: balanced; fast for a script and a table (docs/models.md)
 uses:
   skills: []
   agents: []
