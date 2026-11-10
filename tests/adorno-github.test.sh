@@ -347,6 +347,41 @@ if [ -f "$REAL" ]; then
   expect_exit 0 "docs only" -- "$S/pr-areas" acme/app --files docs/guide.md
   expect_jq "perf falls back to the fallback agent and its skills" \
     '.perf == "agent:fix:patch" and (.skills | index("performance-optimization")) and .by_area.docs.perf == null and .fallbacks.perf.agent == "agent:fix:patch" and (.fallbacks.perf.skills | index("performance-optimization")) and .build == "agent:docs:write"'
+  echo "pr-areas: overrides across layers, ranking and sub-area inheritance"
+  jq '.workspaces = {"ovr-ws": {"repos": ["ovr/layers"], "areas": {"back": {"review": ["agent:review:extra"], "skills": ["extra-skill"]}}}}
+    | .repos = {"ovr/single": {"areas": {"back": {"build": "agent:feat:custom"}, "front": {"skills": ["-frontend-ui-engineering"]}}},
+                "ovr/layers": {"areas": {"back": {"review": ["-agent:review:extra", "-agent:review:tests"], "skills": ["-extra-skill"]}}},
+                "ovr/sub": {"areas": {"back": {"fix": "agent:fix:custom"}}},
+                "ovr/plain": {}}' "$REAL" >"$TMP/ovr-repos.json"
+  reg "$TMP/ovr-repos.json"
+  expect_exit 0 "a repo replaces one role of an area" -- "$S/repo-conf" ovr/single
+  expect_jq "the replaced role changes, its siblings keep the public value" \
+    '.areas.back.build == "agent:feat:custom" and .areas.back.fix == "agent:fix:patch" and .areas.back.perf == "agent:perf:nodejs" and (.areas.back.review | index("agent:review:back"))'
+  expect_jq "a -<skill> removes that skill from the list" '.areas.front.skills == []'
+  expect_exit 0 "a skill removed by the repo is not in pr-areas skills" -- "$S/pr-areas" ovr/single --files client/a.tsx
+  expect_jq "... nor in the result" '(.skills | index("frontend-ui-engineering") | not) and .areas.front == ["client/a.tsx"]'
+  expect_exit 0 "the workspace adds, the repo removes" -- "$S/repo-conf" ovr/layers
+  expect_jq "the workspace addition is removed by the repo, with no marker left" \
+    '(.areas.back.review | index("agent:review:extra") | not) and (.areas.back.skills | index("extra-skill") | not) and ([.areas.back.review[] | select(startswith("-"))] == [])'
+  expect_jq "the repo also removes a public reviewer, the others stay" \
+    '(.areas.back.review | index("agent:review:tests") | not) and (.areas.back.review | index("agent:review:back")) and (.areas.back.review | index("agent:review:perf-back"))'
+  expect_exit 0 "the workspace alone keeps its addition" -- "$S/repo-conf" ovr/plain
+  expect_jq "no workspace match: public list unchanged" '(.areas.back.review | index("agent:review:extra") | not) and (.areas.back.review | index("agent:review:tests"))'
+
+  expect_exit 0 "two auth files and one service file" -- "$S/pr-areas" ovr/plain --files x/auth/a.js x/auth/b.js server/services/c.js
+  expect_jq "security has the most files but no build: build skips to back, fix stays security" \
+    '.build == "agent:feat:back" and .fix == "agent:fix:security"'
+  expect_exit 0 "a tsx file" -- "$S/pr-areas" ovr/plain --files client/a.tsx
+  expect_jq "qa comes from the area" '.qa == "agent:test:e2e"'
+
+  expect_exit 0 "effective roles of the sub-areas" -- "$S/repo-conf" ovr/plain
+  expect_jq "back.sub.query inherits build and review from back, not paths" \
+    '.areas.back.sub.query.build == "agent:feat:back" and .areas.back.sub.query.fix == "agent:fix:patch" and (.areas.back.sub.query.review | index("agent:review:back")) and (.areas.back.sub.query.review | index("agent:review:mongodb")) and (.areas.back.sub.query | has("paths") | not) and .areas.back.sub.query.perf == "agent:perf:mongodb"'
+  expect_exit 0 "an override of a parent role" -- "$S/repo-conf" ovr/sub
+  expect_jq "reaches the sub-areas, whose own roles still win" \
+    '.areas.back.sub.query.fix == "agent:fix:custom" and .areas.back.sub.mongodb.fix == "agent:fix:custom" and .areas.back.sub.query.perf == "agent:perf:mongodb"'
+  reg "$TMP/areas-repos.json"
+
   jq -e '.repos == {}' "$REAL" >/dev/null && ok "public registry has no repos" || ko "public registry has no repos"
   reg "$ROOT/tests/fixtures/repos.json"
 else
