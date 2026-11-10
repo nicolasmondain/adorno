@@ -3,13 +3,15 @@
 
 Usage (bin/kit install writes it into the settings of Claude Code, Codex and Gemini CLI):
     guard_bash.py deny|ask [--format=claude|codex|gemini]
-Reads the hook event on stdin. A command that pushes, publishes on GitHub, edits adorno's registry or runs, or moves
+Reads the hook event on stdin. A command that pushes, publishes on GitHub, edits adorno's registry or a run's grant (runs/active), or moves
 HOME for an adorno script gets `deny` (in a repo install) or `ask` (in a global install, which applies to every
 project). Permission rules only compare the start of a command; this reads it the way a shell does: chained
 commands (; && || |), subshells, $( … ) and backticks, `bash -c '…'`, `eval`, `env`/`sudo`/`command` wrappers,
 `git -C dir`, git aliases, quotes, heredocs; it reads the code given to python -c / node -e and the local scripts a command
 runs (./x.sh, bash x.sh, python3 x.py). A command it cannot read (a variable as program, unbalanced quotes) asks, and
-so does a bug in the guard. Anything else passes untouched (no output, exit 0).
+so does a bug in the guard. Where nobody answers a prompt (permission_mode `bypassPermissions` or `dontAsk`: a
+schedule, a headless run), every `ask` becomes a `deny` carrying the reason, so the agent rewrites its command instead
+of hanging. Anything else passes untouched (no output, exit 0).
 
 Inside a run (Claude Code only), the end of a workflow goes through without a prompt: a command made only of
 `git add` / `git commit` with listed flags (never --no-verify, -f, a message read from outside the repo),
@@ -36,7 +38,8 @@ WRAPPER_OPTS_WITH_VALUE = {"-u", "--user", "-g", "--group", "-n", "--adjustment"
 KEYWORDS = {"do", "then", "else", "elif", "if", "while", "until", "!", "{", "}", "done", "fi"}
 SHELLS = {"sh", "bash", "zsh", "dash", "ksh", "fish"}
 READ_ONLY = {"cat", "jq", "ls", "head", "tail", "less", "more", "grep", "rg", "wc", "stat", "file", "test", "[", "echo",
-             "printf", "diff", "cmp", "realpath", "dirname", "basename", "find"}
+             "printf", "diff", "cmp", "realpath", "dirname", "basename", "find", "cd", "pushd"}
+FILTERS = {"sort", "uniq", "cut", "tr", "true", "sleep", "for"}  # write stdout only (a nested `do for` included)
 GIT_OPTS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"}
 GH_OPTS_WITH_VALUE = {"-R", "--repo", "--hostname"}
 GH_WRITES = {
@@ -46,7 +49,8 @@ GH_WRITES = {
     "workflow": {"run", "enable", "disable"}, "run": {"rerun", "cancel", "delete"},
     "label": None, "secret": None, "variable": None, "gist": None, "ruleset": None,
 }
-ADORNO_STATE = re.compile(r"\.adorno/(registry\.json|runs(/|$))")
+# the registry and the runs' grants; a run's own folder (~/.adorno/runs/<workflow>-<id>/) is its work space
+ADORNO_STATE = re.compile(r"\.adorno/(registry\.json|runs/active(/|$)|runs/?$)")
 OPS = {";", "&&", "||", "|", "&", "(", ")", "|&", ";;", "\n"}
 
 MESSAGES = {
@@ -56,7 +60,7 @@ MESSAGES = {
           "ci-rerun…): they check the run's level and the repo's rights",
     "api": "`gh api` that writes (-f, -F, --input, -X POST…): use the adorno-github scripts",
     "curl": "a write to api.github.com: use the adorno-github scripts",
-    "state": "adorno's registry and runs are written by bin/kit install and run-begin / run-end only",
+    "state": "adorno's registry and run grants (runs/active) are written by bin/kit install and run-begin / run-end only",
     "session": "a run belongs to the session that opened it: CLAUDE_CODE_SESSION_ID is set by Claude Code, not by "
                "a command",
     "home": "an adorno script reads its registry and runs from your real ~/.adorno: do not move HOME for it",
@@ -191,10 +195,6 @@ def heredocs(command):
     Read the way the shell reads it: a `<<` inside quotes is text, not an operator (`-m "a;git <<'EOF'"` must not hide
     the next lines), one inside $( … ) or backticks is code. The operators are removed from the command: the body is
     checked apart, and the operator alone would read as unterminated."""
-    if "<<" in command and any(t in command for t in ("${", "((", "<(", ">(", "[[", "$'", '$"', "\\\n")):
-        # forms this lexer does not model (parameter expansion, arithmetic, process substitution, ANSI-C quotes,
-        # line continuations): with a heredoc around, which lines are body is not certain, so it asks
-        raise ValueError("a heredoc next to an expansion this guard does not read")
     lines, out, bodies, stack, i = command.split("\n"), [], [], [], 0
     while i < len(lines):
         line = lines[i]; i += 1
@@ -259,20 +259,47 @@ def heredocs(command):
             except ValueError:
                 ws = []
             bodies.append((program(ws[0]) if ws else "", "\n".join(body), quoted))
-    return "\n".join(out), bodies
+    rest = "\n".join(out)
+    # forms this lexer does not model (parameter expansion, arithmetic, process substitution, ANSI-C quotes, line
+    # continuations): on a line read as code, they could move where a body starts or ends, so it asks. Inside a body
+    # they cannot: bash reads a body only for its delimiter line, and a quoted body (<<'EOF') is plain data. An
+    # unquoted body joins a line ending in \ to the next, which can hide the delimiter.
+    if bodies and (any(t in rest for t in ("${", "((", "<(", ">(", "[[", "$'", '$"', "\\\n"))
+                   or any(not quoted and re.search(r"\\$", body, re.M) for _, body, quoted in bodies)):
+        raise ValueError("a heredoc next to an expansion this guard does not read")
+    return rest, bodies
 
 
-def substitutions(command):
-    """The commands inside $( … ) and ` … ` (nested ones included), which the shell runs before the rest."""
-    out, i, n = [], 0, len(command)
+def substitutions(command, quotes=True):
+    """The commands inside $( … ) and ` … ` (nested ones included), which the shell runs before the rest. A
+    single-quoted span is text (`awk '/^```/'`), and so is an escaped \\` or \\$; quotes=False for a heredoc body,
+    where bash expands $( … ) even between single quotes."""
+    out, i, n, dquote = [], 0, len(command), False
     while i < n:
-        if command.startswith("$(", i) and not command.startswith("$((", i):
+        if quotes and command[i] == "\\":
+            i += 2
+        elif quotes and command[i] == "'" and not dquote:
+            j = command.find("'", i + 1)
+            if j < 0:
+                raise ValueError("unbalanced quote")
+            i = j + 1
+        elif quotes and command[i] == '"':
+            dquote = not dquote; i += 1
+        elif command.startswith("$(", i) and not command.startswith("$((", i):
+            # a $( … ) is a new quoting context: its quoted words and its ( … ) do not close it (jq 'select(.a)')
             depth, j = 1, i + 2
             while j < n and depth:
-                if command.startswith("$(", j):
-                    depth += 1; j += 2; continue
-                if command[j] == ")":
-                    depth -= 1
+                c = command[j]
+                if c == "\\":
+                    j += 2; continue
+                if c in "'\"":
+                    k = command.find(c, j + 1)
+                    while c == '"' and k > 0 and command[k - 1] == "\\":
+                        k = command.find(c, k + 1)
+                    if k < 0:
+                        raise ValueError("unbalanced quote in $(")
+                    j = k + 1; continue
+                depth += (c == "(") - (c == ")")
                 j += 1
             if depth:
                 raise ValueError("unbalanced $(")
@@ -358,7 +385,7 @@ def check(command, depth=0, cwd=None):
         elif prog in INTERPRETERS:
             found = scan_code(body)
         else:
-            found = None if quoted else next(filter(None, (check(x, depth + 1, cwd) for x in substitutions(body))), None)
+            found = None if quoted else next(filter(None, (check(x, depth + 1, cwd) for x in substitutions(body, quotes=False))), None)
         if found:
             return found
     for inner in substitutions(command):
@@ -368,6 +395,7 @@ def check(command, depth=0, cwd=None):
     tokens = words(command)
     whole_mentions_adorno = "adorno" in command
     loops = {}  # for VAR in WORDS: what $VAR can be, globs expanded
+    in_adorno = False
     for cmd in simple_commands(tokens):
         if len(cmd) >= 3 and cmd[0] == "for" and cmd[2] == "in":
             names = []
@@ -431,7 +459,8 @@ def check(command, depth=0, cwd=None):
                 elif re.match(r"^\s*push\b", alias) or scan_code("git " + alias):
                     return "alias"
         if prog == "gh":
-            if any("$" in a for a in args[:3]):
+            # `gh api` takes an endpoint, not a subcommand: a variable in it (repos/o/r/runs/$id) writes nothing
+            if any("$" in a for a in (args[:1] if args[:1] == ["api"] else args[:3])):
                 raise ValueError("a gh subcommand is a variable")
             found = gh_verdict(args)
             if found:
@@ -448,6 +477,13 @@ def check(command, depth=0, cwd=None):
         is_adorno_script = "adorno-github/scripts/" in words_[0] or "adorno-watch/scripts/" in words_[0] \
             or "adorno-learn/scripts/" in words_[0] or "adorno-llm/scripts/" in words_[0]
         if redirected or (writes_state and prog not in READ_ONLY and not is_adorno_script):
+            return "state"
+        # a cd into ~/.adorno, its runs or their grants is a read; what follows it there may only read, or be an
+        # adorno script (a run's own folder and ~/.adorno/worktrees, the PR workspaces, are ordinary work)
+        if prog in ("cd", "pushd") and any(re.search(r"\.adorno(/runs(/active)?)?/?$|\.adorno/runs/active/", a) for a in args):
+            in_adorno = True
+        elif in_adorno and not is_adorno_script and (prog not in READ_ONLY | FILTERS or any(
+                t in (">", ">>", ">|", "&>", "&>>") and cmd[k + 1:k + 2] != ["/dev/null"] for k, t in enumerate(cmd))):
             return "state"
         if not is_adorno_script:
             path = script_file(words_[0], args, prog, cwd)
@@ -865,6 +901,9 @@ def main():
                 decision, reason = "allow", "inside the open run, at its level (workflow:pr:ship)"
         except Exception:
             pass
+    # bypassPermissions (a schedule, an agent profile) and dontAsk: no one answers a prompt, the tool call would hang
+    if decision == "ask" and event.get("permission_mode") in ("bypassPermissions", "dontAsk"):
+        decision = "deny"
     if decision:
         print(json.dumps(answer(fmt, decision, reason)))
     return 0
