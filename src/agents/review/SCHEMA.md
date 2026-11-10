@@ -135,7 +135,9 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A["Input: diff touching inputs, auth, data or dependencies"] --> B["Extends addy/security-auditor, skill security-and-hardening"]
+  A["Input: diff matched by a security keyword"] --> Q{"Step 0: real sensitive surface? input, authn, authz, secret, personal data, dependency"}
+  Q -->|"no"| P["pass, no finding, one-line reason in the reply"]
+  Q -->|"yes"| B["Extends addy/security-auditor, skill security-and-hardening, concerned files only"]
   B --> C["OWASP Top 10, authentication and authorization, sensitive data"]
   C --> D{"Real secret, token or personal data in diff, fixture or docs?"}
   D -->|"yes"| E["blocker"]

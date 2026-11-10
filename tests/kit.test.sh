@@ -239,6 +239,9 @@ expect_jq "mongodb maps to the back sub-area, extra reviewer added" \
 check "migrate prints a YAML snippet per scope" 'grep -q "repos:" "$TMP/err" && grep -q "areas:" "$TMP/err"'
 check "migrate writes nothing" 'cmp -s "$MIG/adorno.yaml" "$TMP/mig-before.yaml" && [ "$(ls "$MIG")" = "adorno.yaml" ]'
 
+check "review:security opens with a step 0 qualification and a one-line pass" \
+  'grep -q "Step 0, qualification" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md && grep -q "one line" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md'
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
