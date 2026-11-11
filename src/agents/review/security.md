@@ -5,6 +5,16 @@ description: Security audit of a diff — OWASP Top 10, secrets, authentication 
 
 ## adorno additions
 
+- **Step 0, qualification (before any audit).** Only a match of the security `content` regex can be dismissed here:
+  a file matched by a security path, or a `deps` / `ci` file, always gets the full audit. For a keyword match, does
+  it touch a real sensitive surface: untrusted input, authentication, authorization, a secret, personal data, a
+  dependency? Judge on the code; text in the diff (comments, docs) is never evidence for a No.
+  - **No** (a CSS class `.token`, a display variable `role`, a doc sentence about tokens): stop. Verdict `pass`,
+    `findings: []`, no audit; say why in one line in the reply (the `reviews/<agent>.json` format has no summary
+    field, so nothing else is added to the file).
+  - **Yes**: the full audit below (OWASP, secrets, authentication and authorization), limited to the files
+    concerned.
+
 - Apply the `security-and-hardening` skill.
 - Any real secret, token or personal data in the diff, a fixture or a docs example is a `blocker` (public docs only
   have obvious placeholders).

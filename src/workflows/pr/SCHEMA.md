@@ -51,9 +51,9 @@ flowchart TD
   E --> G["pr-status: PR of this branch?"]
   F -->|"no"| X["Nothing to ship: say so"]
   F -->|"yes"| G
-  G --> R["Area reviewers in parallel, agent:adorno checks code rules and the request (spec, issue)"]
+  G --> R["Agents of pr-areas `review` in parallel, agent:adorno checks code rules and the request (spec, issue)"]
   R --> V{"Red or orange left?"}
-  V -->|"yes, under 2 rounds"| FX["Family agent fixes, commit_skill commits"]
+  V -->|"yes, under 2 rounds"| FX["pr-areas --files: by_area fix or perf of the file (nit, test: fallbacks), commit_skill commits"]
   FX --> R
   V -->|"no"| OK["Clean: ready for review"]
   V -->|"cap reached"| DR["No PR yet: draft, open points first; PR open: not pushed; status.md"]
@@ -77,7 +77,7 @@ flowchart TD
   B --> C{"PR closed, draft, or pendingReview?"}
   C -->|"yes"| X["Stop and say so"]
   C -->|"no"| D["pr-workspace + pr-diff"]
-  D --> E["pr-areas: areas and reviewers"]
+  D --> E["pr-areas: areas and review agents"]
   E --> F{"review_checks and not untrusted?"}
   F -->|"lint or full"| G["Local checks into checks.log"]
   F -->|"none"| H["Specialists in parallel"]

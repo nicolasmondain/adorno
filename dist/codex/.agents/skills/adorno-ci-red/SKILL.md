@@ -15,7 +15,7 @@ Input: the user’s request
 2. According to the class:
    - **infra**: nothing to fix; report and stop.
    - **flaky**: `ci-rerun owner/repo <run>` only once, then `ci-wait`. Relapse → treat as a real failure.
-   - **real failure**: the designated agent fixes on the PR's branch, in its worktree (`pr-workspace the user’s request`);
+   - **real failure**: the designated agent fixes on the PR's branch, in its worktree (`pr-workspace the user’s request`), with the `skills` of its files' areas (`pr-areas --files`);
      tests and lint locally first, one typed commit. Then `workflow:pr:ship owner/repo <branch> <worktree>`: the
      repo's `commit_skill` for what is left, `pr-push` (or the repo's `pr_skill` pushes itself), the title and
      description updated if the fix moved the scope.

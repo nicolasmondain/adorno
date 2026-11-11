@@ -1,9 +1,10 @@
 ---
 description: Handles a red CI on a PR — diagnosis from the logs, a single rerun if flaky, otherwise a fix by the designated agent, committed and pushed without asking (workflow:pr:ship), the PR description updated if the scope moved. Use as soon as a check fails.
 args: "<owner/repo#N>"
+roles: [fix, perf]
 uses:
   skills: [adorno-github]
-  agents: [agent:ci:debug, agent:fix:patch, agent:test:unit, agent:refactor:simplify]
+  agents: [agent:ci:debug, agent:fix:patch, agent:test:unit, agent:refactor:simplify, agent:chore:deps, agent:ci:fix, agent:docs:write, agent:fix:security, agent:test:e2e, agent:perf:front, agent:perf:mongodb, agent:perf:nodejs]
   workflows: [workflow:pr:ship]
 model: balanced
 ---
@@ -16,7 +17,7 @@ Input: {{args}}
 2. According to the class:
    - **infra**: nothing to fix; report and stop.
    - **flaky**: `ci-rerun owner/repo <run>` only once, then `ci-wait`. Relapse → treat as a real failure.
-   - **real failure**: the designated agent fixes on the PR's branch, in its worktree (`pr-workspace {{args}}`);
+   - **real failure**: the designated agent fixes on the PR's branch, in its worktree (`pr-workspace {{args}}`), with the `skills` of its files' areas (`pr-areas --files`);
      tests and lint locally first, one typed commit. Then `workflow:pr:ship owner/repo <branch> <worktree>`: the
      repo's `commit_skill` for what is left, `pr-push` (or the repo's `pr_skill` pushes itself), the title and
      description updated if the fix moved the scope.

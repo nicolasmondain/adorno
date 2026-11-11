@@ -1,0 +1,8 @@
+---
+description: agent:ci:fix — Fix the CI pipeline itself — workflow file, job configuration, cache, matrix, pinned action, check script. Use when ci:debug classified a red check as a pipeline problem, not a code or test failure.
+argument-hint: <request>
+---
+
+Delegate the request below to the `adorno-agent-ci-fix` sub-agent (agent:ci:fix) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-ci-fix`) to handle the request.
+
+Request: $ARGUMENTS

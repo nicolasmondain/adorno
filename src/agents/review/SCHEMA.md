@@ -135,7 +135,9 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A["Input: diff touching inputs, auth, data or dependencies"] --> B["Extends addy/security-auditor, skill security-and-hardening"]
+  A["Input: diff matched by a security keyword"] --> Q{"Step 0: real sensitive surface? input, authn, authz, secret, personal data, dependency"}
+  Q -->|"no"| P["pass, no finding, one-line reason in the reply"]
+  Q -->|"yes"| B["Extends addy/security-auditor, skill security-and-hardening, concerned files only"]
   B --> C["OWASP Top 10, authentication and authorization, sensitive data"]
   C --> D{"Real secret, token or personal data in diff, fixture or docs?"}
   D -->|"yes"| E["blocker"]
@@ -158,4 +160,21 @@ flowchart TD
   E -->|"no"| G["Run the repo's test suite"]
   F --> G
   G --> H["reviews/agent.json with tests: command, passed, failed"]
+```
+
+## `agent:review:perf-back`
+
+```mermaid
+flowchart TD
+  A["Input: server diff, or a review comment"] --> B["Scope: only what the diff changes, tied to file:line"]
+  B --> C["Unbounded work: no limit, whole collection in memory"]
+  C --> D["Per-item I/O: N+1, unbounded concurrency"]
+  D --> E["Event loop: heavy CPU, sync I/O, huge JSON"]
+  E --> F["Hot paths: repeated work, unbounded cache, unreleased listeners"]
+  F --> G["Projection: whole documents for a few fields; index detail goes to review:mongodb"]
+  G --> H{"Needs a measurement (explain, profile)?"}
+  H -->|"yes, cannot run"| Q["Question with the command to run, never blocker"]
+  H -->|"no"| I["Finding with severity and fix"]
+  Q --> J["reviews/agent.json"]
+  I --> J
 ```

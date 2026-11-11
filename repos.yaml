@@ -20,9 +20,16 @@
 #   pr_skill         skill that opens the PR of a branch, or updates its title and description when it is open
 #                    (the repo's own, or adorno-pr-open). workflow:pr:ship runs both, without asking, at the end of
 #                    every workflow that touched code; a repo skill may push and run `gh pr create|edit` itself
-#   areas            code areas: path patterns (bash globs, `*` crosses folders) and/or
-#                    regexes on added lines; an area can be overridden per repo
-#   area_reviewers   reviewer agents requested depending on the areas touched (`always` = every time)
+#   areas            code areas, each with detection and roles. Detection: `paths` (bash globs, `*` crosses folders)
+#                    and/or `content` (POSIX ERE run by awk on added lines: no `(?i)`, no `\d`). Roles: `build`, `fix`, `perf`, `qa` (one agent each) and
+#                    `review`, `skills` (lists). `sub` holds sub-areas, one level only (`back.query`, `back.mongodb`):
+#                    detected on their own `paths`/`content`, they add their files to the parent and inherit its roles
+#                    (single role: own else parent's; list: parent's + own). `always` (`review`, `skills`) applies to
+#                    every change. pr-areas turns a diff into the agents and skills to use.
+#                    Override per repo: `paths`, `content` and single roles replace; `review` and `skills` add to
+#                    the public list, and an entry `-x` removes `x` (e.g. `review: ["-agent:review:tests"]`)
+#   fallbacks        `nit`, `test`: agent for work outside any area; `perf`: {agent, skills} used when no touched
+#                    area has a `perf` agent
 #   notion_spec      properties of the Notion page used as a run's spec, per step (`start`, `pr_opened`): property →
 #                    value, `{{today}}`, `{{pr_url}}`; set in local/adorno.yaml only (adorno-notion-sync)
 #   impact           impact analysis of merged PRs (workflow:pr:impact): window compared before / after the
@@ -77,39 +84,91 @@ defaults:
     sources: []           # your per-repo hints, in local/adorno.yaml (see local.example/)
 
   areas:
+    always:
+      review: [agent:review:code, agent:review:ponytail]
+
     front:
       paths: ["*.tsx", "*.jsx", "*.vue", "*.svelte", "*.css", "*.scss", "*.less", "*.html",
               "client/*", "*/client/*", "*/ui/*", "*/components/*", "*/pages/*"]
+      build: agent:feat:front
+      fix: agent:fix:patch
+      perf: agent:perf:front
+      review: [agent:review:front, agent:review:perf]
+      qa: agent:test:e2e
+      skills: [frontend-ui-engineering]
+
     back:
       paths: ["server/*", "*/server/*", "*/services/*", "*/jobs/*", "*/workers/*", "*/lib/*"]
-    mongodb:
-      paths: ["*/migrations/*", "*migration*", "*/collections/*", "*/models/*"]
-      content: '\.aggregate\(|\.createIndex\(|\.find(One)?\(|\.(update|delete|insert)(One|Many)?\(|\.bulkWrite\(|Mongo\.Collection|rawCollection\(|\$lookup|\$match|\$group'
+      build: agent:feat:back
+      fix: agent:fix:patch
+      perf: agent:perf:nodejs
+      review: [agent:review:back, agent:review:tests, agent:review:perf-back]
+      sub:
+        query:
+          content: '\.aggregate\(|\.find(One)?\(|\.(update|delete|insert)(One|Many)?\(|\.bulkWrite\(|rawCollection\(|\$lookup|\$match|\$group'
+          perf: agent:perf:mongodb
+          review: [agent:review:mongodb]
+        mongodb:
+          paths: ["*/migrations/*", "*migration*", "*/collections/*", "*/models/*"]
+          content: '\.createIndex\(|Mongo\.Collection|new Schema\('
+          perf: agent:perf:mongodb
+          review: [agent:review:mongodb]
+          skills: [deprecation-and-migration]
+
     api:
       paths: ["*/api/*", "*/routes/*", "*/methods/*", "*openapi*", "*/api-reference/*"]
-    tests:
-      paths: ["*.test.*", "*.spec.*", "*/tests/*", "*/__tests__/*", "*/test/*"]
+      build: agent:feat:api
+      review: [agent:review:api]
+      skills: [api-and-interface-design]
+
     security:
       paths: ["*/auth/*", "*/permissions/*", "*.env*"]
       content: '(password|secret|token|api[_-]?key|jwt|bcrypt|crypto\.|permission|isAdmin|role)'
+      fix: agent:fix:security
+      review: [agent:review:security]
+      skills: [security-and-hardening]
+
+    typescript:
+      paths: ["*.ts", "*.tsx", "*.mts", "*.cts", "tsconfig*.json"]
+      skills: [typescript-pro]
+
+    tests:
+      paths: ["*.test.*", "*.spec.*", "*/tests/*", "*/__tests__/*", "*/test/*"]
+      build: agent:test:unit
+      fix: agent:test:unit
+      review: [agent:review:tests]
+      skills: [test-driven-development]
+
+    e2e:
+      paths: ["*.e2e.*", "*/e2e/*", "*playwright*"]
+      build: agent:test:e2e
+      fix: agent:test:e2e
+      review: [agent:review:tests]
+      skills: [webapp-testing, playwright-cli]
+
     deps:
       paths: ["package.json", "*/package.json", "*lock.json", "*.lock", "yarn.lock", "requirements*.txt", "go.mod"]
+      build: agent:chore:deps
+      fix: agent:chore:deps
+      review: [agent:review:security, agent:review:ponytail]
+
     ci:
       paths: [".github/*", "*Dockerfile*", "*docker-compose*"]
+      fix: agent:ci:fix
+      review: [agent:review:security]
+      skills: [ci-cd-and-automation]
+
     docs:
       paths: ["*.md", "*.mdx", "docs/*"]
+      build: agent:docs:write
+      fix: agent:docs:write
+      skills: [documentation-and-adrs]
 
-  area_reviewers:
-    always: [agent:review:code, agent:review:ponytail]
-    front: [agent:review:front, agent:review:perf]
-    back: [agent:review:back, agent:review:tests]
-    mongodb: [agent:review:mongodb]
-    api: [agent:review:api]
-    tests: [agent:review:tests]
-    security: [agent:review:security]
-    deps: [agent:review:security]
-    ci: [agent:review:security]
-    docs: []
+  # Agents for work that belongs to no single area: a nit, a missing test, and `perf` when no touched area has one.
+  fallbacks:
+    nit: agent:refactor:simplify
+    test: agent:test:unit
+    perf: { agent: agent:fix:patch, skills: [performance-optimization] }
 
 # Your real repos (reviewers, team, context, permissions, voice, vision) live in local/adorno.yaml, git-ignored
 # and applied by `bin/kit install`. Template: local.example/adorno.yaml. Result for a repo: `bin/kit conf`.

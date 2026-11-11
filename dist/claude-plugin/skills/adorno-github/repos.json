@@ -39,6 +39,12 @@
       "sources": []
     },
     "areas": {
+      "always": {
+        "review": [
+          "agent:review:code",
+          "agent:review:ponytail"
+        ]
+      },
       "front": {
         "paths": [
           "*.tsx",
@@ -54,6 +60,17 @@
           "*/ui/*",
           "*/components/*",
           "*/pages/*"
+        ],
+        "build": "agent:feat:front",
+        "fix": "agent:fix:patch",
+        "perf": "agent:perf:front",
+        "review": [
+          "agent:review:front",
+          "agent:review:perf"
+        ],
+        "qa": "agent:test:e2e",
+        "skills": [
+          "frontend-ui-engineering"
         ]
       },
       "back": {
@@ -64,16 +81,40 @@
           "*/jobs/*",
           "*/workers/*",
           "*/lib/*"
-        ]
-      },
-      "mongodb": {
-        "paths": [
-          "*/migrations/*",
-          "*migration*",
-          "*/collections/*",
-          "*/models/*"
         ],
-        "content": "\\.aggregate\\(|\\.createIndex\\(|\\.find(One)?\\(|\\.(update|delete|insert)(One|Many)?\\(|\\.bulkWrite\\(|Mongo\\.Collection|rawCollection\\(|\\$lookup|\\$match|\\$group"
+        "build": "agent:feat:back",
+        "fix": "agent:fix:patch",
+        "perf": "agent:perf:nodejs",
+        "review": [
+          "agent:review:back",
+          "agent:review:tests",
+          "agent:review:perf-back"
+        ],
+        "sub": {
+          "query": {
+            "content": "\\.aggregate\\(|\\.find(One)?\\(|\\.(update|delete|insert)(One|Many)?\\(|\\.bulkWrite\\(|rawCollection\\(|\\$lookup|\\$match|\\$group",
+            "perf": "agent:perf:mongodb",
+            "review": [
+              "agent:review:mongodb"
+            ]
+          },
+          "mongodb": {
+            "paths": [
+              "*/migrations/*",
+              "*migration*",
+              "*/collections/*",
+              "*/models/*"
+            ],
+            "content": "\\.createIndex\\(|Mongo\\.Collection|new Schema\\(",
+            "perf": "agent:perf:mongodb",
+            "review": [
+              "agent:review:mongodb"
+            ],
+            "skills": [
+              "deprecation-and-migration"
+            ]
+          }
+        }
       },
       "api": {
         "paths": [
@@ -82,6 +123,40 @@
           "*/methods/*",
           "*openapi*",
           "*/api-reference/*"
+        ],
+        "build": "agent:feat:api",
+        "review": [
+          "agent:review:api"
+        ],
+        "skills": [
+          "api-and-interface-design"
+        ]
+      },
+      "security": {
+        "paths": [
+          "*/auth/*",
+          "*/permissions/*",
+          "*.env*"
+        ],
+        "content": "(password|secret|token|api[_-]?key|jwt|bcrypt|crypto\\.|permission|isAdmin|role)",
+        "fix": "agent:fix:security",
+        "review": [
+          "agent:review:security"
+        ],
+        "skills": [
+          "security-and-hardening"
+        ]
+      },
+      "typescript": {
+        "paths": [
+          "*.ts",
+          "*.tsx",
+          "*.mts",
+          "*.cts",
+          "tsconfig*.json"
+        ],
+        "skills": [
+          "typescript-pro"
         ]
       },
       "tests": {
@@ -91,15 +166,31 @@
           "*/tests/*",
           "*/__tests__/*",
           "*/test/*"
+        ],
+        "build": "agent:test:unit",
+        "fix": "agent:test:unit",
+        "review": [
+          "agent:review:tests"
+        ],
+        "skills": [
+          "test-driven-development"
         ]
       },
-      "security": {
+      "e2e": {
         "paths": [
-          "*/auth/*",
-          "*/permissions/*",
-          "*.env*"
+          "*.e2e.*",
+          "*/e2e/*",
+          "*playwright*"
         ],
-        "content": "(password|secret|token|api[_-]?key|jwt|bcrypt|crypto\\.|permission|isAdmin|role)"
+        "build": "agent:test:e2e",
+        "fix": "agent:test:e2e",
+        "review": [
+          "agent:review:tests"
+        ],
+        "skills": [
+          "webapp-testing",
+          "playwright-cli"
+        ]
       },
       "deps": {
         "paths": [
@@ -110,6 +201,12 @@
           "yarn.lock",
           "requirements*.txt",
           "go.mod"
+        ],
+        "build": "agent:chore:deps",
+        "fix": "agent:chore:deps",
+        "review": [
+          "agent:review:security",
+          "agent:review:ponytail"
         ]
       },
       "ci": {
@@ -117,6 +214,13 @@
           ".github/*",
           "*Dockerfile*",
           "*docker-compose*"
+        ],
+        "fix": "agent:ci:fix",
+        "review": [
+          "agent:review:security"
+        ],
+        "skills": [
+          "ci-cd-and-automation"
         ]
       },
       "docs": {
@@ -124,41 +228,23 @@
           "*.md",
           "*.mdx",
           "docs/*"
+        ],
+        "build": "agent:docs:write",
+        "fix": "agent:docs:write",
+        "skills": [
+          "documentation-and-adrs"
         ]
       }
     },
-    "area_reviewers": {
-      "always": [
-        "agent:review:code",
-        "agent:review:ponytail"
-      ],
-      "front": [
-        "agent:review:front",
-        "agent:review:perf"
-      ],
-      "back": [
-        "agent:review:back",
-        "agent:review:tests"
-      ],
-      "mongodb": [
-        "agent:review:mongodb"
-      ],
-      "api": [
-        "agent:review:api"
-      ],
-      "tests": [
-        "agent:review:tests"
-      ],
-      "security": [
-        "agent:review:security"
-      ],
-      "deps": [
-        "agent:review:security"
-      ],
-      "ci": [
-        "agent:review:security"
-      ],
-      "docs": []
+    "fallbacks": {
+      "nit": "agent:refactor:simplify",
+      "test": "agent:test:unit",
+      "perf": {
+        "agent": "agent:fix:patch",
+        "skills": [
+          "performance-optimization"
+        ]
+      }
     }
   },
   "repos": {}

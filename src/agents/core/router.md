@@ -4,6 +4,7 @@ tools: [read, write, search]
 model: fast
 effort: low
 delegable: true
+entry: [workflow:feature:build, workflow:notion:assigned]
 ---
 
 ## Grid (stop at the first question that settles it)

@@ -25,3 +25,19 @@ flowchart TD
   A3 --> OUT
   A4 --> OUT
 ```
+
+## `agent:ci:fix`
+
+```mermaid
+flowchart TD
+  IN["ci.md from ci:debug: pipeline problem"] --> RP["Reproduce locally when the command can run outside the runner"]
+  RP --> FX["Smallest pipeline fix: step order, install, cache key, stale dist or lockfile, matrix"]
+  FX --> NW{"Weakens a check?"}
+  NW -->|"yes"| FX
+  NW -->|"no"| V["Verify locally, then CI run on the branch with ci-wait"]
+  V --> G{"Green?"}
+  G -->|"no, round under 3"| FX
+  G -->|"no, 3 rounds"| STOP["Stop and report"]
+  G -->|"yes"| C["Commit ci(workflow): what was broken; body: cause and failing check"]
+  FAM["Actions pinned by SHA, minimal permissions, no secret displayed"] -.-> FX
+```

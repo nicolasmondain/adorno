@@ -10,7 +10,7 @@ its input.
 
 1. Read `run-plan.yaml` and `spec.md`. The level is the one of the run opened by the workflow (`run-begin`); never
    widen it.
-2. For each step, delegate to the agent named, passing only its input (the previous deliverable and the spec), never
+2. For each step, delegate to the agent named, passing only its input (the previous deliverable and the spec) and the `skills` of its areas (`pr-areas`), never
    the whole history. `parallel` steps: start them in the same turn.
 3. **Loops**: `loop.evaluator: tests` = the repo's `test`/`lint` commands; send the failing output back to the agent,
    up to `max`. `fix_with: same_agent` = the agent that wrote the slice fixes the review findings. A round that

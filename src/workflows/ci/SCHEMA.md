@@ -12,7 +12,7 @@ flowchart TD
   F -->|"green"| K["Report"]
   F -->|"relapse"| G["Treat as real failure"]
   D -->|"real failure"| G
-  G --> H["Designated agent fixes in a worktree: fix:patch, test:unit, refactor:simplify"]
+  G --> H["Agent named by ci:debug fixes in a worktree: ci:fix, area perf or fix (pr-areas), fallbacks test or nit"]
   H --> I["Tests and lint locally, one typed commit"]
   I --> J["workflow:pr:ship: commit_skill, pr-push, description updated if the scope moved"]
   J --> L["ci-wait"]

@@ -1,5 +1,6 @@
 ---
 description: Prepare a repo for agents — detect stack and commands, write AGENTS.md and CONSTRAINTS.md, propose the local/adorno.yaml entry. Use the first time a repo is used (workflow:repo:onboard).
+entry: [workflow:repo:onboard]
 ---
 
 ## Specialty: repo

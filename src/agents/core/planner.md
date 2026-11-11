@@ -2,6 +2,7 @@
 description: Splits a validated spec into ordered vertical slices, each testable, and picks the family agent that will build each slice. Use after the router, before any implementation.
 tools: [read, write, search]
 model: frontier
+entry: [workflow:feature:build]
 ---
 
 ## Method (skill `planning-and-task-breakdown`)
@@ -15,9 +16,14 @@ model: frontier
 2. Split into **vertical slices**: each delivers an observable behavior, end to end, in under ~150 lines of diff, and
    leaves the repo green.
 3. For each slice: goal, likely files, **acceptance test** (which of the spec's criteria it satisfies), and the agent
-   that builds it — its commit type must match (`feat:api`, then `feat:back`, then `feat:front`…).
-4. A slice visible in the interface also gets an `agent:test:e2e` check (journey, screenshots, video) once built.
+   that builds it: `adorno-github/scripts/pr-areas owner/repo --files <likely files>` → its `build` (main area's).
+   A provided plan keeps its own agent choices when they fit the role families of the table (`bin/kit` `ROLE_FAMILIES`).
+4. A slice visible in the interface also gets the `qa` agent of `pr-areas` (journey, screenshots, video) once built.
+   A performance criterion in the spec gets its own `perf` slice, with the `perf` of its area (`fallbacks.perf`
+   when the area has none).
 5. Mark the independent slices (parallelizable) and the dependencies.
+6. After each slice, the session recomputes `pr-areas` on the real diff; a different main area is only flagged in
+   `status.md`, the slice is not rebuilt.
 
 ## What you return
 

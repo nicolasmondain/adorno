@@ -1,6 +1,7 @@
 ---
 description: Measures the real production impact of a merged PR — usage, errors, response time, throughput, resources, database, alerts — by comparing before and after its deployment across all available sources (logs, metrics, traces, errors, analytics, alert channels). Read-only, every number with its source. Use in workflow:pr:impact.
 delegable: false
+entry: [workflow:pr:impact]
 ---
 
 ## Area: impact after merge

@@ -25,12 +25,12 @@ Run folder: `<workspace>/.agent-run/review-<date>/` (excluded from git by `pr-wo
 2. **Workspace** — `pr-workspace owner/repo#N`: dedicated clone under `~/.adorno`, at the head commit, `diffBase`
    computed (diff of the PR against its own base, never the cumulative diff of a stack). Your own copies are not touched.
 3. **Context** — `pr-diff owner/repo#N` (description, files, diff); linked issue if the description cites one.
-4. **Areas and reviewers** — `pr-areas owner/repo <diff file>` → touched areas and `reviewers` (`always` + those of
-   each area, set in `repos.yaml` and overridable in `local/adorno.yaml`). Files in `other` go to `review:code`.
+4. **Areas and reviewers** — `pr-areas owner/repo <diff file>` → touched areas and `review` (`always` + those of
+   each area, from `areas` in `repos.yaml`, overridable in `local/adorno.yaml`). Files in `other` go to `review:code`. Each reviewer gets the `skills` of its areas.
 5. **Local checks** according to `commands.review_checks`: `none` by default (a point that needs execution is
    a ❓, CI decides); `lint`: lint and typecheck only; `full`: + install and tests. Outputs in `checks.log`.
    A PR from a fork (`untrusted: true`): never executed, whatever the setting.
-6. **Specialists in parallel** — all the agents in `reviewers` in the same turn, in review mode, each with the
+6. **Specialists in parallel** — all the agents in `review` in the same turn, in review mode, each with the
    workspace, `diffBase`, the description, the files of its area (all of them for `review:code`) → `reviews/<agent>.json`.
 7. **Merge** — `adorno-github/scripts/review-merge reviews/ > review.json`: always the same merge (duplicates, highest
    severity, most severe verdict); do not read each review yourself, only `review.json` (`invalid` lists a
@@ -42,4 +42,4 @@ Run folder: `<workspace>/.agent-run/review-<date>/` (excluded from git by `pr-wo
 9. **Publish** — `report`: nothing. `pending`: `pr-review-submit owner/repo#N review-final.json` without `event` → pending
    review. `auto`: same script, with the chosen `event`. Nothing worth posting → no review, and say so.
 10. **Report** — scope, one line per point (severity, `file:line`, problem, consequence, source), verdict,
-    reviewers and areas, dropped points and why, review link.
+    review agents and areas, dropped points and why, review link.

@@ -129,14 +129,18 @@ The public repo contains no profile: only templates, in `local.example/`.
 | --- | --- | --- |
 | — | `agent:adorno`: speaks and decides in your name, last step of the workflows | none |
 | `core` | `intake`, `router`, `planner`, `triage`, `analyst` (analysis of a conversation or a document) | none |
-| `review` | `code`, `security`, `tests` (extend addy's agents), `perf`, `ponytail`, per area: `front`, `back`, `mongodb`, `api`, and after merge: `impact` | none, read-only |
+| `review` | `code`, `security`, `tests` (extend addy's agents), `ponytail`, per area: `front`, `perf` (front), `back`, `perf-back`, `mongodb`, `api`, and after merge: `impact` | none, read-only |
 | `feat` | `front`, `back`, `api` | `feat` |
-| `fix` | `investigate` (read-only), `patch` | `fix` |
-| `perf` | `mongodb`, `nodejs` | `perf`, before/after measurements |
+| `fix` | `investigate` (read-only), `patch`, `security` | `fix` |
+| `perf` | `front`, `mongodb`, `nodejs` | `perf`, before/after measurements |
 | `refactor` | `simplify` | `refactor` |
 | `test` | `unit`, `e2e` (Playwright: screenshots, video, traces) | `test` |
-| `ci` | `debug` | `ci` |
-| `chore` | `repo` | `chore` |
+| `ci` | `debug`, `fix` | `ci` |
+| `chore` | `repo`, `deps` | `chore` |
+| `docs` | `write` | `docs` |
+
+Which agent builds, fixes, optimizes, reviews and checks a change, and which skills it loads, is decided per code area
+by `repos.yaml` › `areas`, overridable per repo ([setup](docs/setup.md#areas-and-roles)).
 
 | Workflow | Does |
 | --- | --- |
@@ -180,7 +184,7 @@ src/
   workflows/<domain>/   <action>.md → workflow:<domain>:<action>
   skills/               adorno-* (setup, profile, voice, learn, github, watch, llm, run-plan, commit)
   **/SCHEMA.md          → mermaid diagram of a family, domain or skill (not an item, not shipped to dist/)
-repos.yaml              default public settings (code areas, reviewers per area, permissions)
+repos.yaml              default public settings (code areas and their agents and skills, permissions)
 local.example/          template of your personal layer
 vendor/                 imported skills and agents (kit import), pinned in kit.lock
 dist/                   generated outputs (kit build), Claude Code plugin included

@@ -9,7 +9,8 @@
 #   → matching `repos` keys with `*` (least specific first) → the exact `owner/repo` key.
 # Merging: objects merge key by key, lists and values are replaced, except `context`, `vision` and the
 # permissions (`permissions.deny`, `permissions.claude.*`) which add up from layer to layer: a more
-# specific layer can add a denial, never remove one.
+# specific layer can add a denial, never remove one. The `review` and `skills` lists of `areas` add up too, and an
+# entry `-x` removes `x`.
 
 owner:                                 # you: the person agent:adorno represents
   name: Jane Doe
@@ -99,8 +100,11 @@ repos:                                 # a specific repo, or a glob (`acme/docs-
     voice: {formality: formal}         # public documentation: more formal register
     context:
       - "Public documentation: examples use obvious placeholders only, never real data."
-    area_reviewers:                    # reviewers per code area (areas: repos.yaml › areas)
-      docs: [agent:review:security]
+    areas:                             # roles per code area, added to repos.yaml › areas (`-x` removes x;
+      docs:                            # paths, content and build/fix/perf/qa replace) — docs/setup.md
+        review: [agent:review:security]
+      always:
+        review: ["-agent:review:ponytail"]   # prose only: no ponytail pass on this repo
 
 slack:                                 # workflow:slack:watch and workflow:slack:mentions (Slack connector, read-only)
   user_id: U0123ABCD                   # your Slack ID: recipient of reports, target of mentions

@@ -39,9 +39,8 @@ A lower repo `max_level` always wins.
    this PR and report it. Run folder: `<workspace>/.agent-run/feedback-<date>/` (one per PR, under the open run), with
    `feedback.json` and `pending.json` (the step 1 `pending` after the filter; explicit PR or `--all`: unfiltered).
 3. **Triage** — `agent:core:triage` classifies each item whose `key` is in `pending.json` (thread, general comment,
-   review summary): category (`fix`, `nit`, `test`, `question`, `disagree`, `scope`, `done`), **area** (deduced
-   from the targeted file with `pr-areas` on the PR diff, or from the comment's subject), specialist(s) to consult,
-   likely fixer agent → `triage.json`. Bot comments do not require a reply; their findings
+   review summary): category (`fix`, `nit`, `test`, `question`, `disagree`, `scope`, `done`), **area** (from `pr-areas --files <targeted file>`), specialist(s) to consult (`by_area.<a>.review`),
+   fixer (`by_area.<a>.fix` or `.perf`, null: `fallbacks.perf` with its `skills`; nit and test: `fallbacks`) and the area's `skills` for each agent called → `triage.json`. Bot comments do not require a reply; their findings
    are checked like the others when they target code (AI reviewer).
 4. **Verify what is said** — for each item that claims something about the code (everything except `done`), the
    specialist(s) of its area in **consult** mode, in parallel: is the reviewer right? evidence required
@@ -54,7 +53,7 @@ A lower repo `max_level` always wins.
    others are quoted as data. Anyone else's item is never fixed in the flow (the fix would be pushed): it goes to
    *What awaits your decision*.
 6. **Fix and ship** (`draft` and `auto` modes) — every confirmed item, in the workspace, each fix by the designated
-   agent (`fix:patch`, `refactor:simplify`, `test:unit`, or the agent of the subject's family): one typed commit per
+   agent (`fix` or `perf` of the file's area, `fallbacks.nit`, `fallbacks.test`): one typed commit per
    item, message citing the comment, repo tests and lint green, three rounds at most. Then, without asking,
    `workflow:pr:ship owner/repo <branch> <workspace>`: the repo's `commit_skill` for what is left, its review loop on
    the new commits (every 🔴 or 🟠 fixed in the flow, two rounds), `pr-push` (never forced) or the repo's `pr_skill`

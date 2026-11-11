@@ -14,6 +14,18 @@ Locate the layer first: `scripts/adorno-source` → `source` (the adorno repo), 
 
 Mode from the request: `profile`, `repo`, or both (`profile` first). Unclear → ask.
 
+## Legacy `area_reviewers` (any mode, at the start)
+
+Run `<source>/bin/kit migrate areas` (read-only, works even when `check` fails). An empty list → nothing to do.
+Otherwise `local/adorno.yaml` still has `area_reviewers`, now replaced by `areas.<area>.review`:
+
+1. Show the conversion as a **diff of `local/adorno.yaml`** built from its output (JSON rows on stdout, YAML snippet
+   per scope on stderr): the `area_reviewers` lines removed, `areas.<area>.review` added.
+2. Explain in one line: `areas.<area>.review` is **additive** to the public list, and `-x` removes one reviewer `x`.
+3. Write **only after an explicit yes**, by editing those lines in place — never regenerate the file, its comments
+   and order stay.
+4. Apply: `<source>/bin/kit check`, then `<source>/bin/kit install`.
+
 ## Mode `profile`
 
 Goal: `agent:adorno` decides and writes like the owner. The templates of `local.example/` show the expected shape;

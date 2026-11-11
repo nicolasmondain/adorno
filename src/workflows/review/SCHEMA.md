@@ -12,12 +12,12 @@ flowchart TD
   DP --> D
   D -->|"unknown commits or uncommitted changes"| N
   D --> E["agent:core:triage: triage.json"]
-  E --> F["Specialists in consult mode, in parallel"]
+  E --> F["Specialists of the item's area (by_area review) in consult mode, in parallel"]
   F --> G["agent:adorno (situation 3): every item confirmed, refused or deferred, never asked to the owner"]
   G --> H{"Mode"}
   H -->|"report"| N["status.md and table"]
   G -->|"untrusted author"| N
-  H -->|"draft or auto"| I["Fix every confirmed item, minors included: fix:patch, refactor:simplify, test:unit, 3 rounds max"]
+  H -->|"draft or auto"| I["Fix every confirmed item, minors included: by_area fix or perf of the file, fallbacks nit or test, 3 rounds max"]
   I --> SH["workflow:pr:ship: commit_skill, review loop on new commits (2 rounds), pr-push, description updated, ready once clean (no prompt)"]
   SH -->|"blocker left after the caps: nothing pushed"| N
   SH -->|"pushed"| K{"Mode auto?"}

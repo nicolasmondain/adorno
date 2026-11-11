@@ -191,6 +191,86 @@ expect_exit 0 "uninstall --workspace" -- "${KIT[@]}" uninstall --workspace acme 
 echo "the public build never sees the personal layer"
 check "dist/ has no template identity" '! grep -rq "janedoe" "$ROOT/dist"'
 
+echo "areas, entry and orphans"
+bad "an area role naming an unknown agent" $'  ghost/repo:\n    areas: {back: {build: "agent:feat:nope"}}' "areas.back.build names unknown agent 'agent:feat:nope'"
+bad "a role outside its families" $'  ghost/repo:\n    areas: {back: {build: "agent:review:code"}}' "not a feat/test/docs/chore agent"
+bad "an unknown skill in an area" $'  ghost/repo:\n    areas: {back: {skills: [no-such-skill]}}' "unknown skill 'no-such-skill'"
+bad "an unknown area key" $'  ghost/repo:\n    areas: {back: {reviewers: []}}' "areas.back.reviewers: unknown key"
+bad "a nested sub-area" $'  ghost/repo:\n    areas: {back: {sub: {q: {sub: {x: {}}}}}}' "areas.back.sub.q.sub: unknown key"
+bad "a role in always other than review and skills" $'  ghost/repo:\n    areas: {always: {build: "agent:feat:back"}}' "areas.always.build: unknown key"
+bad "an invalid content regex" $'  ghost/repo:\n    areas: {back: {content: "(unclosed"}}' "areas.back.content is an invalid regex"
+# (?i) is Oniguruma-only: BWK awk (macOS) rejects it, gawk / mawk (Linux CI) accept it. kit check runs the awk that
+# pr-areas will run on the same machine, so the case only applies where that awk rejects it.
+if ! AREA_RE='(?i)token' awk 'BEGIN { if ("" ~ ENVIRON["AREA_RE"]) {} }' 2>/dev/null; then
+  bad "a content regex awk cannot run" $'  ghost/repo:\n    areas: {back: {content: "(?i)token"}}' "areas.back.content is an invalid regex"
+fi
+bad "an unknown fallback" $'  ghost/repo:\n    fallbacks: {lint: "agent:fix:patch"}' "fallbacks.lint: unknown key"
+bad "area_reviewers is refused with the migration hint" $'  ghost/repo:\n    area_reviewers: {docs: ["agent:review:security"]}' "bin/kit migrate areas"
+OKL="$TMP/okl"; mkdir -p "$OKL"
+printf 'owner: {name: T, github: t, language: fr}\nrepos:\n  ghost/repo:\n    areas: {back: {review: ["-agent:review:tests"]}}\n' >"$OKL/adorno.yaml"
+expect_exit 0 "a removal entry (-x) is accepted" -- env ADORNO_LOCAL="$OKL" "${KIT[@]}" check
+
+# a throwaway copy of the kit to break the public sources
+SB="$TMP/sandbox"; mkdir -p "$SB"
+cp -r "$ROOT/bin" "$ROOT/src" "$ROOT/adapters" "$ROOT/vendor" "$ROOT/kit.yaml" "$ROOT/kit.lock" "$ROOT/repos.yaml" "$SB/"
+SBKIT=("${KIT[@]}"); SBKIT[${#SBKIT[@]}-1]="$SB/bin/kit"
+printf -- '---\ndescription: A lonely agent no role names.\ntools: [read]\nmodel: fast\n---\n\nNothing.\n' >"$SB/src/agents/feat/lonely.md"
+out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
+if [ "$got" != 0 ] && grep -q "orphan agent 'agent:feat:lonely': no area role, fallback or entry names it" <<<"$out"; then ok "an orphan agent fails the public check"; else ko "an orphan agent fails the public check" "exit $got: $(tail -c 300 <<<"$out")"; fi
+out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" list --orphans 2>&1)"
+check "list --orphans names it" '[ "$out" = "agent:feat:lonely" ]'
+sed -i.bak 's/^model: fast/model: fast\nentry: [workflow:spec:new]/' "$SB/src/agents/feat/lonely.md"; rm -f "$SB/src/agents/feat/lonely.md.bak"
+out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
+if [ "$got" != 0 ] && grep -q "entry 'workflow:spec:new' does not list agent:feat:lonely in its uses.agents" <<<"$out"; then ok "an entry whose workflow does not list the agent fails"; else ko "an entry whose workflow does not list the agent fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
+sed -i.bak 's/workflow:spec:new/workflow:spec:ghost/' "$SB/src/agents/feat/lonely.md"; rm -f "$SB/src/agents/feat/lonely.md.bak"
+out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
+if [ "$got" != 0 ] && grep -q "entry names unknown workflow 'workflow:spec:ghost'" <<<"$out"; then ok "an entry naming no workflow fails"; else ko "an entry naming no workflow fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
+out="$(ADORNO_LOCAL="$TMP/none" "${KIT[@]}" list --orphans 2>&1)"; got=$?
+check "list --orphans is empty on the real registry" '[ "$got" = 0 ] && [ -z "$out" ]'
+rm -f "$SB/src/agents/feat/lonely.md"
+sed -i.bak 's/agent:fix:security, //' "$SB/src/workflows/pr/ship.md"; rm -f "$SB/src/workflows/pr/ship.md.bak"
+out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
+if [ "$got" != 0 ] && grep -q "workflow:pr:ship dispatches role 'fix' but uses.agents lacks 'agent:fix:security'" <<<"$out"; then ok "a dispatcher missing an agent of its roles fails"; else ko "a dispatcher missing an agent of its roles fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
+cp "$ROOT/src/workflows/pr/ship.md" "$SB/src/workflows/pr/ship.md"
+sed -i.bak 's/^roles: \[.*\]/roles: [fix, deploy]/' "$SB/src/workflows/pr/ship.md"; rm -f "$SB/src/workflows/pr/ship.md.bak"
+out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
+if [ "$got" != 0 ] && grep -q "roles: unknown role 'deploy'" <<<"$out"; then ok "an unknown role value fails"; else ko "an unknown role value fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
+cp "$ROOT/src/workflows/pr/ship.md" "$SB/src/workflows/pr/ship.md"
+expect_exit 0 "the real registry passes with every dispatcher's roles covered" -- env ADORNO_LOCAL="$TMP/none" "${KIT[@]}" check
+check "no area_reviewers reader is left in src/" '! grep -rn "area_reviewers" "$ROOT/src" "$ROOT/bin/kit" | grep -v -e "src/skills/adorno-setup/" -e "bin/kit:.*AREA_REVIEWERS_MSG\|bin/kit:.*area_reviewers" -e SCHEMA.md | grep .'
+check "pr:ship leaves no family agent of its subject" '! grep -q "family agent of its subject" "$ROOT/src/workflows/pr/ship.md"'
+check "entry never reaches a rendered agent" '! grep -rq "^entry:" "$ROOT/dist" --include=*.md --include=*.toml'
+
+echo "migrate areas"
+MIG="$TMP/mig"; mkdir -p "$MIG"
+printf '%s\n' 'owner: {name: T, github: t, language: fr}' 'repos:' '  acme/app:' '    area_reviewers:' \
+  '      docs: [agent:review:security]' '      api: [agent:review:api, agent:review:security]' \
+  '      mongodb: [agent:review:mongodb, agent:review:back]' '      always: [agent:review:code]' \
+  '      front: [agent:review:code]' >"$MIG/adorno.yaml"
+cp "$MIG/adorno.yaml" "$TMP/mig-before.yaml"
+out="$(ADORNO_LOCAL="$MIG" "${KIT[@]}" migrate areas 2>"$TMP/err")"; got=$?
+check "migrate areas succeeds although check fails" '[ "$got" = 0 ] && ! ADORNO_LOCAL="$MIG" "${KIT[@]}" check >/dev/null 2>&1'
+expect_jq "docs: the old list is all additions" '[.[] | select(.area_path == "areas.docs.review")][0].new == ["agent:review:security"]'
+expect_jq "api: only the addition remains" '[.[] | select(.area_path == "areas.api.review")][0].new == ["agent:review:security"]'
+expect_jq "mongodb maps to both back sub-areas, nothing to add over the inherited reviewers" \
+  '([.[] | select(.area_path == "areas.back.sub.mongodb.review" or .area_path == "areas.back.sub.query.review")] | length == 2 and all(.new == [] and .scope == "repos.acme/app"))'
+expect_jq "always: a public reviewer missing from the old list becomes a removal" \
+  '[.[] | select(.area_path == "areas.always.review")][0].new == ["-agent:review:ponytail"]'
+expect_jq "an area omitting a public reviewer gets its -x" \
+  '[.[] | select(.area_path == "areas.front.review")][0].new == ["agent:review:code", "-agent:review:front", "-agent:review:perf"]'
+check "migrate prints a YAML snippet per scope" 'grep -q "repos:" "$TMP/err" && grep -q "areas:" "$TMP/err"'
+check "migrate writes nothing" 'cmp -s "$MIG/adorno.yaml" "$TMP/mig-before.yaml" && [ "$(ls "$MIG")" = "adorno.yaml" ]'
+
+check "review:security opens with a step 0 qualification and a one-line pass" \
+  'grep -q "Step 0, qualification" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md && grep -q "one line" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md'
+
+check "review:security step 0 only dismisses content matches, never path matches nor on diff text" \
+  'grep -q "Only a match of the security .content. regex can be dismissed" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md && grep -q "never evidence for a No" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md'
+
+check "no _family.md hard-codes typescript-pro" '! grep -l "typescript-pro" "$ROOT"/src/agents/*/_family.md'
+check "the skills-by-area rule appears once in the orchestration instructions" \
+  '[ "$(grep -c "Skills by area" "$ROOT"/src/instructions/10-orchestration.md)" = 1 ]'
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -1,19 +1,38 @@
 #!/usr/bin/env bash
 # Usage: pr-areas owner/repo DIFF_FILE
-# Classifies a unified diff into code areas (front, back, mongodb, api, …) with the `areas` rules of
-# repos.yaml — path globs, plus a regex on added lines — and lists the reviewers to call
-# (`area_reviewers`: `always` + one list per touched area). Files matching no area land in `other`.
-# Prints JSON {files, areas: {area: [paths]}, other: [paths], reviewers: [agent ids]}.
+#        pr-areas owner/repo --files PATH [PATH…]      (paths only, before any code exists: no `content` rules)
+# Classifies a change into the code areas of repos.yaml › areas (front, back, api, …) — path globs, plus a regex on
+# added lines when given a diff — and says which agents and skills to use. A sub-area is keyed `parent.sub`
+# (back.query): when detected it also adds its files to its parent. `always` is not an area. Files matching no area
+# land in `other`.
+# Prints JSON {files, areas: {area: [paths]}, other: [paths],
+#              by_area: {area: {build, fix, perf, qa, review, skills}},
+#              build, fix, perf, qa, review, skills, fallbacks}.
+#   build, fix, perf, qa  one agent (or null), taken from the main area, skipping areas without that role. Main area:
+#                         first the main family (a top-level area, counting the files of its sub-areas): most files,
+#                         then config order; only inside that family does a sub-area beat its parent (sub with the
+#                         most files, then config order). Top-level `perf` missing everywhere: fallbacks.perf.agent,
+#                         whose skills join `skills`. `by_area.<a>.perf` is the area's own perf or null: a dispatcher
+#                         reads `fallbacks.perf` (agent and skills) when it is null.
+#   review, skills        union over every detected area, plus `always`, deduplicated, in order.
 . "$(dirname "$0")/_lib.sh"
 
 split_repo "${1:-}"
-diff="${2:-}"
-[ -f "$diff" ] || die "usage: pr-areas owner/repo DIFF_FILE" "$E_USAGE"
+usage="usage: pr-areas owner/repo DIFF_FILE | pr-areas owner/repo --files PATH [PATH…]"
+mode="diff"; diff="${2:-}"
+if [ "${2:-}" = "--files" ]; then
+  mode=files; [ $# -ge 3 ] || die "$usage" "$E_USAGE"
+else
+  [ -f "$diff" ] || die "$usage" "$E_USAGE"
+fi
 conf="$(repo_conf "$REPO")"
 
 tmp="$(work_dir)/areas-$$"; mkdir -p "$tmp"; trap 'rm -rf "$tmp"' EXIT
 : >"$tmp/raw"; : >"$tmp/files"; : >"$tmp/added"; : >"$tmp/hits"
 
+if [ "$mode" = files ]; then
+  shift 2; printf '%s\n' "$@" >"$tmp/files"
+else
 # file list from the `--- a/x` / `+++ b/y` headers (new name for renames, old name for deletions; git quotes
 # names with spaces or non-ASCII characters and escapes them in octal), and `path<TAB>added line` per added line
 awk -v files="$tmp/raw" -v added="$tmp/added" '
@@ -32,10 +51,15 @@ while IFS= read -r f; do
   case "$f" in *\\[0-7][0-7][0-7]*) f="$(printf '%b' "$(printf '%s' "$f" | sed 's/\\\([0-7][0-7][0-7]\)/\\0\1/g')")" ;; esac
   printf '%s\n' "$f"
 done <"$tmp/raw" >"$tmp/files"
+fi
 
-areas="$(jq -r '.areas // {} | keys[]' <<<"$conf")"
-for area in $areas; do
-  globs="$(jq -r --arg a "$area" '.areas[$a].paths // [] | .[]' <<<"$conf")"
+# detection units in config order: top-level areas (not `always`), each followed by its sub-areas as `parent.sub`
+units="$(jq -r '.areas // {} | to_entries[] | select(.key != "always")
+  | .key, (.key as $k | (.value.sub // {}) | keys_unsorted[] | "\($k).\(.)")' <<<"$conf")"
+# the rules of a unit (area or parent.sub)
+unit_rule='(.areas | if ($a | contains(".")) then .[($a | split(".")[0])].sub[($a | split(".")[1])] else .[$a] end)'
+for area in $units; do
+  globs="$(jq -r --arg a "$area" "$unit_rule | .paths // [] | .[]" <<<"$conf")"
   if [ -n "$globs" ]; then
     while IFS= read -r f; do
       while IFS= read -r g; do
@@ -44,21 +68,42 @@ for area in $areas; do
       done <<<"$globs"
     done <"$tmp/files"
   fi
-  regex="$(jq -r --arg a "$area" '.areas[$a].content // empty' <<<"$conf")"
-  if [ -n "$regex" ]; then
+  regex="$(jq -r --arg a "$area" "$unit_rule | .content // empty" <<<"$conf")"
+  if [ -n "$regex" ] && [ -s "$tmp/added" ]; then
     AREA_RE="$regex" awk -F'\t' -v area="$area" '
       { line = $0; sub(/^[^\t]*\t/, "", line); if (line ~ ENVIRON["AREA_RE"]) print area "\t" $1 }
     ' "$tmp/added" >>"$tmp/hits"
   fi
 done
 
-jq -n --rawfile files "$tmp/files" --rawfile hits "$tmp/hits" --argjson conf "$conf" '
-  ($files | split("\n") | map(select(. != ""))) as $all
-  | ($hits | split("\n") | map(select(. != "") | split("\t") | {area: .[0], file: .[1]}) | unique) as $h
-  | ($h | group_by(.area) | map({key: .[0].area, value: [.[].file]}) | from_entries) as $areas
-  | ($conf.area_reviewers // {}) as $map
+jq -n --rawfile files "$tmp/files" --rawfile hits "$tmp/hits" --argjson conf "$conf" --arg units "$units" '
+  ($conf.areas // {}) as $cfg
+  | ($units | split("\n") | map(select(. != ""))) as $order
+  | def rules: . as $a | if contains(".") then ($a | split(".")) as $p | $cfg[$p[0]].sub[$p[1]] else $cfg[$a] end;
+    def lst($k): .[$k] // [];
+    def uniq: reduce .[] as $x ([]; if index([$x]) then . else . + [$x] end);
+    ($files | split("\n") | map(select(. != ""))) as $all
+  # a detected sub-area also puts its files on its parent
+  | ($hits | split("\n") | map(select(. != "") | split("\t") | {area: .[0], file: .[1]})
+     | map(., (select(.area | contains(".")) | .area |= split(".")[0])) | unique) as $h
+  | ($order | map(. as $u | {key: $u, value: [$h[] | select(.area == $u) | .file]} | select(.value | length > 0))
+     | from_entries) as $areas
+  | ($areas | keys_unsorted) as $found
+  | ($found | map(. as $u | ($u | split(".")[0]) as $f
+       | {u: $u, sub: contains("."), n: ($areas[$u] | length), i: ($order | index($u)),
+          fn: ($areas[$f] | length), fi: ($order | index($f))})
+     | sort_by([-.fn, .fi, (if .sub then 0 else 1 end), -.n, .i]) | map(.u)) as $rank
+  | ($cfg.always // {}) as $always
+  | ($conf.fallbacks // {}) as $fb
+  | def pick($r): [$rank[] | rules | select(.[$r] != null) | .[$r]] | first;
+    pick("perf") as $perf
   | { files: ($all | length),
       areas: $areas,
       other: [$all[] | select(. as $f | $h | map(.file) | index($f) | not)],
-      reviewers: ((($map.always // []) + [$areas | keys[] | ($map[.] // [])[]])
-                  | reduce .[] as $r ([]; if index($r) then . else . + [$r] end)) }'
+      by_area: ($areas | with_entries(.value = (.key | rules
+          | {build, fix, perf, qa, review: lst("review"), skills: lst("skills")}))),
+      build: pick("build"), fix: pick("fix"), perf: ($perf // $fb.perf.agent), qa: pick("qa"),
+      review: ([$always | lst("review")] + [$found[] | rules | lst("review")] | add // [] | uniq),
+      skills: ([$always | lst("skills")] + [$found[] | rules | lst("skills")]
+               + [if $perf != null then empty else ($fb.perf.skills // []) end] | add // [] | uniq),
+      fallbacks: $fb }'

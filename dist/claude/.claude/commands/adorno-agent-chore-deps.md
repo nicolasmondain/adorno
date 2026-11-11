@@ -1,0 +1,8 @@
+---
+description: agent:chore:deps — Update dependencies — outdated packages, advisories, lockfile drift. Use on a dependency bump request or a vulnerable or outdated package report; changes manifests and lockfile only.
+argument-hint: <request>
+---
+
+Delegate the request below to the `adorno-agent-chore-deps` sub-agent (agent:chore:deps) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-chore-deps`) to handle the request.
+
+Request: $ARGUMENTS

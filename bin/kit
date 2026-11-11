@@ -72,7 +72,7 @@ BEGIN = "<!-- adorno:begin (managed by kit — edits inside this block are overw
 END = "<!-- adorno:end -->"
 BLOCK_RE = re.compile(r"<!-- adorno:begin.*?-->.*?<!-- adorno:end -->\n?", re.S)
 KINDS = {"skill": "skills", "agent": "agents", "workflow": "workflows"}
-NEUTRAL_AGENT_KEYS = {"name", "description", "tools", "model", "effort", "targets", "delegable"}
+NEUTRAL_AGENT_KEYS = {"name", "description", "tools", "model", "effort", "targets", "delegable", "entry"}
 ARGS_TOKEN = "{{args}}"
 
 
@@ -468,6 +468,15 @@ def validate(cfg: Config, items: dict[str, dict[str, Item]]) -> list[str]:
                 if model is not None and model not in cfg.tiers:
                     errors.append(f"{where}: model '{model}' must be one of {cfg.tiers} "
                                   f"(put native model names under targets.<tool>.model)")
+                entry = it.meta.get("entry")
+                if entry is not None and not (isinstance(entry, list) and all(isinstance(x, str) for x in entry)):
+                    errors.append(f"{where}: entry must be a list of workflow ids")
+                for wf in entry if isinstance(entry, list) else []:
+                    target = next((w for w in items["workflow"].values() if w.id == wf), None)
+                    if target is None:
+                        errors.append(f"{where}: entry names unknown workflow '{wf}'")
+                    elif it.id not in ((target.meta.get("uses") or {}).get("agents") or []):
+                        errors.append(f"{where}: entry '{wf}' does not list {it.id} in its uses.agents")
             effort = it.meta.get("effort")
             if kind != "skill" and effort is not None and effort not in EFFORTS:
                 errors.append(f"{where}: effort '{effort}' must be one of {list(EFFORTS)}")
@@ -484,7 +493,178 @@ def validate(cfg: Config, items: dict[str, dict[str, Item]]) -> list[str]:
         cfg.target(tgt)
 
     delegable = {i.id for i in items["agent"].values() if i.meta.get("delegable")}
-    errors += validate_registry(registry(), {i.id for i in items["agent"].values()} | set(items["agent"]), delegable)
+    reg = registry()
+    errors += validate_registry(reg, {i.id for i in items["agent"].values()} | set(items["agent"]), delegable,
+                                {i.name for i in items["skill"].values()} | set(items["skill"]))
+    errors += validate_roles(reg, items)
+    if not local_on():   # the public registry must leave no agent unreachable
+        for orphan in orphan_agents(reg, items):
+            errors.append(f"orphan agent '{orphan}': no area role, fallback or entry names it")
+    return errors
+
+
+# agent roles of an area, and the agent families each may come from (single place)
+ROLE_FAMILIES = {"build": ("feat", "test", "docs", "chore"), "fix": ("fix", "test", "refactor", "ci", "docs", "chore"),
+                 "perf": ("perf",), "review": ("review",), "qa": ("test",)}
+AREA_KEYS = {"paths", "content", *ROLE_FAMILIES, "skills", "sub"}
+FALLBACK_KEYS = ("nit", "test", "perf")
+AREA_REVIEWERS_MSG = ("`area_reviewers` is replaced by `areas.<area>.review`: run the adorno-setup skill (mode repo) "
+                      "to migrate; `bin/kit migrate areas` prints the conversion")
+
+
+def area_refs(conf: dict) -> list[tuple[str, str]]:
+    """(path, agent ref) of every role of `areas` and `fallbacks`; a leading `-` (removal) is stripped."""
+    refs: list[tuple[str, str]] = []
+
+    def one(path: str, value) -> None:
+        for v in value if isinstance(value, list) else [value]:
+            if isinstance(v, str):
+                refs.append((path, v[1:] if v.startswith("-") else v))
+
+    def area(path: str, a: dict) -> None:
+        for role in ROLE_FAMILIES:
+            one(f"{path}.{role}", a.get(role))
+        for name, sub in (a.get("sub") or {}).items():
+            if isinstance(sub, dict):
+                area(f"{path}.sub.{name}", sub)
+
+    for name, a in (conf.get("areas") or {}).items():
+        if isinstance(a, dict):
+            area(f"areas.{name}", a)
+    for key, v in (conf.get("fallbacks") or {}).items():
+        one(f"fallbacks.{key}", v.get("agent") if isinstance(v, dict) else v)
+    return refs
+
+
+def validate_roles(reg: dict, items: dict) -> list[str]:
+    """`roles:` of a dispatcher workflow: known roles, and `uses.agents` covers every agent the areas give them."""
+    errors: list[str] = []
+    scopes = [reg.get("defaults") or {}, *(c or {} for c in (reg.get("presets") or {}).values()),
+              *(c or {} for c in (reg.get("workspaces") or {}).values()), *(c or {} for c in (reg.get("repos") or {}).values())]
+    refs = [(path, ref) for conf in scopes if isinstance(conf, dict) for path, ref in area_refs(conf)]
+    for it in sorted(items["workflow"].values(), key=lambda w: w.id):
+        roles = it.meta.get("roles")
+        if roles is None:
+            continue
+        where = rel(it.path)
+        if not (isinstance(roles, list) and all(isinstance(r, str) for r in roles)):
+            errors.append(f"{where}: roles must be a list of roles")
+            continue
+        for r in roles:
+            if r not in ROLE_FAMILIES:
+                errors.append(f"{where}: roles: unknown role '{r}' (known: {', '.join(ROLE_FAMILIES)})")
+        used = set((it.meta.get("uses") or {}).get("agents") or [])
+        for r in (r for r in roles if r in ROLE_FAMILIES):
+            wanted = {ref for path, ref in refs if path.endswith(f".{r}")}
+            if r in ("fix", "perf"):
+                wanted |= {ref for path, ref in refs if path.startswith("fallbacks.")}
+            for ref in sorted(wanted - used):
+                errors.append(f"{it.id} dispatches role '{r}' but uses.agents lacks '{ref}' ({where})")
+    return errors
+
+
+def orphan_agents(reg: dict, items: dict) -> list[str]:
+    reached = {ref for _, ref in area_refs(reg.get("defaults") or {})}
+    return sorted(i.id for i in items["agent"].values() if i.id not in reached and not i.meta.get("entry"))
+
+
+def validate_areas(conf: dict, where: str, scope: str, agent_ids: set, skill_names: set) -> list[str]:
+    """`areas` and `fallbacks`: known keys, agents and skills that exist, one family set per role."""
+    errors: list[str] = []
+    if "area_reviewers" in conf:
+        errors.append(f"{where}: {scope}: {AREA_REVIEWERS_MSG}")
+
+    def regex(path: str, rx) -> None:
+        if not isinstance(rx, str):
+            errors.append(f"{where}: {path} must be a regex string")
+        else:  # the engine pr-areas runs: awk, POSIX ERE
+            res = subprocess.run(["awk", 'BEGIN { if ("" ~ ENVIRON["AREA_RE"]) {} }'],
+                                 env={**os.environ, "AREA_RE": rx}, capture_output=True, text=True)
+            if res.returncode != 0:
+                errors.append(f"{where}: {path} is an invalid regex (not a valid awk POSIX ERE): {res.stderr.strip()[:200]}")
+
+    def agent(path: str, ref, families: tuple | None) -> None:
+        if not isinstance(ref, str):
+            errors.append(f"{where}: {path} must name an agent")
+            return
+        name = ref[1:] if ref.startswith("-") else ref
+        if name not in agent_ids:
+            errors.append(f"{where}: {path} names unknown agent '{name}'")
+        elif families and name.split(":")[1:2] and name.split(":")[1] not in families:
+            errors.append(f"{where}: {path}: '{name}' is not a {'/'.join(families)} agent")
+
+    def skills(path: str, value) -> None:
+        if not isinstance(value, list):
+            errors.append(f"{where}: {path} must be a list of skills")
+            return
+        for sk in value:
+            name = sk[1:] if isinstance(sk, str) and sk.startswith("-") else sk
+            if name not in skill_names:
+                errors.append(f"{where}: {path} names unknown skill '{name}'")
+
+    def role(path: str, a: dict, role: str) -> None:
+        value = a.get(role)
+        if value is None:
+            return
+        if role == "skills":
+            skills(path, value)
+        elif role == "review":
+            if not isinstance(value, list):
+                errors.append(f"{where}: {path} must be a list of agents")
+            for ref in value if isinstance(value, list) else []:
+                agent(path, ref, ROLE_FAMILIES[role])
+        else:
+            agent(path, value, ROLE_FAMILIES[role])
+
+    def area(path: str, a, keys: set) -> None:
+        if not isinstance(a, dict):
+            errors.append(f"{where}: {path} must be a mapping")
+            return
+        for key in a:
+            if key not in keys:
+                errors.append(f"{where}: {path}.{key}: unknown key (known: {', '.join(sorted(keys))})")
+        if a.get("paths") is not None and not (isinstance(a["paths"], list)
+                                               and all(isinstance(x, str) for x in a["paths"])):
+            errors.append(f"{where}: {path}.paths must be a list of strings")
+        if a.get("content") is not None:
+            regex(f"{path}.content", a["content"])
+        for r in (*ROLE_FAMILIES, "skills"):
+            if r in keys:
+                role(f"{path}.{r}", a, r)
+
+    areas = conf.get("areas")
+    if areas is not None and not isinstance(areas, dict):
+        errors.append(f"{where}: {scope}.areas must be a mapping")
+        areas = {}
+    for name, a in (areas or {}).items():
+        p = f"{scope}.areas.{name}"
+        if name == "always":
+            area(p, a, {"review", "skills"})
+            continue
+        area(p, a, AREA_KEYS)
+        if isinstance(a, dict) and a.get("sub") is not None:
+            if not isinstance(a["sub"], dict):
+                errors.append(f"{where}: {p}.sub must be a mapping")
+                continue
+            for sname, sub in a["sub"].items():
+                area(f"{p}.sub.{sname}", sub, AREA_KEYS - {"sub"})
+    fb = conf.get("fallbacks")
+    if fb is not None and not isinstance(fb, dict):
+        errors.append(f"{where}: {scope}.fallbacks must be a mapping")
+        fb = {}
+    for key, v in (fb or {}).items():
+        p = f"{scope}.fallbacks.{key}"
+        if key not in FALLBACK_KEYS:
+            errors.append(f"{where}: {p}: unknown key (known: {', '.join(FALLBACK_KEYS)})")
+        elif key == "perf" and isinstance(v, dict):
+            for k in v:
+                if k not in ("agent", "skills"):
+                    errors.append(f"{where}: {p}.{k}: unknown key (known: agent, skills)")
+            agent(f"{p}.agent", v.get("agent"), None)
+            if v.get("skills") is not None:
+                skills(f"{p}.skills", v["skills"])
+        else:
+            agent(p, v, None)
     return errors
 
 
@@ -625,7 +805,7 @@ def validate_notion_spec(spec, where: str) -> list[str]:
     return errors
 
 
-def validate_registry(reg: dict, agent_ids: set, delegable: set) -> list[str]:
+def validate_registry(reg: dict, agent_ids: set, delegable: set, skill_names: set) -> list[str]:
     """repos.yaml and the personal layer: references, levels, permissions, shapes."""
     errors: list[str] = []
     if USE_LOCAL and LEGACY_LOCAL.exists():
@@ -641,10 +821,7 @@ def validate_registry(reg: dict, agent_ids: set, delegable: set) -> list[str]:
         if not isinstance(conf, dict):
             errors.append(f"{where}: {scope} must be a mapping")
             continue
-        for area, agents in (conf.get("area_reviewers") or {}).items():
-            for ref in agents or []:
-                if ref not in agent_ids:
-                    errors.append(f"{where}: {scope}.area_reviewers.{area} names unknown agent '{ref}'")
+        errors += validate_areas(conf, where, scope, agent_ids, skill_names)
         for ref in conf.get("use") or []:
             if ref not in presets:
                 errors.append(f"{where}: {scope}.use names unknown preset '{ref}'")
@@ -1065,10 +1242,67 @@ def cmd_list(args) -> None:
     global USE_LOCAL
     USE_LOCAL = True
     items = collect()
+    if args.orphans:
+        for orphan in orphan_agents(registry(), items):
+            print(orphan)
+        return
     for kind in KINDS:
         print(f"{KINDS[kind]}:")
         for it in sorted(items[kind].values(), key=lambda i: i.id):
             print(f"  {it.id:<34} [{it.origin}] {it.description[:60]}")
+
+
+def migrate_areas(public: dict, loc: dict) -> list[dict]:
+    """Additive equivalent of each legacy `area_reviewers` of the personal layer against the public `areas`."""
+    public_areas = (public.get("defaults") or {}).get("areas") or {}
+    out: list[dict] = []
+    scopes = [("defaults", loc.get("defaults"))]
+    for group in ("presets", "workspaces", "repos"):
+        scopes += [(f"{group}.{n}", c) for n, c in (loc.get(group) or {}).items()]
+    for scope, conf in scopes:
+        legacy = (conf or {}).get("area_reviewers") or {}
+        for area, old in legacy.items():
+            old = list(old or [])
+            if area == "always":
+                targets = [["always"]]
+            elif area == "mongodb" and "mongodb" not in public_areas:
+                # the legacy area covered query content and schema paths: both sub-areas now
+                targets = [["back", "sub", "query"], ["back", "sub", "mongodb"]]
+            else:
+                targets = [[area]]
+            for parts in targets:
+                node = public_areas
+                inherited: list = []
+                for part in parts:
+                    node = (node.get(part) if isinstance(node, dict) else None) or {}
+                    if part == "sub":
+                        inherited = list(parent.get("review") or [])
+                    parent = node
+                pub = list(node.get("review") or []) if isinstance(node, dict) else []
+                new = [x for x in old if x not in inherited + pub] + ["-" + x for x in pub if x not in old]
+                out.append({"scope": scope, "area_path": "areas." + ".".join(parts) + ".review",
+                            "old": old, "public": pub, "new": new})
+    return out
+
+
+def nest(path: str, value) -> dict:
+    for key in reversed(path.split(".")):
+        value = {key: value}
+    return value
+
+
+def cmd_migrate(args) -> None:
+    """Read-only, and works when `check` fails: it reads the two files directly."""
+    loc = load_yaml(LOCAL_CONF) if LOCAL_CONF.exists() else {}
+    rows = migrate_areas(load_yaml(ROOT / "repos.yaml"), loc)
+    print(json.dumps(rows, indent=2, ensure_ascii=False))
+    for scope in dict.fromkeys(r["scope"] for r in rows):
+        snippet: dict = {}
+        for r in (r for r in rows if r["scope"] == scope):
+            snippet = deep_merge(snippet, nest(r["area_path"], r["new"]))
+        group, _, name = scope.partition(".")
+        head = {group: {name: snippet}} if name else {group: snippet}
+        print(f"# {scope}: replaces area_reviewers\n" + yaml.safe_dump(head, sort_keys=False), file=sys.stderr)
 
 
 def cmd_build(args) -> None:
@@ -1929,7 +2163,12 @@ def main() -> None:
     p.add_argument("--dist", action="store_true", help="also fail if dist/ is stale")
     p.set_defaults(fn=cmd_check)
 
-    sub.add_parser("list", help="list skills, agents and workflows").set_defaults(fn=cmd_list)
+    p = sub.add_parser("list", help="list skills, agents and workflows")
+    p.add_argument("--orphans", action="store_true", help="only the agents no area role, fallback or entry names")
+    p.set_defaults(fn=cmd_list)
+    p = sub.add_parser("migrate", help="print the conversion of a legacy setting (read-only)")
+    p.add_argument("what", choices=["areas"])
+    p.set_defaults(fn=cmd_migrate)
     p = sub.add_parser("conf", help="the settings a repo resolves to, with the scopes that matched")
     p.add_argument("repo", nargs="?", help="owner/repo (default: the current directory's repo)")
     p.set_defaults(fn=cmd_conf)

@@ -15,10 +15,12 @@ Input: $ARGUMENTS
    `notion_spec.start` properties; nothing to do without a Notion page or without that setting).
 2. **Route** — `agent:core:router` reads `spec.md` and writes `run-plan.yaml`. If the router concludes that a single
    agent is enough, the plan has only one step: that is normal.
-3. **Plan** — `agent:core:planner` writes `plan.md` (slices, the `feat:*` agent of each slice, acceptance tests).
+3. **Plan** — `agent:core:planner` writes `plan.md` (slices, the `build` agent of each slice from `pr-areas`, acceptance tests).
 4. **Build and verify** — you run `run-plan.yaml` yourself (skill `adorno-run-plan`: a subagent cannot launch
-   others) on the branch `<type>/<slug>`: slices (test loop, three rounds; QA by `agent:test:e2e` with
-   screenshots and video for visible slices), then reviewers in parallel (fix loop, two rounds).
+   others) on the branch `<type>/<slug>`: slices (test loop, three rounds; the `qa` agent of `pr-areas` with
+   screenshots and video for visible slices), then, per slice, `pr-areas` on its diff and its `review` agents in
+   parallel (fix loop, two rounds, each 🔴 or 🟠 to the `fix` or `perf` of its file's area). Each agent gets the `skills`
+   of its areas from `pr-areas`.
 5. **Ship** — `workflow:pr:ship owner/repo <branch> <worktree> <run folder>`, without asking: the repo's
    `commit_skill` commits what is left; the area reviewers and `agent:adorno` check the whole branch against the
    repo's rules and `spec.md`, and every 🔴 or 🟠 is fixed in the flow (two rounds); then its `pr_skill` (default
