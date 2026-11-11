@@ -290,15 +290,19 @@ thread_of() {
 }
 
 # parse_attach [--attach FILE[#alt]]… — fills ATTACH (the values, for a dry run) and ATTACH_ARGS (gh's flags) from
-# the trailing options of pr-comment, pr-open and pr-edit; dies on anything else, a missing file, a type gh cannot
-# upload (images and videos only) or more than gh's 50. Empty arrays: expand with ${ATTACH_ARGS[@]+"${ATTACH_ARGS[@]}"}
-# (bash 3.2 and set -u).
+# the trailing options of pr-comment, pr-open and pr-edit; dies on anything else, a missing file, a symlink, a second
+# `#`, a type gh cannot upload (images and videos only) or more than gh's 50 — checked before anything is sent, since
+# gh publishes the uploads that succeeded even when another one fails. Empty arrays: expand with
+# ${ATTACH_ARGS[@]+"${ATTACH_ARGS[@]}"} (bash 3.2 and set -u).
 ATTACH=() ATTACH_ARGS=()
 parse_attach() {
   local f
   while [ $# -gt 0 ]; do
-    [ "$1" = "--attach" ] && [ -n "${2:-}" ] || die "unexpected argument '$1' (expected --attach FILE[#alt])" "$E_USAGE"
+    [ "$1" = "--attach" ] || die "unexpected argument '$1' (expected --attach FILE[#alt])" "$E_USAGE"
+    [ -n "${2:-}" ] || die "--attach needs a file" "$E_USAGE"
     f="${2%%#*}"
+    [ "${2#*#}" = "${2##*#}" ] || die "one '#' at most (FILE#alt): $2" "$E_USAGE"
+    [ ! -L "$f" ] || die "attachment is a symlink: $f" "$E_USAGE"
     [ -f "$f" ] || die "attachment not found: $f" "$E_USAGE"
     case "$(printf '%s' "${f##*.}" | tr '[:upper:]' '[:lower:]')" in
       png|jpg|jpeg|gif|webp|svg|mp4|mov|webm) ;;
@@ -310,7 +314,7 @@ parse_attach() {
 }
 
 # attach_json — the attachments as a JSON array (dry runs)
-attach_json() { if [ "${#ATTACH[@]}" -eq 0 ]; then echo '[]'; else printf '%s\n' "${ATTACH[@]}" | jq -R . | jq -s .; fi; }
+attach_json() { jq -cn '$ARGS.positional' --args ${ATTACH[@]+"${ATTACH[@]}"}; }
 
 # with_footer owner/repo FILE -> path of FILE, or of a copy with the repo's `reply_footer` appended
 with_footer() {

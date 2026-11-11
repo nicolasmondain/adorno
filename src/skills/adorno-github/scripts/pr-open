@@ -11,8 +11,9 @@ head="${2:-}"; title="${3:-}"; body="${4:-}"; draft=""
 [ -n "$head" ] && [ -n "$title" ] && [ -n "$body" ] \
   || die 'usage: pr-open owner/repo HEAD_BRANCH "type(scope): title" BODY_FILE [--draft] [--attach FILE]…' "$E_USAGE"
 shift 4
-[ "${1:-}" != "--draft" ] || { draft="--draft"; shift; }
-parse_attach "$@"
+rest=()
+for a in "$@"; do if [ "$a" = "--draft" ]; then draft="--draft"; else rest+=("$a"); fi; done
+parse_attach ${rest[@]+"${rest[@]}"}
 [ -s "$body" ] || die "empty PR body: $body" "$E_USAGE"
 require_level "$REPO" L3 open_pr
 

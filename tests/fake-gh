@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Stand-in for `gh` in tests: serves fixtures by route, applies --jq like gh does, logs every call.
-# FAKE_ORIGIN = a local bare repo that plays GitHub for `repo clone`.
+# FAKE_ORIGIN = a local bare repo that plays GitHub for `repo clone`. FAKE_ARGV = file that gets the last call, one argument per line.
 set -euo pipefail
 FIX="${FAKE_FIX:?set FAKE_FIX to the fixtures folder}"
 printf '%s\n' "$*" >>"${FAKE_LOG:-/dev/null}"
+[ -z "${FAKE_ARGV:-}" ] || printf '%s\n' "$@" >"$FAKE_ARGV"  # one argument per line: what a split would break
 
 jq_expr=""; input=""; args=(); paginate=0
 while [ $# -gt 0 ]; do
