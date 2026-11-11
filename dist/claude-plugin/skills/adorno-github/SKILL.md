@@ -37,11 +37,11 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | `pr-push owner/repo#N` | pushes the workspace's commits to your PR's branch, never forced | L2 |
 | `pr-reply owner/repo#N THREAD_ID FILE` | replies in a thread (`-` = stdin) | L3 |
 | `pr-resolve owner/repo#N THREAD_ID` | resolves a thread if `resolve_threads: author` and you are the author | L3 |
-| `pr-comment owner/repo#N FILE` | comment in the PR conversation (`-` = stdin) | L3 |
+| `pr-comment owner/repo#N FILE [--attach F]…` | comment in the PR conversation (`-` = stdin), screenshots or videos attached | L3 |
 | `pr-review-submit owner/repo#N JSON_FILE` | publishes a review with inline comments; `APPROVE` only if `allow_approve` | L3 |
 | `pr-rerequest owner/repo#N [login…]` | re-requests a review (default: those who already reviewed) | L3 |
-| `pr-open owner/repo BRANCH "type(scope): title" FILE [--draft]` | opens the PR, requests the registry's reviewers | L3 |
-| `pr-edit owner/repo#N "type(scope): title" FILE` | updates the title and description of your open PR | L3 |
+| `pr-open owner/repo BRANCH "type(scope): title" FILE [--draft] [--attach F]…` | opens the PR, requests the registry's reviewers; `--attach`: the proof (screenshots, videos) | L3 |
+| `pr-edit owner/repo#N "type(scope): title" FILE [--attach F]…` | updates the title and description of your open PR, new proof attached | L3 |
 | `pr-ready owner/repo#N` | marks your draft PR ready for review (once nothing 🔴 or 🟠 is left open) | L3 |
 
 \* Writes only under `~/.adorno` (no variable moves it), never in your working copies nor on GitHub.

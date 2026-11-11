@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
-# Usage: pr-edit owner/repo#N "type(scope): title" BODY_FILE
-# Updates the title and description of your open PR (workflow:pr:ship, when a workflow pushed new commits to it).
+# Usage: pr-edit owner/repo#N "type(scope): title" BODY_FILE [--attach FILE[#alt]]…
+# Updates the title and description of your open PR (workflow:pr:ship, when a workflow pushed new commits to it or
+# has new proof for it: screenshots or videos, uploaded by gh, `![alt](./file)` in the body rewritten to the upload).
 # Only your own PR, from the same repository (not a fork), still open. The title must be a Conventional Commit header.
 # Needs L3 and the `open_pr` action. ADORNO_DRY_RUN=1 or a dry-run run only prints.
 . "$(dirname "$0")/_lib.sh"
 
 parse_ref "${1:-}"
 title="${2:-}"; body="${3:-}"
-[ -n "$title" ] && [ -n "$body" ] || die 'usage: pr-edit owner/repo#N "type(scope): title" BODY_FILE' "$E_USAGE"
+[ -n "$title" ] && [ -n "$body" ] || die 'usage: pr-edit owner/repo#N "type(scope): title" BODY_FILE [--attach FILE]…' "$E_USAGE"
+shift 3; parse_attach "$@"
 [ -s "$body" ] || die "empty PR body: $body" "$E_USAGE"
 require_cc_title "$title"
 require_level "$REPO" L3 open_pr
 require_own_open_pr "$REPO" "$NUM" >/dev/null
 
 if dry_run; then
-  jq -n --arg repo "$REPO" --argjson n "$NUM" --arg title "$title" \
-    '{dryRun: true, action: "edit-pr", repo: $repo, number: $n, title: $title}'
+  jq -n --arg repo "$REPO" --argjson n "$NUM" --arg title "$title" --argjson att "$(attach_json)" \
+    '{dryRun: true, action: "edit-pr", repo: $repo, number: $n, title: $title, attachments: $att}'
   exit 0
 fi
-gh pr edit "$NUM" -R "$REPO" --title "$title" --body-file "$body" >/dev/null
+gh pr edit "$NUM" -R "$REPO" --title "$title" --body-file "$body" ${ATTACH_ARGS[@]+"${ATTACH_ARGS[@]}"} >/dev/null
 jq -n --arg repo "$REPO" --argjson n "$NUM" --arg title "$title" '{edited: true, repo: $repo, number: $n, title: $title}'
