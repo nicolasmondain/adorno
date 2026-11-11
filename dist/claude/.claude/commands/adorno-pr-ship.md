@@ -1,5 +1,5 @@
 ---
-description: Ends every workflow that touched code — commit (the repo's commit_skill), review and fix until no 🔴 or 🟠 is left and the change meets the request, then the PR (the repo's pr_skill) opened ready for review, or pushed and updated when it is already open. No confirmation and no permission prompt, within the run's level. Last step of feature:build, issue:fix, ci:red, review:received and repo:onboard.
+description: Ends every workflow that touched code — commit (the repo's commit_skill), review and fix until no 🔴 or 🟠 is left and the change meets the request, its proof attached (test output, screenshots and videos of what a user sees), then the PR (the repo's pr_skill) opened ready for review, or pushed and updated when it is already open. No confirmation and no permission prompt, within the run's level. Last step of feature:build, issue:fix, ci:red, review:received and repo:onboard.
 argument-hint: <owner/repo> <branch> [worktree path] [.agent-run folder]
 model: sonnet
 ---
@@ -37,20 +37,38 @@ command.
      no PR yet → it is opened as **draft**, those points at the top of its description with `file:line`; a PR already
      open → those commits are not pushed (reviewers would see known 🔴 or 🟠 land on it). Either way `status.md` says
      what waits for the owner. 🟡 and ❓ never hold it: they go in the description.
-5. **No PR yet** → `pr_skill`, told whether the PR goes out ready or draft:
+5. **Proof** — every PR carries its proof, gathered in the run's `qa/` (the `.agent-run` folder given, else
+   `.agent-run/<date>-<branch slug>/`, never committed):
+   - always: the raw output of the tests, lint and typecheck run on the last commit → `qa/tests.log`, shown in the
+     description as a `<details>` block (`gh` attaches only images and videos);
+   - a visible change (`pr-areas` gives an area with a `qa` agent, or the request changes what a user sees) without
+     a screenshot or a video in `qa/` → that `qa` agent (`agent:test:e2e` by default) on the branch, with its area's
+     `skills`: a journey per acceptance criterion it can show, its media in
+     `qa/`;
+   - still missing (no `tests.log`, or a visible change without media) → the PR goes out or stays **draft**,
+     `Proof missing: <what>` first in its description and in `status.md`. A proof is never invented, nor taken
+     from another commit.
+   The media go out with the PR, never by hand: `pr-open` / `pr-edit … --attach <file>[#alt]` (`adorno-github`),
+   referenced inline in a `## Proof` section of the description (`![alt](./qa/x.png)`, body file written in the run
+   folder so `gh` resolves the path and swaps it for the upload).
+6. **No PR yet** → `pr_skill`, told whether the PR goes out ready or draft:
    - default `adorno-pr-open`: `workflow:pr:open owner/repo <branch> [.agent-run folder]`;
    - a repo skill: run it in the worktree, as it is written. It may push and run `gh pr create` itself: inside the
      run the guard lets `git push origin <branch>` and `gh pr create` through (never forced, never the base, at the
      run's level). Then `pr-status owner/repo` again: no PR for the branch → stop and report what the skill did;
-     opened as draft while the verdict is clean → `pr-ready owner/repo#N`.
-6. **PR already open** → push, update, ready:
+     its description has no `## Proof` → `agent:adorno` appends it and publishes it with `pr-edit owner/repo#N
+     "<its title>" <file> --attach …`; opened as draft while the verdict is clean and the proof complete →
+     `pr-ready owner/repo#N`.
+7. **PR already open** → push, update, ready:
    - push: `pr-push owner/repo#N` (or the repo skill pushes itself, as above);
-   - default update: `agent:adorno` compares the title and description to `git diff origin/<base>...HEAD`. The scope
-     moved (a new What or How, a new risk, a verification that no longer matches) → new title and description in
-     English, in the owner's voice (`adorno-voice`), published by `pr-edit owner/repo#N "<title>" <file>`. Unchanged
-     → nothing. A repo skill: run it in update mode (it receives `#N`); it may run `gh pr edit` itself;
-   - still a draft and the verdict on the whole branch is clean → `pr-ready owner/repo#N`.
-7. **Report** — commits (SHA, message), review rounds and what they fixed, push, PR URL and `opened | updated |
-   unchanged`, `ready | draft` (and why), and what stopped the workflow if anything did — commits the cap held back:
+   - default update: `agent:adorno` compares the title and description to `git diff origin/<base>...HEAD` and the
+     proof to `qa/`. The scope moved (a new What or How, a new risk, a verification that no longer matches) or new
+     proof → new title and description in English, in the owner's voice (`adorno-voice`), published by
+     `pr-edit owner/repo#N "<title>" <file> [--attach <new media>]…`. Unchanged → nothing. A repo skill: run it in
+     update mode (it receives `#N`); it may run `gh pr edit` itself, the new proof then goes out with `pr-edit`;
+   - still a draft, the verdict on the whole branch clean and the proof complete → `pr-ready owner/repo#N`.
+8. **Report** — commits (SHA, message), review rounds and what they fixed, push, PR URL and `opened | updated |
+   unchanged`, `ready | draft` (and why), the proof attached (or what is missing), and what stopped the workflow if
+   anything did — commits the cap held back:
    the worktree and their SHAs, and how to resume (fix, then `pr-push owner/repo#N`). Suggest
    `workflow:pr:watch owner/repo#N` when the caller does not run it.
