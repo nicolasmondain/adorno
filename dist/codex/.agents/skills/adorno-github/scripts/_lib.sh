@@ -290,7 +290,8 @@ thread_of() {
 }
 
 # parse_attach [--attach FILE[#alt]]… — fills ATTACH (the values, for a dry run) and ATTACH_ARGS (gh's flags) from
-# the trailing options of pr-comment, pr-open and pr-edit; dies on anything else, a missing file, a symlink, a second
+# the trailing options of pr-comment, pr-open and pr-edit; dies on anything else, a missing file, a file that is a symlink (a symlinked folder on the way is the guard's job:
+# it resolves the real path), a second
 # `#`, a type gh cannot upload (images and videos only) or more than gh's 50 — checked before anything is sent, since
 # gh publishes the uploads that succeeded even when another one fails. Empty arrays: expand with
 # ${ATTACH_ARGS[@]+"${ATTACH_ARGS[@]}"} (bash 3.2 and set -u).
@@ -314,7 +315,9 @@ parse_attach() {
 }
 
 # attach_json — the attachments as a JSON array (dry runs)
-attach_json() { jq -cn '$ARGS.positional' --args ${ATTACH[@]+"${ATTACH[@]}"}; }
+attach_json() {  # through stdin: a path starting with `-` is not taken for a jq option
+  if [ "${#ATTACH[@]}" -eq 0 ]; then echo '[]'; else printf '%s\n' "${ATTACH[@]}" | jq -R . | jq -cs .; fi
+}
 
 # with_footer owner/repo FILE -> path of FILE, or of a copy with the repo's `reply_footer` appended
 with_footer() {

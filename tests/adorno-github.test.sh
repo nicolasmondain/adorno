@@ -456,6 +456,10 @@ ADORNO_DRY_RUN=1 expect_exit 0 "dry-run comment with attachments" -- "$S/pr-comm
 expect_jq "attachments listed" ".attachments == [\"$TMP/qa/shot.PNG\"]"
 ADORNO_DRY_RUN=1 expect_exit 0 "no attachment: an empty list" -- "$S/pr-comment" acme/docs#42 "$TMP/body.md"
 expect_jq "empty list" '.attachments == []'
+: >"$TMP/qa/-c.png"
+ADORNO_DRY_RUN=1 expect_exit 0 "a path starting with - is a value, not a jq option" -- \
+  sh -c "cd \"$TMP/qa\" && \"$S/pr-comment\" acme/docs#42 \"$TMP/body.md\" --attach -c.png"
+expect_jq "listed as is" '.attachments == ["-c.png"]'
 expect_exit 0 "comment with an attachment" -- "$S/pr-comment" acme/docs#42 "$TMP/body.md" --attach "$TMP/qa/shot.PNG"
 grep -q "pr comment 42 .* --attach $TMP/qa/shot.PNG" "$FAKE_LOG" && ok "... handed to gh pr comment" || ko "... handed to gh pr comment" "$(tail -1 "$FAKE_LOG")"
 expect_exit 2 "a text file is not an attachment" -- "$S/pr-comment" acme/docs#42 "$TMP/body.md" --attach "$TMP/qa/notes.md"

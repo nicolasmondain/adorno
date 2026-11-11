@@ -52,7 +52,8 @@ command.
    - **before anything goes out**, `agent:adorno` looks at every screenshot, the key frames of every video and the
      lines of `tests.log` quoted in the description: a token, a key, a password, an email or a name of a real person,
      production data → that file is deleted from `qa/` and never attached (redo it on clean data, or count it
-     missing);
+     missing). A video it cannot inspect (no frames extracted, e.g. `ffmpeg -i x.webm -vf fps=1 qa/frames/%03d.png`)
+     counts as missing too;
    - still missing (no `tests.log`, or a visible change without clean media) → the PR goes out or stays **draft**,
      `Proof missing: <what>` first in its description and in `status.md`. A proof is never invented, nor taken
      from another commit.
