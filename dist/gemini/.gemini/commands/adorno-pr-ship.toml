@@ -35,18 +35,20 @@ command.
      what waits for the owner. 🟡 and ❓ never hold it: they go in the description.
 5. **Proof** — every PR carries its proof, gathered in the run's `qa/` (the `.agent-run` folder given, else
    `.agent-run/<date>-<branch slug>/`, never committed):
-   - always: the raw output of the tests, lint and typecheck run on the last commit → `qa/tests.log`, shown in the
-     description as a `<details>` block (`gh` attaches only images and videos);
+   - always: the raw output of the tests, lint and typecheck run on the last commit → `qa/tests.log` (kept in the
+     run: `gh` attaches only images and videos, and a PR body stops at 65,536 characters);
    - a visible change (`pr-areas` gives an area with a `qa` agent, or the request changes what a user sees) without
      a screenshot or a video in `qa/` → that `qa` agent (`agent:test:e2e` by default) on the branch, with its area's
-     `skills`: a journey per acceptance criterion it can show, its media in
-     `qa/`;
-   - still missing (no `tests.log`, or a visible change without media) → the PR goes out or stays **draft**,
+     `skills`, on local or seeded data only: a journey per acceptance criterion it can show, its media in `qa/`;
+   - **before anything goes out**, `agent:adorno` looks at every screenshot, the key frames of every video and the
+     lines of `tests.log` quoted in the description: a token, a key, a password, an email or a name of a real person,
+     production data → that file is deleted from `qa/` and never attached (redo it on clean data, or count it
+     missing);
+   - still missing (no `tests.log`, or a visible change without clean media) → the PR goes out or stays **draft**,
      `Proof missing: <what>` first in its description and in `status.md`. A proof is never invented, nor taken
      from another commit.
-   The media go out with the PR, never by hand: `pr-open` / `pr-edit … --attach <file>[#alt]` (`adorno-github`),
-   referenced inline in a `## Proof` section of the description (`![alt](./qa/x.png)`, body file written in the run
-   folder so `gh` resolves the path and swaps it for the upload).
+   The media go out with the PR, never by hand: `pr-open` / `pr-edit … --attach <file>[#alt]` (`adorno-github`), in
+   the `## Proof` section described in `workflow:pr:open` step 3.
 6. **No PR yet** → `pr_skill`, told whether the PR goes out ready or draft:
    - default `adorno-pr-open`: `workflow:pr:open owner/repo <branch> [.agent-run folder]`;
    - a repo skill: run it in the worktree, as it is written. It may push and run `gh pr create` itself: inside the

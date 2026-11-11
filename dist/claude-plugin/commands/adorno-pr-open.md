@@ -22,9 +22,11 @@ No checkpoint: the PR opens without waiting for a "yes" (running the workflow is
    - the description following `process.md` § Pull requests: What / How / mermaid / Verification, `How to test` opened
      by the commands actually run and their result, link to the issue (`Fixes #n`), what the review loop fixed, the
      🟡 and ❓ left (`Impact / Risks`). No real data;
-   - a `## Proof` section: `qa/tests.log` in a `<details>` block, each screenshot or video of `qa/` referenced inline
-     (`![what it shows](./qa/x.png)`), no personal data or secret visible. The body file is written in the run
-     folder, so these paths resolve.
+   - a `## Proof` section: each command of `qa/tests.log` with its result line (passed / failed counts) and, in a
+     `<details>` block, its failing lines only — never the whole log (a body stops at 65,536 characters); each
+     screenshot or video of `qa/` cleared by `workflow:pr:ship` step 5, referenced inline
+     (`![what it shows](./qa/x.png)`; the body file written in the run folder, so the path resolves; a reference gh
+     cannot match is still uploaded, appended at the end).
 4. `adorno-github/scripts/git-push owner/repo <branch>` (never a direct `git push`), then `pr-open owner/repo <branch>
    "<title>" <file> [--draft] --attach <run>/qa/<media>…` (`--draft` only when the verdict is not clean or a proof is
    missing; one `--attach` per screenshot or video, 50 at most): registry reviewers without the author.

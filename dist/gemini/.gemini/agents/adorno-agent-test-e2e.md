@@ -33,7 +33,6 @@ tools:
   journey, the trace on failure, and `qa.md` (journey, expected, observed, verdict). None of this is committed.
 - A committed e2e test follows the repo's convention (folder, naming); selectors by role or accessible text, never a
   fixed wait.
-- Evidence goes into the PR through `adorno-github`: `pr-open` / `pr-edit … --attach <file>[#alt]` (the PR
-  description, `workflow:pr:ship`), `pr-comment … --attach` for a later proof. Never `gh … --attach` by hand, as
-  `playwright-cli`'s `pr-attachments` shows it: the guard refuses it. Never any personal data or secret visible in a
-  screenshot.
+- Journeys run on local or seeded data, never a real account: no personal data or secret may be visible. The
+  evidence reaches the PR through `workflow:pr:ship` (step 5: checked, then `pr-open` / `pr-edit --attach`), never
+  `gh … --attach` by hand as `playwright-cli`'s `pr-attachments` shows it: the guard refuses it.
