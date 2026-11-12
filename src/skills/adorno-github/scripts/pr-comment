@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Usage: pr-comment owner/repo#N BODY_FILE   (BODY_FILE = - reads stdin)
-# Posts a comment on the PR conversation (to answer a general comment or a review summary).
+# Usage: pr-comment owner/repo#N BODY_FILE [--attach FILE[#alt]]…   (BODY_FILE = - reads stdin)
+# Posts a comment on the PR conversation (to answer a general comment or a review summary), with screenshots or
+# videos attached: gh uploads them, rewrites `![alt](./file)` in the body to the upload, appends the others.
 # Needs L3. ADORNO_DRY_RUN=1 prints the comment instead of posting it.
 . "$(dirname "$0")/_lib.sh"
 
 parse_ref "${1:-}"
 file="${2:-}"
-[ -n "$file" ] || die "usage: pr-comment owner/repo#N BODY_FILE|-" "$E_USAGE"
+[ -n "$file" ] || die "usage: pr-comment owner/repo#N BODY_FILE|- [--attach FILE]…" "$E_USAGE"
+shift 2; parse_attach "$@"
 require_level "$REPO" L3 comment
 
 if [ "$file" = "-" ]; then file="$(work_dir)/comment-$$.md"; cat >"$file"; fi
@@ -21,8 +23,8 @@ fi
 file="$(with_footer "$REPO" "$file")"
 
 if dry_run; then
-  jq -n --rawfile body "$file" '{dryRun: true, action: "comment", body: $body}'
+  jq -n --rawfile body "$file" --argjson att "$(attach_json)" '{dryRun: true, action: "comment", body: $body, attachments: $att}'
   exit 0
 fi
-url="$(gh pr comment "$NUM" -R "$REPO" --body-file "$file")"
+url="$(gh pr comment "$NUM" -R "$REPO" --body-file "$file" ${ATTACH_ARGS[@]+"${ATTACH_ARGS[@]}"})"
 jq -n --arg url "$url" '{posted: true, url: $url}'

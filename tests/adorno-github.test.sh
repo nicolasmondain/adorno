@@ -258,6 +258,31 @@ expect_jq "targets the base, as draft" '.base == "main" and .draft and .head == 
 expect_jq "the author is never requested as reviewer" '.reviewers == ["alice"]'
 expect_exit 0 "open" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" "$TMP/body.md"
 expect_jq "returns the url" '.opened and (.url | test("/pull/99$"))'
+mkdir -p "$TMP/qa"; : >"$TMP/qa/after.png"; : >"$TMP/qa/flow.webm"; : >"$TMP/qa/trace.zip"
+ADORNO_DRY_RUN=1 expect_exit 0 "dry-run open with the proof attached" -- "$S/pr-open" acme/docs feat/lem-123-pagination \
+  "feat(api): add stuff" "$TMP/body.md" --draft --attach "$TMP/qa/after.png#After the fix" --attach "$TMP/qa/flow.webm"
+expect_jq "draft kept, attachments listed with their alt text" \
+  ".draft and .attachments == [\"$TMP/qa/after.png#After the fix\", \"$TMP/qa/flow.webm\"]"
+expect_exit 0 "open with an attachment" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" "$TMP/body.md" --attach "$TMP/qa/after.png"
+grep -q "pr create .* --attach $TMP/qa/after.png" "$FAKE_LOG" && ok "... handed to gh pr create" || ko "... handed to gh pr create" "$(tail -1 "$FAKE_LOG")"
+expect_exit 2 "a missing attachment is refused" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" "$TMP/body.md" --attach "$TMP/qa/none.png"
+expect_exit 2 "a type gh cannot upload is refused" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" "$TMP/body.md" --attach "$TMP/qa/trace.zip"
+expect_exit 2 "an unknown trailing argument is refused" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" "$TMP/body.md" --ready
+ADORNO_DRY_RUN=1 expect_exit 0 "--draft after --attach" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" "$TMP/body.md" \
+  --attach "$TMP/qa/after.png" --draft
+expect_jq "still a draft, one attachment" '.draft and (.attachments | length) == 1'
+FAKE_ARGV="$TMP/argv" expect_exit 0 "open with alt text holding spaces" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" \
+  "$TMP/body.md" --attach "$TMP/qa/after.png#After the fix, saved"
+grep -qx -- "$TMP/qa/after.png#After the fix, saved" "$TMP/argv" && ok "... reaches gh as one argument, alt text kept" \
+  || ko "... reaches gh as one argument, alt text kept" "$(cat "$TMP/argv")"
+expect_exit 2 "a second # is refused (which part is the path?)" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" \
+  "$TMP/body.md" --attach "$TMP/qa/after.png#a#b"
+ln -s "$TMP/body.md" "$TMP/qa/link.png"
+expect_exit 2 "a symlink is refused" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" "$TMP/body.md" --attach "$TMP/qa/link.png"
+many=(); for i in $(seq 1 51); do : >"$TMP/qa/s$i.png"; many+=(--attach "$TMP/qa/s$i.png"); done
+expect_exit 2 "more than 50 attachments are refused" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" "$TMP/body.md" "${many[@]}"
+ADORNO_DRY_RUN=1 expect_exit 0 "50 attachments pass" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" "$TMP/body.md" "${many[@]:0:100}"
+expect_jq "all 50 listed" '(.attachments | length) == 50'
 
 echo "pr-edit"
 expect_exit 2 "non-conventional title refused" -- "$S/pr-edit" acme/docs#42 "Add stuff" "$TMP/body.md"
@@ -270,6 +295,11 @@ expect_jq "dry run" '.dryRun and .number == 42'
 expect_exit 0 "edits" -- "$S/pr-edit" acme/docs#42 "feat(api): add pagination" "$TMP/body.md"
 expect_jq "edited" '.edited and .title == "feat(api): add pagination"'
 grep -q "pr edit 42 -R acme/docs --title" "$FAKE_LOG" && ok "... through gh pr edit" || ko "... through gh pr edit" "$(tail -1 "$FAKE_LOG")"
+ADORNO_DRY_RUN=1 expect_exit 0 "dry run lists new proof" -- "$S/pr-edit" acme/docs#42 "feat: x" "$TMP/body.md" --attach "$TMP/qa/flow.webm"
+expect_jq "attachments listed" ".attachments == [\"$TMP/qa/flow.webm\"]"
+expect_exit 0 "edits with new proof" -- "$S/pr-edit" acme/docs#42 "feat: x" "$TMP/body.md" --attach "$TMP/qa/flow.webm"
+grep -q "pr edit 42 .* --attach $TMP/qa/flow.webm" "$FAKE_LOG" && ok "... handed to gh pr edit" || ko "... handed to gh pr edit" "$(tail -1 "$FAKE_LOG")"
+expect_exit 2 "a missing attachment is refused" -- "$S/pr-edit" acme/docs#42 "feat: x" "$TMP/body.md" --attach "$TMP/qa/none.webm"
 
 echo "run-check"
 expect_exit 0 "L3 open_pr inside the suite's run" -- "$S/run-check" acme/docs L3 open_pr
@@ -421,6 +451,21 @@ echo "pr-comment"
 ADORNO_DRY_RUN=1 expect_exit 0 "dry-run comment" -- "$S/pr-comment" acme/docs#42 "$TMP/body.md"
 expect_jq "body shown" '.dryRun and .body == "Fixed in abc123.\n"'
 expect_exit 5 "comment needs L3" -- env ADORNO_LEVEL=L2 "$S/pr-comment" acme/docs#42 "$TMP/body.md"
+mkdir -p "$TMP/qa"; : >"$TMP/qa/shot.PNG"; : >"$TMP/qa/notes.md"
+ADORNO_DRY_RUN=1 expect_exit 0 "dry-run comment with attachments" -- "$S/pr-comment" acme/docs#42 "$TMP/body.md" --attach "$TMP/qa/shot.PNG"
+expect_jq "attachments listed" ".attachments == [\"$TMP/qa/shot.PNG\"]"
+ADORNO_DRY_RUN=1 expect_exit 0 "no attachment: an empty list" -- "$S/pr-comment" acme/docs#42 "$TMP/body.md"
+expect_jq "empty list" '.attachments == []'
+: >"$TMP/qa/-c.png"
+ADORNO_DRY_RUN=1 expect_exit 0 "a path starting with - is a value, not a jq option" -- \
+  sh -c "cd \"$TMP/qa\" && \"$S/pr-comment\" acme/docs#42 \"$TMP/body.md\" --attach -c.png"
+expect_jq "listed as is" '.attachments == ["-c.png"]'
+expect_exit 0 "comment with an attachment" -- "$S/pr-comment" acme/docs#42 "$TMP/body.md" --attach "$TMP/qa/shot.PNG"
+grep -q "pr comment 42 .* --attach $TMP/qa/shot.PNG" "$FAKE_LOG" && ok "... handed to gh pr comment" || ko "... handed to gh pr comment" "$(tail -1 "$FAKE_LOG")"
+expect_exit 2 "a text file is not an attachment" -- "$S/pr-comment" acme/docs#42 "$TMP/body.md" --attach "$TMP/qa/notes.md"
+expect_exit 2 "--attach without a file" -- "$S/pr-comment" acme/docs#42 "$TMP/body.md" --attach
+FAKE_ARGV="$TMP/argv" expect_exit 0 "comment without attachment (empty array, bash 3.2 set -u)" -- "$S/pr-comment" acme/docs#42 "$TMP/body.md"
+grep -q -- "--attach" "$TMP/argv" && ko "... no --attach handed to gh" "$(cat "$TMP/argv")" || ok "... no --attach handed to gh"
 
 echo "pr-merged and pr-deploys (impact reports)"
 expect_exit 0 "merged PRs" -- "$S/pr-merged" acme/docs --since 2026-10-01
@@ -839,6 +884,10 @@ guard_at pass "$C" "" "$S/pr-workspace acme/docs#42 --dir /etc"
 guard_at pass "$C" "" "git commit --file=$TMP/loose.txt"
 mkdir -p "$C/.agent-run"; echo body >"$C/.agent-run/body.md"
 guard_at allow "$C" "" "$S/pr-edit acme/docs#42 'feat: x' .agent-run/body.md"
+mkdir -p "$C/.agent-run/qa"; : >"$C/.agent-run/qa/after.png"; : >"$TMP/loose.png"
+guard_at allow "$C" "" "$S/pr-edit acme/docs#42 'feat: x' .agent-run/body.md --attach '.agent-run/qa/after.png#After'"
+guard_at pass "$C" "" "$S/pr-edit acme/docs#42 'feat: x' .agent-run/body.md --attach $TMP/loose.png"
+guard_at pass "$C" "" "$S/pr-edit acme/docs#42 'feat: x' .agent-run/body.md --attach '$TMP/loose.png#alt'"
 guard_at allow "$C" "" "$S/git-push acme/docs --dir $C"
 
 echo "guard_bash: what the shell expands after the hook never gets allow (fourth security review)"

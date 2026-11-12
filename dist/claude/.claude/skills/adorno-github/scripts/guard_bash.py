@@ -694,13 +694,15 @@ def safe_dir(path, here):
 
 def safe_paths(args, here):
     """Every argument of an allowed script that names an existing file or folder passes safe_file / safe_dir:
-    `pr-edit … ~/.ssh/id_rsa` would publish it, `pr-workspace … --dir /etc` would work there."""
+    `pr-edit … ~/.ssh/id_rsa` would publish it, `pr-workspace … --dir /etc` would work there. An attachment's
+    `#alt` suffix is not part of its path (`--attach ~/x.png#alt` uploads ~/x.png)."""
     for a in args:
-        value = a.split("=", 1)[1] if a.startswith("--") and "=" in a else a
-        full = os.path.join(here, os.path.expanduser(value))
-        if value and os.path.exists(full):
-            if not (safe_dir(value, here) if os.path.isdir(full) else safe_file(value, here)):
-                return False
+        arg = a.split("=", 1)[1] if a.startswith("--") and "=" in a else a
+        for value in {arg, arg.split("#", 1)[0]}:
+            full = os.path.join(here, os.path.expanduser(value))
+            if value and os.path.exists(full):
+                if not (safe_dir(value, here) if os.path.isdir(full) else safe_file(value, here)):
+                    return False
     return True
 
 

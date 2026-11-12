@@ -289,6 +289,36 @@ thread_of() {
     || die "thread $3 does not belong to $1#$2 (it is on ${got:-an unknown PR})" "$E_POLICY"
 }
 
+# parse_attach [--attach FILE[#alt]]… — fills ATTACH (the values, for a dry run) and ATTACH_ARGS (gh's flags) from
+# the trailing options of pr-comment, pr-open and pr-edit; dies on anything else, a missing file, a file that is a symlink (a symlinked folder on the way is the guard's job:
+# it resolves the real path), a second
+# `#`, a type gh cannot upload (images and videos only) or more than gh's 50 — checked before anything is sent, since
+# gh publishes the uploads that succeeded even when another one fails. Empty arrays: expand with
+# ${ATTACH_ARGS[@]+"${ATTACH_ARGS[@]}"} (bash 3.2 and set -u).
+ATTACH=() ATTACH_ARGS=()
+parse_attach() {
+  local f
+  while [ $# -gt 0 ]; do
+    [ "$1" = "--attach" ] || die "unexpected argument '$1' (expected --attach FILE[#alt])" "$E_USAGE"
+    [ -n "${2:-}" ] || die "--attach needs a file" "$E_USAGE"
+    f="${2%%#*}"
+    [ "${2#*#}" = "${2##*#}" ] || die "one '#' at most (FILE#alt): $2" "$E_USAGE"
+    [ ! -L "$f" ] || die "attachment is a symlink: $f" "$E_USAGE"
+    [ -f "$f" ] || die "attachment not found: $f" "$E_USAGE"
+    case "$(printf '%s' "${f##*.}" | tr '[:upper:]' '[:lower:]')" in
+      png|jpg|jpeg|gif|webp|svg|mp4|mov|webm) ;;
+      *) die "gh only attaches images and videos (png jpg gif webp svg mp4 mov webm): $f" "$E_USAGE" ;;
+    esac
+    ATTACH+=("$2"); ATTACH_ARGS+=(--attach "$2"); shift 2
+  done
+  [ "${#ATTACH[@]}" -le 50 ] || die "gh attaches at most 50 files per command" "$E_USAGE"
+}
+
+# attach_json — the attachments as a JSON array (dry runs)
+attach_json() {  # through stdin: a path starting with `-` is not taken for a jq option
+  if [ "${#ATTACH[@]}" -eq 0 ]; then echo '[]'; else printf '%s\n' "${ATTACH[@]}" | jq -R . | jq -cs .; fi
+}
+
 # with_footer owner/repo FILE -> path of FILE, or of a copy with the repo's `reply_footer` appended
 with_footer() {
   local footer out

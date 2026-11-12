@@ -27,12 +27,12 @@ flowchart TD
 flowchart TD
   A["Called by workflow:pr:ship: owner/repo, branch, optional .agent-run folder (alone: run workflow:pr:ship)"] --> C["Local checks: branch_pattern, diff vs base, commits, tests, lint, typecheck"]
   C -->|"fail"| X["Stop and report"]
-  C -->|"ok"| G{"Verdict of the review loop clean?"}
-  G -->|"yes"| H["agent:adorno: title + description (What / How / mermaid / Verification)"]
-  G -->|"no, cap reached"| GH["Open points head the description"]
+  C -->|"ok"| G{"Verdict clean and proof complete?"}
+  G -->|"yes"| H["agent:adorno: title + description (What / How / mermaid / Verification / Proof)"]
+  G -->|"no: cap reached or proof missing"| GH["Open points head the description"]
   GH --> H
   H --> K["git-push owner/repo branch (no checkpoint)"]
-  K --> L["pr-open: ready for review if clean, --draft otherwise"]
+  K --> L["pr-open --attach qa media: ready for review if clean, --draft otherwise"]
   L --> NS{"agent-run folder given?"}
   NS -->|"yes"| NP["adorno-notion-sync pr_opened --pr-url"]
   NS -->|"no"| M["Return PR URL, ready or draft, suggest workflow:pr:watch"]
@@ -55,12 +55,14 @@ flowchart TD
   R --> V{"Red or orange left?"}
   V -->|"yes, under 2 rounds"| FX["pr-areas --files: by_area fix or perf of the file (nit, test: fallbacks), commit_skill commits"]
   FX --> R
-  V -->|"no"| OK["Clean: ready for review"]
+  V -->|"no"| PF["Proof in qa/: tests.log always, screenshots and video if visible (qa agent), checked by agent:adorno for secrets"]
   V -->|"cap reached"| DR["No PR yet: draft, open points first; PR open: not pushed; status.md"]
+  PF -->|"complete"| OK["Clean: ready for review"]
+  PF -->|"missing"| DR
   OK --> P{"PR open?"}
   DR --> P
-  P -->|"no"| H["pr_skill (default workflow:pr:open)"]
-  P -->|"yes"| I["pr-push, pr-edit if the scope moved"]
+  P -->|"no"| H["pr_skill (default workflow:pr:open), proof attached"]
+  P -->|"yes"| I["pr-push, pr-edit --attach if the scope moved or new proof"]
   H --> RD["Still a draft while clean: pr-ready"]
   I --> RD
   RD --> J["Report: commits, rounds, PR URL, ready or draft"]

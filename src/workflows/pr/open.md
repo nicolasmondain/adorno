@@ -18,15 +18,23 @@ No checkpoint: the PR opens without waiting for a "yes" (running the workflow is
 1. **Local checks**, in the clone where the branch lives: name matches `branch_pattern`, up to date with the base
    (`git fetch` then `git diff origin/<base>...HEAD`: the real scope), every commit in Conventional Commits format,
    tests, lint and typecheck green. A failure: stop and report.
-2. **The verdict** of the review loop (`workflow:pr:ship` step 4, in the run's `reviews/`): clean → the PR goes out
-   ready for review; a 🔴 or 🟠 still open after the cap → as draft, those points first in the description.
+2. **The verdict** of the review loop (`workflow:pr:ship` step 4, in the run's `reviews/`) and **the proof** (step 5,
+   the run's `qa/`): clean and the proof complete → the PR goes out ready for review; a 🔴 or 🟠 still open after
+   the cap, or a proof missing → as draft, those points first in the description.
 3. `agent:adorno` writes in English, in your voice (skill `adorno-voice`):
    - the title in Conventional Commit format for the main change;
    - the description following `process.md` § Pull requests: What / How / mermaid / Verification, `How to test` opened
      by the commands actually run and their result, link to the issue (`Fixes #n`), what the review loop fixed, the
-     🟡 and ❓ left (`Impact / Risks`). No real data.
+     🟡 and ❓ left (`Impact / Risks`). No real data;
+   - a `## Proof` section: each command of `qa/tests.log` with its result line (passed / failed counts) and, in a
+     `<details>` block, its first 30 failing lines (`… N more in qa/tests.log` beyond), checked for secrets like the
+     media — never the whole log (a body stops at 65,536 characters); each
+     screenshot or video of `qa/` cleared by `workflow:pr:ship` step 5, referenced inline
+     (`![what it shows](./qa/x.png)`; the body file written in the run folder, so the path resolves; a reference gh
+     cannot match is still uploaded, appended at the end).
 4. `adorno-github/scripts/git-push owner/repo <branch>` (never a direct `git push`), then `pr-open owner/repo <branch>
-   "<title>" <file>` (`--draft` only when the verdict is not clean): registry reviewers without the author.
+   "<title>" <file> [--draft] --attach <run>/qa/<media>…` (`--draft` only when the verdict is not clean or a proof is
+   missing; one `--attach` per screenshot or video, 50 at most): registry reviewers without the author.
 5. With an `.agent-run` folder: `adorno-notion-sync pr_opened <folder> owner/repo --pr-url <PR URL>` (the Notion page
    used as the spec gets the repo's `notion_spec.pr_opened` properties; a Notion failure is reported, the PR stays).
 6. Return the PR URL, ready or draft, and suggest `workflow:pr:watch owner/repo#N`.
