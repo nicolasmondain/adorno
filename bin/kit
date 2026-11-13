@@ -2025,7 +2025,7 @@ def guards(dest: Path, global_: bool, targets: list[str], plan: dict) -> dict[st
     out: dict[str, dict] = {}
     if "claude" in targets and (g := guard_path(plan, "claude")):
         rel = str(settings_path(dest, global_).relative_to(dest))
-        out[rel] = {"event": "PreToolUse", "matcher": "Bash", "timeout": 10,
+        out[rel] = {"event": "PreToolUse", "matcher": "Bash|AskUserQuestion", "timeout": 10,
                     "command": guard_command(dest / g, "ask" if global_ else "deny", "claude")}
     if global_:
         return out

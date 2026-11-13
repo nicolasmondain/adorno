@@ -203,7 +203,8 @@ the code passed to `python3 -c` or `node -e`, and the local scripts a command ru
 `HOME=` in front of an adorno script and any attempt to set `CLAUDE_CODE_SESSION_ID`. A command it cannot
 read (a variable as program, unclosed quotes) asks you; so does a bug in the hook. Where nobody can answer
 (`bypassPermissions` or `dontAsk`: a schedule, a headless run), every "asks" becomes a refusal carrying the reason,
-so the agent rewrites its command instead of hanging. Without `python3`, or
+so the agent rewrites its command instead of hanging; in Claude Code, a question to you (AskUserQuestion) is refused
+there too, with the `--unattended` rule, so a schedule that forgot the flag goes on. Without `python3`, or
 if the hook file is missing, it blocks every shell command rather than let it through.
 
 **Inside a run, no prompt.** The end of a workflow (`workflow:pr:ship`) runs the repo's `commit_skill` and
