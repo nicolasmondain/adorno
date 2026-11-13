@@ -28,7 +28,7 @@ flowchart TD
   A["Called by workflow:pr:ship: owner/repo, branch, optional .agent-run folder (alone: run workflow:pr:ship)"] --> C["Local checks: branch_pattern, diff vs base, commits, tests, lint, typecheck"]
   C -->|"fail"| X["Stop and report"]
   C -->|"ok"| G{"Verdict clean and proof complete?"}
-  G -->|"yes"| H["agent:adorno: title + description (What / How / mermaid / Verification / Proof)"]
+  G -->|"yes"| H["agent:adorno: title + description (What / How / mermaid / Verification / Sources / Proof)"]
   G -->|"no: cap reached or proof missing"| GH["Open points head the description"]
   GH --> H
   H --> K["git-push owner/repo branch (no checkpoint)"]
