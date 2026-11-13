@@ -9,7 +9,7 @@ flowchart TD
   TASK -->|"read path, cron, worker, rollout"| F2["engineering-scale.md"]
   TASK -->|"delivering, review discipline"| F3["process.md"]
   TASK -->|"scope, priorities, trade-offs"| F4["product.md"]
-  TASK -->|"text mentioning a person"| F5["personality.md (SBI)"]
+  TASK -->|"any decision, reply or text in their name; a text mentioning a person"| F5["personality.md (behaviors by situation, SBI)"]
   F1 --> RC["repo-conf: team, reviewers, context, vision, voice"]
   F2 --> RC
   F3 --> RC

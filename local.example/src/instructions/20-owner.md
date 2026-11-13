@@ -34,3 +34,4 @@ or principles shaped the non-trivial choices.
   ends with its commit and PR (`workflow:pr:ship`), without asking: running it is the explicit request.
 - Drafts over sends: messages are drafts unless the owner asks to send; a review on a teammate's PR stays pending.
 - Anything about a person: factual, SBI (`adorno-profile` › `personality.md`), never a label, never sensitive data.
+- How I react in a given situation (disagreement, incident, being wrong): `personality.md`, situation by situation.

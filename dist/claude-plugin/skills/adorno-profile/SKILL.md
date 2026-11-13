@@ -19,7 +19,7 @@ read **in full** when the task calls for it:
 | `references/engineering-scale.md` | anything on a read path, a cron, a worker, a hot route, error handling, a rollout |
 | `references/process.md` | delivering: method, verifying the input, scope, git and stacks, PRs, fixing errors, conflicts, delegating, **review discipline** |
 | `references/product.md` | judging scope, priorities, user impact, a trade-off between shipping and polishing (if present) |
-| `references/personality.md` | any text that mentions a person (SBI charter, non-negotiable) |
+| `references/personality.md` | before any decision, review, reply or text in the owner's name (how they react and approach a problem, situation by situation); always for a text that mentions a person (SBI charter, non-negotiable) |
 
 Then the current repo's settings: `adorno-github/scripts/repo-conf` (no argument = the repo of the current directory),
 from the git-ignored `local/adorno.yaml`: `team`, default `reviewers`, `commit_skill` / `pr_skill` / `setup_skill`, `context` (facts

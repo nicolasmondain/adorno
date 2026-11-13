@@ -9,8 +9,9 @@ flowchart TD
   NV --> REG
   KN --> REG{"Pick the register"}
   REG -->|"unclear"| ASK["Ask the owner"]
-  ASK --> DR
-  REG -->|"GitHub review, thread reply, PR description, Slack, Notion"| DR["Draft with the channel section and ghostwriting rules"]
+  ASK --> UC
+  REG -->|"GitHub review, thread reply, PR description, Slack, Notion"| UC["Closest use case in voice.md: mirror its examples, avoid its counter-examples"]
+  UC --> DR["Draft with the use case, the channel section and ghostwriting rules"]
   DR --> GH{"GitHub?"}
   GH -->|"yes"| BG["English, conventional-comment badge per severity, 1-4 sentences"]
   GH -->|"no"| CH["Channel rules, SBI for anything about a person"]

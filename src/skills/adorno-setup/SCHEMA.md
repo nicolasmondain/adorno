@@ -18,11 +18,32 @@ flowchart TD
   SK --> AN
   NT --> AN
   FL --> AN
-  AN --> FI["Profile references, voice.md, voice knobs"]
+  AN --> FI["Profile references, voice knobs"]
+  AN -.->|"voice.md, personality.md"| MV["Mode voice, steps 1 and 3-5, same corpus"]
+  MV --> FI
   FI --> SU["Summary 15-30 lines: local/src/instructions/20-owner.md"]
   SU --> VI["Vision: local/vision.md"]
   VI --> SH["Show each file in full, write once validated"]
   SH --> AP["bin/kit check, offer bin/kit install --global"]
+```
+
+## Mode `voice`
+
+```mermaid
+flowchart TD
+  T["Trigger: voice or personality missing, off, or to refresh"] --> EX["Existing voice.md and personality.md: migrate into the template's sections, nothing lost, show the diff"]
+  EX --> CO["Corpus the owner agrees to (reused from mode profile if gathered): GitHub voice-samples, Slack, Notion, files"]
+  CO --> VO["Voice: classify samples by use case, 2-3 anonymized examples and one counter-example each; openers, closings, emojis, phrases per channel"]
+  CO --> PE["Personality: behaviors by situation from the corpus, with evidence"]
+  PE --> IQ["One question at a time for the empty situations"]
+  VO --> GA{"Use case or situation with nothing real?"}
+  IQ --> GA
+  GA -->|"yes"| AK["Ask for one example, or leave it out; never invent"]
+  GA -->|"no"| SH
+  AK --> SH["Show each file in full, write once validated"]
+  SH --> AP["bin/kit check, offer bin/kit install --global"]
+  AP --> TR["Test drafts with adorno-voice: one review comment, one Slack reply"]
+  TR -.->|"doesn't sound right"| VO
 ```
 
 ## Mode `repo`
