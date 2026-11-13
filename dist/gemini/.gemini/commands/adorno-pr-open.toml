@@ -18,6 +18,10 @@ No checkpoint: the PR opens without waiting for a "yes" (running the workflow is
    - the description following `process.md` § Pull requests: What / How / mermaid / Verification, `How to test` opened
      by the commands actually run and their result, link to the issue (`Fixes #n`), what the review loop fixed, the
      🟡 and ❓ left (`Impact / Risks`). No real data;
+   - a `## Sources` section, before `## Proof`: one line per Notion page, doc (`url`) and Slack thread of the run's
+     `refs.json`, in the request's order, its title from `source.md` § Sources (`- [Notion · Export CSV](<url>)`),
+     the URL copied verbatim from `refs.json`. Called alone with links in the request and no `refs.json` in the run:
+     `adorno-inputs/scripts/input-refs "<request>" > <run>/refs.json` first;
    - a `## Proof` section: each command of `qa/tests.log` with its result line (passed / failed counts) and, in a
      `<details>` block, its first 30 failing lines (`… N more in qa/tests.log` beyond), checked for secrets like the
      media — never the whole log (a body stops at 65,536 characters); each
@@ -25,8 +29,10 @@ No checkpoint: the PR opens without waiting for a "yes" (running the workflow is
      (`![what it shows](./qa/x.png)`; the body file written in the run folder, so the path resolves; a reference gh
      cannot match is still uploaded, appended at the end).
 4. `adorno-github/scripts/git-push owner/repo <branch>` (never a direct `git push`), then `pr-open owner/repo <branch>
-   "<title>" <file> [--draft] --attach <run>/qa/<media>…` (`--draft` only when the verdict is not clean or a proof is
-   missing; one `--attach` per screenshot or video, 50 at most): registry reviewers without the author.
+   "<title>" <file> [--draft] [--refs <run>/refs.json] --attach <run>/qa/<media>…` (`--draft` only when the verdict is
+   not clean or a proof is missing; `--refs` whenever the run has a `refs.json`: a missing source is refused with
+   exit 2, add it to the body and call again; one `--attach` per screenshot or video, 50 at most): registry reviewers
+   without the author.
 5. With an `.agent-run` folder: `adorno-notion-sync pr_opened <folder> owner/repo --pr-url <PR URL>` (the Notion page
    used as the spec gets the repo's `notion_spec.pr_opened` properties; a Notion failure is reported, the PR stays).
 6. Return the PR URL, ready or draft, and suggest `workflow:pr:watch owner/repo#N`.

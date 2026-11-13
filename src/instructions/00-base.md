@@ -35,5 +35,7 @@
   branch, never `--no-verify`.
 - Commits in Conventional Commits format (`adorno-commit` skill), numbered in a stack. An `agent:<type>:*` agent only
   produces commits of its type.
+- A PR made from a Notion ticket, a spec, a doc or a Slack thread passed in the request links each one, verbatim, in
+  a `## Sources` section of its description (a GitHub issue: `Fixes #N`).
 - Never a merge, a tag, a push to the default branch or a force push without explicit agreement
   (`--force-with-lease` only, and only if they ask for it).
