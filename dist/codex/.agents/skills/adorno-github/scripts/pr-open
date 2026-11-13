@@ -1,20 +1,28 @@
 #!/usr/bin/env bash
-# Usage: pr-open owner/repo HEAD_BRANCH "type(scope): title" BODY_FILE [--draft] [--attach FILE[#alt]]…
+# Usage: pr-open owner/repo HEAD_BRANCH "type(scope): title" BODY_FILE [--draft] [--refs REFS_JSON] [--attach FILE[#alt]]…
 # Opens a PR against the repo's base branch and requests the repo's reviewers. Needs L3.
 # --attach: screenshots or videos for the description (`![alt](./file)` in it is rewritten to the upload).
+# --refs: the run's refs.json; the body must link each Notion page, doc URL and Slack thread of the request.
 # The title must be a Conventional Commit header; the branch must match `branch_pattern` (repos.yaml).
 # Reviewers come from repos.yaml, minus the PR author (GitHub rejects the whole request otherwise).
 . "$(dirname "$0")/_lib.sh"
 
 split_repo "${1:-}"
-head="${2:-}"; title="${3:-}"; body="${4:-}"; draft=""
+head="${2:-}"; title="${3:-}"; body="${4:-}"; draft="" refs=""
 [ -n "$head" ] && [ -n "$title" ] && [ -n "$body" ] \
-  || die 'usage: pr-open owner/repo HEAD_BRANCH "type(scope): title" BODY_FILE [--draft] [--attach FILE]…' "$E_USAGE"
+  || die 'usage: pr-open owner/repo HEAD_BRANCH "type(scope): title" BODY_FILE [--draft] [--refs FILE] [--attach FILE]…' "$E_USAGE"
 shift 4
 rest=()
-for a in "$@"; do if [ "$a" = "--draft" ]; then draft="--draft"; else rest+=("$a"); fi; done
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --draft) draft="--draft"; shift ;;
+    --refs) [ -n "${2:-}" ] || die "--refs needs the run's refs.json" "$E_USAGE"; refs="$2"; shift 2 ;;
+    *) rest+=("$1"); shift ;;
+  esac
+done
 parse_attach ${rest[@]+"${rest[@]}"}
 [ -s "$body" ] || die "empty PR body: $body" "$E_USAGE"
+[ -z "$refs" ] || require_sources "$body" "$refs"
 require_level "$REPO" L3 open_pr
 
 require_cc_title "$title"

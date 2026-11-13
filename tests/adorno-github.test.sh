@@ -283,6 +283,25 @@ many=(); for i in $(seq 1 51); do : >"$TMP/qa/s$i.png"; many+=(--attach "$TMP/qa
 expect_exit 2 "more than 50 attachments are refused" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" "$TMP/body.md" "${many[@]}"
 ADORNO_DRY_RUN=1 expect_exit 0 "50 attachments pass" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" "$TMP/body.md" "${many[@]:0:100}"
 expect_jq "all 50 listed" '(.attachments | length) == 50'
+# the request's sources, as adorno-inputs saves them: the body must link the Notion page, the doc and the Slack thread
+NOTION="https://www.notion.so/acme/Export-CSV-0123456789abcdef0123456789abcdef"
+DOC="https://docs.acme.dev/export"
+SLACK="https://acme.slack.com/archives/C024BE91L/p1730800000000100"
+"$ROOT/src/skills/adorno-inputs/scripts/input-refs" "Build $NOTION per $DOC, decided in $SLACK, see acme/docs#3 and $TMP/body.md" \
+  >"$TMP/refs.json"
+printf '## What\nExport.\n\n## Sources\n- [Notion · Export CSV](%s)\n- [Doc](%s)\n- [Slack](%s)\n\nFixes #3\n' \
+  "$NOTION" "$DOC" "$SLACK" >"$TMP/sbody.md"
+grep -v notion.so "$TMP/sbody.md" >"$TMP/nobody.md"
+ADORNO_DRY_RUN=1 expect_exit 0 "every source linked passes (the issue and the file are not required)" -- "$S/pr-open" acme/docs \
+  fix/lem-9-x "fix: add stuff" "$TMP/sbody.md" --refs "$TMP/refs.json"
+ADORNO_DRY_RUN=1 expect_exit 2 "a body without the Notion link is refused" -- "$S/pr-open" acme/docs fix/lem-9-x \
+  "fix: add stuff" "$TMP/nobody.md" --refs "$TMP/refs.json"
+ADORNO_DRY_RUN=1 expect_exit 0 "--refs after --attach and --draft" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" \
+  "$TMP/sbody.md" --attach "$TMP/qa/after.png" --draft --refs "$TMP/refs.json"
+expect_jq "still a draft, the attachment kept" '.draft and (.attachments | length) == 1'
+expect_exit 2 "--refs on a missing file is refused" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" "$TMP/sbody.md" \
+  --refs "$TMP/none.json"
+expect_exit 2 "--refs without a file is refused" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" "$TMP/sbody.md" --refs
 
 echo "pr-edit"
 expect_exit 2 "non-conventional title refused" -- "$S/pr-edit" acme/docs#42 "Add stuff" "$TMP/body.md"
@@ -300,6 +319,11 @@ expect_jq "attachments listed" ".attachments == [\"$TMP/qa/flow.webm\"]"
 expect_exit 0 "edits with new proof" -- "$S/pr-edit" acme/docs#42 "feat: x" "$TMP/body.md" --attach "$TMP/qa/flow.webm"
 grep -q "pr edit 42 .* --attach $TMP/qa/flow.webm" "$FAKE_LOG" && ok "... handed to gh pr edit" || ko "... handed to gh pr edit" "$(tail -1 "$FAKE_LOG")"
 expect_exit 2 "a missing attachment is refused" -- "$S/pr-edit" acme/docs#42 "feat: x" "$TMP/body.md" --attach "$TMP/qa/none.webm"
+ADORNO_DRY_RUN=1 expect_exit 2 "a rewrite that drops the Notion link is refused" -- "$S/pr-edit" acme/docs#42 "feat: x" \
+  "$TMP/nobody.md" --refs "$TMP/refs.json"
+ADORNO_DRY_RUN=1 expect_exit 0 "a rewrite that keeps every source passes, with new proof" -- "$S/pr-edit" acme/docs#42 \
+  "feat: x" "$TMP/sbody.md" --refs "$TMP/refs.json" --attach "$TMP/qa/flow.webm"
+expect_jq "attachments listed" ".attachments == [\"$TMP/qa/flow.webm\"]"
 
 echo "run-check"
 expect_exit 0 "L3 open_pr inside the suite's run" -- "$S/run-check" acme/docs L3 open_pr

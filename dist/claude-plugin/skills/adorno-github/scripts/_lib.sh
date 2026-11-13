@@ -319,6 +319,21 @@ attach_json() {  # through stdin: a path starting with `-` is not taken for a jq
   if [ "${#ATTACH[@]}" -eq 0 ]; then echo '[]'; else printf '%s\n' "${ATTACH[@]}" | jq -R . | jq -cs .; fi
 }
 
+# require_sources BODY_FILE REFS_FILE — dies unless the body links every Notion page, doc URL and Slack thread of the
+# request (REFS_FILE: the run's refs.json, written by adorno-inputs/scripts/input-refs), each URL verbatim. GitHub
+# issues go through `Fixes #N`, local files do not resolve on GitHub: neither is required.
+require_sources() {
+  local urls u missing=""
+  [ -f "$2" ] || die "--refs: file not found: $2" "$E_USAGE"
+  urls="$(jq -r '.refs[]? | select(.kind == "notion" or .kind == "url" or .kind == "slack") | .url // empty' "$2")" \
+    || die "--refs: not a refs.json from input-refs: $2" "$E_USAGE"
+  while IFS= read -r u; do
+    [ -n "$u" ] || continue
+    grep -qF -- "$u" "$1" || missing="$missing $u"
+  done <<<"$urls"
+  [ -z "$missing" ] || die "PR body misses the sources of the request (add them under ## Sources):$missing" "$E_USAGE"
+}
+
 # with_footer owner/repo FILE -> path of FILE, or of a copy with the repo's `reply_footer` appended
 with_footer() {
   local footer out

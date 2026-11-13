@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
-# Usage: pr-edit owner/repo#N "type(scope): title" BODY_FILE [--attach FILE[#alt]]…
+# Usage: pr-edit owner/repo#N "type(scope): title" BODY_FILE [--refs REFS_JSON] [--attach FILE[#alt]]…
 # Updates the title and description of your open PR (workflow:pr:ship, when a workflow pushed new commits to it or
 # has new proof for it: screenshots or videos, uploaded by gh, `![alt](./file)` in the body rewritten to the upload).
 # Only your own PR, from the same repository (not a fork), still open. The title must be a Conventional Commit header.
+# --refs: the run's refs.json; the body must link each Notion page, doc URL and Slack thread of the request.
 # Needs L3 and the `open_pr` action. ADORNO_DRY_RUN=1 or a dry-run run only prints.
 . "$(dirname "$0")/_lib.sh"
 
 parse_ref "${1:-}"
-title="${2:-}"; body="${3:-}"
-[ -n "$title" ] && [ -n "$body" ] || die 'usage: pr-edit owner/repo#N "type(scope): title" BODY_FILE [--attach FILE]…' "$E_USAGE"
-shift 3; parse_attach "$@"
+title="${2:-}"; body="${3:-}"; refs=""
+[ -n "$title" ] && [ -n "$body" ] || die 'usage: pr-edit owner/repo#N "type(scope): title" BODY_FILE [--refs FILE] [--attach FILE]…' "$E_USAGE"
+shift 3
+rest=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --refs) [ -n "${2:-}" ] || die "--refs needs the run's refs.json" "$E_USAGE"; refs="$2"; shift 2 ;;
+    *) rest+=("$1"); shift ;;
+  esac
+done
+parse_attach ${rest[@]+"${rest[@]}"}
 [ -s "$body" ] || die "empty PR body: $body" "$E_USAGE"
+[ -z "$refs" ] || require_sources "$body" "$refs"
 require_cc_title "$title"
 require_level "$REPO" L3 open_pr
 require_own_open_pr "$REPO" "$NUM" >/dev/null
