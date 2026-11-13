@@ -34,7 +34,8 @@ No checkpoint: the PR opens without waiting for a "yes" (running the workflow is
 4. `adorno-github/scripts/git-push owner/repo <branch>` (never a direct `git push`), then `pr-open owner/repo <branch>
    "<title>" <file> [--draft] [--refs <run>/refs.json [--withhold <url>]…] --attach <run>/qa/<media>…` (`--draft`
    only when the verdict is not clean or a proof is missing; `--refs` whenever the run has a `refs.json`: a missing
-   source is refused with exit 2, add it to the body, or withhold it under the step 3 rule, and call again; one
+   source (or one not written as `[title](url)`) is refused with exit 2, add it to the body, or withhold it under the
+   step 3 rule, and call again; one
    `--attach` per screenshot or video, 50 at most): registry reviewers without the author.
 5. With an `.agent-run` folder: `adorno-notion-sync pr_opened <folder> owner/repo --pr-url <PR URL>` (the Notion page
    used as the spec gets the repo's `notion_spec.pr_opened` properties; a Notion failure is reported, the PR stays).

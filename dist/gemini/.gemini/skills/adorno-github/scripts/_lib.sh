@@ -322,8 +322,8 @@ attach_json() {  # through stdin: a path starting with `-` is not taken for a jq
 # require_sources BODY_FILE REFS_FILE [WITHHELD_URL…] — dies unless the body links every Notion page, doc URL and Slack
 # thread of the request (REFS_FILE: the run's refs.json, written by adorno-inputs/scripts/input-refs), each URL verbatim
 # as a markdown link target `(url)`. A WITHHELD_URL (--withhold) is a doc link (kind url) of REFS_FILE not to publish:
-# not required; a Notion page, a Slack thread or a URL outside REFS_FILE is refused. GitHub issues go through
-# `Fixes #N`, local files do not resolve on GitHub: neither is required.
+# not required, and refused if the body still contains it; a Notion page, a Slack thread or a URL outside REFS_FILE is
+# refused. GitHub issues go through `Fixes #N`, local files do not resolve on GitHub: neither is required.
 require_sources() {
   local body="$1" refs="$2" urls u w skip missing=""
   shift 2
@@ -333,6 +333,7 @@ require_sources() {
   for w in "$@"; do
     jq -e --arg w "$w" 'any(.refs[]; .kind == "url" and .url == $w)' "$refs" >/dev/null \
       || die "--withhold: not a doc link (kind url) of $refs: $w" "$E_USAGE"
+    ! grep -qF -- "$w" "$body" || die "--withhold: the body still contains a withheld link: $w" "$E_USAGE"
   done
   urls="$(jq -r '.refs[] | select(.kind == "notion" or .kind == "url" or .kind == "slack") | .url' "$refs")"
   while IFS= read -r u; do
@@ -341,7 +342,9 @@ require_sources() {
     for w in "$@"; do [ "$u" != "$w" ] || skip=1; done
     [ -n "$skip" ] || grep -qF -- "($u)" "$body" || missing="$missing $u"
   done <<<"$urls"
-  [ -z "$missing" ] || die "PR body misses the sources of the request (add them under ## Sources):$missing" "$E_USAGE"
+  [ -z "$missing" ] \
+    || die "PR body misses the sources of the request, each as a markdown link [title](url) under ## Sources:$missing" \
+      "$E_USAGE"
 }
 
 # with_footer owner/repo FILE -> path of FILE, or of a copy with the repo's `reply_footer` appended

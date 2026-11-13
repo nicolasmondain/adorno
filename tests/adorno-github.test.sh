@@ -301,6 +301,7 @@ expect_jq "nothing withheld" '.withheld == []'
 ADORNO_DRY_RUN=1 expect_exit 2 "a body without the Notion link is refused" -- "$S/pr-open" acme/docs fix/lem-9-x \
   "fix: add stuff" "$TMP/nobody.md" --refs "$TMP/refs.json"
 grep -qF "$NOTION" "$TMP/err" && ok "... naming the Notion URL" || ko "... naming the Notion URL" "$(cat "$TMP/err")"
+grep -qF '[title](url)' "$TMP/err" && ok "... naming the expected form" || ko "... naming the expected form" "$(cat "$TMP/err")"
 ADORNO_DRY_RUN=1 expect_exit 2 "a body without the doc link is refused" -- "$S/pr-open" acme/docs fix/lem-9-x \
   "fix: add stuff" "$TMP/nodoc.md" --refs "$TMP/refs.json"
 grep -qF "$DOC" "$TMP/err" && ok "... naming the doc URL" || ko "... naming the doc URL" "$(cat "$TMP/err")"
@@ -328,6 +329,10 @@ grep -qF "$SIGNED" "$TMP/err" && ok "... naming it" || ko "... naming it" "$(cat
 ADORNO_DRY_RUN=1 expect_exit 0 "--withhold lets a doc link of refs.json stay out" -- "$S/pr-open" acme/docs fix/lem-9-x \
   "fix: add stuff" "$TMP/wbody.md" --refs "$TMP/srefs.json" --withhold "$SIGNED"
 expect_jq "... and lists it" ".withheld == [\"$SIGNED\"]"
+printf '## Sources\n- [Notion · Export CSV](%s)\n- Export sample: %s\n' "$NOTION" "$SIGNED" >"$TMP/leak.md"
+ADORNO_DRY_RUN=1 expect_exit 2 "a withheld doc link still in the body is refused" -- "$S/pr-open" acme/docs fix/lem-9-x \
+  "fix: add stuff" "$TMP/leak.md" --refs "$TMP/srefs.json" --withhold "$SIGNED"
+grep -q 'still contains a withheld link' "$TMP/err" && ok "... said so" || ko "... said so" "$(cat "$TMP/err")"
 expect_exit 0 "opened with a withheld doc link" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" "$TMP/wbody.md" \
   --refs "$TMP/srefs.json" --withhold "$SIGNED"
 expect_jq "... the output lists it" ".opened and .withheld == [\"$SIGNED\"]"
@@ -376,6 +381,9 @@ expect_jq "attachments listed, nothing withheld" ".attachments == [\"$TMP/qa/flo
 ADORNO_DRY_RUN=1 expect_exit 0 "a rewrite can withhold a doc link of refs.json" -- "$S/pr-edit" acme/docs#42 "feat: x" \
   "$TMP/wbody.md" --refs "$TMP/srefs.json" --withhold "$SIGNED"
 expect_jq "... and lists it" ".withheld == [\"$SIGNED\"]"
+expect_exit 0 "edits with a withheld doc link" -- "$S/pr-edit" acme/docs#42 "feat: x" "$TMP/wbody.md" \
+  --refs "$TMP/srefs.json" --withhold "$SIGNED"
+expect_jq "... the output lists it" ".edited and .withheld == [\"$SIGNED\"]"
 ADORNO_DRY_RUN=1 expect_exit 2 "pr-edit: --withhold needs --refs" -- "$S/pr-edit" acme/docs#42 "feat: x" \
   "$TMP/wbody.md" --withhold "$SIGNED"
 
