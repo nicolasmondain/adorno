@@ -100,12 +100,18 @@ check "SCHEMA.md is neither an item nor shipped" '[ -f "$ROOT/src/agents/review/
 check "your own rules and keys are kept" 'jq -e ".model == \"x\" and (.permissions.allow | index(\"Bash(make:*)\")) != null" "$A/.claude/settings.local.json" >/dev/null'
 check "the repo's and the default rules are added" 'jq -e "(.permissions.allow | index(\"Bash(npm test:*)\")) != null and (.permissions.deny | index(\"Bash(gh pr merge:*)\")) != null" "$A/.claude/settings.local.json" >/dev/null'
 check "the guard hook refuses direct writes in this repo" 'jq -e "[.hooks.PreToolUse[].hooks[].command | select(contains(\"guard_bash.py\") and contains(\" deny --format=claude\"))] | length == 1" "$A/.claude/settings.local.json" >/dev/null'
+check "the Claude guard also sees questions (unattended runs)" 'jq -e "[.hooks.PreToolUse[] | select(.matcher == \"Bash|AskUserQuestion\")] | length == 1" "$A/.claude/settings.local.json" >/dev/null'
 check "Codex gets the same hook" 'jq -e "[.hooks.PreToolUse[] | select(.matcher == \"^Bash$\") | .hooks[].command | select(contains(\"--format=codex\"))] | length == 1" "$A/.codex/hooks.json" >/dev/null'
 HOOK="$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$A/.claude/settings.local.json")"
 got="$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git -C x push"}}' | sh -c "$HOOK" | jq -r .hookSpecificOutput.permissionDecision)"
 check "the installed hook runs and refuses" '[ "$got" = deny ]'
+got="$(printf '%s' '{"tool_name":"AskUserQuestion","permission_mode":"bypassPermissions","tool_input":{}}' | sh -c "$HOOK" | jq -r .hookSpecificOutput.permissionDecision)"
+check "the installed hook refuses a question in an unattended run" '[ "$got" = deny ]'
 printf '%s' '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | PATH=/nonexistent /bin/sh -c "$HOOK" 2>/dev/null; got=$?
 check "without python3 the hook blocks (exit 2), it does not let commands through" '[ "$got" = 2 ]'
+# shellcheck disable=SC2034  # err is read by check's eval on the next line
+err="$(printf '%s' '{"tool_name":"AskUserQuestion","permission_mode":"default","tool_input":{}}' | PATH=/nonexistent /bin/sh -c "$HOOK" 2>&1 >/dev/null)"; got=$?
+check "without python3 the hook also blocks questions (exit 2), and says so" '[ "$got" = 2 ] && printf "%s" "$err" | grep -q "questions"'
 check "tiers become Claude models" 'grep -q "^model: opus" "$A/.claude/agents/adorno.md"'
 check "frontier becomes fable" 'grep -q "^model: fable" "$A/.claude/agents/adorno-agent-core-planner.md"'
 check "an agent's effort reaches Claude" 'grep -q "^effort: low" "$A/.claude/agents/adorno-agent-core-triage.md"'

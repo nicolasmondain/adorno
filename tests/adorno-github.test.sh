@@ -742,6 +742,13 @@ out="$(jq -n '{tool_name: "Bash", permission_mode: "dontAsk", tool_input: {comma
 expect_jq "dontAsk has nobody to answer either: deny" '.hookSpecificOutput.permissionDecision == "deny"'
 out="$(jq -n '{tool_name: "Bash", permission_mode: "default", tool_input: {command: "c=push; git $c"}}' | python3 "$S/guard_bash.py" ask)"
 expect_jq "an interactive session still asks" '.hookSpecificOutput.permissionDecision == "ask"'
+out="$(jq -n '{tool_name: "AskUserQuestion", permission_mode: "bypassPermissions", tool_input: {}}' | python3 "$S/guard_bash.py" deny)"
+expect_jq "a question in a scheduled run: deny, with the --unattended rule" \
+  '.hookSpecificOutput.permissionDecision == "deny" and (.hookSpecificOutput.permissionDecisionReason | test("--unattended"))'
+out="$(jq -n '{tool_name: "AskUserQuestion", permission_mode: "dontAsk", tool_input: {}}' | python3 "$S/guard_bash.py" ask)"
+expect_jq "a question in dontAsk: deny" '.hookSpecificOutput.permissionDecision == "deny"'
+out="$(jq -n '{tool_name: "AskUserQuestion", permission_mode: "default", tool_input: {}}' | python3 "$S/guard_bash.py" deny)"
+[ -z "$out" ] && ok "a question in an interactive session passes untouched" || ko "a question in an interactive session passes untouched" "$out"
 
 echo "a registry older than the personal layer"
 printf 'repos: {}\n' >"$TMP/layer.yaml"

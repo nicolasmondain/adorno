@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Claude Code PreToolUse hook for Bash: stops the writes that must go through adorno's scripts.
+"""Claude Code PreToolUse hook for Bash and AskUserQuestion: stops the writes that must go through adorno's scripts.
 
 Usage (bin/kit install writes it into the settings of Claude Code, Codex and Gemini CLI):
     guard_bash.py deny|ask [--format=claude|codex|gemini]
@@ -11,7 +11,9 @@ commands (; && || |), subshells, $( … ) and backticks, $(( … )) arithmetic, 
 node -e and the local scripts a command runs (./x.sh, bash x.sh, python3 x.py). A command it cannot read (a variable as
 program, unbalanced quotes) asks, and so does a bug in the guard. Where nobody answers a prompt (permission_mode
 `bypassPermissions` or `dontAsk`: a schedule, a headless run), every `ask` becomes a `deny` carrying the reason, so the
-agent rewrites its command instead of hanging. Anything else passes untouched (no output, exit 0).
+agent rewrites its command instead of hanging. There, a question to the owner (AskUserQuestion) is denied too, with the
+--unattended rule, so a scheduled run that forgot the flag goes on instead of waiting for an answer. Anything else
+passes untouched (no output, exit 0).
 
 Inside a run (Claude Code only), the end of a workflow goes through without a prompt: a command made only of
 `git add` / `git commit` with listed flags (never --no-verify, -f, a message read from outside the repo),
@@ -903,6 +905,8 @@ def granted(checks, session):
 
 
 FORMATS = ("claude", "codex", "gemini")
+UNATTENDED_QUESTION = ("nobody can answer a question here (bypassPermissions or dontAsk): do not ask, apply the "
+                       "'Unattended runs' rule of your instructions as if the run had --unattended, and go on")
 
 
 def answer(fmt, decision, reason):
@@ -926,6 +930,12 @@ def main():
         event = json.load(sys.stdin)
     except ValueError:
         return 0
+    # bypassPermissions (a schedule, an agent profile) and dontAsk: no one answers a prompt, the tool call would hang
+    unattended = event.get("permission_mode") in ("bypassPermissions", "dontAsk")
+    if event.get("tool_name") == "AskUserQuestion":
+        if unattended:
+            print(json.dumps(answer(fmt, "deny", UNATTENDED_QUESTION)))
+        return 0
     if event.get("tool_name") not in ("Bash", "run_shell_command", "shell"):
         return 0
     tool_input = event.get("tool_input") or {}
@@ -934,8 +944,6 @@ def main():
         command = " ".join(shlex.quote(str(c)) for c in command)
     command = str(command or "")
     cwd = event.get("cwd") or tool_input.get("directory") or os.getcwd()
-    # bypassPermissions (a schedule, an agent profile) and dontAsk: no one answers a prompt, the tool call would hang
-    unattended = event.get("permission_mode") in ("bypassPermissions", "dontAsk")
     try:
         found = check(command, cwd=cwd)
         decision, reason = (mode, MESSAGES[found]) if found else (None, None)

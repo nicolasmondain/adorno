@@ -2011,10 +2011,10 @@ def guard_path(plan: dict, target: str) -> str | None:
 
 
 def guard_command(script: Path, mode: str, fmt: str) -> str:
-    """The hook command. Closed on failure: without python3, or without the guard file, every shell command is
-    refused (exit 2) rather than let through."""
-    return (f'command -v python3 >/dev/null 2>&1 || {{ echo "adorno: python3 is missing, shell commands are blocked '
-            f'(install python3, or bin/kit uninstall)" >&2; exit 2; }}; '
+    """The hook command. Closed on failure: without python3, or without the guard file, every shell command and
+    every question (Claude Code) is refused (exit 2) rather than let through."""
+    return (f'command -v python3 >/dev/null 2>&1 || {{ echo "adorno: python3 is missing, the guard blocks shell commands '
+            f'and questions (install python3, or bin/kit uninstall)" >&2; exit 2; }}; '
             f'python3 "{script}" {mode} --format={fmt} || exit 2')
 
 
@@ -2025,7 +2025,7 @@ def guards(dest: Path, global_: bool, targets: list[str], plan: dict) -> dict[st
     out: dict[str, dict] = {}
     if "claude" in targets and (g := guard_path(plan, "claude")):
         rel = str(settings_path(dest, global_).relative_to(dest))
-        out[rel] = {"event": "PreToolUse", "matcher": "Bash", "timeout": 10,
+        out[rel] = {"event": "PreToolUse", "matcher": "Bash|AskUserQuestion", "timeout": 10,
                     "command": guard_command(dest / g, "ask" if global_ else "deny", "claude")}
     if global_:
         return out
