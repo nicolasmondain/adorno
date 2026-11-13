@@ -1,24 +1,40 @@
 #!/usr/bin/env bash
-# Usage: pr-edit owner/repo#N "type(scope): title" BODY_FILE [--attach FILE[#alt]]…
+# Usage: pr-edit owner/repo#N "type(scope): title" BODY_FILE [--refs REFS_JSON [--withhold URL]…] [--attach FILE[#alt]]…
 # Updates the title and description of your open PR (workflow:pr:ship, when a workflow pushed new commits to it or
 # has new proof for it: screenshots or videos, uploaded by gh, `![alt](./file)` in the body rewritten to the upload).
 # Only your own PR, from the same repository (not a fork), still open. The title must be a Conventional Commit header.
+# --refs: the run's refs.json; the body must link each Notion page, doc URL and Slack thread of the request.
+# --withhold: a doc link (kind url) of the refs.json not to publish (never Notion or Slack), listed in `withheld`.
 # Needs L3 and the `open_pr` action. ADORNO_DRY_RUN=1 or a dry-run run only prints.
 . "$(dirname "$0")/_lib.sh"
 
 parse_ref "${1:-}"
-title="${2:-}"; body="${3:-}"
-[ -n "$title" ] && [ -n "$body" ] || die 'usage: pr-edit owner/repo#N "type(scope): title" BODY_FILE [--attach FILE]…' "$E_USAGE"
-shift 3; parse_attach "$@"
+title="${2:-}"; body="${3:-}"; refs=""
+[ -n "$title" ] && [ -n "$body" ] || die 'usage: pr-edit owner/repo#N "type(scope): title" BODY_FILE [--refs FILE [--withhold URL]…] [--attach FILE]…' "$E_USAGE"
+shift 3
+rest=() withhold=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --refs) [ -n "${2:-}" ] || die "--refs needs the run's refs.json" "$E_USAGE"; refs="$2"; shift 2 ;;
+    --withhold) [ -n "${2:-}" ] || die "--withhold needs a doc URL of the run's refs.json" "$E_USAGE"; withhold+=("$2"); shift 2 ;;
+    *) rest+=("$1"); shift ;;
+  esac
+done
+[ ${#withhold[@]} -eq 0 ] || [ -n "$refs" ] || die "--withhold needs --refs" "$E_USAGE"
+parse_attach ${rest[@]+"${rest[@]}"}
 [ -s "$body" ] || die "empty PR body: $body" "$E_USAGE"
+[ -z "$refs" ] || require_sources "$body" "$refs" ${withhold[@]+"${withhold[@]}"}
+if [ ${#withhold[@]} -eq 0 ]; then withheld='[]'; else withheld="$(printf '%s\n' "${withhold[@]}" | jq -R . | jq -cs .)"; fi
 require_cc_title "$title"
 require_level "$REPO" L3 open_pr
 require_own_open_pr "$REPO" "$NUM" >/dev/null
 
 if dry_run; then
   jq -n --arg repo "$REPO" --argjson n "$NUM" --arg title "$title" --argjson att "$(attach_json)" \
-    '{dryRun: true, action: "edit-pr", repo: $repo, number: $n, title: $title, attachments: $att}'
+    --argjson wh "$withheld" '{dryRun: true, action: "edit-pr", repo: $repo, number: $n, title: $title, attachments: $att,
+      withheld: $wh}'
   exit 0
 fi
 gh pr edit "$NUM" -R "$REPO" --title "$title" --body-file "$body" ${ATTACH_ARGS[@]+"${ATTACH_ARGS[@]}"} >/dev/null
-jq -n --arg repo "$REPO" --argjson n "$NUM" --arg title "$title" '{edited: true, repo: $repo, number: $n, title: $title}'
+jq -n --arg repo "$REPO" --argjson n "$NUM" --arg title "$title" --argjson wh "$withheld" \
+  '{edited: true, repo: $repo, number: $n, title: $title, withheld: $wh}'
