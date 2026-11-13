@@ -105,8 +105,12 @@ check "Codex gets the same hook" 'jq -e "[.hooks.PreToolUse[] | select(.matcher 
 HOOK="$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$A/.claude/settings.local.json")"
 got="$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git -C x push"}}' | sh -c "$HOOK" | jq -r .hookSpecificOutput.permissionDecision)"
 check "the installed hook runs and refuses" '[ "$got" = deny ]'
+got="$(printf '%s' '{"tool_name":"AskUserQuestion","permission_mode":"bypassPermissions","tool_input":{}}' | sh -c "$HOOK" | jq -r .hookSpecificOutput.permissionDecision)"
+check "the installed hook refuses a question in an unattended run" '[ "$got" = deny ]'
 printf '%s' '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | PATH=/nonexistent /bin/sh -c "$HOOK" 2>/dev/null; got=$?
 check "without python3 the hook blocks (exit 2), it does not let commands through" '[ "$got" = 2 ]'
+err="$(printf '%s' '{"tool_name":"AskUserQuestion","permission_mode":"default","tool_input":{}}' | PATH=/nonexistent /bin/sh -c "$HOOK" 2>&1 >/dev/null)"; got=$?
+check "without python3 the hook also blocks questions (exit 2), and says so" '[ "$got" = 2 ] && printf "%s" "$err" | grep -q "questions"'
 check "tiers become Claude models" 'grep -q "^model: opus" "$A/.claude/agents/adorno.md"'
 check "frontier becomes fable" 'grep -q "^model: fable" "$A/.claude/agents/adorno-agent-core-planner.md"'
 check "an agent's effort reaches Claude" 'grep -q "^effort: low" "$A/.claude/agents/adorno-agent-core-triage.md"'

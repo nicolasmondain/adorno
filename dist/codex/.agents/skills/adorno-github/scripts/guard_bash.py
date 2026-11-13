@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Claude Code PreToolUse hook for Bash: stops the writes that must go through adorno's scripts.
+"""Claude Code PreToolUse hook for Bash and AskUserQuestion: stops the writes that must go through adorno's scripts.
 
 Usage (bin/kit install writes it into the settings of Claude Code, Codex and Gemini CLI):
     guard_bash.py deny|ask [--format=claude|codex|gemini]
@@ -905,10 +905,8 @@ def granted(checks, session):
 
 
 FORMATS = ("claude", "codex", "gemini")
-UNATTENDED_QUESTION = ("unattended run, nobody answers a question: apply the --unattended rule. Scope and cost: go on "
-                       "with everything retained and say so in the report. A real stop point (spec validation, a "
-                       "level beyond the run's, a refusal, L4): skip that item, the reason at the top of the report, "
-                       "and go on with the others")
+UNATTENDED_QUESTION = ("nobody can answer a question here (bypassPermissions or dontAsk): do not ask, apply the "
+                       "'Unattended runs' rule of your instructions as if the run had --unattended, and go on")
 
 
 def answer(fmt, decision, reason):
