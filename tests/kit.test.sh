@@ -109,6 +109,7 @@ got="$(printf '%s' '{"tool_name":"AskUserQuestion","permission_mode":"bypassPerm
 check "the installed hook refuses a question in an unattended run" '[ "$got" = deny ]'
 printf '%s' '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | PATH=/nonexistent /bin/sh -c "$HOOK" 2>/dev/null; got=$?
 check "without python3 the hook blocks (exit 2), it does not let commands through" '[ "$got" = 2 ]'
+# shellcheck disable=SC2034  # err is read by check's eval on the next line
 err="$(printf '%s' '{"tool_name":"AskUserQuestion","permission_mode":"default","tool_input":{}}' | PATH=/nonexistent /bin/sh -c "$HOOK" 2>&1 >/dev/null)"; got=$?
 check "without python3 the hook also blocks questions (exit 2), and says so" '[ "$got" = 2 ] && printf "%s" "$err" | grep -q "questions"'
 check "tiers become Claude models" 'grep -q "^model: opus" "$A/.claude/agents/adorno.md"'
