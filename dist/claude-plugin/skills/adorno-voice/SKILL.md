@@ -1,6 +1,6 @@
 ---
 name: adorno-voice
-description: Write as the owner — their voice charter per channel (GitHub reviews, PR descriptions, Slack, long texts), drawn from their real writings, plus the repo's `voice` settings. Load before drafting any text meant for others in their name (review replies, comments, PR descriptions, messages).
+description: Write as the owner — their voice charter (openers per channel, emojis, phrases, examples by use case), drawn from their real writings, plus the repo's `voice` settings. Load before drafting any text meant for others in their name (review replies, comments, PR descriptions, messages).
 ---
 
 # Write as the owner
@@ -15,7 +15,8 @@ description: Write as the owner — their voice charter per channel (GitHub revi
 3. **Find the use case** in the charter's "Use cases" closest to the text to write (a blocking review comment, a
    refusal on a thread, a Slack announcement…): mirror its ✅ examples (length, opener, emoji, phrasing) and avoid
    its ❌. Adapt them to the context, never paste one as is. No close case → the channel's openers and emojis.
-4. **Draft** with that case, the channel's section and the "Ghostwriting rules". Whatever the channel:
+4. **Draft** with that case, the channel's row of 'Openers & closings', 'Emojis', 'Vocabulary' and the
+   'Ghostwriting rules'. Whatever the channel:
    - too short over too long; no ceremony they do not use;
    - clean text, never fake their typos;
    - no em dash;

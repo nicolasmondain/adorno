@@ -13,10 +13,9 @@ Input: $ARGUMENTS
    `local/src/instructions/20-owner.md`): is the principle already there, partly, or contradicted?
 3. **Propose**, one point at a time:
    - what was observed, how many times, with the links;
-   - the exact change: the sentence added or replaced, in which section (a diff; for `voice`, the use case of
-     `voice.md`, the owner's version as ✅ and the rejected draft as ❌; for `personality`, the situation of
-     `personality.md`); a contradiction with the current
-     profile is shown as such, with both versions;
+   - the exact change: the sentence added or replaced, in which section (a diff; for `voice` and `personality`,
+     in the use case or the situation the `adorno-learn` table names); a contradiction with the current profile is
+     shown as such, with both versions;
    - the choice: **accept**, **rephrase** (you dictate, the new diff is shown), **later**, **reject**.
 4. **Write** what is accepted, in the personal layer file only (never in a tracked file of the adorno repo), then
    `learn-decide <key> accepted`; `rejected` or `later` otherwise. A principle that changes how you work day to day

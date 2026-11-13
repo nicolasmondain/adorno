@@ -11,7 +11,7 @@ flowchart TD
   REG -->|"unclear"| ASK["Ask the owner"]
   ASK --> UC
   REG -->|"GitHub review, thread reply, PR description, Slack, Notion"| UC["Closest use case in voice.md: mirror its examples, avoid its counter-examples"]
-  UC --> DR["Draft with the use case, the channel section and ghostwriting rules"]
+  UC --> DR["Draft with the use case, the channel's openers, emojis, vocabulary and ghostwriting rules"]
   DR --> GH{"GitHub?"}
   GH -->|"yes"| BG["English, conventional-comment badge per severity, 1-4 sentences"]
   GH -->|"no"| CH["Channel rules, SBI for anything about a person"]

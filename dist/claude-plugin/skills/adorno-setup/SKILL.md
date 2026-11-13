@@ -84,8 +84,7 @@ method stays in `process.md`). Their shape is the template of `local.example/`: 
    answer, in their words, is the example.
 5. **Gaps** — a use case or a situation with nothing real: ask for one example, or leave it out. Never invent a
    sample, never keep a template placeholder in the owner's file.
-6. **Show, then write** — each file in full (or the diff), written once validated. A trait that changes how they
-   work day to day also goes up, in one line, into `20-owner.md` if they want.
+6. **Show, then write** — each file in full (or the diff), written once validated.
 7. **Apply** — `<source>/bin/kit check`, then offer `<source>/bin/kit install --global`. Check: draft one review
    comment and one Slack reply with `adorno-voice`, show them; what doesn't sound right goes back to step 3.
 
