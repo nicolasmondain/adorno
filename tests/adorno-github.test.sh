@@ -292,10 +292,59 @@ SLACK="https://acme.slack.com/archives/C024BE91L/p1730800000000100"
 printf '## What\nExport.\n\n## Sources\n- [Notion · Export CSV](%s)\n- [Doc](%s)\n- [Slack](%s)\n\nFixes #3\n' \
   "$NOTION" "$DOC" "$SLACK" >"$TMP/sbody.md"
 grep -v notion.so "$TMP/sbody.md" >"$TMP/nobody.md"
+grep -v docs.acme.dev "$TMP/sbody.md" >"$TMP/nodoc.md"
+grep -v slack.com "$TMP/sbody.md" >"$TMP/noslack.md"
+sed "s|($DOC)|($DOC-v2)|" "$TMP/sbody.md" >"$TMP/docv2.md"
 ADORNO_DRY_RUN=1 expect_exit 0 "every source linked passes (the issue and the file are not required)" -- "$S/pr-open" acme/docs \
   fix/lem-9-x "fix: add stuff" "$TMP/sbody.md" --refs "$TMP/refs.json"
+expect_jq "nothing withheld" '.withheld == []'
 ADORNO_DRY_RUN=1 expect_exit 2 "a body without the Notion link is refused" -- "$S/pr-open" acme/docs fix/lem-9-x \
   "fix: add stuff" "$TMP/nobody.md" --refs "$TMP/refs.json"
+grep -qF "$NOTION" "$TMP/err" && ok "... naming the Notion URL" || ko "... naming the Notion URL" "$(cat "$TMP/err")"
+ADORNO_DRY_RUN=1 expect_exit 2 "a body without the doc link is refused" -- "$S/pr-open" acme/docs fix/lem-9-x \
+  "fix: add stuff" "$TMP/nodoc.md" --refs "$TMP/refs.json"
+grep -qF "$DOC" "$TMP/err" && ok "... naming the doc URL" || ko "... naming the doc URL" "$(cat "$TMP/err")"
+ADORNO_DRY_RUN=1 expect_exit 2 "a body without the Slack link is refused" -- "$S/pr-open" acme/docs fix/lem-9-x \
+  "fix: add stuff" "$TMP/noslack.md" --refs "$TMP/refs.json"
+grep -qF "$SLACK" "$TMP/err" && ok "... naming the Slack URL" || ko "... naming the Slack URL" "$(cat "$TMP/err")"
+ADORNO_DRY_RUN=1 expect_exit 2 "a longer URL is not the source it starts with (export-v2 is not export)" -- "$S/pr-open" \
+  acme/docs fix/lem-9-x "fix: add stuff" "$TMP/docv2.md" --refs "$TMP/refs.json"
+: >"$TMP/r0.json"; echo '{}' >"$TMP/r1.json"; echo '{"refs":"x"}' >"$TMP/r2.json"
+echo '{"refs":[{"kind":"url"}]}' >"$TMP/r3.json"; echo '{"refs":[]}' >"$TMP/r4.json"
+for r in r0 r1 r2 r3; do
+  ADORNO_DRY_RUN=1 expect_exit 2 "--refs $r.json ($(wc -c <"$TMP/$r.json" | tr -d ' ') bytes, $(cat "$TMP/$r.json")) is refused" -- "$S/pr-open" acme/docs fix/lem-9-x \
+    "fix: add stuff" "$TMP/sbody.md" --refs "$TMP/$r.json"
+  grep -q 'not a refs.json' "$TMP/err" && ok "... as not a refs.json" || ko "... as not a refs.json" "$(cat "$TMP/err")"
+done
+ADORNO_DRY_RUN=1 expect_exit 0 "--refs with no ref passes" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" \
+  "$TMP/body.md" --refs "$TMP/r4.json"
+# a doc link that must not go out (a signed URL): withheld by name, never Notion or Slack, never a URL outside refs.json
+SIGNED='https://bucket.s3.amazonaws.com/x.csv?X-Amz-Signature=abc'
+"$ROOT/src/skills/adorno-inputs/scripts/input-refs" "Build $NOTION from $SIGNED" >"$TMP/srefs.json"
+printf '## Sources\n- [Notion · Export CSV](%s)\n- Export sample (link withheld: signed URL)\n' "$NOTION" >"$TMP/wbody.md"
+ADORNO_DRY_RUN=1 expect_exit 2 "a signed doc link missing from the body is refused" -- "$S/pr-open" acme/docs fix/lem-9-x \
+  "fix: add stuff" "$TMP/wbody.md" --refs "$TMP/srefs.json"
+grep -qF "$SIGNED" "$TMP/err" && ok "... naming it" || ko "... naming it" "$(cat "$TMP/err")"
+ADORNO_DRY_RUN=1 expect_exit 0 "--withhold lets a doc link of refs.json stay out" -- "$S/pr-open" acme/docs fix/lem-9-x \
+  "fix: add stuff" "$TMP/wbody.md" --refs "$TMP/srefs.json" --withhold "$SIGNED"
+expect_jq "... and lists it" ".withheld == [\"$SIGNED\"]"
+expect_exit 0 "opened with a withheld doc link" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" "$TMP/wbody.md" \
+  --refs "$TMP/srefs.json" --withhold "$SIGNED"
+expect_jq "... the output lists it" ".opened and .withheld == [\"$SIGNED\"]"
+ADORNO_DRY_RUN=1 expect_exit 2 "--withhold refuses a Notion page" -- "$S/pr-open" acme/docs fix/lem-9-x \
+  "fix: add stuff" "$TMP/wbody.md" --refs "$TMP/srefs.json" --withhold "$NOTION"
+grep -q 'not a doc link' "$TMP/err" && ok "... as not a doc link of refs.json" || ko "... as not a doc link of refs.json" "$(cat "$TMP/err")"
+ADORNO_DRY_RUN=1 expect_exit 2 "--withhold refuses a Slack thread" -- "$S/pr-open" acme/docs fix/lem-9-x \
+  "fix: add stuff" "$TMP/sbody.md" --refs "$TMP/refs.json" --withhold "$SLACK"
+grep -q 'not a doc link' "$TMP/err" && ok "... as not a doc link of refs.json" || ko "... as not a doc link of refs.json" "$(cat "$TMP/err")"
+ADORNO_DRY_RUN=1 expect_exit 2 "--withhold refuses a URL outside refs.json" -- "$S/pr-open" acme/docs fix/lem-9-x \
+  "fix: add stuff" "$TMP/wbody.md" --refs "$TMP/srefs.json" --withhold https://elsewhere.dev/x
+grep -q 'not a doc link' "$TMP/err" && ok "... as not a doc link of refs.json" || ko "... as not a doc link of refs.json" "$(cat "$TMP/err")"
+ADORNO_DRY_RUN=1 expect_exit 2 "--withhold needs --refs" -- "$S/pr-open" acme/docs fix/lem-9-x \
+  "fix: add stuff" "$TMP/wbody.md" --withhold "$SIGNED"
+grep -q 'needs --refs' "$TMP/err" && ok "... said so" || ko "... said so" "$(cat "$TMP/err")"
+ADORNO_DRY_RUN=1 expect_exit 2 "--withhold without a URL is refused" -- "$S/pr-open" acme/docs fix/lem-9-x \
+  "fix: add stuff" "$TMP/wbody.md" --refs "$TMP/srefs.json" --withhold
 ADORNO_DRY_RUN=1 expect_exit 0 "--refs after --attach and --draft" -- "$S/pr-open" acme/docs fix/lem-9-x "fix: add stuff" \
   "$TMP/sbody.md" --attach "$TMP/qa/after.png" --draft --refs "$TMP/refs.json"
 expect_jq "still a draft, the attachment kept" '.draft and (.attachments | length) == 1'
@@ -323,7 +372,12 @@ ADORNO_DRY_RUN=1 expect_exit 2 "a rewrite that drops the Notion link is refused"
   "$TMP/nobody.md" --refs "$TMP/refs.json"
 ADORNO_DRY_RUN=1 expect_exit 0 "a rewrite that keeps every source passes, with new proof" -- "$S/pr-edit" acme/docs#42 \
   "feat: x" "$TMP/sbody.md" --refs "$TMP/refs.json" --attach "$TMP/qa/flow.webm"
-expect_jq "attachments listed" ".attachments == [\"$TMP/qa/flow.webm\"]"
+expect_jq "attachments listed, nothing withheld" ".attachments == [\"$TMP/qa/flow.webm\"] and .withheld == []"
+ADORNO_DRY_RUN=1 expect_exit 0 "a rewrite can withhold a doc link of refs.json" -- "$S/pr-edit" acme/docs#42 "feat: x" \
+  "$TMP/wbody.md" --refs "$TMP/srefs.json" --withhold "$SIGNED"
+expect_jq "... and lists it" ".withheld == [\"$SIGNED\"]"
+ADORNO_DRY_RUN=1 expect_exit 2 "pr-edit: --withhold needs --refs" -- "$S/pr-edit" acme/docs#42 "feat: x" \
+  "$TMP/wbody.md" --withhold "$SIGNED"
 
 echo "run-check"
 expect_exit 0 "L3 open_pr inside the suite's run" -- "$S/run-check" acme/docs L3 open_pr
