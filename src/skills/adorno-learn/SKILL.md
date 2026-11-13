@@ -17,8 +17,8 @@ profile: `workflow:profile:learn` does, after the owner validates each change.
 | `code` | how code should be written: types, naming, structure, tests, what they always ask to change | `engineering-types.md` |
 | `product` | priority, scope cut, user-impact argument, ship-vs-polish call | `product.md` |
 | `process` | method, PR and review discipline, what they check before deciding | `process.md` |
-| `voice` | a draft they rewrote: what they cut, added, softened, reworded | `voice.md` (`adorno-voice`) |
-| `personality` | how they address people, give feedback, handle conflict | `personality.md` |
+| `voice` | a draft they rewrote: what they cut, added, softened, reworded; an opener, an emoji, a phrase they use | `voice.md` (`adorno-voice`), the matching use case: their version as ✅, the draft as ❌ |
+| `personality` | how they react, approach a problem, address people, give feedback, handle conflict | `personality.md`, the matching situation |
 
 Strong signals: the owner **says** it ("always…", "never…", "I prefer…") → `--strength explicit`; the owner
 **overrides** a verdict of `agent:adorno`; the owner **edits** a draft before sending it (compare draft and sent

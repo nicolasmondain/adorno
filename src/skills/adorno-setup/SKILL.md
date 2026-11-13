@@ -1,6 +1,6 @@
 ---
 name: adorno-setup
-description: Sets up adorno for its owner — mode `profile` builds a fine-grained profile from their own writings (GitHub reviews and diffs, Slack messages, Notion pages, files they point to) and writes who they are, how they work in tech, product and code, how they write and their vision; mode `repo` declares the current repo (or a whole workspace) with its reviewers, team, context, rights and voice. Everything goes to the personal layer (local/, git-ignored). Use on first use, when an agent reports that the profile or voice is missing, when a repo is not declared, or to change a profile, voice, vision or a repo's settings.
+description: Sets up adorno for its owner — mode `profile` builds a fine-grained profile from their own writings (GitHub reviews and diffs, Slack messages, Notion pages, files they point to) and writes who they are, how they work in tech, product and code, how they write and their vision; mode `voice` fills, alone, the two files that make agents sound and behave like them (voice.md with examples by use case, openers, emojis and phrases; personality.md with behaviors by situation and how they approach a problem); mode `repo` declares the current repo (or a whole workspace) with its reviewers, team, context, rights and voice. Everything goes to the personal layer (local/, git-ignored). Use on first use, when an agent reports that the profile or voice is missing, when a repo is not declared, or to change a profile, voice, personality, vision or a repo's settings.
 ---
 
 # Set up adorno
@@ -12,7 +12,7 @@ validated it. Ask **one question at a time**, propose a default each time, and m
 Locate the layer first: `scripts/adorno-source` → `source` (the adorno repo), `local` (the layer), `localExists`.
 `localExists: false` → offer `cp -r <source>/local.example <local>` and continue once they agree.
 
-Mode from the request: `profile`, `repo`, or both (`profile` first). Unclear → ask.
+Mode from the request: `profile`, `voice`, `repo`, or several (`profile` first, it includes `voice`). Unclear → ask.
 
 ## Legacy `area_reviewers` (any mode, at the start)
 
@@ -50,14 +50,43 @@ the owner's real words beat any template.
    samples; quote short excerpts (no names of third parties) with their links; show contradictions instead of
    smoothing them. Present it as a table per dimension: trait, evidence, confidence.
    Then the files, each section confronted with the analysis, the owner correcting what doesn't sound like them:
-   `local/src/skills/adorno-profile/references/{personality,engineering-types,engineering-scale,product,process}.md`,
-   `local/src/skills/adorno-voice/references/voice.md`, and the voice knobs (`defaults.voice`).
+   `local/src/skills/adorno-profile/references/{engineering-types,engineering-scale,product,process}.md` and the
+   voice knobs (`defaults.voice`). `voice.md` and `personality.md`: steps 1 and 3-5 of mode `voice`, on the same
+   corpus.
 4. **Summary** — 15-30 lines always loaded, distilled from step 3 (hard limits included).
    → `local/src/instructions/20-owner.md`.
 5. **Vision** — the few principles that must win over every agent (60 lines at most, usually 3-10).
    → `local/vision.md`; repo-specific lines go to that repo's `vision:` instead.
 6. **Show, then write** — show each file in full (or the diff when it exists), write it once validated.
 7. **Apply** — `<source>/bin/kit check`, then offer `<source>/bin/kit install --global` (or the project path they use).
+
+## Mode `voice`
+
+Goal: what agents write sounds like the owner, and they react like the owner. Two files, same paths as always:
+`local/src/skills/adorno-voice/references/voice.md` (how they write) and
+`local/src/skills/adorno-profile/references/personality.md` (how they react and approach a problem; delivery
+method stays in `process.md`). Their shape is the template of `local.example/`: sections and use cases, each with
+✅ examples and one ❌.
+
+1. **Start from what exists** — the owner's current files, if any: **migrate**, nothing lost. Each line goes to its
+   section or use case of the template; what fits none stays, in a section of its own. Show the diff.
+2. **Corpus** — as in mode `profile` step 2 (same consent, one source at a time, only the owner's words, nothing kept
+   after the run). Already gathered by mode `profile` → reuse it.
+3. **Voice** — classify each sample into a use case of the template (a blocking review comment, a refusal on a
+   thread, a Slack ack, an announcement, an incident…); a recurring case the template lacks becomes a new use case.
+   Per case: 2-3 short samples as ✅, third-party names replaced (`<teammate>`, `<feature>`), the link kept; one ❌,
+   the generic phrasing they would never use. Then, per channel: openers and closings, the emoji inventory (what each
+   means, how often, where), the phrases they repeat, what they never write. A trait needs two samples.
+4. **Personality** — the behaviors the corpus shows, situation by situation (an ambiguous request, a production
+   incident, a disagreement, being wrong, reviewing, delegating, a trade-off under time pressure), each with its
+   evidence. Then, **one question at a time**, the situations left empty: "A teammate pushes back on your review
+   without evidence: what do you answer?", "A bug hits production on a Friday evening: your first three steps?". Their
+   answer, in their words, is the example.
+5. **Gaps** — a use case or a situation with nothing real: ask for one example, or leave it out. Never invent a
+   sample, never keep a template placeholder in the owner's file.
+6. **Show, then write** — each file in full (or the diff), written once validated.
+7. **Apply** — `<source>/bin/kit check`, then offer `<source>/bin/kit install --global`. Check: draft one review
+   comment and one Slack reply with `adorno-voice`, show them; what doesn't sound right goes back to step 3.
 
 ## Mode `repo`
 

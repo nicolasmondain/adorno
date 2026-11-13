@@ -1,20 +1,33 @@
 #!/usr/bin/env bash
-# Usage: pr-open owner/repo HEAD_BRANCH "type(scope): title" BODY_FILE [--draft] [--attach FILE[#alt]]…
+# Usage: pr-open owner/repo HEAD_BRANCH "type(scope): title" BODY_FILE [--draft] [--refs REFS_JSON [--withhold URL]…]
+#        [--attach FILE[#alt]]…
 # Opens a PR against the repo's base branch and requests the repo's reviewers. Needs L3.
 # --attach: screenshots or videos for the description (`![alt](./file)` in it is rewritten to the upload).
+# --refs: the run's refs.json; the body must link each Notion page, doc URL and Slack thread of the request.
+# --withhold: a doc link (kind url) of the refs.json not to publish (never Notion or Slack), listed in `withheld`.
 # The title must be a Conventional Commit header; the branch must match `branch_pattern` (repos.yaml).
 # Reviewers come from repos.yaml, minus the PR author (GitHub rejects the whole request otherwise).
 . "$(dirname "$0")/_lib.sh"
 
 split_repo "${1:-}"
-head="${2:-}"; title="${3:-}"; body="${4:-}"; draft=""
+head="${2:-}"; title="${3:-}"; body="${4:-}"; draft="" refs=""
 [ -n "$head" ] && [ -n "$title" ] && [ -n "$body" ] \
-  || die 'usage: pr-open owner/repo HEAD_BRANCH "type(scope): title" BODY_FILE [--draft] [--attach FILE]…' "$E_USAGE"
+  || die 'usage: pr-open owner/repo HEAD_BRANCH "type(scope): title" BODY_FILE [--draft] [--refs FILE [--withhold URL]…] [--attach FILE]…' "$E_USAGE"
 shift 4
-rest=()
-for a in "$@"; do if [ "$a" = "--draft" ]; then draft="--draft"; else rest+=("$a"); fi; done
+rest=() withhold=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --draft) draft="--draft"; shift ;;
+    --refs) [ -n "${2:-}" ] || die "--refs needs the run's refs.json" "$E_USAGE"; refs="$2"; shift 2 ;;
+    --withhold) [ -n "${2:-}" ] || die "--withhold needs a doc URL of the run's refs.json" "$E_USAGE"; withhold+=("$2"); shift 2 ;;
+    *) rest+=("$1"); shift ;;
+  esac
+done
+[ ${#withhold[@]} -eq 0 ] || [ -n "$refs" ] || die "--withhold needs --refs" "$E_USAGE"
 parse_attach ${rest[@]+"${rest[@]}"}
 [ -s "$body" ] || die "empty PR body: $body" "$E_USAGE"
+[ -z "$refs" ] || require_sources "$body" "$refs" ${withhold[@]+"${withhold[@]}"}
+if [ ${#withhold[@]} -eq 0 ]; then withheld='[]'; else withheld="$(printf '%s\n' "${withhold[@]}" | jq -R . | jq -cs .)"; fi
 require_level "$REPO" L3 open_pr
 
 require_cc_title "$title"
@@ -35,10 +48,11 @@ args+=(${ATTACH_ARGS[@]+"${ATTACH_ARGS[@]}"})
 
 if dry_run; then
   jq -n --arg repo "$REPO" --arg base "$base" --arg head "$head" --arg title "$title" \
-    --arg reviewers "$reviewers" --arg draft "$draft" --argjson att "$(attach_json)" \
+    --arg reviewers "$reviewers" --arg draft "$draft" --argjson att "$(attach_json)" --argjson wh "$withheld" \
     '{dryRun: true, action: "open-pr", repo: $repo, base: $base, head: $head, title: $title,
-      draft: ($draft == "--draft"), reviewers: ($reviewers | split(",") | map(select(. != ""))), attachments: $att}'
+      draft: ($draft == "--draft"), reviewers: ($reviewers | split(",") | map(select(. != ""))), attachments: $att,
+      withheld: $wh}'
   exit 0
 fi
 url="$(gh "${args[@]}")"
-jq -n --arg url "$url" '{opened: true, url: $url}'
+jq -n --arg url "$url" --argjson wh "$withheld" '{opened: true, url: $url, withheld: $wh}'

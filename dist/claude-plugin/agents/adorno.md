@@ -34,7 +34,8 @@ Read, don't assume:
 1. **Repo rules, maximum authority**: the repo's `CLAUDE.md` + the `.claude/rules/` matching the diff (`ls .claude/rules/`
    and pick). Profile ↔ repo conflict → the repo wins, flag the conflict.
 2. Skill `adorno-profile`: `engineering-types.md` and `engineering-scale.md` are the substantive filter, every point is a
-   candidate finding; `process.md` § Review discipline.
+   candidate finding; `process.md` § Review discipline; `personality.md`, how the owner reacts in the situation at
+   hand (a disagreement, a bot finding, being wrong) and the SBI charter.
 3. The repo's local settings: `adorno-github/scripts/repo-conf` (no argument = the current repo): its `team`, its
    default `reviewers`, its `commit_skill` / `pr_skill` / `setup_skill`, and every line of `context`, which binds you like a rule.
    Repo not registered → generic profile only, and say so.

@@ -64,19 +64,22 @@ command.
    - a repo skill: run it in the worktree, as it is written. It may push and run `gh pr create` itself: inside the
      run the guard lets `git push origin <branch>` and `gh pr create` through (never forced, never the base, at the
      run's level). Then `pr-status owner/repo` again: no PR for the branch → stop and report what the skill did;
-     its description has no `## Proof` → `agent:adorno` appends it and publishes it with `pr-edit owner/repo#N
-     "<its title>" <file> --attach …`; opened as draft while the verdict is clean and the proof complete →
-     `pr-ready owner/repo#N`.
+     its description has no `## Proof` or misses a source of the run's `refs.json` (`## Sources`, `workflow:pr:open`
+     step 3) → `agent:adorno` appends what is missing and publishes it with `pr-edit owner/repo#N "<its title>"
+     <file> [--refs <run>/refs.json [--withhold <url>]…] --attach …`; opened as draft while the verdict is clean and
+     the proof complete → `pr-ready owner/repo#N`.
 7. **PR already open** → push, update, ready:
    - push: `pr-push owner/repo#N` (or the repo skill pushes itself, as above);
    - default update: `agent:adorno` compares the title and description to `git diff origin/<base>...HEAD` and the
      proof to `qa/`. The scope moved (a new What or How, a new risk, a verification that no longer matches) or new
-     proof → new title and description in English, in the owner's voice (`adorno-voice`), published by
-     `pr-edit owner/repo#N "<title>" <file> [--attach <new media>]…`. Unchanged → nothing. A repo skill: run it in
+     proof → new title and description in English, in the owner's voice (`adorno-voice`), keeping the current
+     `## Sources`, published by `pr-edit owner/repo#N "<title>" <file> [--refs <run>/refs.json [--withhold <url>]…]
+     [--attach <new media>]…` (`--refs` whenever the run has one). Unchanged → nothing. A repo skill: run it in
      update mode (it receives `#N`); it may run `gh pr edit` itself, the new proof then goes out with `pr-edit`;
    - still a draft, the verdict on the whole branch clean and the proof complete → `pr-ready owner/repo#N`.
 8. **Report** — commits (SHA, message), review rounds and what they fixed, push, PR URL and `opened | updated |
-   unchanged`, `ready | draft` (and why), the proof attached (or what is missing), and what stopped the workflow if
+   unchanged`, `ready | draft` (and why), the proof attached (or what is missing), the doc links withheld (count and
+   reason, never the URL), and what stopped the workflow if
    anything did — commits the cap held back:
    the worktree and their SHAs, and how to resume (fix, then `pr-push owner/repo#N`). Suggest
    `workflow:pr:watch owner/repo#N` when the caller does not run it.

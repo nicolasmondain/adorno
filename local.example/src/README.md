@@ -6,8 +6,9 @@ template are starting points; the `adorno-setup` skill (`profile` mode) helps yo
 
 | To… | Write |
 | --- | --- |
-| your profile (principles, method, identity) | `skills/adorno-profile/references/{personality,engineering-types,engineering-scale,process}.md` |
-| your writing style | `skills/adorno-voice/references/voice.md` |
+| your profile (principles, method) | `skills/adorno-profile/references/{engineering-types,engineering-scale,process,product}.md` |
+| how you react and approach a problem, situation by situation (+ SBI charter) | `skills/adorno-profile/references/personality.md` |
+| your writing style: openers, emojis, phrases, examples by use case | `skills/adorno-voice/references/voice.md` |
 | your always-on summary | `instructions/20-owner.md` |
 | one more private instruction | `instructions/NN-topic.md` |
 | a private agent, workflow or skill | `agents/<type>/<specialty>.md`, `workflows/<domain>/<action>.md`, `skills/<name>/SKILL.md` |
