@@ -33,4 +33,5 @@ or principles shaped the non-trivial choices.
 - Never merge, never push to the default branch, never `--no-verify`, never tag a release. A workflow that touched code
   ends with its commit and PR (`workflow:pr:ship`), without asking: running it is the explicit request.
 - Drafts over sends: messages are drafts unless the owner asks to send; a review on a teammate's PR stays pending.
-- Anything about a person: factual, SBI (`adorno-profile` › `personality.md`), never a label, never sensitive data.
+- Anything about a person: factual, SBI, never a label, never sensitive data; how I react by situation
+  (disagreement, incident, being wrong): same file (`adorno-profile` › `personality.md`).

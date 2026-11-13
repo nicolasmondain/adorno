@@ -36,12 +36,15 @@ In Claude Code (or another installed tool), ask: **"run the adorno-setup skill, 
 | Step | What it asks you | Where it writes it |
 | --- | --- | --- |
 | Identity | name, GitHub login, language of the exchanges | `local/adorno.yaml` › `owner` |
-| Voice | your agreement to read your latest reviews and PR descriptions on GitHub, a few Slack messages if you want | `local/src/skills/adorno-voice/references/voice.md` + `defaults.voice` |
-| Profile | what you would change in each model: identity, types and design, scale, method and review | `local/src/skills/adorno-profile/references/*.md` |
+| Voice | your agreement to read your latest reviews and PR descriptions on GitHub, a few Slack messages if you want; then your examples, use case by use case | `local/src/skills/adorno-voice/references/voice.md` + `defaults.voice` |
+| Personality | how you react, situation by situation (ambiguous request, incident, disagreement, being wrong…), drawn from the corpus then asked | `local/src/skills/adorno-profile/references/personality.md` |
+| Profile | what you would change in each model: types and design, scale, method and review, product | `local/src/skills/adorno-profile/references/*.md` |
 | Summary | 15 to 30 lines always loaded, drawn from the profile | `local/src/instructions/20-owner.md` |
 | Vision | the few principles that override everything | `local/vision.md` |
 
 It shows you each file before writing it, then runs `bin/kit check` and offers `bin/kit install --global`.
+The voice and personality steps are also a mode of their own, to rerun alone: **"run the adorno-setup skill,
+voice mode"** (it migrates your current files to the new shape, nothing lost).
 You can also write everything by hand from the templates in `local.example/`.
 
 As long as the profile does not exist, the agents say so and work with the repo's instructions and settings
@@ -244,10 +247,19 @@ action above L0 for a message whose author is in `action.trusted_authors`.
 
 A refused action stops the workflow, which says so: nothing is worked around.
 
-## 5. Voice and vision
+## 5. Voice, personality and vision
 
-**Voice.** `voice.md` describes how you write per channel (reviews, replies, PR descriptions, chat). The `voice:`
-settings are added to it, per repo if needed:
+**Voice.** `voice.md` describes how you write: openers and closings per channel, your emojis and what they mean, the
+phrases you repeat and the ones you avoid, then a bank of use cases (a blocking review comment, a refusal on a thread,
+a Slack ack, an announcement, an incident…), each with 2-3 of your real sentences (✅) and the generic phrasing you
+would never use (❌). Agents pick the closest case and mirror it.
+
+**Personality.** `personality.md` describes how you react and approach a problem: your reflexes in order, then one
+section per situation (an ambiguous request, an incident, a disagreement, being wrong, delegating…), plus the SBI
+charter for anything about a person. `agent:adorno` reads it before every decision. How you deliver (git, PRs,
+review discipline) stays in `process.md`.
+
+The `voice:` settings are added to `voice.md`, per repo if needed:
 
 ```yaml
 defaults:
