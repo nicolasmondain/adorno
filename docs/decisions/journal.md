@@ -28,5 +28,6 @@ Consequences:
   phases from the delegations otherwise.
 - The redaction patterns are the writer's own (none existed to reuse); the secret names are those of `bin/kit`
   (`SECRET_ENV_RE`), kept equal by a test.
-- The schema is checked in tests by a standard-library checker limited to the keywords it uses
-  (`tests/jsonschema_subset.py`): no dependency for one schema.
+- The writer checks every event against the schema before writing it, with a standard-library checker limited to
+  the keywords the schema uses (`journal.py validate` runs the same check on a file): no dependency for one schema,
+  and no line a reader would have to guess at.

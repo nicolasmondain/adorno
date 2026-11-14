@@ -22,7 +22,8 @@ goes to stderr, the exit code is 0, and the run goes on.
  "parent": "session", "type": "guard", "decision": "deny", "reason": "…", "command": "…"}
 ```
 
-- `t` is when the event **started** (UTC, milliseconds); `dur` is how long it lasted, in ms, when that is known.
+- `t` is when the event **started** (UTC, milliseconds); `dur` is how long it lasted, in ms, when that is known. An
+  event is written as it ends: the writer sets `t` to now minus `dur`.
 - `actor` is who acts: `you` (the owner), `session` (the main session) or `agent:<instance id>`; `parent` is `session`
   for an agent, `null` otherwise.
 - A long text (prompt, result, message) is kept as `excerpt` (500 characters), `hash` (SHA-256 of the whole) and
@@ -44,6 +45,19 @@ goes to stderr, the exit code is 0, and the run goes on.
 | `github` | a write to GitHub | `action`, `target`, `url` |
 | `session` | the session starts, ends or compacts | `kind` (`start`, `end`, `compact`), `source`, `model`, `transcript` |
 
+## Who records what
+
+| Recorded by | Events |
+| --- | --- |
+| `adorno-github/scripts/run-begin`, `run-end` | `run.begin`, `run.end` |
+| every `adorno-github` script, as it exits | its own `script.call` (exit code, the level and action it asked `require_level` for, dry run) |
+| the write scripts, after a write that reached GitHub | `github` |
+| `review-merge` | `finding`, as produced by each reviewer then as merged |
+| the guard (`guard_bash.py`) | `guard`, for a refusal or a question; what it lets through is not an event |
+| `adorno-github/scripts/run-mark`, called by the session that runs a plan | `step.begin`, `step.end`, `loop` |
+
+`ADORNO_JOURNAL=0` in a script's environment records nothing for it.
+
 ## Writing an event
 
 ```sh
@@ -51,7 +65,16 @@ adorno-journal/scripts/journal.py event TYPE 'JSON of the own fields' [--run ID]
 ```
 
 The event goes to the journal of every run open for the session (`CLAUDE_CODE_SESSION_ID` unless `--session`), or to
-the run `ID` alone. A `text` field is replaced by `excerpt` + `hash` + `chars`. An unknown `type` is refused.
+the run `ID` alone. A JSON array writes one event per element. A `text` field is replaced by `excerpt` + `hash` +
+`chars`. An event `schema.json` refuses is not written, and the reason is said on stderr.
+
+`journal.py validate FILE.jsonl…` runs the same check on whole files (exit 1 on an invalid line).
+
+## Retention
+
+`run-begin` prunes as it opens a run: journals older than 30 days go, then the oldest ones while all journals weigh
+more than 2 GB. Only the journal's own files are removed, never a run's deliverables nor the journal of an open run.
+To delete one by hand: remove its `events.jsonl`.
 
 ## Redaction
 

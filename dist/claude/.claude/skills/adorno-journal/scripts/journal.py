@@ -3,8 +3,13 @@
 
 Usage: journal.py event TYPE [JSON] [--run ID] [--session ID] [--actor ACTOR]
   Appends one event to the journal of every run open for the session (CLAUDE_CODE_SESSION_ID unless --session), or
-  of the run ID alone. JSON (argument, else stdin) holds the type's own fields; `v`, `t`, `run`, `session`, `actor`,
-  `parent` are filled here. A `text` field is replaced by `excerpt` + `hash` + `chars`.
+  of the run ID alone. JSON (argument, else stdin) holds the type's own fields (an array: one event per element);
+  `v`, `t`, `run`, `session`, `actor`, `parent` are filled here. An event is written as it ends: `t`, its start, is
+  now minus its `dur`. A `text` field is replaced by `excerpt` + `hash` + `chars`.
+Usage: journal.py prune
+  Removes the journals older than RETENTION_DAYS, then the oldest while they weigh more than MAX_MB together.
+Usage: journal.py validate [--schema FILE] FILE.jsonl…
+  Checks every line against schema.json, the check each event passes before it is written.
 
 Journals are private: ~/.adorno/runs/<slug>-<run id>/events.jsonl, mode 600, never in a repo. Every string is
 redacted before it is written. Recording never breaks a run: whatever fails, the reason goes to stderr and the exit
@@ -23,6 +28,9 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 SCHEMA = os.path.join(os.path.dirname(HERE), "schema.json")
 EXCERPT = 500        # characters of a prompt, a result or a message kept in the journal
 MAX_STRING = 2000    # any other string is cut there (`reasoning`, opted into by the owner, is kept whole)
+JOURNAL_FILES = ("events.jsonl",)   # what a run folder holds for its journal
+RETENTION_DAYS = 30  # `prune` (run-begin calls it) removes older journals…
+MAX_MB = 2048        # …then the oldest ones while all journals weigh more than this
 # A value is a secret when its key, variable or flag name says so: the names `bin/kit` refuses in `claude_env`
 # (SECRET_ENV_RE), which tests keep equal to this one.
 SECRET_NAME = r"(KEY|TOKEN|SECRET|PASSWORD)"
@@ -82,8 +90,10 @@ def text_fields(text):
     return {"excerpt": cut, "hash": hashlib.sha256(text.encode()).hexdigest(), "chars": len(text)}
 
 
-def now_iso():
-    return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+def started(dur_ms=0):
+    """`t` of an event written as it ends: now, minus how long it lasted."""
+    at = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(milliseconds=dur_ms)
+    return at.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def runs_root():
@@ -110,9 +120,68 @@ def open_runs(session, run=None):
     return found
 
 
-def event_types():
-    with open(SCHEMA, encoding="utf-8") as f:
-        return json.load(f)["properties"]["type"]["enum"]
+def load_schema(path=SCHEMA):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+JSON_TYPES = {"string": str, "integer": int, "number": (int, float), "boolean": bool, "object": dict, "array": list,
+              "null": type(None)}
+
+
+def is_type(value, name):
+    if isinstance(value, bool) and name in ("integer", "number"):
+        return False
+    return isinstance(value, JSON_TYPES[name])
+
+
+def problems(value, schema, where="event"):
+    """What is wrong with value against a JSON Schema, as a list of strings (empty: valid). Only the keywords
+    schema.json uses are implemented; any other raises rather than being half-checked."""
+    out = []
+    for keyword, want in schema.items():
+        if keyword in ("$schema", "title", "description", "then"):
+            continue
+        if keyword == "type":
+            names = want if isinstance(want, list) else [want]
+            if not any(is_type(value, n) for n in names):
+                out.append(f"{where}: expected {' or '.join(names)}")
+        elif keyword == "const":
+            if value != want:
+                out.append(f"{where}: expected {want!r}")
+        elif keyword == "enum":
+            if value not in want:
+                out.append(f"{where}: {value!r} is not one of {want}")
+        elif keyword == "pattern":
+            if isinstance(value, str) and not re.search(want, value):
+                out.append(f"{where}: {value!r} does not match {want}")
+        elif keyword == "minimum":
+            if is_type(value, "number") and value < want:
+                out.append(f"{where}: {value} is below {want}")
+        elif keyword == "required":
+            if isinstance(value, dict):
+                out += [f"{where}: missing '{k}'" for k in want if k not in value]
+        elif keyword == "properties":
+            if isinstance(value, dict):
+                for k, sub in want.items():
+                    if k in value:
+                        out += problems(value[k], sub, f"{where}.{k}")
+        elif keyword == "additionalProperties":
+            if want is False and isinstance(value, dict):
+                out += [f"{where}: unknown field '{k}'" for k in value if k not in schema.get("properties", {})]
+        elif keyword == "items":
+            if isinstance(value, list):
+                for i, item in enumerate(value):
+                    out += problems(item, want, f"{where}[{i}]")
+        elif keyword == "allOf":
+            for sub in want:
+                out += problems(value, sub, where)
+        elif keyword == "if":
+            if not problems(value, want, where):
+                out += problems(value, schema.get("then", {}), where)
+        else:
+            raise NotImplementedError(f"schema keyword '{keyword}' is not supported")
+    return out
 
 
 def append(folder, event):
@@ -123,7 +192,7 @@ def append(folder, event):
         raise ValueError(f"{folder} is not a run folder of {root}")
     os.makedirs(real, mode=0o700, exist_ok=True)
     line = json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n"
-    fd = os.open(os.path.join(real, "events.jsonl"), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+    fd = os.open(os.path.join(real, JOURNAL_FILES[0]), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
     try:
         os.write(fd, line.encode())
     finally:
@@ -131,19 +200,24 @@ def append(folder, event):
 
 
 def record(kind, fields, session, run=None, actor="session"):
-    """Writes the event to each open run's journal. Returns how many journals got it."""
-    if kind not in event_types():
-        raise ValueError(f"unknown event type '{kind}' (schema.json lists them)")
+    """Writes the event to each open run's journal: only an event schema.json accepts is written. Returns how many
+    journals got it."""
     if not isinstance(fields, dict):
         raise ValueError("the event's fields must be a JSON object")
     fields = dict(fields)
     if "text" in fields:
         fields.update(text_fields(fields.pop("text")))
-    written = 0
+    dur = fields.get("dur")
+    at = started(dur if isinstance(dur, int) and not isinstance(dur, bool) and dur > 0 else 0)
+    schema, written = None, 0
     for run_id, folder in open_runs(session, run):
-        event = {"v": 1, "t": now_iso(), "run": run_id, "session": session, "actor": actor,
+        event = {"v": 1, "t": at, "run": run_id, "session": session, "actor": actor,
                  "parent": "session" if actor.startswith("agent:") else None, "type": kind}
         event.update({k: v for k, v in redact(fields).items() if k not in ("v", "run", "session", "type")})
+        schema = schema or load_schema()
+        wrong = problems(event, schema)
+        if wrong:
+            raise ValueError(f"invalid {kind} event, not recorded: {'; '.join(wrong[:5])}")
         try:
             append(folder, event)
             written += 1
@@ -164,13 +238,80 @@ def cmd_event(argv):
     if not positional or len(positional) > 2:
         raise ValueError("usage: journal.py event TYPE [JSON] [--run ID] [--session ID] [--actor ACTOR]")
     raw = positional[1] if len(positional) == 2 else sys.stdin.read()
-    record(positional[0], json.loads(raw or "{}"), options["--session"], options["--run"], options["--actor"])
+    fields = json.loads(raw or "{}")
+    for one in fields if isinstance(fields, list) else [fields]:  # an array: one event per element, in one call
+        try:
+            record(positional[0], one, options["--session"], options["--run"], options["--actor"])
+        except ValueError as e:  # one refused event does not lose the others
+            warn(str(e))
 
 
-COMMANDS = {"event": cmd_event}
+def cmd_validate(argv):
+    """journal.py validate [--schema FILE] FILE.jsonl… — prints `file:line: problem` for each line schema.json
+    refuses. Exit 1 if there is one, 2 if the schema uses a keyword this checker does not implement."""
+    schema = load_schema(*argv[1:2]) if argv[:1] == ["--schema"] else load_schema()
+    argv = argv[2:] if argv[:1] == ["--schema"] else argv
+    bad = 0
+    for path in argv:
+        with open(path, encoding="utf-8") as f:
+            for n, line in enumerate(f, 1):
+                try:
+                    wrong = problems(json.loads(line), schema)
+                except ValueError as e:
+                    wrong = [f"not JSON ({e})"]
+                except NotImplementedError as e:
+                    print(e, file=sys.stderr)
+                    return 2
+                bad += len(wrong)
+                for w in wrong:
+                    print(f"{path}:{n}: {w}")
+    return 1 if bad else 0
+
+
+def journal_files():
+    """[(mtime, size, path)] of every journal file of every run that is not open, oldest first."""
+    root = runs_root()
+    open_folders = set()
+    for path in glob.glob(os.path.join(root, "active", "*.json")):
+        try:
+            with open(path, encoding="utf-8") as f:
+                open_folders.add(os.path.realpath(json.load(f).get("journal") or ""))
+        except (OSError, ValueError, AttributeError):
+            pass
+    found = []
+    for name in JOURNAL_FILES:
+        for path in glob.glob(os.path.join(root, "*", name)):
+            if os.path.realpath(os.path.dirname(path)) in open_folders or os.path.islink(path):
+                continue
+            st = os.stat(path)
+            found.append((st.st_mtime, st.st_size, path))
+    return sorted(found)
+
+
+def cmd_prune(_argv):
+    """Removes the journal files older than RETENTION_DAYS, then the oldest ones while they weigh more than MAX_MB
+    together. Only journal files: a run folder also holds deliverables the journal does not own (an emptied folder
+    is removed)."""
+    files = journal_files()
+    limit = time.time() - RETENTION_DAYS * 86400
+    total = sum(size for _mtime, size, _path in files)
+    for mtime, size, path in files:
+        if mtime >= limit and total <= MAX_MB * 1024 * 1024:
+            break
+        os.remove(path)
+        total -= size
+        try:
+            os.rmdir(os.path.dirname(path))
+        except OSError:
+            pass  # not empty: the run's other files stay
+
+
+COMMANDS = {"event": cmd_event, "prune": cmd_prune}
 
 
 def main(argv):
+    if argv[:1] == ["validate"]:  # a check, not a recording: the one command whose exit code says something
+        return cmd_validate(argv[1:])
     try:
         if not argv or argv[0] not in COMMANDS:
             raise ValueError(f"usage: journal.py {'|'.join(COMMANDS)} …")

@@ -10,6 +10,22 @@ SELF="$(basename "$0")"
 die() { printf '%s: %s\n' "$SELF" "$1" >&2; exit "${2:-1}"; }
 command -v jq >/dev/null 2>&1 || die "missing dependency: jq"
 dir="${1:-}"
+# The journal of the run this merge is part of (adorno-journal): the merge itself, and each finding as produced then
+# as merged. This script does not source _lib.sh (it needs neither gh nor the registry), so it calls the writer, which
+# finds the open run and never fails its caller. ADORNO_JOURNAL=0 turns it off.
+JOURNAL_PY="$(dirname "$0")/../../adorno-journal/scripts/journal.py"
+journal_event() {
+  [ "${ADORNO_JOURNAL:-1}" = 0 ] || [ ! -f "$JOURNAL_PY" ] || ! command -v python3 >/dev/null 2>&1 \
+    || python3 "$JOURNAL_PY" event "$@" || true
+}
+journal_exit() {
+  local rc="$1"
+  set +e
+  journal_event script.call "$(jq -n --arg s "$SELF" --arg d "$dir" --argjson rc "$rc" \
+    --argjson dur "$((SECONDS * 1000))" '{script: $s, args: [$d], exit: $rc, dur: $dur}')"
+  exit "$rc"
+}
+trap 'journal_exit $?' EXIT
 [ -d "$dir" ] || die "usage: review-merge REVIEWS_DIR" 2
 
 ok="[]" bad="[]"
@@ -24,7 +40,7 @@ for f in "$dir"/*.json; do
   fi
 done
 
-jq --argjson bad "$bad" '
+out="$(jq --argjson bad "$bad" '
   def rank: {"blocker": 3, "major": 2, "minor": 1, "question": 0}[.];
   def vrank: {"block": 2, "fix": 1, "pass": 0}[.];
   def implied: if .severity == "blocker" then "block" elif .severity == "major" then "fix" else "pass" end;
@@ -37,4 +53,10 @@ jq --argjson bad "$bad" '
       counts: ($merged | group_by(.severity) | map({(.[0].severity): length}) | add // {}),
       findings: ($merged | sort_by([-(.severity | rank), (.file // ""), (.line // 0)])),
       agents: map(.agent),
-      invalid: $bad }' <<<"$ok"
+      invalid: $bad }' <<<"$ok")"
+printf '%s\n' "$out"
+journal_event finding "$(jq -c --argjson merged "$out" '
+  def own: {severity, title} + (if (.file | type) == "string" then {file} else {} end)
+    + (if (.line | type) == "number" then {line: (.line | floor)} else {} end);
+  [ .[] | .agent as $a | .findings[] | own + {stage: "produced", reviewer: $a} ]
+  + [ $merged.findings[] | own + {stage: "merged", reviewer: (.agents | join(", "))} ]' <<<"$ok")"

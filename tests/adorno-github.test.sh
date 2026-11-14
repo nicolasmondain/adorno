@@ -1158,6 +1158,84 @@ FAKE_PR_STATE=MERGED expect_exit 0 "clean removes the branch worktree adorno cre
 [ ! -d "$bw" ] && [ ! -f "$KH/workspaces/acme__docs/pr-42.link" ] && ok "... worktree and link gone" || ko "... worktree and link gone"
 git -C "$L" show-ref --verify --quiet refs/heads/nm/pagination && ok "... the branch stays" || ko "... the branch stays"
 
+echo "journal (adorno-journal): what the suite's own run recorded on the way"
+JPY="$ROOT/src/skills/adorno-journal/scripts/journal.py"
+SUITE="$(jq -r 'select(.workflow == "workflow:test:suite") | .id' "$KH"/runs/active/*.json)"
+JD="$(jq -r 'select(.workflow == "workflow:test:suite") | .journal' "$KH"/runs/active/*.json)"; JF="$JD/events.jsonl"
+jl() { out="$(jq -cs . "$JF")"; }                      # the whole journal, as one array, in $out
+count() { jq -cs "[.[] | select($1)] | length" "$JF"; }  # count FILTER
+expect_exit 0 "every event the scripts and the guard wrote is valid" -- python3 "$JPY" validate "$JF"
+jl
+expect_jq "run-begin opens the journal with the run's grant" \
+  '.[0].type == "run.begin" and .[0].workflow == "workflow:test:suite" and .[0].level == "L3" and (.[0].repos | length) == 6 and .[0].run == "'"$SUITE"'"'
+expect_jq "a script's call: its name, arguments, exit code, the level and action it asked for" \
+  'any(.[]; .type == "script.call" and .script == "pr-reply" and .exit == 0 and .level == "L3" and .action == "reply" and .args[0] == "acme/docs#42" and .dry_run == false)'
+expect_jq "a refusal is recorded with its exit code (4 policy, 5 level, 2 usage, 3 unregistered)" \
+  '[.[] | select(.type == "script.call") | .exit] | (index(4) and index(5) and index(2) and index(3)) != null'
+expect_jq "a dry run is recorded as one" 'any(.[]; .type == "script.call" and .dry_run == true)'
+expect_jq "a write that reached GitHub: action, target, url" \
+  'any(.[]; .type == "github" and .action == "reply" and (.target | test("^acme/docs#42 thread ")) and (.url | test("^https://")))'
+expect_jq "... for each kind of write" \
+  '[.[] | select(.type == "github") | .action] | unique | (index("push") and index("open_pr") and index("comment") and index("resolve") and index("rerequest")) != null'
+expect_jq "review-merge: each finding as produced, then as merged" \
+  'any(.[]; .type == "finding" and .stage == "produced" and .reviewer == "agent:review:code" and .severity == "minor" and .file == "a.ts" and .line == 3)
+   and any(.[]; .type == "finding" and .stage == "merged" and .severity == "blocker" and .reviewer == "agent:review:back, agent:review:code")
+   and any(.[]; .type == "script.call" and .script == "review-merge" and .exit == 0)'
+expect_jq "the guard's refusals, with the command and the reason" \
+  'any(.[]; .type == "guard" and .decision == "deny" and .command == "git push origin fix/x" and (.reason | length) > 0)'
+expect_jq "what the guard lets through is not an event" \
+  'all(.[] | select(.type == "guard"); .command != "git commit -m '"'"'push the fix'"'"'")'
+expect_jq "scripts that set their own exit trap are recorded too (pr-areas, with_lock in pr-workspace)" \
+  'any(.[]; .type == "script.call" and .script == "pr-areas" and .exit == 0) and any(.[]; .type == "script.call" and .script == "pr-workspace" and .exit == 0)'
+n="$(count '.type == "github"')"
+ADORNO_DRY_RUN=1 "$S/pr-reply" acme/docs#42 T1 "$TMP/body.md" >/dev/null
+[ "$(count '.type == "github"')" = "$n" ] && ok "a dry run reaches nothing: no github event" || ko "github event in a dry run"
+n="$(count '.script == "run-check"')"
+guard_at allow "$C" "" "git push origin fix/lem-8-x"
+[ "$(count '.script == "run-check"')" = "$n" ] && ok "the guard's own probes are not the run's doing" || ko "guard probes recorded"
+n="$(wc -l <"$JF")"
+ADORNO_JOURNAL=0 "$S/repo-conf" acme/docs >/dev/null
+[ "$(wc -l <"$JF")" = "$n" ] && ok "ADORNO_JOURNAL=0 records nothing" || ko "ADORNO_JOURNAL=0"
+"$S/pr-comment" acme/docs#42 "$TMP/norun.md" --attach "$TMP/ghp_0123456789abcdefghijABCDEFGHIJ012345.png" >/dev/null 2>&1
+grep -q "ghp_0123456789" "$JF" && ko "a token in an argument reached the journal" || ok "a token in an argument never reaches the journal"
+expect_exit 0 "run-mark: a step starts" -- "$S/run-mark" step-begin 2 build
+expect_exit 0 "run-mark: a round starts" -- "$S/run-mark" round 1 2 "1 major"
+expect_exit 2 "run-mark: usage" -- "$S/run-mark" round one 2
+jl
+expect_jq "marks are events of their own, without a script.call" \
+  '.[-2].type == "step.begin" and .[-2].index == 2 and .[-2].name == "build" and .[-1] .type == "loop" and .[-1].round == 1 and .[-1].cap == 2 and .[-1].reason == "1 major"
+   and all(.[]; .script != "run-mark")'
+guard_at allow "$TMP" "" "$S/run-mark step-end 2 build"
+
+echo "journal: recording never breaks a script"
+chmod 500 "$JD"; chmod 400 "$JF"
+expect_exit 0 "a journal that cannot be written: the script ends as usual" -- "$S/repo-conf" acme/docs
+expect_jq "... with its output" '.repo == "acme/docs"'
+expect_exit 3 "... and a refusal keeps its exit code" -- "$S/pr-reply" foo/bar#1 T1 "$TMP/body.md"
+grep -q "not recorded" "$TMP/err" && ok "... and the journal says on stderr what it could not write" || ko "silent journal failure"
+chmod 700 "$JD"; chmod 600 "$JF"
+mkdir -p "$TMP/broken/adorno-github" "$TMP/broken/adorno-journal/scripts" "$TMP/alone/adorno-github"
+cp -R "$S" "$TMP/broken/adorno-github/scripts"; cp -R "$S" "$TMP/alone/adorno-github/scripts"
+cp "$ROOT/src/skills/adorno-github/repos.json" "$TMP/broken/adorno-github/" 2>/dev/null; cp "$ROOT/src/skills/adorno-github/repos.json" "$TMP/alone/adorno-github/" 2>/dev/null
+printf 'import sys\nsys.exit(3)\n' >"$TMP/broken/adorno-journal/scripts/journal.py"
+expect_exit 0 "a writer that fails: the script ends as usual" -- "$TMP/broken/adorno-github/scripts/repo-conf" acme/docs
+expect_exit 4 "... and a refusal keeps its exit code" -- "$TMP/broken/adorno-github/scripts/pr-resolve" acme/strict#7 T1
+n="$(wc -l <"$JF")"
+expect_exit 0 "without the adorno-journal skill: the script ends as usual" -- "$TMP/alone/adorno-github/scripts/repo-conf" acme/docs
+[ "$(wc -l <"$JF")" = "$n" ] && ok "... and records nothing" || ko "recorded without the skill"
+
+echo "journal: always under ~/.adorno/runs, whatever --dir says"
+expect_exit 0 "a run whose folder is in a workspace" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-begin" --workflow workflow:pr:review \
+  --mode report --level L0 --repo acme/docs --dir "$TMP/ws/.agent-run/review-1"
+WSRUN="$(jq -r .id <<<"$out")"
+expect_jq "the journal is not in --dir" '.dir == "'"$TMP"'/ws/.agent-run/review-1" and .journal == "'"$KH"'/runs/pr-review-'"$WSRUN"'"'
+[ -z "$(find "$TMP/ws" -name '*.jsonl')" ] && [ -f "$KH/runs/pr-review-$WSRUN/events.jsonl" ] && ok "nothing recorded in the workspace" || ko "journal in the workspace"
+expect_exit 0 "run-end closes the journal" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-end" "$WSRUN"
+out="$(jq -cs . "$KH/runs/pr-review-$WSRUN/events.jsonl")"
+expect_jq "from run.begin (with the run's folder) to run.end, for that session only" \
+  '.[0].type == "run.begin" and .[0].dir == "'"$TMP"'/ws/.agent-run/review-1" and .[0].dry_run == true and .[-1].type == "run.end" and .[-1].outcome == "ended" and all(.[]; .session == "sess-j")'
+expect_exit 0 "that journal is valid" -- python3 "$JPY" validate "$KH/runs/pr-review-$WSRUN/events.jsonl"
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

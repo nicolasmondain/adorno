@@ -32,7 +32,8 @@ command.
      half done is a 🟠 anchored on its line there. `review-merge` → the verdict.
    - A 🔴 or a 🟠 → fixed in the flow: each by `by_area.<a>.fix` (or `.perf` for a performance point; null: `fallbacks.perf`, agent and its `skills`) of its file's
      area (`pr-areas --files <file>`; nit: `fallbacks.nit`, missing test: `fallbacks.test`), with that area's `skills`, tests and lint green, committed with `commit_skill`;
-     then the reviewers again on the new commits and on the points still open. Two fix rounds at most.
+     then the reviewers again on the new commits and on the points still open. Two fix rounds at most, each opened
+     with `run-mark round <n> 2 "<what is left>"` (the run's journal frames it).
    - Clean (no 🔴 nor 🟠, the request met) → **ready for review**. The cap reached with a 🔴 or 🟠 still open:
      no PR yet → it is opened as **draft**, those points at the top of its description with `file:line`; a PR already
      open → those commits are not pushed (reviewers would see known 🔴 or 🟠 land on it). Either way `status.md` says

@@ -6,7 +6,8 @@
 # it (require_level): a run applies only to the repos it names (at least one); no run for a repo → L0, every write
 # there is refused; it counts only in the session that opened it (CLAUDE_CODE_SESSION_ID, set by Claude Code);
 # several runs of one session for a repo → the strictest wins. Prints {id, dir, level, deny, dry_run, repos, expires_at}.
-# End with run-end.
+# End with run-end. Also opens the run's journal (skill adorno-journal: `journal` in the output), private and always
+# under ~/.adorno/runs whatever PATH is, and prunes the old ones.
 # Modes have fixed floors: report → L0 and dry run; draft → the code goes out (commit, push, PR: workflow:pr:ship),
 # the conversation does not (reply, comment, resolve, rerequest, review, submit, ci_rerun denied).
 . "$(dirname "$0")/_lib.sh"
@@ -43,13 +44,17 @@ esac
 
 id="$(date -u +%Y%m%dT%H%M%S)-$$-$RANDOM"
 slug="$(printf '%s' "$workflow" | sed 's/^workflow://; s/:/-/g')"
-[ -n "$dir" ] || dir="$(kit_home)/runs/$slug-$id"
+# the run's journal (adorno-journal) is private: always under ~/.adorno/runs, even when --dir is inside a workspace
+journal="$(kit_home)/runs/$slug-$id"
+[ -n "$dir" ] || dir="$journal"
 mkdir -p "$dir" "$(runs_dir)"
 case "$ttl" in *m) secs=$(( ${ttl%m} * 60 )) ;; *h) secs=$(( ${ttl%h} * 3600 )) ;; esac
 jq -n --arg id "$id" --arg w "$workflow" --arg m "$mode" --arg l "$level" --arg d "$deny" --argjson dry "$dry" \
-  --arg dir "$dir" --arg session "$(session_id)" --argjson exp "$(( $(date +%s) + secs ))" --args '
+  --arg dir "$dir" --arg journal "$journal" --arg session "$(session_id)" --argjson exp "$(( $(date +%s) + secs ))" --args '
   {id: $id, session: $session, workflow: $w, mode: $m, level: $l, deny: ($d | split(",") | map(select(. != "")) | unique),
-   dry_run: $dry, repos: $ARGS.positional, dir: $dir, started: (now | todate), expires: $exp}' \
+   dry_run: $dry, repos: $ARGS.positional, dir: $dir, journal: $journal, started: (now | todate), expires: $exp}' \
   "${repos[@]}" >"$(runs_dir)/.$id.tmp"
 mv "$(runs_dir)/.$id.tmp" "$(runs_dir)/$id.json"
 jq '. + {expires_at: (.expires | todate)}' "$(runs_dir)/$id.json"
+journal_event run.begin "$(jq '{workflow, mode, level, repos, dir, deny, dry_run}' "$(runs_dir)/$id.json")" --run "$id"
+! journal_on || python3 "$JOURNAL_PY" prune || true  # old journals go as new ones come

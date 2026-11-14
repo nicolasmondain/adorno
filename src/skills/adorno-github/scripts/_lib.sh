@@ -88,7 +88,52 @@ grant() {
 
 # dry_run — true when every write must only be printed (a report run applies, or ADORNO_DRY_RUN=1); uses $REPO when
 # the script has parsed one
-dry_run() { [ "$(grant "${REPO:-}" | jq -r .dry_run)" = "true" ]; }
+dry_run() {
+  JOURNAL_DRY=false
+  [ "$(grant "${REPO:-}" | jq -r .dry_run)" = "true" ] || return 1
+  JOURNAL_DRY=true
+}
+
+# ── journal: what this script did, in the journal of the run it is part of (adorno-journal) ────────────────────────
+# Recording never breaks nor slows a script: nothing happens without an open run, without python3 or without the
+# adorno-journal skill, and the writer itself always exits 0. ADORNO_JOURNAL=0 turns it off (the guard's own probes).
+JOURNAL_PY="$ADORNO_GITHUB_DIR/../../adorno-journal/scripts/journal.py"
+JOURNAL_ARGS=("$@") JOURNAL_LEVEL="" JOURNAL_ACTION="" JOURNAL_DRY=""
+
+journal_on() {
+  [ "${ADORNO_JOURNAL:-1}" != 0 ] && ls "$(runs_dir)"/*.json >/dev/null 2>&1 \
+    && [ -f "$JOURNAL_PY" ] && command -v python3 >/dev/null 2>&1
+}
+
+# journal_event TYPE JSON [--run ID] — appends the event (the type's own fields) to this session's open runs
+journal_event() {
+  ! journal_on || python3 "$JOURNAL_PY" event "$@" || true
+}
+
+# journal_github ACTION TARGET [URL] — a write that reached GitHub (never called in a dry run)
+journal_github() {
+  journal_event github "$(jq -n --arg a "$1" --arg t "$2" --arg u "${3:-}" \
+    '{action: $a, target: $t} + (if $u == "" then {} else {url: $u} end)')"
+}
+
+# The script's own event, written as it exits (whatever its exit code, a refusal included): its name, its arguments,
+# what require_level was asked and whether the run made it a dry run. A script with something to remove on exit
+# sets `trap '_journal_exit $? PATH' EXIT` instead of a trap of its own.
+_journal_exit() {
+  local rc="$1"
+  set +e
+  [ -z "${2:-}" ] || rm -rf "$2"
+  if journal_on; then
+    python3 "$JOURNAL_PY" event script.call "$(jq -n --arg s "$SELF" --argjson rc "$rc" \
+      --argjson dur "$((SECONDS * 1000))" --arg l "$JOURNAL_LEVEL" --arg act "$JOURNAL_ACTION" --arg dry "$JOURNAL_DRY" \
+      '{script: $s, args: $ARGS.positional, exit: $rc, dur: $dur}
+       + (if $l == "" then {} else {level: $l} end) + (if $act == "" then {} else {action: $act} end)
+       + (if $dry == "" then {} else {dry_run: ($dry == "true")} end)' \
+      --args ${JOURNAL_ARGS[@]+"${JOURNAL_ARGS[@]}"})"
+  fi
+  exit "$rc"
+}
+trap '_journal_exit $?' EXIT
 
 # split_repo owner/repo -> sets OWNER NAME REPO
 split_repo() {
@@ -195,6 +240,7 @@ level_num() { case "$1" in L0) echo 0;; L1) echo 1;; L2) echo 2;; L3) echo 3;; L
 # when it named some. Actions: push, reply, comment, resolve, rerequest, review, submit, open_pr, ci_rerun.
 require_level() {
   local need_n max conf g granted
+  JOURNAL_LEVEL="$2" JOURNAL_ACTION="${3:-}"
   need_n="$(level_num "$2")"
   conf="$(repo_conf "$1")"
   max="$(jq -r '.max_level // "L0"' <<<"$conf")"
@@ -239,11 +285,12 @@ with_lock() {
     sleep 0.2
   done
   echo "$$" >"$lock/pid"
-  trap 'rm -rf "$lock"' EXIT INT TERM
+  trap 'rm -rf "$lock"' INT TERM
+  trap '_journal_exit $? "$lock"' EXIT
   # not `( … ) || rc=$?`: set -e is ignored in the left side of || (and in callers' conditions, so the commands
   # given to with_lock also check their own steps)
   set +e; ( set -e; "$@" ); rc=$?; set -e
-  rm -rf "$lock"; trap - EXIT INT TERM
+  rm -rf "$lock"; trap - INT TERM; trap '_journal_exit $?' EXIT
   return "$rc"
 }
 

@@ -21,7 +21,7 @@ expect_exit() {
   if [ "$got" = "$code" ]; then ok "$name"; else ko "$name" "exit $got, want $code: $(cat "$TMP/err")"; fi
 }
 expect_jq() { if jq -e "$2" >/dev/null 2>&1 <<<"$out"; then ok "$1"; else ko "$1" "$2 on: $out"; fi; }
-valid() { python3 "$ROOT/tests/jsonschema_subset.py" "$SCHEMA" "$@"; }
+valid() { python3 "$J" validate "$@"; }
 # open_run ID SESSION [EXPIRES] — what run-begin writes: the grant, and where the run's journal goes
 open_run() {
   jq -n --arg id "$1" --arg s "$2" --argjson exp "${3:-$(( $(date +%s) + 3600 ))}" --arg j "$KH/runs/test-$1" \
@@ -47,7 +47,7 @@ printf '%s\n' "${base/session\",\"parent/bot\",\"parent},\"type\":\"loop\",\"rou
 expect_exit 1 "refused: an unknown actor" -- valid "$TMP/bad.jsonl"
 printf '{"type": "object", "maxProperties": 3}' >"$TMP/schema.json"
 expect_exit 2 "a schema keyword the checker does not implement is an error, not a pass" -- \
-  python3 "$ROOT/tests/jsonschema_subset.py" "$TMP/schema.json" "$TMP/bad.jsonl"
+  python3 "$J" validate --schema "$TMP/schema.json" "$TMP/bad.jsonl"
 
 echo "writer"
 expect_exit 0 "no run open: nothing happens" -- python3 "$J" event loop '{"round":1,"cap":2}' --session sess-a
@@ -80,7 +80,7 @@ expect_exit 0 "stdin input" -- sh -c "printf '%s' '{\"round\":2,\"cap\":2}' | py
 last 20260101T100000-1-1; expect_jq "read from stdin" '.round == 2'
 n="$(lines 20260101T100000-1-1)"
 expect_exit 0 "an unknown type is refused, the caller goes on" -- python3 "$J" event nope '{}' --session sess-a
-grep -q "unknown event type" "$TMP/err" && [ "$(lines 20260101T100000-1-1)" = "$n" ] && ok "said on stderr, nothing written" || ko "unknown type"
+grep -q "is not one of" "$TMP/err" && [ "$(lines 20260101T100000-1-1)" = "$n" ] && ok "said on stderr, nothing written" || ko "unknown type"
 expect_exit 0 "invalid JSON is refused, the caller goes on" -- python3 "$J" event loop '{not json' --session sess-a
 [ "$(lines 20260101T100000-1-1)" = "$n" ] && ok "nothing written" || ko "invalid JSON written"
 expect_exit 0 "every line written is valid" -- valid "$KH"/runs/test-*/events.jsonl
@@ -125,6 +125,19 @@ expect_jq "reasoning is kept whole and redacted, other strings are cut" \
 expect_exit 0 "redacted lines are valid" -- valid "$f"
 kit_names="$(grep -o 'SECRET_ENV_RE = re.compile(r"[^"]*"' "$ROOT/bin/kit" | sed 's/.*r"//; s/"$//')"
 grep -qF "SECRET_NAME = r\"$kit_names\"" "$J" && ok "same secret names as bin/kit (SECRET_ENV_RE)" || ko "secret names differ from bin/kit" "$kit_names"
+
+echo "prune"
+old_run="$KH/runs/old-20250101T000000-1-1"; kept_run="$KH/runs/kept-20250101T000000-2-2"; open_old="$KH/runs/test-20260101T000000-9-9"
+mkdir -p "$old_run" "$kept_run/reviews" "$open_old"
+for d in "$old_run" "$kept_run" "$open_old"; do echo '{}' >"$d/events.jsonl"; touch -t 202501010000 "$d/events.jsonl"; done
+echo '{}' >"$kept_run/reviews/code.json"; touch -t 202501010000 "$kept_run/reviews/code.json"
+open_run 20260101T000000-9-9 sess-z
+expect_exit 0 "prune" -- python3 "$J" prune
+[ ! -e "$old_run" ] && ok "an old journal goes, and its emptied folder with it" || ko "old journal kept"
+[ ! -e "$kept_run/events.jsonl" ] && [ -f "$kept_run/reviews/code.json" ] && ok "only the journal goes: the run's other files stay" || ko "deliverables removed"
+[ -f "$open_old/events.jsonl" ] && ok "the journal of an open run stays, whatever its age" || ko "open run pruned"
+[ -f "$f" ] && ok "a recent journal stays" || ko "recent journal pruned"
+rm -f "$KH/runs/active/20260101T000000-9-9.json"
 
 echo "recording never breaks the caller"
 chmod 500 "$KH/runs/test-20260101T100000-1-1"; chmod 400 "$f"
