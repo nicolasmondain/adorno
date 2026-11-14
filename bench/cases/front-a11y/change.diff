@@ -1,0 +1,26 @@
+diff --git a/client/components/NoteToolbar.tsx b/client/components/NoteToolbar.tsx
+index c0f507d..235291d 100644
+--- a/client/components/NoteToolbar.tsx
++++ b/client/components/NoteToolbar.tsx
+@@ -1,15 +1,19 @@
+-import { PencilIcon } from './icons.tsx';
++import { PencilIcon, TrashIcon } from './icons.tsx';
+ 
+ interface NoteToolbarProps {
+   onEdit: () => void;
++  onDelete: () => void;
+ }
+ 
+-export function NoteToolbar({ onEdit }: NoteToolbarProps) {
++export function NoteToolbar({ onEdit, onDelete }: NoteToolbarProps) {
+   return (
+     <div className="note-toolbar">
+       <button type="button" className="icon-button" aria-label="Edit note" onClick={onEdit}>
+         <PencilIcon aria-hidden="true" />
+       </button>
++      <button type="button" className="icon-button" onClick={onDelete}>
++        <TrashIcon aria-hidden="true" />
++      </button>
+     </div>
+   );
+ }

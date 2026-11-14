@@ -1,0 +1,23 @@
+{
+  "title": "refactor(duration): flatten formatDuration",
+  "description": "`formatDuration` nested three levels of `if / else`. Early returns and named constants replace them; the output is unchanged, and a test now pins the unit boundaries.",
+  "rationale": "A behavior-preserving refactor with tests: the same output for every whole, non-negative input. Nothing to block or fix.",
+  "routing": {
+    "areas": [
+      "back",
+      "tests",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:back",
+      "agent:review:tests",
+      "agent:review:perf-back"
+    ]
+  },
+  "verdict": [
+    "pass"
+  ],
+  "findings": []
+}

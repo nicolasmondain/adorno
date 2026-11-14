@@ -191,6 +191,7 @@ local.example/          template of your personal layer
 vendor/                 imported skills and agents (kit import), pinned in kit.lock
 dist/                   generated outputs (kit build), Claude Code plugin included
 docs/                   guides
+bench/                  reviewer benchmark: cases, routing check, runner, scoring and report (bench/README.md)
 tests/                  tests of the adorno-github scripts against a fake gh
 ```
 
@@ -217,6 +218,7 @@ tests/kit.test.sh            # tests of bin/kit: validation, install, uninstall
 tests/adorno-setup.test.sh   # tests of the setup (adorno source, voice samples)
 tests/adorno-learn.test.sh   # tests of the learning profile
 tests/adorno-inputs.test.sh  # tests of the reading of a request's links
+tests/bench.test.sh          # tests of the reviewer benchmark: cases, routing, runner and scoring, no model
 # CI also runs them on macOS, with /bin/bash 3.2
 ```
 

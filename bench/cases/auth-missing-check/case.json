@@ -1,0 +1,50 @@
+{
+  "title": "feat(invoices): delete a draft invoice",
+  "description": "Users can now delete an invoice while it is still a draft. Adds `DELETE /invoices/:id`: 204 when the draft is deleted, 404 when the invoice does not exist or is no longer a draft.",
+  "rationale": "The sibling routes call `requirePermission` (`invoices:read`, `invoices:write`); the new delete route does not, so a read-only member can delete drafts.",
+  "routing": {
+    "areas": [
+      "api",
+      "back",
+      "back.query",
+      "tests",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:back",
+      "agent:review:tests",
+      "agent:review:perf-back",
+      "agent:review:mongodb",
+      "agent:review:api"
+    ]
+  },
+  "verdict": [
+    "block"
+  ],
+  "findings": [
+    {
+      "file": "server/routes/invoices.ts",
+      "lines": [
+        42,
+        44
+      ],
+      "category": "missing-authorization",
+      "severity": [
+        "blocker"
+      ],
+      "keywords": [
+        "permission",
+        "authori[sz]",
+        "access control",
+        "read-only member",
+        "privilege",
+        "invoices:write",
+        "\\b403\\b",
+        "forbidden"
+      ],
+      "reviewer": "agent:review:back"
+    }
+  ]
+}

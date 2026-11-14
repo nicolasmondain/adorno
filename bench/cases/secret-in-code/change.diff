@@ -1,0 +1,11 @@
+diff --git a/server/config.ts b/server/config.ts
+index 8b3c8ea..090effb 100644
+--- a/server/config.ts
++++ b/server/config.ts
+@@ -10,5 +10,5 @@ export const config = {
+   port: Number(process.env.PORT ?? 3000),
+   mongoUrl: requireEnv('MONGO_URL'),
+   paymentsBaseUrl: process.env.PAYMENTS_BASE_URL ?? 'https://payments.example.test',
+-  paymentsApiKey: requireEnv('PAYMENTS_API_KEY'),
++  paymentsApiKey: process.env.PAYMENTS_API_KEY ?? 'sk_test_FAKE_0000',
+ };

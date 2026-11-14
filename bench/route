@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Usage: route [--repo owner/repo] [--cases DIR] [--case ID]…
+# The free part of the benchmark: runs pr-areas on each case's change.diff and compares the areas and the reviewers
+# it picks with case.json › routing. The rules are those the registry gives to --repo (adorno/bench by default):
+# tests/bench.test.sh declares that repo with the public defaults only (repos.yaml › areas), which is what CI checks;
+# on your machine, pass a repo your registry declares to see what your personal layer changes.
+# Prints a JSON array, one entry per case:
+#   {case, ok, areas: {want, got}, review: {want, got}, skills_missing, routed}
+# `areas` and `review` must be the same sets; `routing.skills` must be included in the skills picked; `routed` is
+# the full pr-areas output. Exits 1 when a case diverges, 2 on wrong usage, 3 when the repo is not declared.
+set -euo pipefail
+
+SELF="$(basename "$0")"
+die() { printf '%s: %s\n' "$SELF" "$1" >&2; exit "${2:-1}"; }
+command -v jq >/dev/null 2>&1 || die "missing dependency: jq"
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+usage="usage: route [--repo owner/repo] [--cases DIR] [--case ID]…"
+repo="adorno/bench"
+cases="$ROOT/bench/cases"
+only=""
+while [ $# -gt 0 ]; do
+  [ $# -ge 2 ] || die "$usage" 2
+  case "$1" in
+    --repo)  repo="$2" ;;
+    --cases) cases="$2" ;;
+    --case)  only="$only$2"$'\n' ;;
+    *) die "$usage" 2 ;;
+  esac
+  shift 2
+done
+[ -d "$cases" ] || die "no such folder: $cases" 2
+[ -n "$only" ] || only="$(for d in "$cases"/*/; do [ ! -f "$d/case.json" ] || basename "$d"; done)"
+
+results=""
+while IFS= read -r id; do
+  [ -n "$id" ] || continue
+  dir="$cases/$id"
+  [ -f "$dir/case.json" ] && [ -f "$dir/change.diff" ] || die "unknown case: $id" 2
+  routed="$("$ROOT/src/skills/adorno-github/scripts/pr-areas" "$repo" "$dir/change.diff")" || {
+    code=$?
+    [ "$code" != 3 ] || printf '%s: pass --repo with a repo your registry declares (tests/bench.test.sh checks the public defaults)\n' "$SELF" >&2
+    exit "$code"
+  }
+  entry="$(jq -n --arg case "$id" --argjson routed "$routed" --slurpfile c "$dir/case.json" '
+    $c[0].routing as $want
+    | {areas: {want: ($want.areas | sort), got: ($routed.areas | keys)},
+       review: {want: ($want.review | sort), got: ($routed.review | sort)},
+       skills_missing: (($want.skills // []) - $routed.skills)}
+    | {case: $case, ok: (.areas.want == .areas.got and .review.want == .review.got and .skills_missing == [])}
+      + . + {routed: $routed}')"
+  results="$results$entry"$'\n'
+done <<<"$only"
+
+jq -s '.' <<<"$results"
+failed="$(jq -rs '[.[] | select(.ok | not) | .case] | join(", ")' <<<"$results")"
+[ -z "$failed" ] || die "routing differs from case.json: $failed"

@@ -1,0 +1,45 @@
+{
+  "title": "feat(notes): delete a note from its toolbar",
+  "description": "Adds a delete button to the note toolbar, next to the edit button. The parent confirms and deletes in `onDelete`.",
+  "rationale": "The new button holds only an icon hidden from assistive technology and has no `aria-label`: a screen reader announces \"button\" with no name (WCAG 4.1.2). The edit button next to it has one.",
+  "routing": {
+    "areas": [
+      "front",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:front",
+      "agent:review:perf"
+    ]
+  },
+  "verdict": [
+    "fix"
+  ],
+  "findings": [
+    {
+      "file": "client/components/NoteToolbar.tsx",
+      "lines": [
+        14,
+        15
+      ],
+      "category": "accessibility",
+      "severity": [
+        "major"
+      ],
+      "keywords": [
+        "aria-label",
+        "accessible name",
+        "screen[ -]?reader",
+        "\\ba11y\\b",
+        "accessib",
+        "wcag",
+        "assistive",
+        "unlabel+ed",
+        "no (visible )?label"
+      ],
+      "reviewer": "agent:review:front"
+    }
+  ]
+}

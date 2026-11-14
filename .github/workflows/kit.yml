@@ -17,7 +17,7 @@ jobs:
       - name: Validate sources and make sure dist/ is up to date
         run: ./bin/kit check --dist
       - name: Lint the scripts
-        run: shellcheck -x -s bash -P SCRIPTDIR $(find src/skills -path '*/scripts/*' -type f ! -name '*.jq' ! -name '*.py') tests/fake-gh tests/fake-curl tests/*.sh
+        run: shellcheck -x -s bash -P SCRIPTDIR $(find src/skills -path '*/scripts/*' -type f ! -name '*.jq' ! -name '*.py') bench/route tests/fake-gh tests/fake-curl tests/fake-claude tests/*.sh
       - name: Get the browser the journal viewer is tested in (Chromium, pinned in tests/journal-viewer.smoke.py)
         run: uv run --script tests/journal-viewer.smoke.py --install
       - name: Test the scripts (fake gh, fake curl, fixtures) and the viewer (in the browser)

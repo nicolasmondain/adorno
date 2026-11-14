@@ -1,0 +1,49 @@
+{
+  "title": "fix(jobs): keep syncing invoices when one account fails",
+  "description": "One account with a deleted billing id made the nightly invoice sync throw, so no account after it was synced. The job now skips the failing account and goes on with the others.",
+  "rationale": "The `catch` is empty: the failure is neither logged, counted in the report nor rethrown at the end, so the scheduler sees a green run and nobody learns that accounts stopped syncing (a database error is hidden the same way).",
+  "routing": {
+    "areas": [
+      "back",
+      "back.query",
+      "tests",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:back",
+      "agent:review:tests",
+      "agent:review:perf-back",
+      "agent:review:mongodb"
+    ]
+  },
+  "verdict": [
+    "fix"
+  ],
+  "findings": [
+    {
+      "file": "server/jobs/syncInvoices.ts",
+      "lines": [
+        40,
+        41
+      ],
+      "category": "swallowed-error",
+      "severity": [
+        "major"
+      ],
+      "keywords": [
+        "swallow",
+        "silent",
+        "empty catch",
+        "\\blog",
+        "(hid|mask)(es|den|ing|s)?\\b",
+        "ignor",
+        "(never|not|no longer) (report|surfac|rethrow|alert|pag)",
+        "on-?call",
+        "green"
+      ],
+      "reviewer": "agent:review:back"
+    }
+  ]
+}

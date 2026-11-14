@@ -1,0 +1,48 @@
+{
+  "title": "perf(contacts): debounce the contact search",
+  "description": "Typing in the contact search fired one request per keystroke. The search callback is now debounced by 300 ms, and the pending call is cancelled on unmount.",
+  "rationale": "`import _ from 'lodash'` pulls the whole library into the bundle for one `debounce`; the repo already imports per method (`lodash/capitalize` in `client/lib/format.ts`).",
+  "routing": {
+    "areas": [
+      "front",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:front",
+      "agent:review:perf"
+    ],
+    "skills": [
+      "frontend-ui-engineering"
+    ]
+  },
+  "verdict": [
+    "pass",
+    "fix"
+  ],
+  "findings": [
+    {
+      "file": "client/components/ContactSearch.tsx",
+      "lines": [
+        1,
+        12
+      ],
+      "category": "bundle-weight",
+      "severity": [
+        "minor",
+        "major"
+      ],
+      "keywords": [
+        "bundle",
+        "lodash/debounce",
+        "tree[ -]?shak",
+        "(whole|entire|full|all of) (the )?(lodash|library)",
+        "per[ -]method",
+        "\\bkb\\b",
+        "import cost"
+      ],
+      "reviewer": "agent:review:perf"
+    }
+  ]
+}

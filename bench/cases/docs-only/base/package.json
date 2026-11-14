@@ -1,0 +1,16 @@
+{
+  "name": "bench-notes",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "tsx server/index.ts",
+    "test": "tsx --test \"server/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
