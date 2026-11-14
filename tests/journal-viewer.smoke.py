@@ -270,6 +270,21 @@ def main(argv):
         page.keyboard.press("+")
         nodes = page.evaluate("document.querySelectorAll('.diagram .marks *').length")
         check("... zoomed in too: only what is near the window is in the page", 0 < nodes <= 1500, str(nodes))
+        # played fast in its text log, the current row runs ahead of the log's throttled scroll
+        page.keyboard.press("l")
+        page.wait_for_selector("#log li", state="attached")
+        counted(page.locator("#log li"), int(page.get_attribute("#log", "data-rows")))   # every chunk is in
+        page.evaluate("document.activeElement.blur()")
+        for _ in range(4):
+            page.keyboard.press(">")
+        page.keyboard.press("Home")
+        page.keyboard.press("Space")
+        page.wait_for_timeout(1500)
+        page.keyboard.press("Space")
+        marked = page.locator("#log li[aria-current]")
+        check("paused in the text log of a large run, the current row is on screen",
+              stage.get_attribute("data-state") == "paused" and retried(lambda: expect(marked).to_be_in_viewport())[0],
+              f'{stage.get_attribute("data-state")} at {stage.get_attribute("data-index")}')
 
         print("reduced motion, forced colours, narrow window")
         calm = watch(browser.new_page(viewport={"width": 1280, "height": 800}, reduced_motion="reduce"))

@@ -230,7 +230,7 @@ function pause() {
   state.playing = false;
   cancelAnimationFrame(state.frame);
   $("play").textContent = "Play";
-  seek(state.p, { announce: true });
+  seek(state.p, { follow: true, announce: true }); // the log scrolled at most every LOG_SCROLL_MS while playing
 }
 
 // To the previous or next event the view shows.
