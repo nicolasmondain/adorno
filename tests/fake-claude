@@ -9,8 +9,9 @@
 #   NAME.message      its last message; with no NAME.json next to it, it writes no file at all
 #   NAME.link         a misbehaving agent: in place of its review, a link to the path this file holds
 #   adorno.final.json, adorno.notes.md   what agent:adorno writes as review-final.json and review-notes.md
-# FAKE_CLAUDE_COST: the cost of one call (0.01 by default). FAKE_CLAUDE_COMMITS: file that gets the commit subjects
-# of the workspace, newest first, at each call.
+# FAKE_CLAUDE_COST: the cost of one call (0.01 by default; `null`: a tool that reports none). FAKE_CLAUDE_FAIL=NAME:
+# that agent crashes (no file, garbage on stdout, a line on stderr, exit 1). FAKE_CLAUDE_COMMITS: file that gets the
+# commit subjects of the workspace, newest first, at each call.
 set -euo pipefail
 
 [ "${1:-}" != "--version" ] || { echo "0.0.0 (fake claude)"; exit 0; }
@@ -34,6 +35,7 @@ dir="${FAKE_CLAUDE_DIR:-/nonexistent}"
 run=".agent-run/review"
 name="${agent#adorno:}"; name="${name#adorno-agent-review-}"
 message="Verdict: pass."
+if [ "$name" = "${FAKE_CLAUDE_FAIL:-}" ]; then echo "not an envelope"; echo "fake-claude: $name crashed" >&2; exit 1; fi
 if [ "$name" = adorno ]; then
   [ ! -f "$dir/adorno.final.json" ] || cp "$dir/adorno.final.json" "$run/review-final.json"
   if [ -f "$dir/adorno.notes.md" ]; then cp "$dir/adorno.notes.md" "$run/review-notes.md"; else echo "Clean." >"$run/review-notes.md"; fi

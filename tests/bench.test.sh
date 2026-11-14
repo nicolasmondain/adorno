@@ -211,6 +211,24 @@ if [ -f "$REAL" ]; then
     '.failed == [{"case": "clean-refactor", "n": 1, "links": [".agent-run/review/reviews/tests.json"]}] and (.runs | map(.case)) == ["docs-only"]'
   rm "$FK/tests.link" "$FK/tests.message"; calls
 
+  expect_exit 0 "a tool that crashes on a reviewer" -- env FAKE_CLAUDE_FAIL=back "$B/run" --case clean-refactor --label crash --results "$R"
+  D="$R/crash/clean-refactor/1"
+  out="$(cat "$D/meta/back.json")"
+  expect_jq "is an error, not a review: no cost, and run once more" \
+    '.stop == "tool_failed" and .is_error and .cost_usd == null and .attempts == 2 and .delivered == "none"'
+  if grep -q "fake-claude: back crashed" "$D/messages/back.md"; then ok "what the tool said is kept as its message"; else ko "what the tool said is kept as its message" "$(cat "$D/messages/back.md")"; fi
+  out="$(cat "$D/run.json")"
+  expect_jq "the review is reported missing" '.missing == ["agent:review:back"]'
+  if [ -f "$D/meta/adorno.json" ]; then ok "and the run goes on to agent:adorno"; else ko "and the run goes on to agent:adorno"; fi
+  calls
+
+  expect_exit 0 "a tool that reports no cost" -- env FAKE_CLAUDE_COST=null "$B/run" --case docs-only --repeat 2 --budget-usd 0.05 --label free --results "$R"
+  if grep -qF "| cost | – |" <<<"$out"; then ok "the report shows no cost"; else ko "the report shows no cost" "$(grep -F "| cost" <<<"$out")"; fi
+  if grep -q "reports no cost: --budget-usd did not apply" "$TMP/err"; then ok "says the budget did not apply"; else ko "says the budget did not apply" "$(cat "$TMP/err")"; fi
+  out="$(cat "$R/free/run.json")"
+  expect_jq "and runs every repeat, with no cost recorded" '.cost_usd == null and .skipped == [] and (.runs | length) == 2 and all(.runs[]; .cost_usd == null)'
+  calls
+
   expect_exit 0 "a budget" -- "$B/run" --case docs-only --repeat 3 --budget-usd 0.05 --label budget --results "$R"
   if grep -q "Incomplete run.*docs-only #2, docs-only #3" <<<"$out"; then ok "is named at the top of the report when it cut the run"; else ko "is named at the top of the report when it cut the run" "$(head -c 400 <<<"$out")"; fi
   out="$(cat "$R/budget/run.json")"
