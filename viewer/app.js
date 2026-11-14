@@ -310,10 +310,11 @@ function keyboard(event) {
     return;
   }
   if (typing || event.metaKey || event.ctrlKey || event.altKey || !state.open.length) return;
-  const onButton = event.target.closest("button");
+  // what activates itself on Enter or Space (a button, a link, a disclosure) keeps those keys
+  const onControl = event.target.closest("button, a[href], summary, [role=tab]");
   const speedAt = SPEEDS.indexOf(state.speed);
   const actions = {
-    " ": () => (onButton ? null : state.playing ? pause() : play()),
+    " ": () => (onControl ? null : state.playing ? pause() : play()),
     ArrowRight: () => step(1),
     ArrowLeft: () => step(-1),
     Home: () => { pause(); seek(0, { index: -1, follow: true }); },
@@ -330,7 +331,7 @@ function keyboard(event) {
     4: () => setView("workflow"),
     "[": () => jump(-1),
     "]": () => jump(1),
-    Enter: () => (onButton || state.index < 0 ? null : select([state.index])),
+    Enter: () => (onControl || state.index < 0 ? null : select([state.index])),
     l: () => tab(state.tab === "log" ? "diagram" : "log"),
     r: () => reload(),
     "?": () => $("help").showModal(),
