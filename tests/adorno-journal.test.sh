@@ -85,7 +85,7 @@ grep -q "is not one of" "$TMP/err" && [ "$(lines 20260101T100000-1-1)" = "$n" ] 
 expect_exit 0 "invalid JSON is refused, the caller goes on" -- python3 "$J" event loop '{not json' --session sess-a
 [ "$(lines 20260101T100000-1-1)" = "$n" ] && ok "nothing written" || ko "invalid JSON written"
 expect_exit 0 "every line written is valid" -- valid "$KH"/runs/test-*/events.jsonl
-[ "$(stat -f %Lp "$KH/runs/test-20260101T100000-1-1/events.jsonl" 2>/dev/null || stat -c %a "$KH/runs/test-20260101T100000-1-1/events.jsonl")" = 600 ] \
+[ "$(stat -c %a "$KH/runs/test-20260101T100000-1-1/events.jsonl" 2>/dev/null || stat -f %Lp "$KH/runs/test-20260101T100000-1-1/events.jsonl")" = 600 ] \
   && ok "a journal is readable by its owner only" || ko "journal mode 600"
 for i in 1 2 3 4 5 6 7 8; do python3 "$J" event loop "{\"round\":$i,\"cap\":8}" --session sess-b & done; wait
 [ "$(jq -s '[.[] | select(.type == "loop")] | length' "$KH/runs/test-20260101T100000-2-2/events.jsonl")" = 8 ] \
@@ -298,7 +298,7 @@ expect_jq "a text the hooks already recorded (the reply, the agent's return) is 
   'all(.[]; .excerpt != "Done." and .excerpt != "Review written")'
 expect_jq "reasoning is not copied unless the owner asked" 'all(.[]; has("reasoning") | not)'
 expect_exit 0 "enriched events are valid" -- valid "$ED/enriched.jsonl"
-[ "$(stat -f %Lp "$ED/enriched.jsonl" 2>/dev/null || stat -c %a "$ED/enriched.jsonl")" = 600 ] && ok "readable by its owner only" || ko "enriched.jsonl mode"
+[ "$(stat -c %a "$ED/enriched.jsonl" 2>/dev/null || stat -f %Lp "$ED/enriched.jsonl")" = 600 ] && ok "readable by its owner only" || ko "enriched.jsonl mode"
 before="$(cksum <"$ED/enriched.jsonl")"; n="$(wc -l <"$ED/events.jsonl")"
 python3 "$J" enrich "test-$ER" >/dev/null
 [ "$(cksum <"$ED/enriched.jsonl")" = "$before" ] && [ "$(wc -l <"$ED/events.jsonl")" = "$n" ] \

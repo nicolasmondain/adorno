@@ -1275,7 +1275,7 @@ expect_exit 0 "a run whose folder is in a workspace" -- env CLAUDE_CODE_SESSION_
 WSRUN="$(jq -r .id <<<"$out")"
 expect_jq "the journal is not in --dir" '.dir == "'"$TMP"'/ws/.agent-run/review-1" and .journal == "'"$KH"'/runs/pr-review-'"$WSRUN"'"'
 [ -z "$(find "$TMP/ws" -name '*.jsonl')" ] && [ -f "$KH/runs/pr-review-$WSRUN/events.jsonl" ] && ok "nothing recorded in the workspace" || ko "journal in the workspace"
-mode_of() { stat -f %Lp "$1" 2>/dev/null || stat -c %a "$1"; }
+mode_of() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
 [ "$(mode_of "$KH/runs/pr-review-$WSRUN")" = 700 ] && ok "... its journal folder, made by the writer, readable by its owner only" || ko "--dir journal folder mode" "$(mode_of "$KH/runs/pr-review-$WSRUN")"
 expect_exit 0 "a run whose folder is in a workspace, recording off" -- env ADORNO_JOURNAL=0 CLAUDE_CODE_SESSION_ID=sess-k "$S/run-begin" \
   --workflow workflow:pr:review --mode report --level L0 --repo acme/docs --dir "$TMP/ws/.agent-run/review-2"
