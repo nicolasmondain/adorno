@@ -596,6 +596,10 @@ printf '{"agent":"agent:review:tests","findings":[]}' >"$TMP/reviews2/c.json"
 expect_exit 0 "review-merge, inconsistent reviews" -- "$S/review-merge" "$TMP/reviews2"
 expect_jq "a blocker forces block; unknown or missing verdicts are invalid, not pass" \
   '.verdict == "block" and .invalid == ["b.json", "c.json"]'
+mkdir -p "$TMP/spy" "$TMP/norun-home"; printf '#!/bin/sh\ntouch "%s"\n' "$TMP/spy.called" >"$TMP/spy/python3"; chmod +x "$TMP/spy/python3"
+expect_exit 0 "review-merge without an open run" -- env HOME="$TMP/norun-home" PATH="$TMP/spy:$PATH" "$S/review-merge" "$TMP/reviews"
+expect_jq "... merges as usual" '.verdict == "block"'
+[ ! -e "$TMP/spy.called" ] && ok "... and starts no interpreter to record it" || ko "review-merge started python3 with no run open"
 
 echo "pr-areas: tricky paths"
 printf 'diff --git "a/client/\\303\\251 x.tsx" "b/client/\\303\\251 x.tsx"\n--- "a/client/\\303\\251 x.tsx"\n+++ "b/client/\\303\\251 x.tsx"\n@@ -1 +1 @@\n+const a = 1\ndiff --git a/server/old.ts b/server/old.ts\ndeleted file mode 100644\n--- a/server/old.ts\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\n' >"$TMP/tricky.diff"
@@ -1187,6 +1191,9 @@ expect_jq "review-merge: each finding as produced, then as merged" \
   'any(.[]; .type == "finding" and .stage == "produced" and .reviewer == "agent:review:code" and .severity == "minor" and .file == "a.ts" and .line == 3)
    and any(.[]; .type == "finding" and .stage == "merged" and .severity == "blocker" and .reviewer == "agent:review:back, agent:review:code")
    and any(.[]; .type == "script.call" and .script == "review-merge" and .exit == 0)'
+expect_jq "review-merge: the merged verdict and its counts, from the scripts to the session" \
+  'any(.[]; .type == "message" and .kind == "verdict" and .from == "scripts" and .to == "session" and .excerpt == "block (2 reviews): 1 blocker")
+   and any(.[]; .type == "message" and .kind == "verdict" and .excerpt == "block (1 review): 1 blocker")'
 expect_jq "the guard's refusals, with the command and the reason" \
   'any(.[]; .type == "guard" and .decision == "deny" and .command == "git push origin fix/x" and (.reason | length) > 0)'
 expect_jq "what the guard lets through is not an event" \

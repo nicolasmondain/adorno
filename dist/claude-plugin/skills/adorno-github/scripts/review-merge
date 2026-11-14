@@ -15,6 +15,7 @@ dir="${1:-}"
 # finds the open run and never fails its caller. ADORNO_JOURNAL=0 turns it off.
 JOURNAL_PY="$(dirname "$0")/../../adorno-journal/scripts/journal.py"
 journal_event() {
+  ls "$HOME"/.adorno/runs/active/*.json >/dev/null 2>&1 || return 0  # no run open: no interpreter started
   [ "${ADORNO_JOURNAL:-1}" = 0 ] || [ ! -f "$JOURNAL_PY" ] || ! command -v python3 >/dev/null 2>&1 \
     || python3 "$JOURNAL_PY" event "$@" || true
 }
@@ -60,3 +61,8 @@ journal_event finding "$(jq -c --argjson merged "$out" '
     + (if (.line | type) == "number" then {line: (.line | floor)} else {} end);
   [ .[] | .agent as $a | .findings[] | own + {stage: "produced", reviewer: $a} ]
   + [ $merged.findings[] | own + {stage: "merged", reviewer: (.agents | join(", "))} ]' <<<"$ok")"
+# the merged verdict, as the scripts hand it back to the session: "fix (3 reviews): 2 major, 1 minor"
+journal_event message "$(jq -c --argjson n "$(jq 'length' <<<"$ok")" '
+  [("blocker", "major", "minor", "question") as $s | select(.counts[$s]) | "\(.counts[$s]) \($s)"] as $c
+  | {from: "scripts", to: "session", kind: "verdict",
+     text: "\(.verdict) (\($n) review\(if $n == 1 then "" else "s" end)): \(if $c == [] then "no finding" else $c | join(", ") end)"}' <<<"$out")"
