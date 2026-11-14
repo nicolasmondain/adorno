@@ -1,0 +1,46 @@
+{
+  "title": "feat(orders): list orders with the customer name",
+  "description": "The orders page needs the customer name next to each order. Adds `listOrdersWithCustomer`, which returns the page of orders with `customerName` (null when the customer was deleted).",
+  "rationale": "One `findOne` on `customers` per order in a loop of up to 200 orders: an N+1, where one `$in` query (or a `$lookup`) does it.",
+  "routing": {
+    "areas": [
+      "back",
+      "back.query",
+      "tests",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:back",
+      "agent:review:tests",
+      "agent:review:perf-back",
+      "agent:review:mongodb"
+    ]
+  },
+  "verdict": [
+    "fix"
+  ],
+  "findings": [
+    {
+      "file": "server/services/orders.ts",
+      "lines": [
+        35,
+        39
+      ],
+      "category": "n-plus-one",
+      "severity": [
+        "major"
+      ],
+      "keywords": [
+        "n\\s*\\+\\s*1",
+        "per[ -](order|item|row|iteration)",
+        "(in|inside) (a|the) loop",
+        "one (query|findOne|round[ -]?trip) (per|for each)",
+        "quer(y|ies) (per|for each|in a loop)",
+        "sequential"
+      ],
+      "reviewer": "agent:review:mongodb"
+    }
+  ]
+}

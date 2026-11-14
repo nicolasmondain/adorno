@@ -409,6 +409,11 @@ repos:
 A repo's setting takes effect with `bin/kit install <repo>` (or `--workspace`): the agents installed in the repo
 override those of `--global`. `bin/kit conf owner/repo` shows the result (`models`).
 
+**Compare before you switch.** Before moving the reviewers to another tier, model or provider, run the reviewer
+benchmark with each (`bench/run --label a --budget-usd 30`, `bench/run --label b --model … --budget-usd 30`), then
+`bench/report --label b --against a`: what they find, miss and invent, and what it costs
+([bench/README.md](../bench/README.md)).
+
 **OpenRouter, OpenAI, Google, your models: routes.** A route is an OpenAI-compatible endpoint. An agent
 sent to a route is still launched by the tool, on `fast`, but becomes a light agent: it gathers the inputs with
 its tools, sends the judgment to the route's model (`adorno-llm/scripts/llm-run`), checks the response and writes the

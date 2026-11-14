@@ -1,0 +1,169 @@
+# Reviewer benchmark
+
+adorno reviews code with specialist agents picked by area, merges their reviews, then `agent:adorno` rechecks. Tiers,
+models, providers and prompts change often. This benchmark says, for a given tool, model and version of the prompts,
+what the reviewers find, miss and invent, and what it costs.
+
+It has a free part, which runs in CI, and a part that calls models and costs money, which only runs when you start it.
+
+| Part | Command | Cost |
+| --- | --- | --- |
+| The cases are valid and each diff applies; `pr-areas` routes each case as expected; runner, scoring and report on fake model output | `tests/bench.test.sh` | none, in CI |
+| The routing alone | `bench/route` | none |
+| A run: the reviewers, `review-merge`, `agent:adorno` | `bench/run` | models |
+| Score and report a run again, compare, save a baseline | `bench/report` | none |
+
+## What it measures
+
+Per case and overall, on the merged review (`review.json`):
+
+| Measure | Definition |
+| --- | --- |
+| routing | the areas and reviewers `pr-areas` picks are those of `case.json` |
+| recall | expected findings found / expected findings |
+| precision | matched findings / (matched + false positives + findings not graded yet) |
+| severity | found findings whose highest reported severity is one the case accepts |
+| attribution | found findings that the expected reviewer raised |
+| verdict | the merged verdict (`pass`, `fix`, `block`) is one the case accepts |
+| clean cases | on a case without defect: findings reported (false alarms), and the verdict must be `pass` |
+| reviews | reviews that `review-merge` rejected or that never came, after one retry |
+| after `agent:adorno` | the same recall and precision on what it kept (`review-final.json`, inline comments and their badges), over the runs where that file is readable; the runs where it is absent or invalid are counted apart |
+| cost | tokens in and out, the cost the tool reports, agent time, the model that really ran, per agent and in total |
+| stability | over several repeats: mean, worst and best run of recall and precision |
+
+A reported finding **matches** an expected one when it is on the same file, within 3 lines of the expected range
+(anywhere in the file when `lines` is `null`), and one of the case's keywords (regular expressions, case-insensitive)
+is found in its `title`, `detail` or `fix`. The rule lives in one place: `matches` in [`score`](score). Several
+findings on the same expected one count once; the others are duplicates, not errors.
+
+What it does not measure: the briefing the workflow session writes for each reviewer (the runner uses the fixed
+[`prompts/`](prompts)), your personal layer (profile, voice, repo `context`), and the GitHub steps of `pr:review`.
+
+## Run it
+
+Once: `bin/kit build`, then declare the repo the cases are routed as. In `local/adorno.yaml`:
+
+```yaml
+repos:
+  adorno/bench: {}
+```
+
+and `bin/kit install --global`. Or pass `--repo` with a repo your registry already declares: the routing then follows
+that repo's settings, and the run records any difference with `case.json` (`routing_ok`).
+
+```sh
+bench/run --case mongo-n-plus-one --budget-usd 5      # one case, each agent on its own tier
+bench/run --label tiers --budget-usd 30               # the 13 cases
+bench/report --label tiers                            # the report again, after grading extras for instance
+```
+
+`bench/run [--case ID]… [--model X] [--repeat N] [--label NAME] [--budget-usd N] [--repo owner/repo] [--parallel N]`
+builds a throwaway workspace per case (`base/` committed, then `change.diff`), starts every reviewer `pr-areas` picks
+(`--parallel` at a time), merges with `review-merge`, runs a missing or invalid review once more, then starts
+`agent:adorno` on the merged review. It ends with the report. Everything goes to `bench/results/<label>/`, ignored by
+git: `run.json`, and per case run the reviews, `review.json`, what `agent:adorno` wrote, `meta/<agent>.json` (models,
+tokens, cost, duration) and each agent's last message.
+
+What a run is made of:
+
+- **The prompts of this working tree** (`dist/`, public layer only): the agents come from `dist/claude-plugin`, the
+  instructions from `dist/AGENTS.md`. Your user settings, global instructions, installed agents and hooks are not
+  loaded, so a result is tied to a commit (`prompts.sha`, and `dirty` when `src/` or `dist/` had uncommitted changes).
+- **Each agent on its own tier**, unless `--model` replaces the model of all of them.
+- **A sandbox**: an agent writes inside its workspace only and has no network (Claude Code's sandbox, macOS or Linux).
+  Nothing reaches GitHub, your registry or your learning notes. The runner, outside the sandbox, never follows a link
+  an agent leaves in its run folder: that case run fails, nothing of it is kept, and the report names it at the top.
+- **Claude Code** for now (`--tool claude`). Another provider goes through the same tool: export its variables
+  (`ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_DEFAULT_OPUS_MODEL`…) in the shell that starts the run. The
+  runner stores no key, and the report shows the model that really ran.
+
+## Compare two models
+
+```sh
+bench/run --label opus --repeat 3 --budget-usd 60
+bench/run --label haiku --model haiku --repeat 3 --budget-usd 10
+bench/report --label haiku --against opus
+```
+
+The report then says, overall and per case, what improved and what regressed, in points. Use the same commit for
+both runs, or the difference also holds the prompts. To compare two versions of the prompts, do the opposite: same
+model, two commits.
+
+A run you validate as a reference becomes a baseline, compared with by name like a run:
+
+```sh
+bench/report --label opus --save-baseline 2026-11-opus   # writes bench/baselines/2026-11-opus.json: commit it
+bench/report --label haiku --against 2026-11-opus
+```
+
+A baseline holds scores, tokens, costs, model names and the sha of the prompts, and no text written by a model. It is
+never overwritten, and it is yours to create and commit.
+
+## Findings to grade
+
+A finding that matches nothing the case plans may be a false positive, or a real point the case did not think of.
+Until you say which, it counts against precision and the report lists it under "Findings to grade". Grade it once in
+the case's `case.json`:
+
+```json
+"extras": [
+  {"file": "server/services/orders.ts", "lines": [36, 40], "keywords": ["tenant", "accountId"], "valid": true,
+   "note": "the accountId filter of the lookup is not tested"}
+]
+```
+
+`valid: true`: a real point, it no longer weighs on precision. `valid: false`: a false positive. Then
+`bench/report --label <run>`: the scores are computed again from the results, at no cost. When a real finding of the
+planned defect shows up there, the case's keywords are too narrow: widen them, with words that name the defect rather
+than its fix.
+
+## Cost to expect
+
+Measured on 2026-11-14 with Claude Code 2.1.325, each agent on its default tier, on `mongo-n-plus-one` (6 reviewers
+and `agent:adorno`): **1.53 USD** and 4 minutes. A reviewer cost 0.15 to 0.22 USD, `agent:adorno` 0.44 USD; 653k
+tokens in (mostly read from cache) and 16k out. The 13 cases start 69 reviewers and 13 `agent:adorno` passes: count
+about 18 USD and 50 minutes per repeat, to be measured on your side with one case first. Always pass `--budget-usd`:
+no case starts once the spent amount plus the dearest case so far would exceed it, what is left is split over the
+calls (over the reviewers of a round, then all of it to `agent:adorno`), and the report says at the top what was
+skipped. The budget relies on the cost the tool reports.
+
+## Add a case
+
+A case is a folder `cases/<id>/`:
+
+- `base/`: a small synthetic repo before the change (a few files). Written for the benchmark: no code from a real
+  project, no personal data, no secret that looks real (`sk_test_FAKE_0000`).
+- `change.diff`: the change to review, as `git diff` prints it. Simplest: commit `base/` in a scratch repo, make the
+  change, `git diff > change.diff`.
+- `case.json`:
+
+```json
+{
+  "title": "feat(orders): list orders with the customer name",
+  "description": "What the pull request says: the reviewers read it.",
+  "rationale": "One line: the defect, and what a good review says.",
+  "routing": {"areas": ["back", "back.query", "tests", "typescript"],
+              "review": ["agent:review:code", "agent:review:ponytail", "agent:review:back", "agent:review:tests",
+                         "agent:review:perf-back", "agent:review:mongodb"],
+              "skills": ["typescript-pro"]},
+  "verdict": ["fix"],
+  "findings": [{"file": "server/services/orders.ts", "lines": [35, 39], "category": "n-plus-one",
+                "severity": ["major"], "keywords": ["n\\s*\\+\\s*1", "per[ -](order|item)"],
+                "reviewer": "agent:review:mongodb"}]
+}
+```
+
+`routing.areas` and `routing.review` are exact sets, `routing.skills` (optional) must be among the skills picked.
+`verdict` and `severity` list what the case accepts. `lines` is the range in the changed file, or `null` for a
+finding on the file as a whole. `category` is a label; `keywords` do the matching. A case without `findings` is a
+clean case: its verdict is `["pass"]`. `title` is a Conventional Commit header: the change is committed under it.
+
+Keep one defect per case and give the change the tests a careful author would write, so that what the reviewers
+report beyond the defect stays small. Then `bin/kit build && tests/bench.test.sh`: it checks the shape, that the diff
+applies, that the findings point into the change, and the routing.
+
+The routing is what `pr-areas` does today, not what one would wish: in the first set, `auth-missing-check` and
+`secret-in-code` do not reach `agent:review:security`, because the `security` area is detected on added lines that
+name a permission or a secret in lower case, and neither a missing check nor `PAYMENTS_API_KEY` does.
+
+The decisions behind all this: [docs/decisions/bench.md](../docs/decisions/bench.md).

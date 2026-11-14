@@ -1,0 +1,56 @@
+{
+  "title": "feat(account): resolve an account from its API token",
+  "description": "The browser extension only knows the API token the user pasted. Adds `POST /account/lookup`, which returns the id, name and plan of the account behind a token, or 401.",
+  "rationale": "`req.body.token` goes raw into the filter: a JSON body `{\"token\": {\"$ne\": null}}` matches the first account without knowing any token. The value must be checked to be a string.",
+  "routing": {
+    "areas": [
+      "api",
+      "back",
+      "back.query",
+      "security",
+      "tests",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:back",
+      "agent:review:tests",
+      "agent:review:perf-back",
+      "agent:review:mongodb",
+      "agent:review:api",
+      "agent:review:security"
+    ],
+    "skills": [
+      "security-and-hardening"
+    ]
+  },
+  "verdict": [
+    "block"
+  ],
+  "findings": [
+    {
+      "file": "server/routes/account.ts",
+      "lines": [
+        20,
+        22
+      ],
+      "category": "nosql-injection",
+      "severity": [
+        "blocker"
+      ],
+      "keywords": [
+        "inject",
+        "\\$ne\\b",
+        "\\$gt\\b",
+        "\\$where",
+        "operator",
+        "no-?sql",
+        "(not|un|never|without) ?(validat|sanitiz|check)",
+        "typeof",
+        "(is|be|to) a string"
+      ],
+      "reviewer": "agent:review:security"
+    }
+  ]
+}

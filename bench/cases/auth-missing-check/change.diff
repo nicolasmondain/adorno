@@ -1,0 +1,44 @@
+diff --git a/server/routes/invoices.test.ts b/server/routes/invoices.test.ts
+index a9474ff..ca60123 100644
+--- a/server/routes/invoices.test.ts
++++ b/server/routes/invoices.test.ts
+@@ -47,3 +47,19 @@ test('PATCH /invoices/:id is refused without invoices:write', async () => {
+     await api(db, reader).patch('/invoices/inv_1').send({ amount: 250 }).expect(403);
+   });
+ });
++
++test('DELETE /invoices/:id removes a draft', async () => {
++  await withDb(async (db) => {
++    await db.collection<Invoice>('invoices').insertOne(draft);
++    await api(db, writer).delete('/invoices/inv_1').expect(204);
++    assert.equal(await db.collection('invoices').countDocuments(), 0);
++  });
++});
++
++test('DELETE /invoices/:id answers 404 when the invoice is not a draft', async () => {
++  await withDb(async (db) => {
++    await db.collection<Invoice>('invoices').insertOne({ ...draft, status: 'paid' });
++    await api(db, writer).delete('/invoices/inv_1').expect(404);
++    assert.equal(await db.collection('invoices').countDocuments(), 1);
++  });
++});
+diff --git a/server/routes/invoices.ts b/server/routes/invoices.ts
+index e023b97..451f00a 100644
+--- a/server/routes/invoices.ts
++++ b/server/routes/invoices.ts
+@@ -39,5 +39,15 @@ export function invoicesRouter(db: Db): Router {
+     res.status(204).end();
+   });
+ 
++  router.delete('/invoices/:id', async (req, res) => {
++    const member: Member = res.locals.member;
++    const result = await invoices.deleteOne({ _id: req.params.id, accountId: member.accountId, status: 'draft' });
++    if (result.deletedCount === 0) {
++      res.status(404).json({ error: 'invoice_not_found' });
++      return;
++    }
++    res.status(204).end();
++  });
++
+   return router;
+ }

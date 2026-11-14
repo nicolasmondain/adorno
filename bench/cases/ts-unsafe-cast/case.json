@@ -1,0 +1,51 @@
+{
+  "title": "feat(subscriptions): apply a plan change from the billing webhook",
+  "description": "The billing provider sends `plan.changed` when a customer upgrades or downgrades. Adds `applyPlanChange`, which returns the subscription with the plan and seats of the event.",
+  "rationale": "`event.plan` is a free `string` from a webhook and `Subscription.plan` is the closed union `Plan`: `as any` silences that error instead of narrowing, so an unknown plan is stored and `monthlyPrice` returns `NaN` for it.",
+  "routing": {
+    "areas": [
+      "back",
+      "tests",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:back",
+      "agent:review:tests",
+      "agent:review:perf-back"
+    ],
+    "skills": [
+      "typescript-pro"
+    ]
+  },
+  "verdict": [
+    "pass",
+    "fix"
+  ],
+  "findings": [
+    {
+      "file": "server/services/subscriptions.ts",
+      "lines": [
+        24,
+        24
+      ],
+      "category": "unsafe-cast",
+      "severity": [
+        "minor",
+        "major"
+      ],
+      "keywords": [
+        "as any",
+        "\\bany\\b",
+        "\\bcast",
+        "type guard",
+        "narrow",
+        "\\bNaN\\b",
+        "(unknown|invalid|arbitrary|unvalidated) (plan|string|value)",
+        "validat"
+      ],
+      "reviewer": "agent:review:code"
+    }
+  ]
+}

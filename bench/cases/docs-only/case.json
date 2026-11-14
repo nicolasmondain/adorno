@@ -1,0 +1,21 @@
+{
+  "title": "docs(readme): explain how to run the tests",
+  "description": "The README said how to start the server but not how to run the tests. Adds a Test section.",
+  "rationale": "A README-only change that matches `package.json` (`npm test`, `engines.node >= 22`): the `docs` area alone, no specialist beyond the `always` reviewers, nothing to fix.",
+  "routing": {
+    "areas": [
+      "docs"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail"
+    ],
+    "skills": [
+      "documentation-and-adrs"
+    ]
+  },
+  "verdict": [
+    "pass"
+  ],
+  "findings": []
+}

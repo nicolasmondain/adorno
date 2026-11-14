@@ -1,0 +1,32 @@
+diff --git a/client/components/ContactSearch.tsx b/client/components/ContactSearch.tsx
+index b6e1a6a..b555c3c 100644
+--- a/client/components/ContactSearch.tsx
++++ b/client/components/ContactSearch.tsx
+@@ -1,11 +1,17 @@
+-import { useState } from 'react';
++import _ from 'lodash';
++import { useEffect, useMemo, useState } from 'react';
+ 
+ interface ContactSearchProps {
+   onSearch: (query: string) => void;
+ }
+ 
++const SEARCH_DELAY_MS = 300;
++
+ export function ContactSearch({ onSearch }: ContactSearchProps) {
+   const [query, setQuery] = useState('');
++  const debouncedSearch = useMemo(() => _.debounce(onSearch, SEARCH_DELAY_MS), [onSearch]);
++
++  useEffect(() => () => debouncedSearch.cancel(), [debouncedSearch]);
+ 
+   return (
+     <label>
+@@ -15,7 +21,7 @@ export function ContactSearch({ onSearch }: ContactSearchProps) {
+         value={query}
+         onChange={(event) => {
+           setQuery(event.target.value);
+-          onSearch(event.target.value);
++          debouncedSearch(event.target.value);
+         }}
+       />
+     </label>

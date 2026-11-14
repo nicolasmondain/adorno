@@ -1,0 +1,70 @@
+diff --git a/server/jobs/syncInvoices.test.ts b/server/jobs/syncInvoices.test.ts
+index a539bee..8255726 100644
+--- a/server/jobs/syncInvoices.test.ts
++++ b/server/jobs/syncInvoices.test.ts
+@@ -27,3 +27,20 @@ test('syncInvoices upserts the invoices of every billed account', async () => {
+     assert.equal(await db.collection('invoices').countDocuments(), 2);
+   });
+ });
++
++test('syncInvoices keeps going when the provider fails for one account', async () => {
++  await withDb(async (db) => {
++    await db.collection<BilledAccount>('accounts').insertMany(accounts);
++    const fetchInvoices: FetchInvoices = async (billingId) => {
++      if (billingId === 'bill_1') {
++        throw new Error('billing provider answered 404 for bill_1');
++      }
++      return [{ id: `inv_${billingId}`, amountCents: 1200, issuedAt: '2026-01-01' }];
++    };
++
++    const report = await syncInvoices(db, fetchInvoices);
++
++    assert.deepEqual(report, { accounts: 1, invoices: 1 });
++    assert.equal(await db.collection('invoices').countDocuments(), 1);
++  });
++});
+diff --git a/server/jobs/syncInvoices.ts b/server/jobs/syncInvoices.ts
+index a71f314..0142f57 100644
+--- a/server/jobs/syncInvoices.ts
++++ b/server/jobs/syncInvoices.ts
+@@ -20,22 +20,26 @@ export async function syncInvoices(db: Db, fetchInvoices: FetchInvoices): Promis
+ 
+   const report: SyncReport = { accounts: 0, invoices: 0 };
+   for (const account of accounts) {
+-    const invoices = await fetchInvoices(account.billingId);
+-    if (invoices.length > 0) {
+-      await db.collection('invoices').bulkWrite(
+-        invoices.map((invoice) => ({
+-          updateOne: {
+-            filter: { _id: invoice.id },
+-            update: {
+-              $set: { accountId: account._id, amountCents: invoice.amountCents, issuedAt: new Date(invoice.issuedAt) },
++    try {
++      const invoices = await fetchInvoices(account.billingId);
++      if (invoices.length > 0) {
++        await db.collection('invoices').bulkWrite(
++          invoices.map((invoice) => ({
++            updateOne: {
++              filter: { _id: invoice.id },
++              update: {
++                $set: { accountId: account._id, amountCents: invoice.amountCents, issuedAt: new Date(invoice.issuedAt) },
++              },
++              upsert: true,
+             },
+-            upsert: true,
+-          },
+-        })),
+-      );
++          })),
++        );
++      }
++      report.accounts += 1;
++      report.invoices += invoices.length;
++    } catch {
++      // A broken billing id must not stop the sync of the other accounts.
+     }
+-    report.accounts += 1;
+-    report.invoices += invoices.length;
+   }
+   return report;
+ }

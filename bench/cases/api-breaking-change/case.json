@@ -1,0 +1,54 @@
+{
+  "title": "refactor(contacts): rename total to totalCount in the list response",
+  "description": "The other list endpoints we are adding return `totalCount`. Renames `total` to `totalCount` in `GET /v1/contacts` for consistency; the reference and the test follow.",
+  "rationale": "`GET /v1/contacts` is a public, versioned endpoint: renaming a response field in place breaks every integration that reads `total`. It needs a new version, or both fields during a deprecation.",
+  "routing": {
+    "areas": [
+      "api",
+      "back",
+      "docs",
+      "tests",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:back",
+      "agent:review:tests",
+      "agent:review:perf-back",
+      "agent:review:api"
+    ],
+    "skills": [
+      "api-and-interface-design"
+    ]
+  },
+  "verdict": [
+    "block"
+  ],
+  "findings": [
+    {
+      "file": "server/routes/contacts.ts",
+      "lines": [
+        20,
+        24
+      ],
+      "category": "breaking-change",
+      "severity": [
+        "blocker"
+      ],
+      "keywords": [
+        "breaking",
+        "backward",
+        "compatib",
+        "\\bv2\\b",
+        "new version",
+        "versioning",
+        "deprecat",
+        "(existing|current) (clients|consumers|integrations)",
+        "integrations",
+        "\\bsdks?\\b"
+      ],
+      "reviewer": "agent:review:api"
+    }
+  ]
+}
