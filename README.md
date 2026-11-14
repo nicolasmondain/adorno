@@ -165,7 +165,8 @@ by `repos.yaml` › `areas`, overridable per repo ([setup](docs/setup.md#areas-a
 corrections), `adorno-github` (`gh` scripts tested without network, runs and permissions), `adorno-watch` (settings and
 memory of the Slack and Notion watches), `adorno-notion-sync` (the properties of the Notion spec page at each step,
 from your repo config), `adorno-llm` (a task sent to an OpenAI-compatible model),
-`adorno-run-plan` (run a plan from the session), `adorno-commit`, and the skills imported as is: [addy/agent-skills](https://skills.addy.ie/) (method, from spec
+`adorno-run-plan` (run a plan from the session), `adorno-journal` (the journal of every run: who did what, with which
+model, replayed by `bin/kit serve`), `adorno-commit`, and the skills imported as is: [addy/agent-skills](https://skills.addy.ie/) (method, from spec
 to deployment), [ponytail](https://ponytail.dev/) (the least code that works),
 [playwright-cli](https://github.com/microsoft/playwright-cli) and
 [webapp-testing](https://github.com/anthropics/skills) (browser QA),
@@ -182,8 +183,9 @@ src/
   agents/adorno.md      → agent:adorno
   agents/<family>/      _family.md + <specialty>.md → agent:<family>:<specialty>
   workflows/<domain>/   <action>.md → workflow:<domain>:<action>
-  skills/               adorno-* (setup, profile, voice, learn, github, watch, llm, run-plan, commit)
+  skills/               adorno-* (setup, profile, voice, learn, github, watch, llm, run-plan, journal, commit)
   **/SCHEMA.md          → mermaid diagram of a family, domain or skill (not an item, not shipped to dist/)
+viewer/                 the run journal's viewer, served by bin/kit serve (a tool of this repo, not shipped to dist/)
 repos.yaml              default public settings (code areas and their agents and skills, permissions)
 local.example/          template of your personal layer
 vendor/                 imported skills and agents (kit import), pinned in kit.lock
@@ -203,7 +205,12 @@ bin/kit new agent fix:flaky  # or: new workflow ci:flaky, new skill <name>
 bin/kit import [--update]    # imported skills and agents (commits pinned in kit.lock)
 bin/kit install PATH|--global|--workspace NAME [--targets claude,codex] [--public-only] [--dry-run]
 bin/kit uninstall PATH|--global|--workspace NAME
+bin/kit serve [--port 8765]  # replay your runs in a browser, on 127.0.0.1 only (docs/journal.md)
+bin/kit journal enrich RUN   # read a run's Claude Code transcripts again (models, tokens)
 tests/adorno-github.test.sh     # tests of the GitHub scripts, no network
+tests/adorno-journal.test.sh # tests of the run journal: format, redaction, hooks, transcripts
+tests/kit-serve.test.sh      # tests of the journals' local server
+tests/journal-viewer.test.sh # tests of the viewer, in Chromium when Playwright is there
 tests/adorno-watch.test.sh   # tests of the watch scripts, no connector
 tests/adorno-llm.test.sh     # tests of the call to an external model, no network
 tests/kit.test.sh            # tests of bin/kit: validation, install, uninstall

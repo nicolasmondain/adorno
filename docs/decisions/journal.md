@@ -24,8 +24,20 @@ Consequences:
 
 - A journal always lives under `~/.adorno/runs/<slug>-<run id>/`, whatever `run-begin --dir` says: a run's working
   folder can be inside a repo (`.agent-run/`), a journal never is. `run.begin` records `dir`.
-- No workflow declares `steps:`; `step.*` and `loop` events exist for the runs that mark them, and the viewer derives
-  phases from the delegations otherwise.
+- No workflow declares `steps:`; `step.*` and `loop` events exist for the runs that mark them (`run-mark`, called by
+  the session that runs a plan and by `workflow:pr:ship`), and the viewer derives phases from the delegations
+  otherwise, saying so. `run-mark` lives with the run scripts of `adorno-github`: the guard lets its scripts through
+  inside a run, so marking never prompts.
+- A thirteenth event type, `session` (start, end, compaction): the hooks carry it and no type of the plan fitted.
+- `actor` is who acts (`you`, `session`, `agent:<instance>`); scripts, the guard and GitHub are where an arrow
+  lands, read from the event's type. A script does not know which agent ran it: its call is the session's.
+- What the transcripts add goes to a second file, `enriched.jsonl`, rewritten whole at each reading: `events.jsonl`
+  stays append-only, and reading again duplicates nothing. A reader takes both, sorted on time.
+- The server never serves a transcript (they are outside a run's folders and hold reasoning in clear): the viewer
+  shows the path, to copy.
+- The viewer takes its colours from the ones named for the public page and falls back to system fonts; the page
+  itself was not at hand. `viewer/tokens.css` is the one file to align with it, with the font files next to it.
+- The browser test pins Playwright (`tests/journal-viewer.smoke.py`) and runs offline: nothing is downloaded by a test.
 - The redaction patterns are the writer's own (none existed to reuse); the secret names are those of `bin/kit`
   (`SECRET_ENV_RE`), kept equal by a test.
 - The writer checks every event against the schema before writing it, with a standard-library checker limited to
