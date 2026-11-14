@@ -152,6 +152,8 @@ def main(argv):
         page.locator("#panel .wrote button").first.click()
         page.wait_for_selector("#panel .file-view:not([hidden])")
         check("... which opens it in the panel", "paginate the teams list" in page.locator("#panel .file-view").text_content())
+        page.keyboard.press("Escape")
+        page.keyboard.press("End")   # the click moved the playhead back: a mark not drawn yet has no shaft to click
         page.locator(".t-agent-return").nth(1).click()
         builder = lanes[returns[1]["from"]]["wrote"]
         check("... and a file outside the run as plain text",
