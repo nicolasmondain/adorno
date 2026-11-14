@@ -234,6 +234,8 @@ expect_jq "dry-run shows the body, posts nothing" '.dryRun and .body == "Fixed i
 grep -q addPullRequestReviewThreadReply "$FAKE_LOG" && ko "dry-run must not call the mutation" || ok "dry-run did not call the mutation"
 expect_exit 0 "real reply" -- "$S/pr-reply" acme/docs#42 T1 "$TMP/body.md"
 expect_jq "reply returns the comment url" '.posted and (.url | test("#r1$"))'
+FAKE_REPLY_FAIL=1 expect_exit 1 "a reply GitHub refuses keeps gh's exit code" -- "$S/pr-reply" acme/docs#42 T1 "$TMP/body.md"
+case "$out" in *"Thread is outdated"*) ok "... and what gh printed still reaches stdout" ;; *) ko "gh's output was swallowed" "$out" ;; esac
 printf '' >"$TMP/empty.md"
 expect_exit 2 "empty body refused" -- "$S/pr-reply" acme/docs#42 T1 "$TMP/empty.md"
 
