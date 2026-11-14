@@ -46,22 +46,30 @@ SECRET_NAME = r"(KEY|TOKEN|SECRET|PASSWORD)"
 SECRET_NAME_RE = re.compile(SECRET_NAME, re.I)
 SECRET_FLAG_RE = re.compile(r"^--?[\w-]*" + SECRET_NAME + r"[\w-]*$", re.I)
 # (kind, pattern, replacement) applied in order to every string. Best effort: a secret none of them recognises is
-# written as it is, which is why journals stay on this machine.
+# written as it is, which is why journals stay on this machine. A name pattern starts only at the start of a token
+# (the lookbehinds): unanchored, a long run of word characters or dashes made it quadratic.
 REDACTIONS = [(kind, re.compile(pattern, flags), repl) for kind, pattern, flags, repl in (
     ("private-key", r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(-----END [A-Z ]*PRIVATE KEY-----|\Z)", re.S, "[redacted:{}]"),
     ("authorization", r"(authorization[\"']?\s*[:=]\s*[\"']?)(?:[a-z]+\s+)?[^\s\"',;]+", re.I, r"\1[redacted:{}]"),
     ("bearer", r"\b(bearer\s+)[A-Za-z0-9._~+/=-]{8,}", re.I, r"\1[redacted:{}]"),
     ("credentials", r"\b([a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@", re.I, r"\1[redacted:{}]@"),
+    # curl -u user:password, --user=user:password
+    ("credentials", r"((?<![\w-])(?:-u|--user)(?:\s+|=)[\"']?)[^\s:\"']+:[^\s\"']+", 0, r"\1[redacted:{}]"),
     ("github", r"\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})", 0, "[redacted:{}]"),
+    ("gitlab", r"\bglpat-[A-Za-z0-9_-]{20,}", 0, "[redacted:{}]"),
     ("api-key", r"\bsk-[A-Za-z0-9_-]{16,}", 0, "[redacted:{}]"),
+    ("api-key", r"\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}", 0, "[redacted:{}]"),
     ("aws", r"\b(AKIA|ASIA)[0-9A-Z]{16}\b", 0, "[redacted:{}]"),
     ("slack", r"\bxox[abeoprs]-[A-Za-z0-9-]{10,}", 0, "[redacted:{}]"),
     ("jwt", r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}", 0, "[redacted:{}]"),
-    # NAME=value, "name": "value", --name=value
-    ("secret", r"([\w.-]*" + SECRET_NAME + r"[\w.-]*[\"']?\s*[=:]\s*[\"']?)[^\s\"',;&]+", re.I, r"\1[redacted:{}]"),
-    # --name value
-    ("secret", r"(--?[\w-]*" + SECRET_NAME + r"[\w-]*\s+)[^\s-]\S*", re.I, r"\1[redacted:{}]"),
+    # NAME=value, "name": "value", --name=value; a quoted value goes whole, spaces included
+    ("secret", r"((?<![\w.-])[\w.-]*" + SECRET_NAME + r"[\w.-]*[\"']?\s*[=:]\s*(?P<q>[\"'])?)(?(q)[^\"'\n]+|[^\s\"',;&]+)",
+     re.I, r"\1[redacted:{}]"),
+    # --name value, --name "a value"
+    ("secret", r"((?<![\w-])--?[\w-]*" + SECRET_NAME + r"[\w-]*\s+(?P<q>[\"'])?)(?(q)[^\"'\n]+|[^\s-]\S*)", re.I,
+     r"\1[redacted:{}]"),
 )]
+WINDOW = 1024   # characters redacted past a cut, so that a secret across it is recognised whole before it is cut
 
 
 def warn(message):
@@ -77,12 +85,13 @@ def redact_string(text):
 def redact(value, key=""):
     """value with every secret replaced, strings cut to their limit. A string under a key named like a secret, or
     after a flag named like one in a list of arguments, goes whole; numbers and booleans never do (`tokens` holds
-    counts)."""
+    counts). A long string is redacted on its first MAX_STRING + WINDOW characters, then cut: never cut first."""
     if isinstance(value, str):
         if SECRET_NAME_RE.search(key):
             return "[redacted:secret]"
-        text = redact_string(value)
-        return text if key == "reasoning" or len(text) <= MAX_STRING else text[:MAX_STRING] + "…"
+        if key == "reasoning" or len(value) <= MAX_STRING:
+            return redact_string(value)
+        return redact_string(value[:MAX_STRING + WINDOW])[:MAX_STRING] + "…"
     if isinstance(value, dict):
         return {k: redact(v, str(k)) for k, v in value.items()}
     if isinstance(value, list):
@@ -93,9 +102,11 @@ def redact(value, key=""):
 
 def text_fields(text):
     """A long text (prompt, result, message) as the journal keeps it: an excerpt, and the hash and length of the whole
-    so the full text can be matched in the transcript."""
+    so the full text can be matched in the transcript. The excerpt is redacted before it is cut (a secret across the
+    cut is recognised whole); the hash and the length are those of the raw text, as the transcript holds it."""
     text = str(text)
-    cut = text[:EXCERPT] + ("…" if len(text) > EXCERPT else "")
+    red = redact_string(text[:EXCERPT + WINDOW])
+    cut = red if len(text) <= EXCERPT and len(red) <= EXCERPT else red[:EXCERPT] + "…"
     return {"excerpt": cut, "hash": hashlib.sha256(text.encode()).hexdigest(), "chars": len(text)}
 
 

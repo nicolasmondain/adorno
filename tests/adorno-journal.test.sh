@@ -123,6 +123,45 @@ last 20260101T100000-1-1
 expect_jq "reasoning is kept whole and redacted, other strings are cut" \
   '(.reasoning | length) > 3000 and (.reasoning | test("ghp_") | not) and (.stop | length) == 2001'
 expect_exit 0 "redacted lines are valid" -- valid "$f"
+# a secret across the excerpt's cut (character 500): redacted whole, never cut first then written in part
+pad="$(printf 'x%.0s' $(seq 1 486))"
+for secret in "$GH" "https://bob:$PW@example.test/x"; do
+  text="$pad $secret and the rest"
+  python3 "$J" event message "$(jq -n --arg t "$text" '{from: "you", to: "session", kind: "prompt", text: $t}')" --session sess-a
+  last 20260101T100000-1-1
+  expect_jq "a text whose secret crosses character 500 is cut after redaction (${secret:0:12}…)" \
+    '(.excerpt | length) == 501 and (.excerpt | test("ghp_|bob:") | not) and (.excerpt | test(" \\[red|https://\\[red")) and .chars == '"${#text}"' and .hash == "'"$(printf '%s' "$text" | shasum -a 256 | cut -d' ' -f1)"'"'
+done
+grep -q "ghp_" "$f" && ko "part of a token crossing the cut reached the journal" || ok "no part of a token crossing the cut is written"
+grep -q "hunter2" "$f" && ko "a URL password crossing the cut reached the journal" || ok "no URL password crossing the cut is written"
+# the shapes Bash commands carry most
+cmd='curl -u admin:hunter3pw https://x.test; S=sk_live_0123456789abcdefABCD; G=glpat-0123456789abcdefghijKL; TOKEN="abc defquoted" ./run --token "two wordsquoted"; curl --user=bob:pw4sure x'
+python3 "$J" event tool.call "$(jq -n --arg c "$cmd" '{tool: "Bash", input: $c}')" --session sess-a
+last 20260101T100000-1-1
+for secret in hunter3pw sk_live_0123 glpat-0123 defquoted wordsquoted pw4sure; do
+  grep -q -- "$secret" "$f" && ko "leaked: $secret" || ok "never written: $secret"
+done
+expect_jq "... and the command stays readable" '.input | test("^curl -u \\[redacted:credentials\\] https://x.test; ") and test("TOKEN=\"\\[redacted:secret\\]\" ./run --token \"\\[redacted:secret\\]\"")'
+# redaction is linear: a long unbroken token (a base64 blob, a minified line) costs no more than its length
+timed() {  # timed SECONDS CMD… — how long CMD took, or "timeout"
+  python3 -c 'import subprocess, sys, time
+t = time.time()
+try:
+    subprocess.run(sys.argv[2:], timeout=float(sys.argv[1]), stdout=subprocess.DEVNULL)
+except subprocess.TimeoutExpired:
+    sys.exit(print("timeout"))
+print(f"{time.time() - t:.2f}")' "$@"
+}
+fast() { case "$1" in timeout) return 1 ;; esac; python3 -c 'import sys; sys.exit(float(sys.argv[1]) >= 1)' "$1"; }
+for c in a -; do
+  run="$(head -c 51200 /dev/zero | tr '\0' "$c")"
+  took="$(timed 5 python3 "$J" event tool.call "$(jq -n --arg c "$run" '{tool: "Bash", input: $c}')" --session sess-a)"
+  last 20260101T100000-1-1
+  fast "$took" && jq -e '(.input | length) == 2001' >/dev/null <<<"$out" && ok "50 KB of '$c' as an input: ${took}s, cut to its limit" || ko "50 KB of '$c' as an input" "$took"
+  took="$(timed 5 python3 "$J" event model.turn "$(jq -n --arg r "$run" '{model: "m", tokens: {in: 0, out: 0, cache_read: 0, cache_write: 0}, reasoning: $r}')" --session sess-a)"
+  last 20260101T100000-1-1
+  fast "$took" && jq -e '(.reasoning | length) == 51200' >/dev/null <<<"$out" && ok "50 KB of '$c' as reasoning, redacted whole: ${took}s" || ko "50 KB of '$c' as reasoning" "$took"
+done
 kit_names="$(grep -o 'SECRET_ENV_RE = re.compile(r"[^"]*"' "$ROOT/bin/kit" | sed 's/.*r"//; s/"$//')"
 grep -qF "SECRET_NAME = r\"$kit_names\"" "$J" && ok "same secret names as bin/kit (SECRET_ENV_RE)" || ko "secret names differ from bin/kit" "$kit_names"
 
@@ -215,6 +254,28 @@ rm -f "$TR/sess-e/subagents/agent-a9.jsonl"
 expect_exit 0 "a transcript Claude Code pruned: the rest is still read" -- python3 "$J" enrich "$ER"
 expect_jq "... and it says which one is missing" '.transcripts == 1 and .model_turns == 2'
 grep -q "transcript not found" "$TMP/err" && ok "... on stderr" || ko "missing transcript not reported"
+# a token across character 500 in a text block and in a thinking block of the transcripts: redacted, then cut
+TS="$TMP/claude/projects/secret"; mkdir -p "$TS/sess-s/subagents"
+sed "s|I will delegate the review.|$pad $GH then more|" "$FIX/transcripts/sess-e.jsonl" >"$TS/sess-s.jsonl"
+sed "s|Compare both branches.|$pad $GH compared|" "$FIX/transcripts/sess-e/subagents/agent-a9.jsonl" >"$TS/sess-s/subagents/agent-a9.jsonl"
+grep -q "$GH" "$TS/sess-s.jsonl" && grep -q "$GH" "$TS/sess-s/subagents/agent-a9.jsonl" && ok "the transcripts hold the token" || ko "transcript copies"
+SR=20260101T100000-6-6; open_run "$SR" sess-s; SD="$KH/runs/test-$SR"
+sv() { python3 "$J" event "$@" --run "$SR" --session sess-s; }
+sv run.begin '{"t":"2026-01-01T10:00:00.000Z","workflow":"workflow:test:run","mode":"auto","level":"L1","repos":["acme/app"],"dir":"/synthetic"}'
+sv message "$(jq -n --arg p "$TS/sess-s.jsonl" '{t: "2026-01-01T10:00:01.000Z", from: "you", to: "session", kind: "prompt", text: "Review", transcript: $p}')" --actor you
+sv agent.return "$(jq -n --arg p "$TS/sess-s/subagents/agent-a9.jsonl" '{t: "2026-01-01T10:00:07.500Z", agent: {id: "a9"}, text: "Review written", transcript: $p}')" --actor agent:a9
+sv run.end '{"t":"2026-01-01T10:30:00.100Z","workflow":"workflow:test:run","outcome":"ended"}'
+rm -f "$KH/runs/active/$SR.json"
+for reasoning in false true; do
+  printf '{"journal": {"reasoning": %s}}' "$reasoning" >"$KH/registry.json"
+  expect_exit 0 "enrich, journal.reasoning: $reasoning" -- python3 "$J" enrich "$SR"
+  out="$(jq -cs . "$SD/enriched.jsonl")"
+  expect_jq "... the text is there, cut after its redaction" \
+    'any(.[]; .type == "message" and (.excerpt | startswith("xxx")) and (.excerpt | length) == 501 and (.excerpt | test("ghp_") | not))'
+  [ "$reasoning" = false ] || expect_jq "... and the reasoning, redacted" 'any(.[]; .type == "model.turn" and ((.reasoning // "") | test("\\[redacted:github\\] compared")))'
+  grep -q "ghp_" "$SD/enriched.jsonl" && ko "... a token crossing the cut reached enriched.jsonl" || ok "... no part of the token in enriched.jsonl"
+done
+rm -f "$KH/registry.json"
 expect_exit 0 "an unknown run fails nothing" -- python3 "$J" enrich 20990101T000000-1-1
 grep -q "no journal for run" "$TMP/err" && ok "... and says so" || ko "unknown run not reported"
 
