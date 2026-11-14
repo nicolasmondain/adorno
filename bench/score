@@ -225,7 +225,8 @@ def main():
         case["summary"] = summarize(case["runs"])
     score = {"label": run["label"],
              "run": {key: run[key] for key in ("tool", "tool_version", "model", "repo", "repeat", "prompts",
-                                               "started_at", "budget_usd", "skipped")},
+                                               "started_at", "budget_usd", "skipped")}
+             | {"failed": run.get("failed", [])},
              "overall": summarize(every), "cases": cases, "agents": agents, "ungraded": ungraded}
     (top / "score.json").write_text(json.dumps(score, indent=2, ensure_ascii=False) + "\n")
     print(json.dumps(score, indent=2, ensure_ascii=False))

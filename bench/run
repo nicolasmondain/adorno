@@ -19,8 +19,9 @@ global instructions and your hooks are not loaded. An agent runs sandboxed: it w
 has no network. --model replaces the model of every agent; without it each agent runs on its own tier.
 
 Results go to RESULTS/<label>/ (bench/results by default, ignored by git):
-  run.json                     the run: tool, model, prompts (sha, dirty), cost, what the budget skipped
-  <case>/<n>/run.json          one case run: diffBase, routing_ok, missing and invalid reviews, cost
+  run.json                     the run: tool, model, prompts (sha, dirty), cost, what the budget skipped, the case
+                               runs that failed
+  <case>/<n>/run.json          one case run: diffBase, routing_ok, missing and invalid reviews, cost; or why it failed
   <case>/<n>/areas.json        the pr-areas output
   <case>/<n>/reviews/*.json    each reviewer's review; review.json the merged one
   <case>/<n>/review-final.json, review-notes.md   what agent:adorno wrote
@@ -30,12 +31,15 @@ Results go to RESULTS/<label>/ (bench/results by default, ignored by git):
 --budget-usd relies on the cost the tool reports: no case starts once the spent amount plus the dearest case so far
 would exceed it, and what is left is split over the calls: over the reviewers of a round, then all of it to
 agent:adorno. The run ends with its report (bench/report), printed.
-Exits 2 on wrong usage, 3 when --repo is not declared.
+The runner itself runs outside the sandbox: it never follows a link an agent leaves under .agent-run/. Such a case
+run fails, nothing of its run folder is kept, and the run goes on with the others.
+Exits 1 when a case run failed, 2 on wrong usage, 3 when --repo is not declared.
 """
 import argparse
 import concurrent.futures
 import datetime
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -183,6 +187,29 @@ def salvage(message):
     return None
 
 
+class Planted(Exception):
+    """An agent left links in its run folder: the case run fails, and nothing of it is kept."""
+
+
+def planted_links(workspace):
+    """The symbolic links under the workspace's .agent-run/, relative to the workspace. An agent can plant one there;
+    the runner, outside the sandbox, never writes, deletes or copies through it."""
+    root = workspace / ".agent-run"
+    if root.is_symlink():
+        return [".agent-run"]
+    found = []
+    for folder, dirs, files in os.walk(root):  # followlinks=False: a linked folder is listed, never entered
+        found += [os.path.relpath(os.path.join(folder, name), workspace) for name in dirs + files
+                  if os.path.islink(os.path.join(folder, name))]
+    return sorted(found)
+
+
+def refuse_links(workspace):
+    links = planted_links(workspace)
+    if links:
+        raise Planted(links)
+
+
 def add_attempt(meta, attempt):
     meta["attempts"] += 1
     meta["is_error"], meta["stop"] = attempt["is_error"], attempt["stop"]
@@ -233,14 +260,17 @@ def run_case(args, tool, case_id, entry, always, state, dest):
                                                       skills=", ".join(skills) or "none"))
             return agent, play(agent, prompt, budget)
 
-        pending, merged = list(routed["review"]), {}
-        for attempt_number in (1, 2):
-            # what is left, split over every call of the round: their caps add up to it, whatever --parallel is
-            share = None if left() is None or not pending else left() / len(pending)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=parallel) as pool:
-                for agent, attempt in pool.map(lambda a: review(a, share), pending):
-                    if attempt["cost_usd"] is not None:
-                        state["spent"] += attempt["cost_usd"]
+        summary = {"case": case_id, "diff_base": diff_base, "routing_ok": entry["ok"]}
+        try:
+            pending, merged = list(routed["review"]), {}
+            for attempt_number in (1, 2):
+                # what is left, split over every call of the round: their caps add up to it, whatever --parallel is
+                share = None if left() is None or not pending else left() / len(pending)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=parallel) as pool:
+                    done = list(pool.map(lambda a: review(a, share), pending))
+                state["spent"] += sum(a["cost_usd"] for _, a in done if a["cost_usd"] is not None)
+                refuse_links(workspace)  # no agent runs any more: from here the runner alone touches the run folder
+                for agent, attempt in done:
                     target = run_dir / "reviews" / f"{short(agent)}.json"
                     if target.is_file():
                         metas[agent]["delivered"] = "file"
@@ -249,38 +279,46 @@ def run_case(args, tool, case_id, entry, always, state, dest):
                         if found is not None:
                             write_json(target, found)
                             metas[agent]["delivered"] = "salvaged"
-            merged = json.loads(out([SCRIPTS / "review-merge", run_dir / "reviews"]))
-            pending = [a for a in routed["review"] if not (run_dir / "reviews" / f"{short(a)}.json").is_file()
-                       or f"{short(a)}.json" in merged["invalid"]]
-            if not pending or attempt_number == 2 or exhausted():
-                break
-            for agent in pending:  # as step 7 of workflow:pr:review: run that specialist once more
-                (run_dir / "reviews" / f"{short(agent)}.json").unlink(missing_ok=True)
-                metas[agent]["delivered"] = "none"
-        write_json(run_dir / "review.json", merged)
-        missing = [a for a in routed["review"] if not (run_dir / "reviews" / f"{short(a)}.json").is_file()]
+                merged = json.loads(out([SCRIPTS / "review-merge", run_dir / "reviews"]))
+                pending = [a for a in routed["review"] if not (run_dir / "reviews" / f"{short(a)}.json").is_file()
+                           or f"{short(a)}.json" in merged["invalid"]]
+                if not pending or attempt_number == 2 or exhausted():
+                    break
+                for agent in pending:  # as step 7 of workflow:pr:review: run that specialist once more
+                    (run_dir / "reviews" / f"{short(agent)}.json").unlink(missing_ok=True)
+                    metas[agent]["delivered"] = "none"
+            write_json(run_dir / "review.json", merged)
+            missing = [a for a in routed["review"] if not (run_dir / "reviews" / f"{short(a)}.json").is_file()]
 
-        if not exhausted():
-            attempt = play(ADORNO, fill(templates["adorno"], common), left())
-            if attempt["cost_usd"] is not None:
-                state["spent"] += attempt["cost_usd"]
-            if (run_dir / "review-final.json").is_file() or (run_dir / "review-notes.md").is_file():
-                metas[ADORNO]["delivered"] = "file"
+            if not exhausted():
+                attempt = play(ADORNO, fill(templates["adorno"], common), left())
+                if attempt["cost_usd"] is not None:
+                    state["spent"] += attempt["cost_usd"]
+                refuse_links(workspace)
+                if (run_dir / "review-final.json").is_file() or (run_dir / "review-notes.md").is_file():
+                    metas[ADORNO]["delivered"] = "file"
 
-        write_json(dest / "areas.json", routed)
-        shutil.copytree(run_dir / "reviews", dest / "reviews")
-        for name in ("review.json", "review-final.json", "review-notes.md"):
-            if (run_dir / name).is_file():
-                shutil.copy(run_dir / name, dest / name)
+            write_json(dest / "areas.json", routed)
+            (dest / "reviews").mkdir(parents=True)
+            for path in sorted((run_dir / "reviews").iterdir()):  # regular files only
+                if path.is_file():
+                    shutil.copy(path, dest / "reviews" / path.name)
+            for name in ("review.json", "review-final.json", "review-notes.md"):
+                if (run_dir / name).is_file():
+                    shutil.copy(run_dir / name, dest / name)
+            summary.update({"missing": missing, "invalid": merged["invalid"], "verdict": merged["verdict"]})
+        except Planted as planted:
+            links = planted.args[0]
+            print(f"run: {case_id}: an agent left links in its run folder ({', '.join(links)}): this case run fails",
+                  file=sys.stderr)
+            summary.update({"failed": "an agent left links in its run folder: nothing of it is kept", "links": links})
         for agent, meta in metas.items():
             write_json(dest / "meta" / f"{short(agent)}.json", meta)
             (dest / "messages").mkdir(exist_ok=True)
             (dest / "messages" / f"{short(agent)}.md").write_text(messages[agent] + "\n")
         costs = [m["cost_usd"] for m in metas.values() if m["cost_usd"] is not None]
-        summary = {"case": case_id, "diff_base": diff_base, "routing_ok": entry["ok"], "missing": missing,
-                   "invalid": merged["invalid"], "verdict": merged["verdict"],
-                   "budget_exhausted": exhausted(), "cost_usd": sum(costs) if costs else None,
-                   "duration_ms": sum(m["duration_ms"] for m in metas.values())}
+        summary.update({"budget_exhausted": exhausted(), "cost_usd": sum(costs) if costs else None,
+                        "duration_ms": sum(m["duration_ms"] for m in metas.values())})
         write_json(dest / "run.json", summary)
         return summary
     finally:
@@ -341,7 +379,7 @@ def main():
         die(f"{args.tool} is not installed or does not start")
 
     state = {"spent": 0.0}
-    runs, skipped, dearest = [], [], 0.0
+    runs, skipped, failed, dearest = [], [], [], 0.0
     for n in range(1, args.repeat + 1):
         for case_id in cases:
             if args.budget_usd is not None and (skipped or state["spent"] + dearest > args.budget_usd):
@@ -349,7 +387,10 @@ def main():
                 continue
             print(f"run: {case_id} #{n}", file=sys.stderr)
             summary = run_case(args, tool, case_id, entries[case_id], always, state, top / case_id / str(n))
-            runs.append({"case": case_id, "n": n, "cost_usd": summary["cost_usd"]})
+            if "failed" in summary:
+                failed.append({"case": case_id, "n": n, "links": summary["links"]})
+            else:
+                runs.append({"case": case_id, "n": n, "cost_usd": summary["cost_usd"]})
             dearest = max(dearest, summary["cost_usd"] or 0.0)
             if summary["budget_exhausted"]:
                 print(f"run: budget reached during {case_id} #{n}", file=sys.stderr)
@@ -361,14 +402,15 @@ def main():
               "started_at": started.isoformat(timespec="seconds"),
               "finished_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
               "budget_usd": args.budget_usd, "cost_usd": state["spent"] if priced else None,
-              "runs": runs, "skipped": skipped}
+              "runs": runs, "skipped": skipped, "failed": failed}
     write_json(top / "run.json", report)
     if skipped:
         print(f"run: budget of {args.budget_usd} USD reached, {len(skipped)} case run(s) skipped", file=sys.stderr)
     if not runs:
         sys.exit(1)
-    sys.exit(subprocess.run([sys.executable, str(ROOT / "bench" / "report"), "--label", label, "--results",
-                             str(args.results), "--cases", str(args.cases)]).returncode)
+    reported = subprocess.run([sys.executable, str(ROOT / "bench" / "report"), "--label", label, "--results",
+                               str(args.results), "--cases", str(args.cases)]).returncode
+    sys.exit(reported or (1 if failed else 0))
 
 
 if __name__ == "__main__":

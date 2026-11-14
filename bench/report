@@ -126,6 +126,10 @@ def render(score, comparison):
     if run["skipped"]:
         skipped = ", ".join(f"{s['case']} #{s['n']}" for s in run["skipped"])
         lines += [f"> **Incomplete run**: the budget of {money(run['budget_usd'])} stopped it before {skipped}.", ""]
+    if run["failed"]:
+        failed = ", ".join(f"{f['case']} #{f['n']}" for f in run["failed"])
+        lines += [f"> **Failed case runs**, not scored: {failed}. An agent left links in its run folder (named in "
+                  "their run.json).", ""]
     final, clean = overall["final"], overall["clean"]
     rows = [
         ["recall", spread(overall["recall"]), f"{overall['found']}/{overall['expected']} expected findings found"],

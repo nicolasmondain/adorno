@@ -7,6 +7,7 @@
 #   NAME.json         the review it writes to .agent-run/review/reviews/NAME.json (default: a pass, no finding)
 #   NAME.first.json   written instead on its first call in a workspace (a malformed review, then the retry)
 #   NAME.message      its last message; with no NAME.json next to it, it writes no file at all
+#   NAME.link         a misbehaving agent: in place of its review, a link to the path this file holds
 #   adorno.final.json, adorno.notes.md   what agent:adorno writes as review-final.json and review-notes.md
 # FAKE_CLAUDE_COST: the cost of one call (0.01 by default). FAKE_CLAUDE_COMMITS: file that gets the commit subjects
 # of the workspace, newest first, at each call.
@@ -37,7 +38,9 @@ if [ "$name" = adorno ]; then
   [ ! -f "$dir/adorno.final.json" ] || cp "$dir/adorno.final.json" "$run/review-final.json"
   if [ -f "$dir/adorno.notes.md" ]; then cp "$dir/adorno.notes.md" "$run/review-notes.md"; else echo "Clean." >"$run/review-notes.md"; fi
 else
-  if [ -f "$dir/$name.first.json" ] && [ ! -f "$run/.fake-$name" ]; then
+  if [ -f "$dir/$name.link" ]; then
+    ln -s "$(cat "$dir/$name.link")" "$run/reviews/$name.json"
+  elif [ -f "$dir/$name.first.json" ] && [ ! -f "$run/.fake-$name" ]; then
     cp "$dir/$name.first.json" "$run/reviews/$name.json"
   elif [ -f "$dir/$name.json" ]; then
     cp "$dir/$name.json" "$run/reviews/$name.json"

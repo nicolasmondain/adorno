@@ -71,7 +71,8 @@ What a run is made of:
   loaded, so a result is tied to a commit (`prompts.sha`, and `dirty` when `src/` or `dist/` had uncommitted changes).
 - **Each agent on its own tier**, unless `--model` replaces the model of all of them.
 - **A sandbox**: an agent writes inside its workspace only and has no network (Claude Code's sandbox, macOS or Linux).
-  Nothing reaches GitHub, your registry or your learning notes.
+  Nothing reaches GitHub, your registry or your learning notes. The runner, outside the sandbox, never follows a link
+  an agent leaves in its run folder: that case run fails, nothing of it is kept, and the report names it at the top.
 - **Claude Code** for now (`--tool claude`). Another provider goes through the same tool: export its variables
   (`ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_DEFAULT_OPUS_MODEL`…) in the shell that starts the run. The
   runner stores no key, and the report shows the model that really ran.

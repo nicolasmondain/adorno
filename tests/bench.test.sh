@@ -193,6 +193,24 @@ if [ -f "$REAL" ]; then
   expect_jq "after one retry" '.delivered == "none" and .attempts == 2'
   rm "$FK/tests.message"; calls
 
+  # an agent plants a dangling link where its review goes, and gives a salvageable review in its message
+  printf '%s' "$TMP/outside.json" >"$FK/tests.link"
+  printf 'Here it is: {"agent":"agent:review:tests","verdict":"pass","findings":[]}\n' >"$FK/tests.message"
+  expect_exit 1 "a link an agent plants in its run folder" -- "$B/run" --case docs-only --case clean-refactor --label planted --results "$R"
+  if grep -q "^> \*\*Failed case runs\*\*.*clean-refactor #1" <<<"$out"; then ok "is named at the top of the report"; else ko "is named at the top of the report" "$(head -c 400 <<<"$out")"; fi
+  if [ ! -e "$TMP/outside.json" ]; then ok "is never written through"; else ko "is never written through" "$(cat "$TMP/outside.json")"; fi
+  out="$(cat "$R/planted/clean-refactor/1/run.json")"
+  expect_jq "fails that case run, and names the link" '(.failed | type) == "string" and .links == [".agent-run/review/reviews/tests.json"]'
+  if [ ! -e "$R/planted/clean-refactor/1/reviews" ] && [ ! -e "$R/planted/clean-refactor/1/review.json" ]; then
+    ok "nothing of it is copied"
+  else
+    ko "nothing of it is copied" "$(find "$R/planted/clean-refactor/1" | head -20)"
+  fi
+  out="$(cat "$R/planted/run.json")"
+  expect_jq "the run records it apart, and goes on with the other cases" \
+    '.failed == [{"case": "clean-refactor", "n": 1, "links": [".agent-run/review/reviews/tests.json"]}] and (.runs | map(.case)) == ["docs-only"]'
+  rm "$FK/tests.link" "$FK/tests.message"; calls
+
   expect_exit 0 "a budget" -- "$B/run" --case docs-only --repeat 3 --budget-usd 0.05 --label budget --results "$R"
   if grep -q "Incomplete run.*docs-only #2, docs-only #3" <<<"$out"; then ok "is named at the top of the report when it cut the run"; else ko "is named at the top of the report when it cut the run" "$(head -c 400 <<<"$out")"; fi
   out="$(cat "$R/budget/run.json")"
