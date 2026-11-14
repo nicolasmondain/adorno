@@ -602,6 +602,13 @@ mkdir -p "$TMP/spy" "$TMP/norun-home"; printf '#!/bin/sh\ntouch "%s"\n' "$TMP/sp
 expect_exit 0 "review-merge without an open run" -- env HOME="$TMP/norun-home" PATH="$TMP/spy:$PATH" "$S/review-merge" "$TMP/reviews"
 expect_jq "... merges as usual" '.verdict == "block"'
 [ ! -e "$TMP/spy.called" ] && ok "... and starts no interpreter to record it" || ko "review-merge started python3 with no run open"
+merged="$out"; real_jq="$(command -v jq)"
+printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s"\nexec "%s" "$@"\n' "$TMP/jq.calls" "$real_jq" >"$TMP/spy/jq"; chmod +x "$TMP/spy/jq"
+expect_exit 0 "review-merge without an open run, HOME unset" -- env -u HOME PATH="$TMP/spy:$PATH" "$S/review-merge" "$TMP/reviews"
+[ "$out" = "$merged" ] && [ ! -s "$TMP/err" ] && ok "... the same output, nothing on stderr" || ko "review-merge's output changed with HOME unset" "$out / $(cat "$TMP/err")"
+[ ! -e "$TMP/spy.called" ] && ok "... and starts no interpreter" || ko "review-merge started python3 with no run open, HOME unset"
+grep -q 'stage: "produced"\|kind: "verdict"' "$TMP/jq.calls" && ko "review-merge built the journal's messages with no run open" || ok "... nor builds the journal's messages"
+rm -f "$TMP/spy/jq"
 
 echo "pr-areas: tricky paths"
 printf 'diff --git "a/client/\\303\\251 x.tsx" "b/client/\\303\\251 x.tsx"\n--- "a/client/\\303\\251 x.tsx"\n+++ "b/client/\\303\\251 x.tsx"\n@@ -1 +1 @@\n+const a = 1\ndiff --git a/server/old.ts b/server/old.ts\ndeleted file mode 100644\n--- a/server/old.ts\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\n' >"$TMP/tricky.diff"
