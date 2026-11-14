@@ -212,8 +212,8 @@ function tick(now) {
 
 function play() {
   if (!state.open.length || state.playing) return;
-  if (calm.matches) {   // no animation asked for: playing is stepping, from the start once at the end
-    if (state.index >= state.open[0].events.length - 1) seek(0, { index: -1 });
+  if (calm.matches) {   // no animation asked for: playing is stepping, from the start once past what the view shows
+    if (!state.open[0].events.slice(state.index + 1).some((e) => visible(e, state.view))) seek(0, { index: -1 });
     step(1);
     return;
   }

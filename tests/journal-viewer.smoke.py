@@ -299,6 +299,26 @@ def main(argv):
         calm.keyboard.press("Space")
         check("... then advances one event at a time", calm_stage.get_attribute("data-index") == "1",
               calm_stage.get_attribute("data-index"))
+        # the open run, served as if it were still going and its last events were tool calls
+        def ends_on_tools(r):
+            while r["events"][-1]["type"] != "tool.call":
+                r["events"].pop()
+            return r
+        calm.route(f"{base}/api/runs/{other_id}", lambda route: route.fulfill(json=ends_on_tools(route.fetch().json())))
+        shown = [e["i"] for e in ends_on_tools(api(base, f"/api/runs/{other_id}"))["events"] if e["type"] != "tool.call"]
+        calm.goto(f"{base}/#run={other_id}")
+        calm.wait_for_selector(f'.diagram[data-run="{other_id}"] .mark', state="attached")
+        calm.focus(".diagram .scroll")
+        calm.keyboard.press("2")
+        calm.keyboard.press("Home")
+        for _ in shown:
+            calm.keyboard.press("ArrowRight")
+        at_last = calm_stage.get_attribute("data-index")
+        calm.keyboard.press("Space")
+        check("... and at the last event a view shows, with hidden ones after it, Space starts over",
+              at_last == str(shown[-1]) and calm_stage.get_attribute("data-index") == str(shown[0])
+              and calm_stage.get_attribute("data-state") == "paused",
+              f'{at_last} → {calm_stage.get_attribute("data-index")} {calm_stage.get_attribute("data-state")}')
         contrast = watch(browser.new_page(viewport={"width": 1280, "height": 800}, forced_colors="active"))
         contrast.goto(f"{base}/#run={run_id}")
         contrast.wait_for_selector(".diagram .mark", state="attached")
