@@ -6,7 +6,7 @@ while building it).
 Context: adorno picks its reviewers by area (`repos.yaml` › `areas`, `pr-areas`), merges their reviews
 (`review-merge`), then `agent:adorno` rechecks. Models, tiers and prompts change often and nothing measured whether
 the reviews stay good. `bench/` holds synthetic cases, a free routing check that runs in CI, a headless runner, a
-scoring and a report.
+scoring and a report. How it works: [bench/README.md](../../bench/README.md).
 
 | # | Decision | Why |
 | --- | --- | --- |
