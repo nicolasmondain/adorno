@@ -1,0 +1,22 @@
+/* The only file that holds colours, fonts and sizes: "Das Neue Frankfurt" — paper, black rules, one signal red.
+   Everything else reads these through var(--…). Jost and IBM Plex Mono are named first and fall back to the
+   system's own until their files are added next to this one (fonts/ + @font-face here). */
+:root {
+  --paper: #f3f0e8;
+  --paper-deep: #e8e4d8;
+  --ink: #111111;
+  --ink-soft: #5a564c;
+  --rule-soft: #c8c3b4;
+  --red: #c8231a;
+
+  --font-sans: "Jost", "Futura", "Avenir Next", "Century Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --size: 15px;
+  --size-small: 12px;
+
+  --rule: 1.5px;
+  --rule-heavy: 3px;
+  --gap: 12px;
+  --head-w: 200px;
+  --panel-w: 380px;
+}
