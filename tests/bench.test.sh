@@ -80,7 +80,9 @@ then ok "every keyword is a valid regular expression"; else ko "every keyword is
 echo "routing (public default rules from repos.yaml)"
 REAL="$ROOT/dist/claude/.claude/skills/adorno-github/repos.json"
 if [ -f "$REAL" ]; then
-  jq '.repos = {"adorno/bench": {}}' "$REAL" >"$KH/registry.json"
+  # adorno/bare drops the `always` reviewers: docs-only then routes to no reviewer at all
+  jq '.repos = {"adorno/bench": {}, "adorno/bare": {"areas": {"always": {"review": ["-agent:review:code", "-agent:review:ponytail"]}}}}' \
+    "$REAL" >"$KH/registry.json"
   expect_exit 0 "every case routes as its case.json says" -- "$B/route"
   expect_jq "one entry per case, all ok, each with the full pr-areas output" \
     "length == $n and all(.[]; .ok and (.routed.review | length) >= 2 and (.routed.by_area | type) == \"object\")"
@@ -206,6 +208,14 @@ if [ -f "$REAL" ]; then
   expect_jq "is reported on the case run" '.budget_exhausted'
   if [ ! -e "$R/spent/docs-only/1/meta/adorno.json" ]; then ok "and agent:adorno is not started"; else ko "and agent:adorno is not started"; fi
   unset FAKE_CLAUDE_COST; calls
+  expect_exit 0 "a budget on a case with more reviewers than --parallel" -- "$B/run" --case mongo-n-plus-one --parallel 3 --budget-usd 0.5 --label wide --results "$R"
+  calls
+  expect_jq "splits what is left over every reviewer's call, not over the slots" \
+    '[.[] | select(.[index("--agent") + 1] != "adorno:adorno") | .[index("--max-budget-usd") + 1] | tonumber] | length == 6 and add <= 0.5'
+  expect_exit 0 "a budget on a routing that picks no reviewer" -- "$B/run" --repo adorno/bare --case docs-only --budget-usd 0.05 --label bare --results "$R"
+  calls
+  expect_jq "goes straight to agent:adorno, with the whole budget" \
+    'length == 1 and (.[0] | .[index("--agent") + 1] == "adorno:adorno" and (.[index("--max-budget-usd") + 1] | tonumber) == 0.05)'
 
   expect_exit 0 "a routing that differs from case.json" -- "$B/run" --cases "$TMP/cases" --case reviewer --label drift --results "$R"
   out="$(cat "$R/drift/reviewer/1/run.json")"

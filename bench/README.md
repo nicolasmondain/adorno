@@ -122,8 +122,9 @@ Measured on 2026-11-14 with Claude Code 2.1.325, each agent on its default tier,
 and `agent:adorno`): **1.53 USD** and 4 minutes. A reviewer cost 0.15 to 0.22 USD, `agent:adorno` 0.44 USD; 653k
 tokens in (mostly read from cache) and 16k out. The 13 cases start 69 reviewers and 13 `agent:adorno` passes: count
 about 18 USD and 50 minutes per repeat, to be measured on your side with one case first. Always pass `--budget-usd`:
-no case starts once the spent amount plus the dearest case so far would exceed it, each call is capped by what is
-left, and the report says at the top what was skipped. The budget relies on the cost the tool reports.
+no case starts once the spent amount plus the dearest case so far would exceed it, what is left is split over the
+calls (over the reviewers of a round, then all of it to `agent:adorno`), and the report says at the top what was
+skipped. The budget relies on the cost the tool reports.
 
 ## Add a case
 

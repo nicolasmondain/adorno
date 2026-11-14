@@ -28,7 +28,8 @@ Results go to RESULTS/<label>/ (bench/results by default, ignored by git):
   <case>/<n>/messages/<name>.md  the agent's last message
 
 --budget-usd relies on the cost the tool reports: no case starts once the spent amount plus the dearest case so far
-would exceed it, and each call is capped by what is left. The run ends with its report (bench/report), printed.
+would exceed it, and what is left is split over the calls: over the reviewers of a round, then all of it to
+agent:adorno. The run ends with its report (bench/report), printed.
 Exits 2 on wrong usage, 3 when --repo is not declared.
 """
 import argparse
@@ -234,7 +235,8 @@ def run_case(args, tool, case_id, entry, always, state, dest):
 
         pending, merged = list(routed["review"]), {}
         for attempt_number in (1, 2):
-            share = None if left() is None else max(left() / min(parallel, len(pending)), 0.01)
+            # what is left, split over every call of the round: their caps add up to it, whatever --parallel is
+            share = None if left() is None or not pending else left() / len(pending)
             with concurrent.futures.ThreadPoolExecutor(max_workers=parallel) as pool:
                 for agent, attempt in pool.map(lambda a: review(a, share), pending):
                     if attempt["cost_usd"] is not None:
