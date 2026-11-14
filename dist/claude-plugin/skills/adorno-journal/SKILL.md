@@ -65,7 +65,8 @@ server derives them from the agent's own `Write`, `Edit` and `NotebookEdit` call
 
 The hooks are Claude Code's only (Codex and Gemini sessions record their scripts, not their turns). They do nothing
 outside a run, never block (`PostToolUse` is not even waited for) and always exit 0. A tool call is recorded by what
-it was about (a command, a path, a pattern), never by the content it carried: an edit is its file, not its code. A
+it was about (a command, a path, a pattern), never by the content it carried: an edit is its file, not its code; an
+MCP tool's call keeps its numbers, booleans and ids only (below). A
 project installed next to a global install leaves the recording to the global one.
 
 ## What the transcripts add
@@ -124,7 +125,8 @@ Every string is redacted before it is written, and before it is cut to its excer
 recognised whole; the hash and length are those of the raw text): GitHub and GitLab tokens, `sk-…`, `sk_live_…` and
 `rk_live_…` keys, AWS and Slack keys, JWTs, private key blocks, `Authorization` headers, `Bearer …`, credentials in a
 URL or after `-u` / `--user` (`user:pass`), and any value whose key, variable or flag name contains `key`, `token`,
-`secret` or `password` (a quoted value goes whole, spaces included); each becomes `[redacted:<kind>]`. For a tool the
-writer does not know (an MCP tool), a call keeps only numbers, booleans and identifier-like strings; any other value is
-written as `…`. It is best effort: a secret that matches none of these is written as it is, one more reason a journal
+`secret` or `password` (a quoted value goes whole, spaces included, up to the quote that opened it); each becomes
+`[redacted:<kind>]`. For a tool the writer does not know (an MCP tool), a call keeps only numbers, booleans and the ids
+its keys name as such (`id`, `…_id`, `…Id`, `…_ts`, `channel`, `limit`, `page_size`, `…_count`); any other value, a
+`query` or a one-word `text` included, is written as `…`. It is best effort: a secret that matches none of these is written as it is, one more reason a journal
 never leaves the machine.

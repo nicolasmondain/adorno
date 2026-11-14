@@ -25,8 +25,9 @@ Codex and Gemini sessions record what the scripts and the guard do; their turns 
 The writer, `journal.py`, is called by adorno's scripts and hooks: it is not a command for agents, and the guard does
 not let it through. An agent marks a run with `run-mark`.
 
-A tool call is recorded by what it was about (a command, a path, a pattern), never by the content it carried: an edit
-is its file, not its code. A prompt, a result or a message is kept as its first 500 characters, the hash of the whole
+A tool call of Claude Code's own tools is recorded by what it was about (a command, a path, a pattern), never by the
+content it carried: an edit is its file, not its code; an MCP tool's call by its numbers, booleans and ids only
+(below). A prompt, a result or a message is kept as its first 500 characters, the hash of the whole
 and where the whole is (the transcript). The models' reasoning is **not** copied, unless you ask for it (below).
 
 Recording never breaks nor blocks a run: without `python3`, without an open run, or when a journal cannot be written,
@@ -45,8 +46,9 @@ Every string goes through the redaction before it is written, and before it is c
 across the cut is recognised whole: GitHub and GitLab tokens, `sk-…` and `sk_live_…` keys, AWS and Slack keys, JWTs,
 private key blocks, `Authorization` headers, `Bearer …`, credentials in a URL or after `-u` / `--user`, and any value
 whose key, variable or flag is named like a secret (`key`, `token`, `secret`, `password`), a quoted value with its
-spaces. Each becomes `[redacted:<kind>]`. For a tool the writer does not know (an MCP tool), a call keeps only numbers,
-booleans and short identifier-like strings; any other value is written as `…`.
+spaces, up to the quote that opened it. Each becomes `[redacted:<kind>]`. For a tool the writer does not know (an MCP
+tool), a call keeps only numbers, booleans and the ids its keys name as such (`id`, `…_id`, `…Id`, `…_ts`, `channel`,
+`limit`, `page_size`, `…_count`); any other value, a `query` or a one-word `text` included, is written as `…`.
 
 It is best effort: a secret that looks like none of these is written as it is. A journal also holds commands, paths,
 excerpts of prompts and names. Treat it as private; it has no export.

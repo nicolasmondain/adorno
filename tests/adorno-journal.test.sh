@@ -235,6 +235,16 @@ hook "{\"hook_event_name\":\"PostToolUse\",$common,\"tool_name\":\"mcp__slack__s
 expect_jq "a tool the journal does not know (MCP): its identifiers, never its content" \
   '.tool == "mcp__slack__send_message" and (.input | fromjson) == {"channel_id": "C0123ABC", "text": "…", "reply_broadcast": false, "limit": 3, "blocks": "…", "thread_ts": "1712345678.000100"}'
 grep -q "Shipping tonight" "$H" && ko "an MCP message's text reached the journal" || ok "an MCP message's text is not in the journal"
+# an MCP tool's keys are its own: a `query` is content, and a one-token value is not an id unless its key says so
+hook "{\"hook_event_name\":\"PostToolUse\",$common,\"tool_name\":\"mcp__slack__search\",\"duration_ms\":90,\"tool_input\":{\"query\":\"salary review Alice Martin\",\"channel_id\":\"C0123ABC\",\"limit\":5},\"tool_response\":{}}"; hl
+expect_jq "an MCP tool's query is named, never written" '(.input | fromjson) == {"query": "…", "channel_id": "C0123ABC", "limit": 5}'
+hook "{\"hook_event_name\":\"PostToolUse\",$common,\"tool_name\":\"mcp__vault__write_secret\",\"duration_ms\":40,\"tool_input\":{\"path\":\"kv/app\",\"value\":\"Zk9fQ2xYw81LmPq7Rt\"},\"tool_response\":{}}"; hl
+expect_jq "a secret store's value is named, never written" '(.input | fromjson) == {"path": "…", "value": "…"}'
+hook "{\"hook_event_name\":\"PostToolUse\",$common,\"tool_name\":\"mcp__slack__send_message\",\"duration_ms\":50,\"tool_input\":{\"channel_id\":\"C0123ABC\",\"text\":\"approved\"},\"tool_response\":{}}"; hl
+expect_jq "a one-word message is named, never written" '(.input | fromjson) == {"channel_id": "C0123ABC", "text": "…"}'
+for content in "salary review" Zk9fQ2xYw81LmPq7Rt approved; do
+  grep -q "$content" "$H" && ko "an MCP tool's content reached the journal: $content" || ok "an MCP tool's content is not in the journal: $content"
+done
 hook "{\"hook_event_name\":\"PostToolUseFailure\",$common,\"tool_name\":\"Bash\",\"duration_ms\":8000,\"tool_input\":{\"command\":\"npm test\"},\"error\":\"1 failing\",\"is_interrupt\":false}"; hl
 expect_jq "a failed tool call" '.type == "tool.call" and .error == true and .excerpt == "1 failing" and .dur == 8000'
 hook "{\"hook_event_name\":\"PostToolUse\",$common,\"tool_name\":\"AskUserQuestion\",\"duration_ms\":720000,\"tool_input\":{\"questions\":[{\"question\":\"Validate the plan?\",\"header\":\"Plan\",\"options\":[]}]},\"tool_response\":{\"answers\":{\"Validate the plan?\":\"Yes\"}}}"; hl

@@ -75,6 +75,7 @@ REDACTIONS = [(kind, re.compile(pattern, flags), repl) for kind, pattern, flags,
 )]
 WINDOW = 1024   # characters redacted past a cut, so that a secret across it is recognised whole before it is cut
 IDENTIFIER = re.compile(r"^[\w.:/@#+-]{1,80}$")   # an id, a name, a path: one short token, no spaces, no content
+ID_KEY = re.compile(r"id|\w+_id|\w+Id|\w+_ts|channel|limit|page_size|\w+_count")   # an MCP key whose value is an id
 
 
 def warn(message):
@@ -310,12 +311,15 @@ def tool_summary(tool, tool_input):
         return ""
     if tool in ("Agent", "Task"):
         return f"{tool_input.get('subagent_type') or ''}: {tool_input.get('description') or ''}"
-    for key in ("command", "file_path", "notebook_path", "pattern", "url", "query", "skill"):
-        if isinstance(tool_input.get(key), str):
-            return tool_input[key]
-    # a tool this does not know (an MCP tool: a Slack message, a Notion page): its numbers, booleans and
-    # identifier-like strings; any other value is named, never written
-    return json.dumps({k: v if isinstance(v, (int, float, bool)) or (isinstance(v, str) and IDENTIFIER.match(v))
+    if not tool.startswith("mcp__"):  # Claude Code's own tools: these keys hold what the call was about
+        for key in ("command", "file_path", "notebook_path", "pattern", "url", "query", "skill"):
+            if isinstance(tool_input.get(key), str):
+                return tool_input[key]
+    # a tool this does not know (an MCP tool: a Slack message, a Notion page, a secret store), whose keys mean what
+    # it says: its numbers, its booleans and the identifiers its keys name as such; any other value is named, never
+    # written
+    return json.dumps({k: v if isinstance(v, (int, float, bool)) or (isinstance(v, str) and IDENTIFIER.match(v)
+                                                                     and ID_KEY.fullmatch(str(k)))
                        else "…" for k, v in tool_input.items()}, ensure_ascii=False)
 
 
