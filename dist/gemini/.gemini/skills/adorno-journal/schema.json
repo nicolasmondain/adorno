@@ -32,7 +32,6 @@
 
     "agent": {"type": "object", "required": ["id"], "additionalProperties": false,
               "properties": {"id": {"type": "string"}, "type": {"type": "string"}}},
-    "tier": {"type": "string"},
     "model": {"type": "string"},
     "tokens": {"type": "object", "required": ["in", "out", "cache_read", "cache_write"], "additionalProperties": false,
                "properties": {"in": {"type": "integer", "minimum": 0}, "out": {"type": "integer", "minimum": 0},

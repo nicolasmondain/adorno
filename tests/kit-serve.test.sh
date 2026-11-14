@@ -48,7 +48,7 @@ echo '{"id": "x"}' >"$RUNS/active/x.json"; echo '{}' >"$RUNS/active/events.jsonl
 echo 'not a journal' >"$RUNS/no-journal-20260101T090000-1-1/notes.md"
 cp -R "$RUNS/broken-20260101T130000-1002-3" "$TMP/elsewhere/linked"; ln -s "$TMP/elsewhere/linked" "$RUNS/linked-20260101T140000-1-1"
 WS="$TMP/workspaces/acme__app/pr-7/.agent-run/review-1"; mkdir -p "$WS/reviews"
-echo '{"verdict": "fix"}' >"$WS/reviews/merged.json"
+echo '{"verdict": "fix"}' >"$WS/reviews/merged.json"; echo '{"verdict": "pass"}' >"$WS/reviews/code.json"
 F1=feature-build-20260101T100000-1000-1; F2=pr-review-20260101T120000-1001-2; F3=broken-20260101T130000-1002-3
 echo 'top secret' >"$TMP/elsewhere/secret.md"; ln -s "$TMP/elsewhere/secret.md" "$RUNS/$F1/leak.md"
 echo '<script>1</script>' >"$RUNS/$F1/page.html"; mkdir "$RUNS/$F1/folder.md"
@@ -93,9 +93,9 @@ expect_jq "the runs that have a journal, newest first; not the grants, a run wit
 expect_jq "a run: what it was, how long, what it cost" \
   '.runs[2] | .run == "20260101T100000-1000-1" and .workflow == "workflow:feature:build" and .mode == "draft" and .level == "L2" and .repos == ["acme/app"]
    and .start == "2026-01-01T10:00:00.000Z" and .end == "2026-01-01T10:17:10.100Z" and .duration_ms == 1030100 and .outcome == "ended"
-   and .agents == 9 and .events == 71 and .bad_lines == 0 and .tokens == {"in": 32900, "out": 5930, "cache_read": 39300, "cache_write": 51800} and .size > 0'
+   and .agents == 9 and .events == 85 and .bad_lines == 0 and .tokens == {"in": 32900, "out": 5930, "cache_read": 39300, "cache_write": 51800} and .size > 0'
 expect_jq "a run still open, its transcripts' turns counted with the rest" \
-  '.runs[1] | .outcome == "open" and .end == null and .agents == 3 and .events == 12 and .tokens.in == 2500'
+  '.runs[1] | .outcome == "open" and .end == null and .agents == 3 and .events == 13 and .tokens.in == 2500'
 expect_jq "a damaged journal is listed, its unreadable lines counted" '.runs[0] | .bad_lines == 1 and .events == 2 and .workflow == null and .outcome == "open"'
 printf '%s\n' '{"v":1,"t":"2026-01-01T13:00:09.000Z","run":"20260101T130000-1002-3","session":"sess-f3","actor":"session","parent":null,"type":"tool.call","tool":"Read","input":"a"}' >>"$RUNS/$F3/events.jsonl"
 get /api/runs; expect_jq "a journal that grew is read again" '.runs[0].events == 3'
@@ -103,14 +103,22 @@ get /api/runs; expect_jq "a journal that grew is read again" '.runs[0].events ==
 echo "read"
 status 200 "/api/runs/$F1"
 expect_jq "events in order, numbered, in milliseconds from the start" \
-  '.t0 == "2026-01-01T10:00:00.000Z" and .duration_ms == 1030100 and (.events | length) == 64 and ([.events[].i] == [range(0; 64)])
+  '.t0 == "2026-01-01T10:00:00.000Z" and .duration_ms == 1030100 and (.events | length) == 78 and ([.events[].i] == [range(0; 78)])
    and ([.events[].t] | . == sort) and ([.events[].u] | . == sort) and .open == false and .outcome == "ended"'
 expect_jq "lanes: you, the session, each agent in spawn order, scripts, the guard, GitHub" \
   '[.lanes[].id] == ["you", "session", "agent:a-plan", "agent:a-build", "agent:a-rev-code", "agent:a-rev-sec", "agent:a-rev-pony",
                      "agent:a-fix-1", "agent:a-rerev-1", "agent:a-fix-2", "agent:a-rerev-2", "scripts", "guard", "github"]'
-expect_jq "an agent's lane: what it is, its model and tier, when it lived" \
+expect_jq "an agent's lane: what it is, its model (from its Agent call), when it lived" \
   '.lanes[2] | .label == "core-planner" and .agent == "adorno-agent-core-planner" and .instance == "a-plan" and .parent == "session"
-   and .model == "claude-fable-5-1" and .tier == "frontier" and .start == 9000 and .end == 60000 and .orphan == false'
+   and .model == "claude-fable-5-1" and (has("tier") | not) and .start == 9000 and .end == 60000 and .orphan == false'
+expect_jq "what each agent wrote, from its own Write and Edit calls: once each, in order, openable when the run's folders hold it" \
+  '(.lanes | map(select(.kind == "agent") | {key: .instance, value: .wrote}) | from_entries) as $w
+   | $w["a-plan"] == [{"path": "'"$RUNS/$F1"'/plan.md", "file": "plan.md"}]
+   and $w["a-rev-sec"] == [{"path": "'"$RUNS/$F1"'/reviews/security.json", "file": "reviews/security.json"}]
+   and $w["a-rev-code"] == [{"path": "'"$RUNS/$F1"'/reviews/code.json", "file": null}]
+   and $w["a-build"] == [{"path": "/synthetic/app/src/teams/list.ts", "file": null}]
+   and ([.lanes[] | select(.kind != "agent") | has("wrote")] | any | not)'
+expect_jq "an agent's return no longer carries a file" 'all(.events[] | select(.type == "agent.return"); (.d | has("file") | not) and (.label | endswith(" returns")))'
 expect_jq "the session's model is the one of its turns" '.lanes[1].model == "claude-sonnet-5-5"'
 expect_jq "every arrow goes from a lane to a lane" \
   '([.lanes[].id]) as $l | all(.events[]; (.from | IN($l[])) and (.to == null or (.to | IN($l[]))))'
@@ -142,10 +150,13 @@ expect_jq "the time map is continuous and increasing, activity keeps its length"
 expect_jq "the files of the run that can be opened" '[.files[].path] | sort == ["plan.md", "reviews/security.json", "status.md"]'
 status 200 "/api/runs/$F2"
 expect_jq "an open run: both files read together, an agent without spawn kept apart, one still running" \
-  '.open and (.events | length) == 12 and ([.lanes[] | select(.kind == "agent") | [.id, .orphan]] == [["agent:r1", false], ["agent:r2", false], ["agent:zz", true]])
+  '.open and (.events | length) == 13 and ([.lanes[] | select(.kind == "agent") | [.id, .orphan]] == [["agent:r1", false], ["agent:r2", false], ["agent:zz", true]])
    and (.lanes[] | select(.id == "agent:r1") | .model == "claude-opus-5-5" and .end == 40000) and (.lanes[] | select(.id == "agent:r2") | .end == .start + 34000)'
 expect_jq "without marked steps, phases are derived from the delegations and say so" '(.steps | length) == 1 and .steps[0].source == "derived" and .rounds == []'
-expect_jq "the files of its .agent-run folder" '[.files[].path] == ["reviews/merged.json"]'
+expect_jq "the files of its .agent-run folder" '[.files[].path] == ["reviews/code.json", "reviews/merged.json"]'
+expect_jq "a file an agent wrote in the run's .agent-run folder can be opened" \
+  '(.lanes[] | select(.id == "agent:r1") | .wrote) == [{"path": "'"$TMP"'/workspaces/acme__app/pr-7/.agent-run/review-1/reviews/code.json", "file": "reviews/code.json"}]
+   and all(.lanes[] | select(.id == "agent:r2" or .id == "agent:zz"); .wrote == [])'
 status 200 "/api/runs/$F3"
 expect_jq "a damaged journal still reads: what is unknown is kept as a mark" \
   '.bad_lines == 1 and .workflow == null and any(.events[]; .type == "future.thing" and .from == "session" and .to == null)'
@@ -168,7 +179,7 @@ status 413 "/api/runs/$F1/file?path=huge.log"
 sed "s|/.agent-run/review-1|/review-1|" "$RUNS/$F2/events.jsonl" >"$RUNS/$F2/events.tmp" && mv "$RUNS/$F2/events.tmp" "$RUNS/$F2/events.jsonl"
 mkdir -p "$TMP/workspaces/acme__app/pr-7/review-1/reviews"; echo '{}' >"$TMP/workspaces/acme__app/pr-7/review-1/reviews/merged.json"
 status 404 "/api/runs/$F2/file?path=reviews/merged.json"
-get "/api/runs/$F2"; expect_jq "a run folder that is not an .agent-run folder is never read" '.files == []'
+get "/api/runs/$F2"; expect_jq "a run folder that is not an .agent-run folder is never read" '.files == [] and (.lanes[] | select(.id == "agent:r1") | .wrote[0].file) == null'
 
 echo "requests"
 status 403 /api/runs -H "Host: evil.test"

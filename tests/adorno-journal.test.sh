@@ -43,6 +43,7 @@ bad "an unknown type" '"type":"nope"'
 bad "a value outside its enum" '"type":"guard","decision":"allow","reason":"r","command":"c"'
 bad "a wrong value type" '"type":"script.call","script":"x","exit":"0"'
 bad "a session kind outside its enum" '"type":"session","kind":"pause"'
+bad "a tier (Claude Code's hooks give the resolved model, never the kit's tier)" '"type":"agent.spawn","agent":{"id":"a1"},"tool":"claude","tier":"deep"'
 printf '%s\n' "${base/session\",\"parent/bot\",\"parent},\"type\":\"loop\",\"round\":1,\"cap\":2}" >"$TMP/bad.jsonl"
 expect_exit 1 "refused: an unknown actor" -- valid "$TMP/bad.jsonl"
 printf '{"type": "object", "maxProperties": 3}' >"$TMP/schema.json"

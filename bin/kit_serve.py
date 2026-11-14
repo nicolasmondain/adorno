@@ -145,11 +145,30 @@ def short(agent_type):
     return re.sub(r"^adorno-agent-", "", agent_type or "") or "agent"
 
 
-def lanes_of(events, t0, last):
+WRITING_TOOLS = ("Write", "Edit", "NotebookEdit")   # a tool call whose `input` is the path of a file it wrote
+
+
+def servable(roots, path):
+    """The path the file endpoint takes for a file a tool call wrote (its absolute path, as recorded), or None: a
+    relative path says nothing of where it is, and a file outside the run's folders, gone, or of another type is
+    never served."""
+    if not isinstance(path, str) or not os.path.isabs(path):
+        return None
+    real = os.path.realpath(path)
+    for root in roots:
+        if os.path.commonpath([root, real]) == root and real != root:
+            rel = os.path.relpath(real, root)
+            return rel if resolve_file(roots, rel) == real else None
+    return None
+
+
+def lanes_of(events, t0, last, roots):
     """The lanes, top to bottom: you, the main session, each agent instance in spawn order, scripts, the guard,
     GitHub. An agent seen without its spawn (hooks missed it, the run opened late) still gets a lane, marked orphan;
-    one that never returned (still running, or its return missed) lives until the end of what was recorded."""
-    agents, models = {}, {}
+    one that never returned (still running, or its return missed) lives until the end of what was recorded. An
+    agent's `wrote`: the files its own Write, Edit and NotebookEdit calls name, once each, in order, with the path
+    the file endpoint takes for them (`file`, None when it cannot serve it)."""
+    agents, models, written = {}, {}, {}
     for e in events:
         at = ms_between(t0, e["t"])
         actor = e.get("actor")
@@ -158,8 +177,8 @@ def lanes_of(events, t0, last):
             models[actor][e["model"]] += 1
         for lane in {a for a in (agent_id(e), actor) if isinstance(a, str) and a.startswith("agent:")}:
             a = agents.setdefault(lane, {"id": lane, "kind": "agent", "instance": lane[len("agent:"):], "parent": "session",
-                                         "agent": None, "model": None, "tier": None, "start": at, "end": None,
-                                         "orphan": True})
+                                         "agent": None, "model": None, "start": at, "end": None, "orphan": True,
+                                         "wrote": []})
             about = e.get("agent") if lane == agent_id(e) else None
             if about and about.get("type") and not a["agent"]:
                 a["agent"] = about["type"]
@@ -169,7 +188,10 @@ def lanes_of(events, t0, last):
                 a["end"] = at
             if about:  # the Agent tool call names the model the instance runs on
                 a["model"] = a["model"] or e.get("model")
-                a["tier"] = a["tier"] or e.get("tier")
+            if (lane == actor and e["type"] == "tool.call" and e.get("tool") in WRITING_TOOLS
+                    and isinstance(e.get("input"), str) and e["input"] not in written.setdefault(lane, {""})):
+                written[lane].add(e["input"])
+                a["wrote"].append({"path": e["input"], "file": servable(roots, e["input"])})
 
     def usual(actor):
         seen = models.get(actor) or {}
@@ -196,7 +218,7 @@ def label_of(e, names):
     if kind == "agent.spawn":
         return f"{who} starts {names.get(agent_id(e), 'an agent')}"
     if kind == "agent.return":
-        return f"{who} returns" + (f", wrote {e['file']}" if e.get("file") else "")
+        return f"{who} returns"
     if kind == "model.turn":
         got = tokens_of(e) or {}
         return f"{who}: {e.get('model')} responds ({got.get('in', 0)} in, {got.get('out', 0)} out)"
@@ -347,7 +369,8 @@ def normalize(name, folder):
                 "lanes": [], "events": [], "steps": [], "rounds": [], "files": [],
                 "time": {"gap_ms": GAP_MS, "width": 0, "segments": time_map([], 0)},
                 "totals": {"tokens": {k: 0 for k in TOKEN_KEYS}, "by_lane": {}, "by_model": {}, "counts": {}}}
-    lanes = lanes_of(events, t0, last)
+    roots = file_roots(folder, begin.get("dir"))
+    lanes = lanes_of(events, t0, last, roots)
     ids = {l["id"] for l in lanes}
     names = {l["id"]: l["label"] for l in lanes}
     steps = steps_of(events, lanes, t0, last)
@@ -379,7 +402,6 @@ def normalize(name, folder):
     out.sort(key=lambda e: e["t"])
     for i, (e, u) in enumerate(zip(out, drawn(segments, [e["t"] for e in out]))):
         e["i"], e["u"] = i, u
-    roots = file_roots(folder, begin.get("dir"))
     return {"id": name, "run": begin.get("run") or events[0].get("run"), "workflow": begin.get("workflow"),
             "mode": begin.get("mode"), "level": begin.get("level"), "repos": begin.get("repos") or [],
             "outcome": (end.get("outcome") or "ended") if end else "open", "open": end is None, "bad_lines": bad,
