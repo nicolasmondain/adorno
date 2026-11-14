@@ -189,6 +189,10 @@ expect_jq "a tool call inside a subagent belongs to that agent" \
 hook "{\"hook_event_name\":\"PostToolUse\",$common,\"tool_name\":\"Edit\",\"duration_ms\":20,\"tool_input\":{\"file_path\":\"src/a.ts\",\"old_string\":\"const password = 1\",\"new_string\":\"const x = 2\"},\"tool_response\":{\"filePath\":\"src/a.ts\"}}"; hl
 expect_jq "an edit is its path, never the code it carried" '.tool == "Edit" and .input == "src/a.ts" and (has("excerpt") | not)'
 grep -q "const x = 2" "$H" && ko "edited code reached the journal" || ok "the edited code is not in the journal"
+hook "{\"hook_event_name\":\"PostToolUse\",$common,\"tool_name\":\"mcp__slack__send_message\",\"duration_ms\":300,\"tool_input\":{\"channel_id\":\"C0123ABC\",\"text\":\"Shipping tonight, details below\",\"reply_broadcast\":false,\"limit\":3,\"blocks\":[{\"text\":\"x\"}],\"thread_ts\":\"1712345678.000100\"},\"tool_response\":{\"ok\":true}}"; hl
+expect_jq "a tool the journal does not know (MCP): its identifiers, never its content" \
+  '.tool == "mcp__slack__send_message" and (.input | fromjson) == {"channel_id": "C0123ABC", "text": "…", "reply_broadcast": false, "limit": 3, "blocks": "…", "thread_ts": "1712345678.000100"}'
+grep -q "Shipping tonight" "$H" && ko "an MCP message's text reached the journal" || ok "an MCP message's text is not in the journal"
 hook "{\"hook_event_name\":\"PostToolUseFailure\",$common,\"tool_name\":\"Bash\",\"duration_ms\":8000,\"tool_input\":{\"command\":\"npm test\"},\"error\":\"1 failing\",\"is_interrupt\":false}"; hl
 expect_jq "a failed tool call" '.type == "tool.call" and .error == true and .excerpt == "1 failing" and .dur == 8000'
 hook "{\"hook_event_name\":\"PostToolUse\",$common,\"tool_name\":\"AskUserQuestion\",\"duration_ms\":720000,\"tool_input\":{\"questions\":[{\"question\":\"Validate the plan?\",\"header\":\"Plan\",\"options\":[]}]},\"tool_response\":{\"answers\":{\"Validate the plan?\":\"Yes\"}}}"; hl

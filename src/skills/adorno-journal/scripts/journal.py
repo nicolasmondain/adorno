@@ -70,6 +70,7 @@ REDACTIONS = [(kind, re.compile(pattern, flags), repl) for kind, pattern, flags,
      r"\1[redacted:{}]"),
 )]
 WINDOW = 1024   # characters redacted past a cut, so that a secret across it is recognised whole before it is cut
+IDENTIFIER = re.compile(r"^[\w.:/@#+-]{1,80}$")   # an id, a name, a path: one short token, no spaces, no content
 
 
 def warn(message):
@@ -292,8 +293,10 @@ def tool_summary(tool, tool_input):
     for key in ("command", "file_path", "notebook_path", "pattern", "url", "query", "skill"):
         if isinstance(tool_input.get(key), str):
             return tool_input[key]
-    return json.dumps({k: v for k, v in tool_input.items() if isinstance(v, (str, int, float, bool))},
-                      ensure_ascii=False)
+    # a tool this does not know (an MCP tool: a Slack message, a Notion page): its numbers, booleans and
+    # identifier-like strings; any other value is named, never written
+    return json.dumps({k: v if isinstance(v, (int, float, bool)) or (isinstance(v, str) and IDENTIFIER.match(v))
+                       else "…" for k, v in tool_input.items()}, ensure_ascii=False)
 
 
 def hook_events(payload):
