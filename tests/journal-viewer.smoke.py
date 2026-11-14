@@ -159,6 +159,22 @@ def main(argv):
         page.keyboard.press("4")
         check("the workflow view shows the steps of the plan", page.locator("rect.step").count() == len(run["steps"]) == 3)
         page.keyboard.press("1")
+        turn = max((e for e in run["events"] if e["type"] == "model.turn"), key=lambda e: e["dur"])
+        page.focus(".diagram .scroll")
+        page.keyboard.press("0")
+        size = "[document.querySelector('.diagram .scroll').clientWidth, +document.querySelector('.diagram .canvas').getAttribute('width')]"
+        for _ in range(20):   # zoom in until a screen is less than a third of the longest model turn
+            seen, canvas = page.evaluate(size)
+            zoom = (canvas - 24) / run["time"]["width"]
+            if seen / zoom < turn["dur"] / 3:
+                break
+            page.keyboard.press("+")
+        page.evaluate("(x) => { document.querySelector('.diagram .scroll').scrollLeft = x; }",
+                      12 + (turn["u"] + turn["dur"] / 2) * zoom - seen / 2)
+        page.wait_for_timeout(200)
+        check("zoomed into the middle of a long model turn, its bar is still drawn",
+              page.locator(f'.diagram .mark.bar[data-i="{turn["i"]}"]').count() == 1, f"screen {seen / zoom:.0f} ms of {turn['dur']}")
+        page.keyboard.press("0")
         page.focus("#home")
         page.keyboard.press("Enter")
         page.wait_for_timeout(200)

@@ -19,6 +19,9 @@ export class Diagram {
     this.current = -1;
     this.marks = [];
     this.pending = false;
+    // the longest model turn, in drawn time: a turn that started that far left of the window can still cover it
+    this.reach = 0;
+    for (const e of run.events) if (e.type === "model.turn") this.reach = Math.max(this.reach, uOf(run, e.t + e.dur) - e.u);
 
     this.heads = el("div", { class: "heads" });
     this.layers = Object.fromEntries(["bands", "lanes", "gaps", "rounds", "marks"].map((name) => [name, svg("g", { class: name })]));
@@ -130,11 +133,11 @@ export class Diagram {
     });
   }
 
-  // The marks of the events in view, plus one screen on each side.
+  // The marks of the events in view, plus one screen on each side, plus the model turns that started earlier.
   draw() {
     const { run } = this;
     const span = this.scroll.clientWidth || 800;
-    const first = upperBound(run.events, (this.scroll.scrollLeft - span - PAD) / this.zoom - 1, (e) => e.u);
+    const first = upperBound(run.events, (this.scroll.scrollLeft - span - PAD) / this.zoom - this.reach - 1, (e) => e.u);
     const last = upperBound(run.events, (this.scroll.scrollLeft + 2 * span - PAD) / this.zoom, (e) => e.u);
     this.marks = marksFor(run, this.view, first, last, this.zoom).map((mark) => ({ ...mark, node: this.node(mark) }));
     this.layers.marks.replaceChildren(...this.marks.map((m) => m.node));
