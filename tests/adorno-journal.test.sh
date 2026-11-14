@@ -246,6 +246,11 @@ chmod 500 "$KH/runs/test-20260101T100000-1-1"; chmod 400 "$f"
 expect_exit 0 "a journal that cannot be written" -- python3 "$J" event loop '{"round":1,"cap":2}' --session sess-a
 grep -q "not recorded" "$TMP/err" && ok "said on stderr" || ko "silent failure" "$(cat "$TMP/err")"
 chmod 700 "$KH/runs/test-20260101T100000-1-1"; chmod 600 "$f"
+# a full disk, simulated: no file may grow (the reason is read through a pipe, since no file can take it either)
+n="$(wc -l <"$f")"
+expect_exit 0 "a disk that takes no more" -- sh -c "ulimit -f 0; python3 '$J' event loop '{\"round\":1,\"cap\":2}' --session sess-a 2>&1 | cat"
+case "$out" in *"not recorded"*) ok "said, and the caller goes on" ;; *) ko "a failed write was silent" "$out" ;; esac
+[ "$(wc -l <"$f")" = "$n" ] && ok "the journal is left as it was, no half line" || ko "the journal changed on a failed write"
 expect_exit 0 "no arguments" -- python3 "$J"
 expect_exit 0 "a broken run file is skipped" -- sh -c "printf '{' >'$KH/runs/active/broken.json'; python3 '$J' event loop '{\"round\":1,\"cap\":2}' --session sess-a"
 
