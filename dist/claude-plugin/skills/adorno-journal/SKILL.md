@@ -55,8 +55,14 @@ goes to stderr, the exit code is 0, and the run goes on.
 | `review-merge` | `finding`, as produced by each reviewer then as merged |
 | the guard (`guard_bash.py`) | `guard`, for a refusal or a question; what it lets through is not an event |
 | `adorno-github/scripts/run-mark`, called by the session that runs a plan | `step.begin`, `step.end`, `loop` |
+| the Claude Code hooks `bin/kit install` adds (`journal.py hook`) | `session`, `message` (the owner's prompt, the session's reply), `tool.call`, `checkpoint` (a question to the owner), `agent.spawn`, `agent.return` |
 
 `ADORNO_JOURNAL=0` in a script's environment records nothing for it.
+
+The hooks are Claude Code's only (Codex and Gemini sessions record their scripts, not their turns). They do nothing
+outside a run, never block (`PostToolUse` is not even waited for) and always exit 0. A tool call is recorded by what
+it was about (a command, a path, a pattern), never by the content it carried: an edit is its file, not its code. A
+project installed next to a global install leaves the recording to the global one.
 
 ## Writing an event
 

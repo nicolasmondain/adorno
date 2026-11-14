@@ -112,6 +112,23 @@ check "without python3 the hook blocks (exit 2), it does not let commands throug
 # shellcheck disable=SC2034  # err is read by check's eval on the next line
 err="$(printf '%s' '{"tool_name":"AskUserQuestion","permission_mode":"default","tool_input":{}}' | PATH=/nonexistent /bin/sh -c "$HOOK" 2>&1 >/dev/null)"; got=$?
 check "without python3 the hook also blocks questions (exit 2), and says so" '[ "$got" = 2 ] && printf "%s" "$err" | grep -q "questions"'
+# shellcheck disable=SC2034  # JQ_J is read by check's eval on the next lines
+JQ_J='[.hooks | to_entries[] | .key as $e | .value[] | .hooks[] | select(.command | contains("adorno-journal/scripts/journal.py")) | {event: $e, async: (.async // false), timeout}]'
+check "the journal's hooks are next to the guard, one per event it records" 'jq -e "$JQ_J | map(.event) | sort == [\"PostCompact\", \"PostToolUse\", \"PostToolUseFailure\", \"SessionEnd\", \"SessionStart\", \"Stop\", \"SubagentStart\", \"SubagentStop\", \"UserPromptSubmit\"]" "$A/.claude/settings.local.json" >/dev/null'
+check "a tool call is never waited for; the end of a session is" 'jq -e "$JQ_J | (map(select(.async) | .event) | sort) == [\"PostToolUse\", \"PostToolUseFailure\"] and all(.[]; .timeout == 5)" "$A/.claude/settings.local.json" >/dev/null'
+check "Codex and Gemini get no journal hook" '! grep -q journal.py "$A/.codex/hooks.json"'
+JHOOK="$(jq -r '.hooks.PostToolUse[] | .hooks[] | select(.command | contains("journal.py")) | .command' "$A/.claude/settings.local.json")"
+PAYLOAD='{"hook_event_name":"PostToolUse","session_id":"sess-k","tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":{"stdout":"a.txt"},"duration_ms":12}'
+printf '%s' "$PAYLOAD" | sh -c "$JHOOK"; got=$?
+check "without an open run the journal hook does nothing and lets the session go on" '[ "$got" = 0 ] && [ -z "$(find "$ADORNO_HOME/runs" -name events.jsonl 2>/dev/null)" ]'
+mkdir -p "$ADORNO_HOME/runs/active"
+jq -n --arg j "$ADORNO_HOME/runs/test-20260101T000000-1-1" --argjson exp "$(( $(date +%s) + 600 ))" \
+  '{id: "20260101T000000-1-1", session: "sess-k", workflow: "workflow:test:run", expires: $exp, journal: $j}' >"$ADORNO_HOME/runs/active/20260101T000000-1-1.json"
+printf '%s' "$PAYLOAD" | sh -c "$JHOOK"; got=$?
+check "inside a run the installed hook records the tool call" '[ "$got" = 0 ] && jq -e ".type == \"tool.call\" and .tool == \"Bash\" and .input == \"ls\" and .dur == 12 and .session == \"sess-k\"" "$ADORNO_HOME/runs/test-20260101T000000-1-1/events.jsonl" >/dev/null'
+printf '%s' "$PAYLOAD" | PATH=/nonexistent /bin/sh -c "$JHOOK" 2>/dev/null; got=$?
+check "without python3 the journal hook lets the session go on (exit 0): it records, it does not guard" '[ "$got" = 0 ]'
+rm -rf "$ADORNO_HOME/runs"
 check "tiers become Claude models" 'grep -q "^model: opus" "$A/.claude/agents/adorno.md"'
 check "frontier becomes fable" 'grep -q "^model: fable" "$A/.claude/agents/adorno-agent-core-planner.md"'
 check "an agent's effort reaches Claude" 'grep -q "^effort: low" "$A/.claude/agents/adorno-agent-core-triage.md"'
@@ -164,6 +181,11 @@ check "the registry knows it at once" 'jq -e "[.. | objects | has(\"newco/svc\")
 "${KIT[@]}" uninstall "$TMP/newco/svc" --force >/dev/null
 cp "$TMP/layer.bak" "$ADORNO_LOCAL/adorno.yaml"
 
+# an install made before the journal recorded one hook per settings file: the next one takes it over
+jq '.hook |= with_entries(.value |= .[0])' "$A/.adorno/installed.json" >"$TMP/state.json" && mv "$TMP/state.json" "$A/.adorno/installed.json"
+expect_exit 0 "reinstall over an older install's state" -- "${KIT[@]}" install "$A" --targets claude,codex
+check "... the guard is still there once, the journal hooks once each" 'jq -e "([.hooks.PreToolUse[].hooks[] | select(.command | contains(\"guard_bash.py\"))] | length == 1) and ([.hooks.Stop[].hooks[] | select(.command | contains(\"journal.py\"))] | length == 1)" "$A/.claude/settings.local.json" >/dev/null'
+
 echo "uninstall"
 expect_exit 0 "uninstall the repo" -- "${KIT[@]}" uninstall "$A" --force
 check "agents gone" '[ ! -e "$A/.claude/agents" ]'
@@ -177,14 +199,17 @@ expect_exit 0 "install --global" -- "${KIT[@]}" install --global --targets claud
 check "Codex asks before direct writes (its own rules)" 'grep -q "prefix_rule(pattern=\[\"git\", \"push\"\], decision=\"prompt\"" "$HOME/.codex/rules/adorno.rules"'
 check "Gemini asks too (its policy engine)" 'grep -q "decision = \"ask_user\"" "$HOME/.gemini/policies/adorno.toml" && grep -q "\"gh pr comment\"" "$HOME/.gemini/policies/adorno.toml"'
 check "in your user settings, direct shell writes ask (they apply to every project)" 'jq -e "(.permissions.ask | index(\"Bash(gh pr comment:*)\")) != null and ((.permissions.deny // []) | index(\"Bash(gh pr comment:*)\")) == null" "$HOME/.claude/settings.json" >/dev/null'
+check "the global install records runs too" 'jq -e "[.hooks.Stop[].hooks[].command | select(contains(\"adorno-journal/scripts/journal.py\"))] | length == 1" "$HOME/.claude/settings.json" >/dev/null'
 check "the global guard hook asks" 'jq -e "[.hooks.PreToolUse[].hooks[].command | select(contains(\"guard_bash.py\") and contains(\" ask --format=claude\"))] | length == 1" "$HOME/.claude/settings.json" >/dev/null'
 check "... and edits of adorno's files stay denied" 'jq -e "(.permissions.deny | index(\"Edit(~/.adorno/registry.json)\")) != null" "$HOME/.claude/settings.json" >/dev/null'
 expect_exit 0 "dry run of --global" -- "${KIT[@]}" install --global --targets claude --dry-run
 check "... names your user settings" 'grep -q "~/.claude/settings.json" <<<"$out"'
 expect_exit 0 "a project next to a global install" -- "${KIT[@]}" install "$A" --targets claude
 check "takes its instructions from the global one" '[ ! -e "$A/.claude/rules/adorno.md" ] && [ ! -e "$A/AGENTS.md" ]'
+check "... and leaves the recording to it (no event written twice), keeping its own guard" '! grep -q journal.py "$A/.claude/settings.local.json" && grep -q guard_bash.py "$A/.claude/settings.local.json"'
 "${KIT[@]}" uninstall "$A" --force >/dev/null
 expect_exit 0 "uninstall --global" -- "${KIT[@]}" uninstall --global
+check "the hooks are removed from your user settings" '[ ! -e "$HOME/.claude/settings.json" ] || ! jq -e ".hooks" "$HOME/.claude/settings.json" >/dev/null'
 check "rules removed from your user settings" '[ ! -e "$HOME/.claude/settings.json" ] || ! jq -e ".permissions.deny // .permissions.ask" "$HOME/.claude/settings.json" >/dev/null'
 check "the Codex and Gemini rules are removed" '[ ! -e "$HOME/.codex/rules/adorno.rules" ] && [ ! -e "$HOME/.gemini/policies/adorno.toml" ]'
 check "the registry is removed" '[ ! -e "$ADORNO_HOME/registry.json" ]'

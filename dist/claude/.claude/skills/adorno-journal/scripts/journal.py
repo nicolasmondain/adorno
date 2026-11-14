@@ -6,6 +6,8 @@ Usage: journal.py event TYPE [JSON] [--run ID] [--session ID] [--actor ACTOR]
   of the run ID alone. JSON (argument, else stdin) holds the type's own fields (an array: one event per element);
   `v`, `t`, `run`, `session`, `actor`, `parent` are filled here. An event is written as it ends: `t`, its start, is
   now minus its `dur`. A `text` field is replaced by `excerpt` + `hash` + `chars`.
+Usage: journal.py hook
+  The command of the Claude Code hooks `bin/kit install` adds: records what the hook's payload (stdin) says.
 Usage: journal.py prune
   Removes the journals older than RETENTION_DAYS, then the oldest while they weigh more than MAX_MB together.
 Usage: journal.py validate [--schema FILE] FILE.jsonl…
@@ -246,6 +248,78 @@ def cmd_event(argv):
             warn(str(e))
 
 
+def tool_summary(tool, tool_input):
+    """One line saying what a tool call was about, never the content it carried (a file's text, an edit's strings)."""
+    if not isinstance(tool_input, dict):
+        return ""
+    if tool in ("Agent", "Task"):
+        return f"{tool_input.get('subagent_type') or ''}: {tool_input.get('description') or ''}"
+    for key in ("command", "file_path", "notebook_path", "pattern", "url", "query", "skill"):
+        if isinstance(tool_input.get(key), str):
+            return tool_input[key]
+    return json.dumps({k: v for k, v in tool_input.items() if isinstance(v, (str, int, float, bool))},
+                      ensure_ascii=False)
+
+
+def hook_events(payload):
+    """What a Claude Code hook received (its stdin), as [(type, fields, actor)]. The payload's fields are those of the
+    hooks reference, checked on Claude Code 2.1.325: in a subagent, `session_id` is the main session's and `agent_id`
+    names the subagent. An event this does not map gives nothing."""
+    name, agent = payload.get("hook_event_name"), payload.get("agent_id")
+    actor = f"agent:{agent}" if agent else "session"
+    about = {"id": str(agent), "type": str(payload.get("agent_type") or "")} if agent else None
+    dur = payload.get("duration_ms")
+    dur = int(dur) if isinstance(dur, (int, float)) and not isinstance(dur, bool) else None
+    said = payload.get("last_assistant_message")
+    if name == "SessionStart":
+        return [("session", {"kind": "start", "source": payload.get("source"), "model": payload.get("model"),
+                             "transcript": payload.get("transcript_path")}, "session")]
+    if name == "SessionEnd":
+        return [("session", {"kind": "end", "source": payload.get("reason")}, "session")]
+    if name == "PostCompact":
+        return [("session", {"kind": "compact", "source": payload.get("trigger")}, "session")]
+    if name == "UserPromptSubmit":
+        prompt = str(payload.get("prompt") or "")
+        if prompt.lstrip().startswith("<task-notification"):  # the harness reporting a background agent, not the owner
+            return []
+        return [("message", {"from": "you", "to": "session", "kind": "prompt", "text": prompt}, "you")]
+    if name == "Stop":
+        return [("message", {"from": "session", "to": "you", "kind": "reply", "text": said}, "session")]
+    if name == "SubagentStart" and agent:
+        return [("agent.spawn", {"agent": about, "tool": "claude"}, "session")]
+    if name == "SubagentStop" and agent:
+        return [("agent.return", {"agent": about, "transcript": payload.get("agent_transcript_path"), "text": said},
+                 actor)]
+    if name in ("PostToolUse", "PostToolUseFailure"):
+        tool, given, got = str(payload.get("tool_name") or ""), payload.get("tool_input"), payload.get("tool_response")
+        given, got = given if isinstance(given, dict) else {}, got if isinstance(got, dict) else {}
+        if tool == "AskUserQuestion":
+            asked = [q.get("question") for q in given.get("questions") or [] if isinstance(q, dict)]
+            answers = got.get("answers") if isinstance(got.get("answers"), dict) else {}
+            return [("checkpoint", {"question": " / ".join(str(q) for q in asked if q), "by": "you", "dur": dur,
+                                    "answer": " / ".join(str(a) for a in answers.values()) or None}, actor)]
+        fields = {"tool": tool, "input": tool_summary(tool, given), "dur": dur}
+        if name == "PostToolUseFailure":
+            fields.update(error=True, text=payload.get("error"))
+        elif tool == "Bash":
+            fields["text"] = "\n".join(str(got[k]) for k in ("stdout", "stderr") if got.get(k)) or None
+        elif tool in ("Agent", "Task") and got.get("agentId"):
+            # the call that spawned a subagent: what links the instance to its prompt and its model
+            fields.update(agent={"id": str(got["agentId"]), "type": str(given.get("subagent_type") or "")},
+                          model=got.get("resolvedModel"), text=given.get("prompt"))
+        return [("tool.call", fields, actor)]
+    return []
+
+
+def cmd_hook(_argv):
+    """journal.py hook — the command of the hooks `bin/kit install` adds to Claude Code: reads the hook's payload on
+    stdin and records what it says, when a run is open for that session."""
+    payload = json.load(sys.stdin)
+    session = str(payload.get("session_id") or "")
+    for kind, fields, actor in hook_events(payload):
+        record(kind, {k: v for k, v in fields.items() if v is not None}, session, actor=actor)
+
+
 def cmd_validate(argv):
     """journal.py validate [--schema FILE] FILE.jsonl… — prints `file:line: problem` for each line schema.json
     refuses. Exit 1 if there is one, 2 if the schema uses a keyword this checker does not implement."""
@@ -306,7 +380,7 @@ def cmd_prune(_argv):
             pass  # not empty: the run's other files stay
 
 
-COMMANDS = {"event": cmd_event, "prune": cmd_prune}
+COMMANDS = {"event": cmd_event, "hook": cmd_hook, "prune": cmd_prune}
 
 
 def main(argv):

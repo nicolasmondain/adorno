@@ -126,6 +126,52 @@ expect_exit 0 "redacted lines are valid" -- valid "$f"
 kit_names="$(grep -o 'SECRET_ENV_RE = re.compile(r"[^"]*"' "$ROOT/bin/kit" | sed 's/.*r"//; s/"$//')"
 grep -qF "SECRET_NAME = r\"$kit_names\"" "$J" && ok "same secret names as bin/kit (SECRET_ENV_RE)" || ko "secret names differ from bin/kit" "$kit_names"
 
+echo "hooks (Claude Code payloads, shapes read on 2.1.325)"
+open_run 20260101T100000-7-7 sess-h
+H="$KH/runs/test-20260101T100000-7-7/events.jsonl"
+hook() { printf '%s' "$1" | python3 "$J" hook; }   # hook PAYLOAD
+hl() { out="$(tail -n 1 "$H" 2>/dev/null)"; }
+common='"session_id":"sess-h","transcript_path":"/synthetic/sess-h.jsonl","cwd":"/synthetic"'
+hook "{\"hook_event_name\":\"SessionStart\",$common,\"source\":\"startup\"}"; hl
+expect_jq "SessionStart" '.type == "session" and .kind == "start" and .source == "startup" and .transcript == "/synthetic/sess-h.jsonl" and .actor == "session"'
+hook "{\"hook_event_name\":\"UserPromptSubmit\",$common,\"prompt\":\"Add pagination\",\"permission_mode\":\"default\"}"; hl
+expect_jq "UserPromptSubmit: the owner speaks to the session" '.type == "message" and .actor == "you" and .from == "you" and .to == "session" and .kind == "prompt" and .excerpt == "Add pagination"'
+n="$(wc -l <"$H")"
+hook "{\"hook_event_name\":\"UserPromptSubmit\",$common,\"prompt\":\"<task-notification>agent done</task-notification>\"}"
+[ "$(wc -l <"$H")" = "$n" ] && ok "a background-agent notification is not the owner speaking" || ko "task notification recorded as a prompt"
+hook "{\"hook_event_name\":\"SubagentStart\",$common,\"agent_id\":\"a1b2\",\"agent_type\":\"adorno-agent-review-code\"}"; hl
+expect_jq "SubagentStart: the session spawns an agent" '.type == "agent.spawn" and .actor == "session" and .parent == null and .agent == {"id": "a1b2", "type": "adorno-agent-review-code"} and .tool == "claude"'
+hook "{\"hook_event_name\":\"PostToolUse\",$common,\"tool_name\":\"Agent\",\"duration_ms\":4,\"tool_input\":{\"description\":\"review\",\"prompt\":\"Review the diff\",\"subagent_type\":\"adorno-agent-review-code\"},\"tool_response\":{\"isAsync\":true,\"status\":\"async_launched\",\"agentId\":\"a1b2\",\"resolvedModel\":\"claude-opus-5-5\"}}"; hl
+expect_jq "the Agent call links the instance to its prompt and its model" \
+  '.type == "tool.call" and .tool == "Agent" and .input == "adorno-agent-review-code: review" and .agent.id == "a1b2" and .model == "claude-opus-5-5" and .excerpt == "Review the diff" and .dur == 4'
+hook "{\"hook_event_name\":\"PostToolUse\",$common,\"agent_id\":\"a1b2\",\"agent_type\":\"adorno-agent-review-code\",\"tool_name\":\"Bash\",\"duration_ms\":422,\"tool_input\":{\"command\":\"git diff master...HEAD\",\"description\":\"d\"},\"tool_response\":{\"stdout\":\"+ a line\",\"stderr\":\"\",\"interrupted\":false}}"; hl
+expect_jq "a tool call inside a subagent belongs to that agent" \
+  '.type == "tool.call" and .actor == "agent:a1b2" and .parent == "session" and .tool == "Bash" and .input == "git diff master...HEAD" and .excerpt == "+ a line" and .dur == 422'
+hook "{\"hook_event_name\":\"PostToolUse\",$common,\"tool_name\":\"Edit\",\"duration_ms\":20,\"tool_input\":{\"file_path\":\"src/a.ts\",\"old_string\":\"const password = 1\",\"new_string\":\"const x = 2\"},\"tool_response\":{\"filePath\":\"src/a.ts\"}}"; hl
+expect_jq "an edit is its path, never the code it carried" '.tool == "Edit" and .input == "src/a.ts" and (has("excerpt") | not)'
+grep -q "const x = 2" "$H" && ko "edited code reached the journal" || ok "the edited code is not in the journal"
+hook "{\"hook_event_name\":\"PostToolUseFailure\",$common,\"tool_name\":\"Bash\",\"duration_ms\":8000,\"tool_input\":{\"command\":\"npm test\"},\"error\":\"1 failing\",\"is_interrupt\":false}"; hl
+expect_jq "a failed tool call" '.type == "tool.call" and .error == true and .excerpt == "1 failing" and .dur == 8000'
+hook "{\"hook_event_name\":\"PostToolUse\",$common,\"tool_name\":\"AskUserQuestion\",\"duration_ms\":720000,\"tool_input\":{\"questions\":[{\"question\":\"Validate the plan?\",\"header\":\"Plan\",\"options\":[]}]},\"tool_response\":{\"answers\":{\"Validate the plan?\":\"Yes\"}}}"; hl
+expect_jq "a question to the owner is a checkpoint, with its answer and how long it waited" \
+  '.type == "checkpoint" and .question == "Validate the plan?" and .answer == "Yes" and .by == "you" and .dur == 720000'
+hook "{\"hook_event_name\":\"SubagentStop\",$common,\"agent_id\":\"a1b2\",\"agent_type\":\"adorno-agent-review-code\",\"agent_transcript_path\":\"/synthetic/sess-h/subagents/agent-a1b2.jsonl\",\"last_assistant_message\":\"Review written\"}"; hl
+expect_jq "SubagentStop: the agent returns, with where its transcript is" \
+  '.type == "agent.return" and .actor == "agent:a1b2" and .agent.id == "a1b2" and .transcript == "/synthetic/sess-h/subagents/agent-a1b2.jsonl" and .excerpt == "Review written"'
+hook "{\"hook_event_name\":\"Stop\",$common,\"last_assistant_message\":\"Done.\",\"stop_hook_active\":false}"; hl
+expect_jq "Stop: the session answers the owner" '.type == "message" and .from == "session" and .to == "you" and .kind == "reply" and .excerpt == "Done."'
+hook "{\"hook_event_name\":\"PostCompact\",$common,\"trigger\":\"auto\"}"; hl
+expect_jq "PostCompact" '.type == "session" and .kind == "compact" and .source == "auto"'
+hook "{\"hook_event_name\":\"SessionEnd\",$common,\"reason\":\"other\"}"; hl
+expect_jq "SessionEnd" '.type == "session" and .kind == "end" and .source == "other"'
+n="$(wc -l <"$H")"
+hook "{\"hook_event_name\":\"Notification\",$common,\"message\":\"x\"}"; hook 'not json'; hook '{}'
+[ "$(wc -l <"$H")" = "$n" ] && ok "an event the journal does not map, or a broken payload, writes nothing and fails nothing" || ko "unmapped hook event written"
+hook "{\"hook_event_name\":\"Stop\",\"session_id\":\"sess-other\",\"last_assistant_message\":\"x\"}"
+[ "$(wc -l <"$H")" = "$n" ] && ok "a session without an open run is not recorded" || ko "foreign session recorded"
+expect_exit 0 "every event the hooks wrote is valid" -- valid "$H"
+rm -f "$KH/runs/active/20260101T100000-7-7.json"
+
 echo "prune"
 old_run="$KH/runs/old-20250101T000000-1-1"; kept_run="$KH/runs/kept-20250101T000000-2-2"; open_old="$KH/runs/test-20260101T000000-9-9"
 mkdir -p "$old_run" "$kept_run/reviews" "$open_old"
