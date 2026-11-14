@@ -383,23 +383,41 @@ grep -q "not recorded" "$TMP/err" && ok "said on stderr" || ko "silent failure" 
 chmod 700 "$KH/runs/test-20260101T100000-1-1"; chmod 600 "$f"
 # a full disk, simulated: no file may grow (the reason is read through a pipe, since no file can take it either)
 n="$(wc -l <"$f")"
-expect_exit 0 "a disk that takes no more" -- sh -c "ulimit -f 0; python3 '$J' event loop '{\"round\":1,\"cap\":2}' --session sess-a 2>&1 | cat"
-case "$out" in *"not recorded"*) ok "said, and the caller goes on" ;; *) ko "a failed write was silent" "$out" ;; esac
+expect_exit 0 "a disk that takes no more" -- sh -c "ulimit -f 0; python3 '$J' event loop '{\"round\":1,\"cap\":2}' --session sess-a 2>&1; echo rc=\$?"
+case "$out" in *"not recorded"*"rc=0"*) ok "said, and the caller goes on (the writer exits 0)" ;; *) ko "a failed write was silent, or the writer failed" "$out" ;; esac
 [ "$(wc -l <"$f")" = "$n" ] && ok "the journal is left as it was" || ko "the journal changed on a failed write"
 # a disk that fills up partway through a line: the write takes part of it and says how much. Simulated (macOS does
 # not apply a file size limit to a write in append mode, so `ulimit -f` cannot cut one short there)
-size="$(( $(wc -c <"$f") ))"
+# short_write HOW SESSION — half: half the bytes land; none: no byte lands; raced: half land, then another writer
+# appends a whole line before the take-back
 short_write() {
   python3 -B -c 'import os, sys
 sys.path.insert(0, sys.argv[1])
 import journal
-real = os.write
-os.write = lambda fd, data: real(fd, data[:len(data) // 2])  # half the bytes land, as on a disk that fills up
-sys.exit(journal.main(["event", "loop", "{\"round\": 1, \"cap\": 2, \"reason\": \"" + "r" * 1500 + "\"}", "--session", "sess-a"]))' "$(dirname "$J")"
+real, how = os.write, sys.argv[2]
+def write(fd, data):
+    if how == "none":
+        return 0
+    written = real(fd, data[:len(data) // 2])  # as on a disk that fills up
+    if how == "raced":
+        other = os.open(sys.argv[4], os.O_WRONLY | os.O_APPEND)
+        real(other, b"{\"other\":\"writer\"}\n"); os.close(other)
+    return written
+os.write = write
+sys.exit(journal.main(["event", "loop", "{\"round\": 1, \"cap\": 2, \"reason\": \"" + "r" * 1500 + "\"}", "--session", sys.argv[3]]))' "$(dirname "$J")" "$@"
 }
-expect_exit 0 "a write cut short by a full disk: the caller goes on" -- short_write
-grep -q "not recorded" "$TMP/err" && ok "... said on stderr" || ko "a short write was silent" "$(cat "$TMP/err")"
+size="$(( $(wc -c <"$f") ))"
+expect_exit 0 "a write cut short by a full disk: the caller goes on" -- short_write half sess-a
+grep -q "short write" "$TMP/err" && ok "... said on stderr" || ko "a short write was silent" "$(cat "$TMP/err")"
 [ "$(( $(wc -c <"$f") ))" = "$size" ] && tail -n 1 "$f" | jq -e . >/dev/null && ok "... and no half line is left" || ko "a half line was left" "$size -> $(wc -c <"$f")"
+expect_exit 0 "a write that took nothing: the caller goes on" -- short_write none sess-a
+grep -q "short write" "$TMP/err" && [ "$(( $(wc -c <"$f") ))" = "$size" ] && ok "... said, and the journal is left whole" || ko "a write that took nothing changed the journal" "$size -> $(wc -c <"$f"): $(cat "$TMP/err")"
+open_run 20260101T100000-4-4 sess-w
+W="$KH/runs/test-20260101T100000-4-4/events.jsonl"
+python3 "$J" event loop '{"round":1,"cap":2}' --session sess-w
+expect_exit 0 "a short write, then another writer's line: the caller goes on" -- short_write raced sess-w "$W"
+grep -q "short write" "$TMP/err" && grep -q '{"other":"writer"}' "$W" && ok "... said, and the other writer's line is not taken back with it" || ko "another writer's line was lost" "$(cat "$TMP/err")"
+rm -f "$KH/runs/active/20260101T100000-4-4.json"
 expect_exit 0 "no arguments" -- python3 "$J"
 n="$(lines 20260101T100000-1-1)"
 printf '{' >"$KH/runs/active/broken.json"

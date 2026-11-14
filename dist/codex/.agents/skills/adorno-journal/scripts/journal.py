@@ -235,7 +235,9 @@ def problems(value, schema, where="event"):
 
 def append(folder, event):
     """One line, one write, on a file opened for append: concurrent writers (hooks, scripts) never interleave. A
-    write cut short (a full disk) is taken back, so no half line is left for the next one to be glued to."""
+    write cut short (a full disk) is taken back, so no half line is left for the next one to be glued to: only when
+    part of the line landed and nothing was appended since (the file ends where this write did), else another
+    writer's line would go with it."""
     root = os.path.realpath(runs_root())
     real = os.path.realpath(folder)
     if os.path.dirname(real) != root or os.path.basename(real) == "active":
@@ -246,8 +248,12 @@ def append(folder, event):
     try:
         written = os.write(fd, line)
         if written != len(line):
-            os.ftruncate(fd, os.lseek(fd, 0, os.SEEK_CUR) - written)   # the offset is the end of what was written
-            raise OSError(f"short write ({written} of {len(line)} bytes), taken back")
+            end = os.lseek(fd, 0, os.SEEK_CUR)   # after a write, the end of what it wrote
+            if 0 < written < len(line) and os.fstat(fd).st_size == end:
+                os.ftruncate(fd, end - written)
+                raise OSError(f"short write ({written} of {len(line)} bytes), taken back")
+            raise OSError(f"short write ({written} of {len(line)} bytes), left as it is"
+                          + (": the journal grew since" if written else ""))
     finally:
         os.close(fd)
 
