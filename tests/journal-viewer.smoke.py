@@ -196,6 +196,22 @@ def main(argv):
         page.wait_for_selector(f'.diagram[data-run="{large_id}"] .mark', state="attached")
         nodes = page.evaluate("document.querySelectorAll('.diagram .marks *').length")
         check("thousands of events stay within the drawing budget", 0 < nodes <= 1500, str(nodes))
+        # once the buckets widen (a run zoomed out), a question and a refusal on the same lanes are one mark
+        shapes = page.evaluate("""async (id) => {
+            const { Diagram } = await import('/diagram.js');
+            const run = await (await fetch('/api/runs/' + id)).json();
+            const guards = run.events.filter((e) => e.type === 'guard' && e.from === 'session').map((e) => e.i);
+            const box = document.createElement('div');
+            document.body.append(box);
+            const d = new Diagram(box, run, () => {});
+            d.layout();
+            const shapes = [...d.node({ kind: 'arrow', type: 'guard', from: 'session', to: 'guard', x: 0, width: 0, events: guards })
+              .querySelectorAll('.cross, .ring')].map((n) => n.getAttribute('class'));
+            box.remove();
+            return [guards.map((i) => run.events[i].d.decision), shapes];
+        }""", large_id)
+        check("a guard mark that stands for a question then a refusal shows the refusal's cross",
+              shapes == [["ask", "deny"], ["cross"]], str(shapes))
         page.keyboard.press("+")
         page.keyboard.press("+")
         nodes = page.evaluate("document.querySelectorAll('.diagram .marks *').length")

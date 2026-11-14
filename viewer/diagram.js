@@ -159,7 +159,7 @@ export class Diagram {
         svg("polygon", { class: "tip", points: `${x},${y2} ${x - 4},${y2 - dir * 7} ${x + 4},${y2 - dir * 7}` }));
       if (mark.type === "checkpoint") shapes.push(svg("circle", { class: "disc", cx: x, cy: y2, r: 5 }));
       if (mark.type === "guard") {
-        shapes.push(event.d.decision === "deny"
+        shapes.push(mark.events.some((i) => run.events[i].d.decision === "deny")   // a refusal is never hidden by a merge
           ? svg("path", { class: "cross", d: `M${x - 5},${y2 - 5} L${x + 5},${y2 + 5} M${x + 5},${y2 - 5} L${x - 5},${y2 + 5}` })
           : svg("circle", { class: "ring", cx: x, cy: y2, r: 5 }));
       }

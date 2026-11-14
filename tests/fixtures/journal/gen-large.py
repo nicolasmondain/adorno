@@ -42,6 +42,9 @@ def main(total):
                 event(at, "tool.call", actor=name, tool=rng.choice(["Read", "Edit", "Bash", "Grep"]), input=f"src/file{k % 40}.ts",
                       dur=rng.randrange(5, 120))
         event(at + 500, "agent.return", actor=name, agent=about)
+    # a question then a refusal of the guard at the same instant: drawn as one mark once the buckets widen
+    for decision in ("ask", "deny"):
+        event(600000, "guard", decision=decision, reason="adorno: outside the worktree", command="rm -r /synthetic")
     event(max(ms_of(e) for e in out) + 1000, "run.end", workflow="workflow:feature:build", outcome="ended")
     out.sort(key=lambda e: e["t"])
     for e in out:
