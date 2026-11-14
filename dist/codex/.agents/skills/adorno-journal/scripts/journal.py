@@ -370,7 +370,7 @@ def millis(start, end):
         delta = datetime.datetime.strptime(end, fmt) - datetime.datetime.strptime(start, fmt)
     except ValueError:
         return 0
-    return max(0, int(delta.total_seconds() * 1000))
+    return max(0, delta // datetime.timedelta(milliseconds=1))
 
 
 def turn_fields(turn, reasoning):

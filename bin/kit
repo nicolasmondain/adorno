@@ -17,6 +17,7 @@ Gemini CLI, Copilot, Cursor and any tool that reads Agent Skills (SKILL.md).
   kit install PATH|--global|--workspace NAME [--targets a,b] [--link] [--public-only] [--force] [--dry-run]
   kit uninstall PATH|--global|--workspace NAME [--force]
   kit journal enrich RUN        read a run's Claude Code transcripts again into its journal (models, tokens)
+  kit serve [--port 8765] [--runs DIR]   the run journals and their viewer, on 127.0.0.1 only, read-only
 
 Personal layer: local/ (or $ADORNO_LOCAL), git-ignored, template in local.example/.
   local/adorno.yaml   owner, defaults, presets, workspaces, repos (settings, permissions, voice, vision lines)
@@ -2212,6 +2213,14 @@ def cmd_journal(args) -> None:
     sys.exit(subprocess.run([sys.executable, str(ROOT / "src" / "skills" / JOURNAL_NAME), args.action, args.run]).returncode)
 
 
+def cmd_serve(args) -> None:
+    """`kit serve`: the local server of the run journals and their viewer (bin/kit_serve.py, standard library)."""
+    sys.dont_write_bytecode = True  # no bin/__pycache__ left behind
+    sys.path.insert(0, str(ROOT / "bin"))
+    import kit_serve
+    sys.exit(kit_serve.serve(args.port, args.runs or str(kit_home() / "runs"), str(ROOT / "viewer")))
+
+
 # ───────────────────────────── cli ─────────────────────────────
 
 def main() -> None:
@@ -2262,6 +2271,10 @@ def main() -> None:
     p.add_argument("action", choices=["enrich"], help="enrich: read the run's Claude Code transcripts again")
     p.add_argument("run", help="a run id, or the name of its folder under ~/.adorno/runs")
     p.set_defaults(fn=cmd_journal)
+    p = sub.add_parser("serve", help="serve the run journals and their viewer on 127.0.0.1 (read-only)")
+    p.add_argument("--port", type=int, default=8765, help="default 8765; 0: any free port")
+    p.add_argument("--runs", help="the folder of the runs (default: ~/.adorno/runs)")
+    p.set_defaults(fn=cmd_serve)
 
     args = ap.parse_args()
     try:

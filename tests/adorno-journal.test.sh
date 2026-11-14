@@ -31,7 +31,7 @@ last() { out="$(tail -n 1 "$KH/runs/test-$1/events.jsonl" 2>/dev/null)"; }
 lines() { wc -l <"$KH/runs/test-$1/events.jsonl" 2>/dev/null | tr -d ' '; }
 
 echo "schema"
-expect_exit 0 "the fixture journal is valid" -- valid "$FIX"/*/events.jsonl
+expect_exit 0 "the fixture journals are valid" -- valid "$FIX"/feature-build-*/events.jsonl "$FIX"/pr-review-*/*.jsonl
 types="$(jq -r '.properties.type.enum[]' "$SCHEMA" | sort | tr '\n' ' ')"
 seen="$(jq -r .type "$FIX"/feature-build-*/events.jsonl | sort -u | tr '\n' ' ')"
 [ "$types" = "$seen" ] && ok "the fixture holds every event type" || ko "every type in the fixture" "schema: $types / fixture: $seen"
@@ -165,7 +165,7 @@ expect_jq "PostCompact" '.type == "session" and .kind == "compact" and .source =
 hook "{\"hook_event_name\":\"SessionEnd\",$common,\"reason\":\"other\"}"; hl
 expect_jq "SessionEnd" '.type == "session" and .kind == "end" and .source == "other"'
 n="$(wc -l <"$H")"
-hook "{\"hook_event_name\":\"Notification\",$common,\"message\":\"x\"}"; hook 'not json'; hook '{}'
+hook "{\"hook_event_name\":\"Notification\",$common,\"message\":\"x\"}"; hook 'not json' 2>/dev/null; hook '{}'
 [ "$(wc -l <"$H")" = "$n" ] && ok "an event the journal does not map, or a broken payload, writes nothing and fails nothing" || ko "unmapped hook event written"
 hook "{\"hook_event_name\":\"Stop\",\"session_id\":\"sess-other\",\"last_assistant_message\":\"x\"}"
 [ "$(wc -l <"$H")" = "$n" ] && ok "a session without an open run is not recorded" || ko "foreign session recorded"
@@ -180,7 +180,7 @@ ev run.begin '{"t":"2026-01-01T10:00:00.000Z","workflow":"workflow:test:run","mo
 ev message "$(jq -n --arg p "$TR/sess-e.jsonl" '{t: "2026-01-01T10:00:01.000Z", from: "you", to: "session", kind: "prompt", text: "Review the branch", transcript: $p}')" --actor you
 ev agent.return "$(jq -n --arg p "$TR/sess-e/subagents/agent-a9.jsonl" '{t: "2026-01-01T10:00:07.500Z", agent: {id: "a9", type: "adorno-agent-review-code"}, text: "Review written", transcript: $p}')" --actor agent:a9
 ev message '{"t":"2026-01-01T10:00:12.500Z","from":"session","to":"you","kind":"reply","text":"Done."}'
-ev run.end '{"t":"2026-01-01T10:30:00.000Z","workflow":"workflow:test:run","outcome":"ended"}'
+ev run.end '{"t":"2026-01-01T10:30:00.100Z","workflow":"workflow:test:run","outcome":"ended"}'
 rm -f "$KH/runs/active/$ER.json"
 expect_exit 0 "enrich a closed run, by its id" -- python3 "$J" enrich "$ER"
 expect_jq "says what it read" '.transcripts == 2 and .model_turns == 3 and .messages == 1 and (.file | endswith("/enriched.jsonl"))'
