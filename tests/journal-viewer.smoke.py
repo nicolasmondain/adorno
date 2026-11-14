@@ -56,6 +56,15 @@ def main(argv):
             return NO_BROWSER
         problems, elsewhere = [], []
 
+        def counted(locator, n):
+            """A count the page reaches in time (retried: the page's policy forbids the eval a wait_for_function needs),
+            as (ok, detail) for check()."""
+            try:
+                expect(locator).to_have_count(n)
+                return True, ""
+            except AssertionError as e:
+                return False, str(e).strip().splitlines()[0]
+
         def watch(page):
             page.on("console", lambda m: problems.append(m.text) if m.type == "error" else None)
             page.on("pageerror", lambda e: problems.append(str(e)))
@@ -170,11 +179,10 @@ def main(argv):
         check("the agents-only view hides the tool calls and moves nothing",
               page.locator(".mark.t-tool-call").count() == 0 and page.locator(".t-agent-spawn .shaft").first.get_attribute("x1") == x_before)
         page.keyboard.press("l")
-        expect(page.locator("#log li")).to_have_count(len(run["events"]) - tools)  # a retried count: the page's policy forbids eval
-        check("L shows the same events as text, minus what the view hides", True)
+        check("L shows the same events as text, minus what the view hides", *counted(page.locator("#log li"), len(run["events"]) - tools))
         page.keyboard.press("1")
-        expect(page.locator("#log li")).to_have_count(len(run["events"]))
-        check("the text log has one row per event", page.locator("#log li[aria-current]").count() == 1)
+        check("the text log has one row per event", *counted(page.locator("#log li"), len(run["events"])))
+        check("... and one current row", page.locator("#log li[aria-current]").count() == 1)
         page.evaluate("document.activeElement.blur()")
         page.keyboard.press("Home")
         page.keyboard.press("Space")
