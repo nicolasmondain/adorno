@@ -1253,7 +1253,7 @@ guard_says() {
   out="$(jq -n '{tool_name: "Bash", tool_input: {command: "git push origin fix/x"}}' | python3 "$1" deny 2>"$TMP/err")"; rc=$?
   jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null 2>&1 <<<"$out" && [ "$rc" = 0 ]
 }
-guard_says "$S/guard_bash.py" && ok "a journal that cannot be written: the guard still denies, and exits 0" || ko "guard with a read-only journal" "exit $rc: $out"
+guard_says "$S/guard_bash.py" && grep -q "not recorded" "$TMP/err" && ok "a journal that cannot be written (and said so): the guard still denies, and exits 0" || ko "guard with a read-only journal" "exit $rc: $out: $(cat "$TMP/err")"
 chmod 700 "$JD"; chmod 600 "$JF"
 mkdir -p "$TMP/broken/adorno-github" "$TMP/broken/adorno-journal/scripts" "$TMP/alone/adorno-github"
 cp -R "$S" "$TMP/broken/adorno-github/scripts"; cp -R "$S" "$TMP/alone/adorno-github/scripts"
@@ -1291,13 +1291,6 @@ expect_exit 0 "run-end closes the journal" -- env CLAUDE_CODE_SESSION_ID=sess-j 
 grep -q '"script":"run-end"' "$J2/events.jsonl" && ko "run-end's own call landed in the session's other run" || ok "run-end's own call lands in no other run: run.end is its event"
 expect_exit 0 "run-end with an outcome" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-end" "$RUN2" draft
 out="$(tail -n 1 "$J2/events.jsonl")"; expect_jq "... recorded in run.end" '.type == "run.end" and .outcome == "draft" and .workflow == "workflow:pr:ship"'
-out="$(jq -cs . "$KH/runs/pr-review-$WSRUN/events.jsonl")"
-expect_jq "from run.begin (with the run's folder) to run.end, for that session only" \
-  '.[0].type == "run.begin" and .[0].dir == "'"$TMP"'/ws/.agent-run/review-1" and .[0].dry_run == true and .[-1].type == "run.end" and .[-1].outcome == "ended" and all(.[]; .session == "sess-j")'
-expect_exit 0 "that journal is valid" -- python3 "$JPY" validate "$KH/runs/pr-review-$WSRUN/events.jsonl"
-tries=0; until [ -f "$KH/runs/pr-review-$WSRUN/enriched.jsonl" ] || [ "$tries" -ge 100 ]; do tries=$((tries + 1)); sleep 0.2; done
-[ -f "$KH/runs/pr-review-$WSRUN/enriched.jsonl" ] && [ -f "$KH/runs/pr-review-$WSRUN/enrich.log" ] \
-  && ok "run-end starts the reading of the transcripts, without waiting for it" || ko "no enrichment after run-end"
 # run_and_end OUTCOME — opens a run in that session and ends it with OUTCOME; its journal in $JE
 run_and_end() {
   out="$(env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-begin" --workflow workflow:pr:ship --mode draft --level L2 --repo acme/docs)"
@@ -1316,6 +1309,13 @@ else
   ko "an outcome outside the list left the run open"
 fi
 [ "$rc" = 2 ] && grep -q "great" "$TMP/err" && ok "... said on stderr, and exit 2" || ko "an outcome outside the list was silent" "exit $rc: $(cat "$TMP/err")"
+out="$(jq -cs . "$KH/runs/pr-review-$WSRUN/events.jsonl")"
+expect_jq "from run.begin (with the run's folder) to run.end, for that session only" \
+  '.[0].type == "run.begin" and .[0].dir == "'"$TMP"'/ws/.agent-run/review-1" and .[0].dry_run == true and .[-1].type == "run.end" and .[-1].outcome == "ended" and all(.[]; .session == "sess-j")'
+expect_exit 0 "that journal is valid" -- python3 "$JPY" validate "$KH/runs/pr-review-$WSRUN/events.jsonl"
+tries=0; until [ -f "$KH/runs/pr-review-$WSRUN/enriched.jsonl" ] || [ "$tries" -ge 100 ]; do tries=$((tries + 1)); sleep 0.2; done
+[ -f "$KH/runs/pr-review-$WSRUN/enriched.jsonl" ] && [ -f "$KH/runs/pr-review-$WSRUN/enrich.log" ] \
+  && ok "run-end starts the reading of the transcripts, without waiting for it" || ko "no enrichment after run-end"
 [ "$(mode_of "$KH/runs/pr-review-$WSRUN/enrich.log")" = 600 ] && ok "... its log readable by its owner only" || ko "enrich.log mode" "$(mode_of "$KH/runs/pr-review-$WSRUN/enrich.log")"
 
 echo
