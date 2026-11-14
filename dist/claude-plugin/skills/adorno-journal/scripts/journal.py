@@ -45,6 +45,10 @@ DEFAULTS = {"reasoning": False, "retention_days": 30, "max_mb": 2048}
 SECRET_NAME = r"(KEY|TOKEN|SECRET|PASSWORD)"
 SECRET_NAME_RE = re.compile(SECRET_NAME, re.I)
 SECRET_FLAG_RE = re.compile(r"^--?[\w-]*" + SECRET_NAME + r"[\w-]*$", re.I)
+# A value after a secret's name: quoted, it ends at the quote that opened it (in double quotes, an escaped quote is
+# part of it, as in JSON); unquoted, at the pattern given to format().
+OPENING_QUOTE = r"(?:(?P<dq>\")|(?P<sq>'))?"
+QUOTED_VALUE = r"(?(dq)(?:[^\"\\\n]|\\.)+|(?(sq)[^'\n]+|{}))"
 # (kind, pattern, replacement) applied in order to every string. Best effort: a secret none of them recognises is
 # written as it is, which is why journals stay on this machine. A name pattern starts only at the start of a token
 # (the lookbehinds): unanchored, a long run of word characters or dashes made it quadratic.
@@ -53,8 +57,8 @@ REDACTIONS = [(kind, re.compile(pattern, flags), repl) for kind, pattern, flags,
     ("authorization", r"(authorization[\"']?\s*[:=]\s*[\"']?)(?:[a-z]+\s+)?[^\s\"',;]+", re.I, r"\1[redacted:{}]"),
     ("bearer", r"\b(bearer\s+)[A-Za-z0-9._~+/=-]{8,}", re.I, r"\1[redacted:{}]"),
     ("credentials", r"\b([a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@", re.I, r"\1[redacted:{}]@"),
-    # curl -u user:password, --user=user:password
-    ("credentials", r"((?<![\w-])(?:-u|--user)(?:\s+|=)[\"']?)[^\s:\"']+:[^\s\"']+", 0, r"\1[redacted:{}]"),
+    # curl -u user:password, -uuser:password, --user=user:password
+    ("credentials", r"((?<![\w-])(?:-u\s*|--user(?:\s+|=))[\"']?)[^\s:\"']+:[^\s\"']+", 0, r"\1[redacted:{}]"),
     ("github", r"\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})", 0, "[redacted:{}]"),
     ("gitlab", r"\bglpat-[A-Za-z0-9_-]{20,}", 0, "[redacted:{}]"),
     ("api-key", r"\bsk-[A-Za-z0-9_-]{16,}", 0, "[redacted:{}]"),
@@ -63,11 +67,11 @@ REDACTIONS = [(kind, re.compile(pattern, flags), repl) for kind, pattern, flags,
     ("slack", r"\bxox[abeoprs]-[A-Za-z0-9-]{10,}", 0, "[redacted:{}]"),
     ("jwt", r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}", 0, "[redacted:{}]"),
     # NAME=value, "name": "value", --name=value; a quoted value goes whole, spaces included
-    ("secret", r"((?<![\w.-])[\w.-]*" + SECRET_NAME + r"[\w.-]*[\"']?\s*[=:]\s*(?P<q>[\"'])?)(?(q)[^\"'\n]+|[^\s\"',;&]+)",
-     re.I, r"\1[redacted:{}]"),
+    ("secret", r"((?<![\w.-])[\w.-]*" + SECRET_NAME + r"[\w.-]*[\"']?\s*[=:]\s*" + OPENING_QUOTE + ")"
+     + QUOTED_VALUE.format(r"[^\s\"',;&]+"), re.I, r"\1[redacted:{}]"),
     # --name value, --name "a value"
-    ("secret", r"((?<![\w-])--?[\w-]*" + SECRET_NAME + r"[\w-]*\s+(?P<q>[\"'])?)(?(q)[^\"'\n]+|[^\s-]\S*)", re.I,
-     r"\1[redacted:{}]"),
+    ("secret", r"((?<![\w-])--?[\w-]*" + SECRET_NAME + r"[\w-]*\s+" + OPENING_QUOTE + ")"
+     + QUOTED_VALUE.format(r"[^\s-]\S*"), re.I, r"\1[redacted:{}]"),
 )]
 WINDOW = 1024   # characters redacted past a cut, so that a secret across it is recognised whole before it is cut
 IDENTIFIER = re.compile(r"^[\w.:/@#+-]{1,80}$")   # an id, a name, a path: one short token, no spaces, no content

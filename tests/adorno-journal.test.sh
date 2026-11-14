@@ -169,6 +169,18 @@ for secret in hunter3pw sk_live_0123 glpat-0123 defquoted wordsquoted pw4sure; d
   grep -q -- "$secret" "$f" && ko "leaked: $secret" || ok "never written: $secret"
 done
 expect_jq "... and the command stays readable" '.input | test("^curl -u \\[redacted:credentials\\] https://x.test; ") and test("TOKEN=\"\\[redacted:secret\\]\" ./run --token \"\\[redacted:secret\\]\"")'
+# a quoted value ends at the quote that opened it, an escaped quote included; curl's -u with the value attached
+cmd="$(cat <<'EOF'
+curl -uadmin:leakq3 x; password="has'leakq1 inside" ./a; echo '{"api_key":"a\"leakq2 c"}'; ./run --token "it's leakq4 too"
+EOF
+)"
+python3 "$J" event tool.call "$(jq -n --arg c "$cmd" '{tool: "Bash", input: $c}')" --session sess-a
+last 20260101T100000-1-1
+for secret in leakq1 leakq2 leakq3 leakq4; do
+  grep -q -- "$secret" "$f" && ko "leaked: $secret" || ok "never written: $secret"
+done
+expect_jq "... and the command stays readable" \
+  '.input == "curl -u[redacted:credentials] x; password=\"[redacted:secret]\" ./a; echo '"'"'{\"api_key\":\"[redacted:secret]\"}'"'"'; ./run --token \"[redacted:secret]\""'
 # redaction is linear: a long unbroken token (a base64 blob, a minified line) costs no more than its length
 timed() {  # timed SECONDS CMD… — how long CMD took, or "timeout"
   python3 -c 'import subprocess, sys, time
