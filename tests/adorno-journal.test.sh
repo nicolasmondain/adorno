@@ -172,6 +172,52 @@ hook "{\"hook_event_name\":\"Stop\",\"session_id\":\"sess-other\",\"last_assista
 expect_exit 0 "every event the hooks wrote is valid" -- valid "$H"
 rm -f "$KH/runs/active/20260101T100000-7-7.json"
 
+echo "enrich (synthetic Claude Code transcripts)"
+TR="$TMP/claude/projects/x"; mkdir -p "$TR"; cp -R "$FIX/transcripts/." "$TR/"
+ER=20260101T100000-8-8; open_run "$ER" sess-e; ED="$KH/runs/test-$ER"
+ev() { python3 "$J" event "$@" --run "$ER" --session sess-e; }
+ev run.begin '{"t":"2026-01-01T10:00:00.000Z","workflow":"workflow:test:run","mode":"auto","level":"L1","repos":["acme/app"],"dir":"/synthetic"}'
+ev message "$(jq -n --arg p "$TR/sess-e.jsonl" '{t: "2026-01-01T10:00:01.000Z", from: "you", to: "session", kind: "prompt", text: "Review the branch", transcript: $p}')" --actor you
+ev agent.return "$(jq -n --arg p "$TR/sess-e/subagents/agent-a9.jsonl" '{t: "2026-01-01T10:00:07.500Z", agent: {id: "a9", type: "adorno-agent-review-code"}, text: "Review written", transcript: $p}')" --actor agent:a9
+ev message '{"t":"2026-01-01T10:00:12.500Z","from":"session","to":"you","kind":"reply","text":"Done."}'
+ev run.end '{"t":"2026-01-01T10:30:00.000Z","workflow":"workflow:test:run","outcome":"ended"}'
+rm -f "$KH/runs/active/$ER.json"
+expect_exit 0 "enrich a closed run, by its id" -- python3 "$J" enrich "$ER"
+expect_jq "says what it read" '.transcripts == 2 and .model_turns == 3 and .messages == 1 and (.file | endswith("/enriched.jsonl"))'
+out="$(jq -cs . "$ED/enriched.jsonl")"
+expect_jq "one model.turn per response: the blocks of one request are one turn, its usage counted once" \
+  '[.[] | select(.type == "model.turn" and .actor == "session")] | length == 2 and .[0].tokens == {"in":100,"out":50,"cache_read":1000,"cache_write":200}
+   and .[0].model == "claude-sonnet-5-5" and .[0].stop == "tool_use" and .[0].thinking_tokens == 30 and .[0].thinking_ms == 400'
+expect_jq "a turn starts when its request is sent and lasts until its last block" \
+  '[.[] | select(.type == "model.turn" and .actor == "session")] | .[0].t == "2026-01-01T10:00:02.000Z" and .[0].dur == 2000 and .[1].t == "2026-01-01T10:00:10.000Z" and .[1].dur == 2000'
+expect_jq "a subagent's turns are its own" \
+  'any(.[]; .type == "model.turn" and .actor == "agent:a9" and .parent == "session" and .model == "claude-opus-5-5" and .tokens.cache_write == 4000 and .t == "2026-01-01T10:00:05.000Z")'
+expect_jq "what happened before the run opened or after it closed is not the run's" \
+  'all(.[]; .t >= "2026-01-01T10:00:00.000Z" and .t <= "2026-01-01T10:30:00.000Z") and all(.[]; (.excerpt // "") | test("Before|After") | not)'
+expect_jq "a text the model wrote: excerpt, hash, and where the whole is" \
+  '[.[] | select(.type == "message")] | length == 1 and .[0].excerpt == "I will delegate the review." and .[0].from == "session" and .[0].to == "you" and .[0].kind == "text"
+   and (.[0].ref.file | endswith("/sess-e.jsonl")) and .[0].ref.id == "u-3" and (.[0].hash | length) == 64'
+expect_jq "a text the hooks already recorded (the reply, the agent's return) is not written twice" \
+  'all(.[]; .excerpt != "Done." and .excerpt != "Review written")'
+expect_jq "reasoning is not copied unless the owner asked" 'all(.[]; has("reasoning") | not)'
+expect_exit 0 "enriched events are valid" -- valid "$ED/enriched.jsonl"
+[ "$(stat -f %Lp "$ED/enriched.jsonl" 2>/dev/null || stat -c %a "$ED/enriched.jsonl")" = 600 ] && ok "readable by its owner only" || ko "enriched.jsonl mode"
+before="$(cksum <"$ED/enriched.jsonl")"; n="$(wc -l <"$ED/events.jsonl")"
+python3 "$J" enrich "test-$ER" >/dev/null
+[ "$(cksum <"$ED/enriched.jsonl")" = "$before" ] && [ "$(wc -l <"$ED/events.jsonl")" = "$n" ] \
+  && ok "running it again changes nothing (events.jsonl is never rewritten)" || ko "enrich is not idempotent"
+printf '{"journal": {"reasoning": true}}' >"$KH/registry.json"
+python3 "$J" enrich "$ER" >/dev/null; out="$(jq -cs . "$ED/enriched.jsonl")"
+expect_jq "journal.reasoning: true copies the reasoning the transcript holds (an empty one stays absent)" \
+  '[.[] | select(.type == "model.turn")] | (map(select(.actor == "agent:a9"))[0].reasoning == "Compare both branches.") and all(.[] | select(.actor == "session"); has("reasoning") | not)'
+rm -f "$KH/registry.json"
+rm -f "$TR/sess-e/subagents/agent-a9.jsonl"
+expect_exit 0 "a transcript Claude Code pruned: the rest is still read" -- python3 "$J" enrich "$ER"
+expect_jq "... and it says which one is missing" '.transcripts == 1 and .model_turns == 2'
+grep -q "transcript not found" "$TMP/err" && ok "... on stderr" || ko "missing transcript not reported"
+expect_exit 0 "an unknown run fails nothing" -- python3 "$J" enrich 20990101T000000-1-1
+grep -q "no journal for run" "$TMP/err" && ok "... and says so" || ko "unknown run not reported"
+
 echo "prune"
 old_run="$KH/runs/old-20250101T000000-1-1"; kept_run="$KH/runs/kept-20250101T000000-2-2"; open_old="$KH/runs/test-20260101T000000-9-9"
 mkdir -p "$old_run" "$kept_run/reviews" "$open_old"
@@ -184,6 +230,16 @@ expect_exit 0 "prune" -- python3 "$J" prune
 [ -f "$open_old/events.jsonl" ] && ok "the journal of an open run stays, whatever its age" || ko "open run pruned"
 [ -f "$f" ] && ok "a recent journal stays" || ko "recent journal pruned"
 rm -f "$KH/runs/active/20260101T000000-9-9.json"
+# the owner's settings: no age limit to speak of, one megabyte in all
+printf '{"journal": {"retention_days": 100000, "max_mb": 1}}' >"$KH/registry.json"
+big1="$KH/runs/big-20260101T000000-1-1"; big2="$KH/runs/big-20260201T000000-2-2"; mkdir -p "$big1" "$big2"
+head -c 700000 /dev/zero >"$big1/enriched.jsonl"; touch -t 202601010000 "$big1/enriched.jsonl"
+head -c 700000 /dev/zero >"$big2/events.jsonl"; touch -t 202602010000 "$big2/events.jsonl"
+expect_exit 0 "prune with the owner's settings" -- python3 "$J" prune
+[ ! -e "$big1" ] && [ -f "$big2/events.jsonl" ] && ok "over max_mb, the oldest journals go first, until the rest fits" || ko "size cap"
+[ ! -e "$open_old/events.jsonl" ] && ok "... an old journal whose run is closed among them" || ko "closed old journal kept over the cap"
+[ -f "$f" ] && ok "retention_days is the owner's: a journal within it stays" || ko "journal pruned within retention"
+rm -f "$KH/registry.json"
 
 echo "recording never breaks the caller"
 chmod 500 "$KH/runs/test-20260101T100000-1-1"; chmod 400 "$f"

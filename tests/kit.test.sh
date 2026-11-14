@@ -178,7 +178,12 @@ awk '{ print } /^repos:/ { print "  newco/svc: {max_level: L1}" }' "$TMP/layer.b
 mkrepo "$TMP/newco/svc" newco/svc
 expect_exit 0 "install for a repo added to the layer" -- "${KIT[@]}" install "$TMP/newco/svc" --targets claude
 check "the registry knows it at once" 'jq -e "[.. | objects | has(\"newco/svc\")] | any" "$ADORNO_HOME/registry.json" >/dev/null'
+check "the run journal's settings are in it, where the writer reads them" 'jq -e ".journal == {reasoning: false, retention_days: 30, max_mb: 2048}" "$ADORNO_HOME/registry.json" >/dev/null'
 "${KIT[@]}" uninstall "$TMP/newco/svc" --force >/dev/null
+sed 's/^  retention_days: 30 .*/  retention_days: soon/; s/^  reasoning: false .*/  reasoning: sometimes/' "$TMP/layer.bak" >"$ADORNO_LOCAL/adorno.yaml"
+printf '  keep_forever: true\n' >>"$ADORNO_LOCAL/adorno.yaml"
+expect_exit 1 "invalid journal settings are refused" -- "${KIT[@]}" check
+check "... each one named" 'grep -q "journal.retention_days must be a positive integer" "$TMP/err" && grep -q "journal.reasoning must be true or false" "$TMP/err" && grep -q "journal.keep_forever: unknown setting" "$TMP/err"'
 cp "$TMP/layer.bak" "$ADORNO_LOCAL/adorno.yaml"
 
 # an install made before the journal recorded one hook per settings file: the next one takes it over

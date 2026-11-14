@@ -16,6 +16,7 @@ Gemini CLI, Copilot, Cursor and any tool that reads Agent Skills (SKILL.md).
   kit build                     public build into dist/ (never includes local/)
   kit install PATH|--global|--workspace NAME [--targets a,b] [--link] [--public-only] [--force] [--dry-run]
   kit uninstall PATH|--global|--workspace NAME [--force]
+  kit journal enrich RUN        read a run's Claude Code transcripts again into its journal (models, tokens)
 
 Personal layer: local/ (or $ADORNO_LOCAL), git-ignored, template in local.example/.
   local/adorno.yaml   owner, defaults, presets, workspaces, repos (settings, permissions, voice, vision lines)
@@ -205,7 +206,8 @@ def _registry() -> dict:
             ws["repos"] = list(dict.fromkeys(list(ws.get("repos") or []) + list(workspace_dirs(ws))))
             workspaces[name] = ws
         data["workspaces"] = workspaces
-        for key in ("slack", "notion"):  # owner-level watches (workflow:slack:*, workflow:notion:*)
+        # owner-level: the watches (workflow:slack:*, workflow:notion:*) and the run journal's settings
+        for key in ("slack", "notion", "journal"):
             if loc.get(key):
                 data[key] = loc[key]
     return data
@@ -672,6 +674,23 @@ WATCH_NOTIFY = ("dm", "draft", "none")
 SINCE_RE = re.compile(r"^(\d+[mhd]|\d{4}-\d{2}-\d{2}(T[\d:]+Z?)?)$")
 
 
+def validate_journal(reg: dict, where: str) -> list[str]:
+    """`journal` of the personal layer: what the run journal keeps (adorno-journal/scripts/journal.py › DEFAULTS)."""
+    conf = reg.get("journal")
+    if conf is None:
+        return []
+    if not isinstance(conf, dict):
+        return [f"{where}: journal must be a mapping"]
+    errors = [f"{where}: journal.{k}: unknown setting (known: reasoning, retention_days, max_mb)"
+              for k in conf if k not in ("reasoning", "retention_days", "max_mb")]
+    if "reasoning" in conf and not isinstance(conf["reasoning"], bool):
+        errors.append(f"{where}: journal.reasoning must be true or false")
+    for k in ("retention_days", "max_mb"):
+        if k in conf and not (isinstance(conf[k], int) and not isinstance(conf[k], bool) and conf[k] > 0):
+            errors.append(f"{where}: journal.{k} must be a positive integer")
+    return errors
+
+
 def validate_watches(reg: dict, where: str, agent_ids: set) -> list[str]:
     """`slack` and `notion` sections of the personal layer (workflow:slack:*, workflow:notion:*)."""
     errors: list[str] = []
@@ -865,6 +884,7 @@ def validate_registry(reg: dict, agent_ids: set, delegable: set, skill_names: se
         if scope.startswith("workspaces.") and not (conf.get("repos") or conf.get("paths")):
             errors.append(f"{where}: {scope} needs `repos` (GitHub globs) or `paths` (local folders)")
     errors += validate_watches(reg, where, agent_ids)
+    errors += validate_journal(reg, where)
     # presets that use each other must not loop
     def walk(name: str, seen: tuple) -> None:
         if name in seen:
@@ -2187,6 +2207,11 @@ def uninstall_from(args, dest: Path) -> None:
     print(f"uninstalled from {dest}" + (f" ({len(kept)} modified file(s) kept)" if kept else ""))
 
 
+def cmd_journal(args) -> None:
+    """`kit journal enrich RUN`: the skill's own writer does it (run-end starts it too; this runs it again)."""
+    sys.exit(subprocess.run([sys.executable, str(ROOT / "src" / "skills" / JOURNAL_NAME), args.action, args.run]).returncode)
+
+
 # ───────────────────────────── cli ─────────────────────────────
 
 def main() -> None:
@@ -2232,6 +2257,11 @@ def main() -> None:
             p.add_argument("--dry-run", action="store_true")
             p.add_argument("--public-only", action="store_true", help="ignore local/ (your personal layer)")
         p.set_defaults(fn=fn)
+
+    p = sub.add_parser("journal", help="a run's journal (skill adorno-journal)")
+    p.add_argument("action", choices=["enrich"], help="enrich: read the run's Claude Code transcripts again")
+    p.add_argument("run", help="a run id, or the name of its folder under ~/.adorno/runs")
+    p.set_defaults(fn=cmd_journal)
 
     args = ap.parse_args()
     try:

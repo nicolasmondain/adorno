@@ -8,13 +8,18 @@ Usage: journal.py event TYPE [JSON] [--run ID] [--session ID] [--actor ACTOR]
   now minus its `dur`. A `text` field is replaced by `excerpt` + `hash` + `chars`.
 Usage: journal.py hook
   The command of the Claude Code hooks `bin/kit install` adds: records what the hook's payload (stdin) says.
+Usage: journal.py enrich RUN
+  Reads the Claude Code transcripts of the run's session and subagents (their paths come from the hooks' events) and
+  writes what the hooks do not carry into enriched.jsonl, next to events.jsonl: one `model.turn` per model response
+  (model, tokens, thinking), and the texts the models wrote. Rewritten whole each time: run it again at will.
 Usage: journal.py prune
-  Removes the journals older than RETENTION_DAYS, then the oldest while they weigh more than MAX_MB together.
+  Removes the journals older than `retention_days`, then the oldest while they weigh more than `max_mb` together.
 Usage: journal.py validate [--schema FILE] FILE.jsonl…
   Checks every line against schema.json, the check each event passes before it is written.
 
 Journals are private: ~/.adorno/runs/<slug>-<run id>/events.jsonl, mode 600, never in a repo. Every string is
-redacted before it is written. Recording never breaks a run: whatever fails, the reason goes to stderr and the exit
+redacted before it is written. The owner's settings: `journal` in local/adorno.yaml (DEFAULTS below). Recording never
+breaks a run: whatever fails, the reason goes to stderr and the exit
 code is 0.
 """
 import datetime
@@ -30,9 +35,11 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 SCHEMA = os.path.join(os.path.dirname(HERE), "schema.json")
 EXCERPT = 500        # characters of a prompt, a result or a message kept in the journal
 MAX_STRING = 2000    # any other string is cut there (`reasoning`, opted into by the owner, is kept whole)
-JOURNAL_FILES = ("events.jsonl",)   # what a run folder holds for its journal
-RETENTION_DAYS = 30  # `prune` (run-begin calls it) removes older journals…
-MAX_MB = 2048        # …then the oldest ones while all journals weigh more than this
+JOURNAL_FILES = ("events.jsonl", "enriched.jsonl", "enrich.log")   # what a run folder holds for its journal
+# The owner's settings (`journal` in local/adorno.yaml, which `bin/kit install` puts in the registry) and their
+# defaults: models' reasoning is copied only when asked for; `prune` (run-begin calls it) removes journals older than
+# retention_days, then the oldest ones while all journals weigh more than max_mb.
+DEFAULTS = {"reasoning": False, "retention_days": 30, "max_mb": 2048}
 # A value is a secret when its key, variable or flag name says so: the names `bin/kit` refuses in `claude_env`
 # (SECRET_ENV_RE), which tests keep equal to this one.
 SECRET_NAME = r"(KEY|TOKEN|SECRET|PASSWORD)"
@@ -100,6 +107,17 @@ def started(dur_ms=0):
 
 def runs_root():
     return os.path.join(os.path.expanduser("~"), ".adorno", "runs")
+
+
+def settings():
+    conf = dict(DEFAULTS)
+    try:
+        with open(os.path.join(os.path.dirname(runs_root()), "registry.json"), encoding="utf-8") as f:
+            own = json.load(f).get("journal")
+        conf.update({k: own[k] for k in DEFAULTS if k in own})
+    except (OSError, ValueError, AttributeError, TypeError):
+        pass  # no registry, or no `journal` in it: the defaults
+    return conf
 
 
 def open_runs(session, run=None):
@@ -201,25 +219,31 @@ def append(folder, event):
         os.close(fd)
 
 
-def record(kind, fields, session, run=None, actor="session"):
-    """Writes the event to each open run's journal: only an event schema.json accepts is written. Returns how many
-    journals got it."""
+def event_for(kind, fields, run_id, session, actor, schema):
+    """The event as it is written: common fields filled (`t`: now minus `dur`, unless given), a `text` turned into
+    excerpt + hash + chars, every string redacted. Raises unless schema.json accepts it."""
     if not isinstance(fields, dict):
         raise ValueError("the event's fields must be a JSON object")
     fields = dict(fields)
     if "text" in fields:
         fields.update(text_fields(fields.pop("text")))
     dur = fields.get("dur")
-    at = started(dur if isinstance(dur, int) and not isinstance(dur, bool) and dur > 0 else 0)
+    event = {"v": 1, "t": started(dur if isinstance(dur, int) and not isinstance(dur, bool) and dur > 0 else 0),
+             "run": run_id, "session": session, "actor": actor,
+             "parent": "session" if actor.startswith("agent:") else None, "type": kind}
+    event.update({k: v for k, v in redact(fields).items() if k not in ("v", "run", "session", "type")})
+    wrong = problems(event, schema)
+    if wrong:
+        raise ValueError(f"invalid {kind} event, not recorded: {'; '.join(wrong[:5])}")
+    return event
+
+
+def record(kind, fields, session, run=None, actor="session"):
+    """Writes the event to each open run's journal. Returns how many journals got it."""
     schema, written = None, 0
     for run_id, folder in open_runs(session, run):
-        event = {"v": 1, "t": at, "run": run_id, "session": session, "actor": actor,
-                 "parent": "session" if actor.startswith("agent:") else None, "type": kind}
-        event.update({k: v for k, v in redact(fields).items() if k not in ("v", "run", "session", "type")})
         schema = schema or load_schema()
-        wrong = problems(event, schema)
-        if wrong:
-            raise ValueError(f"invalid {kind} event, not recorded: {'; '.join(wrong[:5])}")
+        event = event_for(kind, fields, run_id, session, actor, schema)
         try:
             append(folder, event)
             written += 1
@@ -282,9 +306,11 @@ def hook_events(payload):
         prompt = str(payload.get("prompt") or "")
         if prompt.lstrip().startswith("<task-notification"):  # the harness reporting a background agent, not the owner
             return []
-        return [("message", {"from": "you", "to": "session", "kind": "prompt", "text": prompt}, "you")]
+        return [("message", {"from": "you", "to": "session", "kind": "prompt", "text": prompt,
+                             "transcript": payload.get("transcript_path")}, "you")]
     if name == "Stop":
-        return [("message", {"from": "session", "to": "you", "kind": "reply", "text": said}, "session")]
+        return [("message", {"from": "session", "to": "you", "kind": "reply", "text": said,
+                             "transcript": payload.get("transcript_path")}, "session")]
     if name == "SubagentStart" and agent:
         return [("agent.spawn", {"agent": about, "tool": "claude"}, "session")]
     if name == "SubagentStop" and agent:
@@ -318,6 +344,156 @@ def cmd_hook(_argv):
     session = str(payload.get("session_id") or "")
     for kind, fields, actor in hook_events(payload):
         record(kind, {k: v for k, v in fields.items() if v is not None}, session, actor=actor)
+
+
+def read_events(path):
+    """The events of a journal file, skipping lines that do not parse (a line being written, a damaged file)."""
+    events = []
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    event = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(event, dict):
+                    events.append(event)
+    except OSError:
+        pass
+    return events
+
+
+def millis(start, end):
+    """Milliseconds between two timestamps (ISO, UTC, with milliseconds), never negative; 0 when one does not read."""
+    fmt = "%Y-%m-%dT%H:%M:%S.%fZ"
+    try:
+        delta = datetime.datetime.strptime(end, fmt) - datetime.datetime.strptime(start, fmt)
+    except ValueError:
+        return 0
+    return max(0, int(delta.total_seconds() * 1000))
+
+
+def turn_fields(turn, reasoning):
+    usage = turn["usage"] if isinstance(turn["usage"], dict) else {}
+    details = usage.get("output_tokens_details") if isinstance(usage.get("output_tokens_details"), dict) else {}
+    counts = {ours: usage[theirs] if isinstance(usage.get(theirs), int) else 0 for ours, theirs in (
+        ("in", "input_tokens"), ("out", "output_tokens"), ("cache_read", "cache_read_input_tokens"),
+        ("cache_write", "cache_creation_input_tokens"))}
+    fields = {"t": turn["start"], "dur": millis(turn["start"], turn["end"]), "model": str(turn["model"] or "unknown"),
+              "tokens": counts, "thinking_ms": turn["thinking_ms"]}
+    if isinstance(details.get("thinking_tokens"), int):
+        fields["thinking_tokens"] = details["thinking_tokens"]
+    if isinstance(turn["stop"], str):
+        fields["stop"] = turn["stop"]
+    if reasoning and turn["reasoning"]:
+        fields["reasoning"] = "\n\n".join(turn["reasoning"])
+    return fields
+
+
+def transcript_events(path, actor, since, until, reasoning):
+    """[(type, fields)] read from one Claude Code transcript, between two instants: a `model.turn` per model response,
+    and a `message` per text the model wrote. The format is Claude Code's own (read on 2.1.325), not a contract: what
+    is not recognised is skipped. One response is several lines, one per content block, each repeating the same
+    usage: they are grouped on `requestId` and the usage is counted once. A turn starts when its request is sent
+    (the `api-request` line before it)."""
+    found, turn, asked_at = [], None, None
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if '"assistant"' not in line and '"api-request"' not in line:
+                continue  # most of a transcript is prompts and tool results: not parsed
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            at = row.get("timestamp") if isinstance(row, dict) else None
+            if not isinstance(at, str) or not since <= at <= until:
+                continue
+            if row.get("type") == "api-request":
+                asked_at = at
+                continue
+            message = row.get("message")
+            if row.get("type") != "assistant" or not isinstance(message, dict):
+                continue
+            request = row.get("requestId") or message.get("id")
+            if turn is None or turn["id"] != request:
+                if turn:
+                    found.append(("model.turn", turn_fields(turn, reasoning)))
+                turn = {"id": request, "start": asked_at if asked_at and asked_at <= at else at, "thinking_ms": 0,
+                        "reasoning": []}
+                asked_at = None
+            turn.update(end=at, model=message.get("model"), usage=message.get("usage"), stop=message.get("stop_reason"))
+            if isinstance(row.get("thinkingDurationMs"), int):
+                turn["thinking_ms"] += row["thinkingDurationMs"]
+            for block in message.get("content") or []:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "thinking" and isinstance(block.get("thinking"), str) and block["thinking"]:
+                    turn["reasoning"].append(block["thinking"])
+                elif block.get("type") == "text" and isinstance(block.get("text"), str) and block["text"].strip():
+                    ref = {"file": path, **({"id": row["uuid"]} if isinstance(row.get("uuid"), str) else {})}
+                    found.append(("message", {"t": at, "from": actor, "to": "you" if actor == "session" else "session",
+                                              "kind": "text", "text": block["text"], "ref": ref}))
+    if turn:
+        found.append(("model.turn", turn_fields(turn, reasoning)))
+    return found
+
+
+def run_transcripts(events):
+    """{transcript path: actor} of a run, as its hooks' events say (never guessed): the session's on its `session`
+    and `message` events, each subagent's on its `agent.return`. A subagent still running when the run ended has no
+    return: its file is next to the session's, in `<session>/subagents/`."""
+    main = next((e["transcript"] for e in events if e.get("type") in ("session", "message")
+                 and isinstance(e.get("transcript"), str)), None)
+    sources = {}
+    for e in events:
+        if e.get("type") == "agent.return" and isinstance(e.get("transcript"), str) and isinstance(e.get("agent"), dict):
+            sources[e["transcript"]] = f"agent:{e['agent'].get('id')}"
+            main = main or os.path.dirname(os.path.dirname(e["transcript"])) + ".jsonl"
+    if main:
+        for path in glob.glob(os.path.join(main[:-len(".jsonl")], "subagents", "agent-*.jsonl")):
+            sources.setdefault(path, "agent:" + os.path.basename(path)[len("agent-"):-len(".jsonl")])
+        sources[main] = "session"
+    return sources
+
+
+def cmd_enrich(argv):
+    if len(argv) != 1:
+        raise ValueError("usage: journal.py enrich RUN (a run id, or the name of its folder)")
+    folders = [d for d in glob.glob(os.path.join(runs_root(), "*"))
+               if (os.path.basename(d) == argv[0] or os.path.basename(d).endswith("-" + argv[0]))
+               and os.path.isfile(os.path.join(d, JOURNAL_FILES[0])) and not os.path.islink(d)]
+    if len(folders) != 1:
+        raise ValueError(f"no journal for run '{argv[0]}' under {runs_root()}")
+    events = read_events(os.path.join(folders[0], JOURNAL_FILES[0]))
+    begin = next((e for e in events if e.get("type") == "run.begin"), None)
+    if not begin:
+        raise ValueError(f"{folders[0]}: no run.begin in the journal")
+    since = str(begin.get("t"))
+    until = next((str(e.get("t")) for e in events if e.get("type") == "run.end"), started())
+    known = {e.get("hash") for e in events if e.get("hash")}  # texts the hooks already recorded (a reply, a return)
+    schema, reasoning, out, read = load_schema(), settings()["reasoning"] is True, [], 0
+    for path, actor in sorted(run_transcripts(events).items()):
+        if not os.path.isfile(path):
+            warn(f"transcript not found (pruned by Claude Code?): {path}")
+            continue
+        read += 1
+        for kind, fields in transcript_events(path, actor, since, until, reasoning):
+            if kind == "message" and hashlib.sha256(fields["text"].encode()).hexdigest() in known:
+                continue
+            try:
+                out.append(event_for(kind, fields, str(begin.get("run")), str(begin.get("session") or ""), actor, schema))
+            except ValueError as e:
+                warn(str(e))
+    out.sort(key=lambda e: e["t"])
+    target = os.path.join(folders[0], JOURNAL_FILES[1])
+    fd = os.open(target + ".tmp", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        for event in out:
+            f.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
+    os.replace(target + ".tmp", target)
+    print(json.dumps({"run": begin.get("run"), "transcripts": read, "file": target,
+                      "model_turns": sum(e["type"] == "model.turn" for e in out),
+                      "messages": sum(e["type"] == "message" for e in out)}))
 
 
 def cmd_validate(argv):
@@ -363,14 +539,14 @@ def journal_files():
 
 
 def cmd_prune(_argv):
-    """Removes the journal files older than RETENTION_DAYS, then the oldest ones while they weigh more than MAX_MB
-    together. Only journal files: a run folder also holds deliverables the journal does not own (an emptied folder
-    is removed)."""
-    files = journal_files()
-    limit = time.time() - RETENTION_DAYS * 86400
+    """Removes the journal files older than `retention_days`, then the oldest ones while they weigh more than
+    `max_mb` together. Only journal files: a run folder also holds deliverables the journal does not own (an emptied
+    folder is removed)."""
+    conf, files = settings(), journal_files()
+    limit = time.time() - conf["retention_days"] * 86400
     total = sum(size for _mtime, size, _path in files)
     for mtime, size, path in files:
-        if mtime >= limit and total <= MAX_MB * 1024 * 1024:
+        if mtime >= limit and total <= conf["max_mb"] * 1024 * 1024:
             break
         os.remove(path)
         total -= size
@@ -380,7 +556,7 @@ def cmd_prune(_argv):
             pass  # not empty: the run's other files stay
 
 
-COMMANDS = {"event": cmd_event, "hook": cmd_hook, "prune": cmd_prune}
+COMMANDS = {"event": cmd_event, "hook": cmd_hook, "enrich": cmd_enrich, "prune": cmd_prune}
 
 
 def main(argv):

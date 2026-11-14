@@ -1235,6 +1235,9 @@ out="$(jq -cs . "$KH/runs/pr-review-$WSRUN/events.jsonl")"
 expect_jq "from run.begin (with the run's folder) to run.end, for that session only" \
   '.[0].type == "run.begin" and .[0].dir == "'"$TMP"'/ws/.agent-run/review-1" and .[0].dry_run == true and .[-1].type == "run.end" and .[-1].outcome == "ended" and all(.[]; .session == "sess-j")'
 expect_exit 0 "that journal is valid" -- python3 "$JPY" validate "$KH/runs/pr-review-$WSRUN/events.jsonl"
+tries=0; until [ -f "$KH/runs/pr-review-$WSRUN/enriched.jsonl" ] || [ "$tries" -ge 100 ]; do tries=$((tries + 1)); sleep 0.2; done
+[ -f "$KH/runs/pr-review-$WSRUN/enriched.jsonl" ] && [ -f "$KH/runs/pr-review-$WSRUN/enrich.log" ] \
+  && ok "run-end starts the reading of the transcripts, without waiting for it" || ko "no enrichment after run-end"
 
 echo
 echo "$pass passed, $fail failed"

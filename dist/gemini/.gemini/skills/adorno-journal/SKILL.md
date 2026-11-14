@@ -64,6 +64,33 @@ outside a run, never block (`PostToolUse` is not even waited for) and always exi
 it was about (a command, a path, a pattern), never by the content it carried: an edit is its file, not its code. A
 project installed next to a global install leaves the recording to the global one.
 
+## What the transcripts add
+
+Hooks do not carry the model of a turn nor its tokens. `run-end` starts, without waiting for it,
+`journal.py enrich <run id>`: it reads the Claude Code transcripts of the run's session and subagents (their paths are
+in the hooks' events, never guessed), keeps what happened between `run.begin` and `run.end`, and writes
+`enriched.jsonl` next to `events.jsonl`:
+
+- one `model.turn` per model response: model, tokens (the usage of a response counted once, whatever its number of
+  blocks), thinking tokens and time, stop reason; `t` is when the request was sent;
+- one `message` per text a model wrote, with `ref` (`file`, `id`) pointing at the transcript line that holds the
+  whole; a text a hook already recorded is not written twice.
+
+`events.jsonl` is never rewritten; `enriched.jsonl` is rewritten whole each time, so the reading can be run again
+(`journal.py enrich <run id>`, or `bin/kit journal enrich <run id>` from the adorno repo), as long as Claude Code has
+not pruned its transcripts. What goes wrong is said in `enrich.log`. A reader takes both files together, sorted on
+`t`. The transcript format is Claude Code's own (read on 2.1.325), not a contract: what is not recognised is skipped.
+
+## Settings
+
+`journal` in the owner's `local/adorno.yaml` (installed by `bin/kit install`):
+
+| Setting | Default | Does |
+| --- | --- | --- |
+| `reasoning` | `false` | `true`: `model.turn` also holds the model's reasoning, when the transcript has it in clear |
+| `retention_days` | `30` | journals older than this are removed when a run opens |
+| `max_mb` | `2048` | then the oldest ones, while all journals weigh more than this |
+
 ## Writing an event
 
 ```sh
@@ -78,9 +105,9 @@ the run `ID` alone. A JSON array writes one event per element. A `text` field is
 
 ## Retention
 
-`run-begin` prunes as it opens a run: journals older than 30 days go, then the oldest ones while all journals weigh
-more than 2 GB. Only the journal's own files are removed, never a run's deliverables nor the journal of an open run.
-To delete one by hand: remove its `events.jsonl`.
+`run-begin` prunes as it opens a run: journals older than `retention_days` go, then the oldest ones while all
+journals weigh more than `max_mb`. Only the journal's own files are removed (`events.jsonl`, `enriched.jsonl`,
+`enrich.log`), never a run's deliverables nor the journal of an open run. To delete one by hand: remove those files.
 
 ## Redaction
 
