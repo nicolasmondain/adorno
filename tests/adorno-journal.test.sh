@@ -304,7 +304,23 @@ expect_exit 0 "prune with the owner's settings" -- python3 "$J" prune
 [ ! -e "$big1" ] && [ -f "$big2/events.jsonl" ] && ok "over max_mb, the oldest journals go first, until the rest fits" || ko "size cap"
 [ ! -e "$open_old/events.jsonl" ] && ok "... an old journal whose run is closed among them" || ko "closed old journal kept over the cap"
 [ -f "$f" ] && ok "retention_days is the owner's: a journal within it stays" || ko "journal pruned within retention"
+# a run's journal files go together: its age is its newest file, its weight their sum
+pair="$KH/runs/pair-20260101T000000-3-3"; single="$KH/runs/single-20260215T000000-4-4"; mkdir -p "$pair" "$single"
+head -c 400000 /dev/zero >"$pair/events.jsonl"; touch -t 202601010000 "$pair/events.jsonl"
+head -c 400000 /dev/zero >"$pair/enriched.jsonl"; touch -t 202603010000 "$pair/enriched.jsonl"
+head -c 700000 /dev/zero >"$single/events.jsonl"; touch -t 202602150000 "$single/events.jsonl"
+expect_exit 0 "prune runs, not files" -- python3 "$J" prune
+[ ! -e "$big2" ] && [ ! -e "$single" ] && ok "over max_mb, the runs whose newest file is oldest go first" || ko "runs pruned out of order"
+[ -f "$pair/events.jsonl" ] && [ -f "$pair/enriched.jsonl" ] && ok "a run's journal is kept whole: never its events without its enrichment" || ko "a run's files pruned apart"
 rm -f "$KH/registry.json"
+# a linked run folder: prune never follows it (append, enrich and the server refuse such folders too)
+mkdir -p "$TMP/elsewhere-run"; echo '{}' >"$TMP/elsewhere-run/events.jsonl"; echo '{}' >"$TMP/elsewhere-run/enriched.jsonl"
+touch -t 202501010000 "$TMP/elsewhere-run/events.jsonl" "$TMP/elsewhere-run/enriched.jsonl"
+ln -s "$TMP/elsewhere-run" "$KH/runs/linked-20250101T000000-5-5"
+expect_exit 0 "prune, a linked run folder among the runs" -- python3 "$J" prune
+[ -f "$TMP/elsewhere-run/events.jsonl" ] && [ -f "$TMP/elsewhere-run/enriched.jsonl" ] && [ -L "$KH/runs/linked-20250101T000000-5-5" ] \
+  && ok "a linked run folder is left alone, and what it points to" || ko "prune followed a linked run folder"
+rm -f "$KH/runs/linked-20250101T000000-5-5"
 
 echo "recording never breaks the caller"
 chmod 500 "$KH/runs/test-20260101T100000-1-1"; chmod 400 "$f"

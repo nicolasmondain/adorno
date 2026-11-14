@@ -532,9 +532,10 @@ def cmd_validate(argv):
     return 1 if bad else 0
 
 
-def journal_files():
-    """[(mtime, size, path)] of every journal file of every run that is not open, oldest first."""
-    root = runs_root()
+def run_journals():
+    """[(age, size, folder, [journal files])] of every run that is not open, oldest first: a run's age is its newest
+    journal file, its size their sum. Only real folders directly under the runs folder: a link is never followed."""
+    root = os.path.realpath(runs_root())
     open_folders = set()
     for path in glob.glob(os.path.join(root, "active", "*.json")):
         try:
@@ -543,29 +544,32 @@ def journal_files():
         except (OSError, ValueError, AttributeError):
             pass
     found = []
-    for name in JOURNAL_FILES:
-        for path in glob.glob(os.path.join(root, "*", name)):
-            if os.path.realpath(os.path.dirname(path)) in open_folders or os.path.islink(path):
-                continue
-            st = os.stat(path)
-            found.append((st.st_mtime, st.st_size, path))
+    for folder in glob.glob(os.path.join(root, "*")):
+        if (os.path.islink(folder) or not os.path.isdir(folder) or os.path.basename(folder) == "active"
+                or os.path.dirname(os.path.realpath(folder)) != root or os.path.realpath(folder) in open_folders):
+            continue
+        files = [p for p in (os.path.join(folder, n) for n in JOURNAL_FILES) if os.path.isfile(p) and not os.path.islink(p)]
+        if files:
+            stats = [os.stat(p) for p in files]
+            found.append((max(s.st_mtime for s in stats), sum(s.st_size for s in stats), folder, files))
     return sorted(found)
 
 
 def cmd_prune(_argv):
-    """Removes the journal files older than `retention_days`, then the oldest ones while they weigh more than
-    `max_mb` together. Only journal files: a run folder also holds deliverables the journal does not own (an emptied
-    folder is removed)."""
-    conf, files = settings(), journal_files()
+    """Removes the journals of the runs older than `retention_days`, then of the oldest runs while all journals weigh
+    more than `max_mb`. A run's journal files go together, and only them: a run folder also holds deliverables the
+    journal does not own (an emptied folder is removed)."""
+    conf, runs = settings(), run_journals()
     limit = time.time() - conf["retention_days"] * 86400
-    total = sum(size for _mtime, size, _path in files)
-    for mtime, size, path in files:
-        if mtime >= limit and total <= conf["max_mb"] * 1024 * 1024:
+    total = sum(size for _age, size, _folder, _files in runs)
+    for age, size, folder, files in runs:
+        if age >= limit and total <= conf["max_mb"] * 1024 * 1024:
             break
-        os.remove(path)
+        for path in files:
+            os.remove(path)
         total -= size
         try:
-            os.rmdir(os.path.dirname(path))
+            os.rmdir(folder)
         except OSError:
             pass  # not empty: the run's other files stay
 
