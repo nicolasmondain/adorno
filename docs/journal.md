@@ -11,7 +11,7 @@ A run opened by `run-begin` gets a journal, one event per line:
 
 | Recorded | By |
 | --- | --- |
-| the run opening and closing, with how it ended (`done`, `draft`, `stopped`, `failed`) | `run-begin`, `run-end` |
+| the run opening and closing, with how it ended (`done`, `draft`, `stopped`, `failed`, else `ended`) | `run-begin`, `run-end` |
 | each adorno script: its name, arguments, exit code, the level and action it asked for, a dry run | the script itself, as it exits |
 | each write that reached GitHub | the write scripts |
 | each review finding, as produced then as merged, and the merged verdict | `review-merge` |

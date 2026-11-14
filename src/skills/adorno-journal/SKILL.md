@@ -31,7 +31,7 @@ goes to stderr, the exit code is 0, and the run goes on.
 
 | `type` | When | Own fields (required first) |
 | --- | --- | --- |
-| `run.begin` / `run.end` | the run opens / closes | `workflow`, `mode`, `level`, `repos`, `dir` / `workflow`, `outcome` (`done`, `draft`, `stopped`, `failed`, or `ended` when the workflow passed none) |
+| `run.begin` / `run.end` | the run opens / closes | `workflow`, `mode`, `level`, `repos`, `dir` / `workflow`, `outcome` (`done`, `draft`, `stopped`, `failed`, or `ended`: passed, by default, or for a word outside the list) |
 | `step.begin` / `step.end` | a step of the run's plan starts / ends | `index`, `name` |
 | `agent.spawn` / `agent.return` | a subagent starts / returns | `agent` (`id`, `type`), `model`, `tool`, text, `transcript` |
 | `model.turn` | one model response | `model`, `tokens` (`in`, `out`, `cache_read`, `cache_write`), `thinking_tokens`, `thinking_ms`, `stop`, `reasoning` |

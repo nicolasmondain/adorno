@@ -1282,8 +1282,6 @@ RUN2="$(jq -r .id <<<"$out")"; J2="$(jq -r .journal <<<"$out")"
 [ "$(jq -r .dir <<<"$out")" = "$J2" ] && [ "$(mode_of "$J2")" = 700 ] && ok "... its folder is the journal's, readable by its owner only" || ko "journal folder mode" "$(mode_of "$J2")"
 expect_exit 0 "run-end closes the journal" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-end" "$WSRUN"
 grep -q '"script":"run-end"' "$J2/events.jsonl" && ko "run-end's own call landed in the session's other run" || ok "run-end's own call lands in no other run: run.end is its event"
-expect_exit 2 "run-end: an outcome outside done, draft, stopped, failed is refused" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-end" "$RUN2" great
-[ -f "$KH/runs/active/$RUN2.json" ] && out="$(tail -n 1 "$J2/events.jsonl")" && expect_jq "... the run stays open, the refusal recorded" '.type == "script.call" and .script == "run-end" and .exit == 2'
 expect_exit 0 "run-end with an outcome" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-end" "$RUN2" draft
 out="$(tail -n 1 "$J2/events.jsonl")"; expect_jq "... recorded in run.end" '.type == "run.end" and .outcome == "draft" and .workflow == "workflow:pr:ship"'
 out="$(jq -cs . "$KH/runs/pr-review-$WSRUN/events.jsonl")"
@@ -1293,6 +1291,24 @@ expect_exit 0 "that journal is valid" -- python3 "$JPY" validate "$KH/runs/pr-re
 tries=0; until [ -f "$KH/runs/pr-review-$WSRUN/enriched.jsonl" ] || [ "$tries" -ge 100 ]; do tries=$((tries + 1)); sleep 0.2; done
 [ -f "$KH/runs/pr-review-$WSRUN/enriched.jsonl" ] && [ -f "$KH/runs/pr-review-$WSRUN/enrich.log" ] \
   && ok "run-end starts the reading of the transcripts, without waiting for it" || ko "no enrichment after run-end"
+# run_and_end OUTCOME — opens a run in that session and ends it with OUTCOME; its journal in $JE
+run_and_end() {
+  out="$(env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-begin" --workflow workflow:pr:ship --mode draft --level L2 --repo acme/docs)"
+  RE="$(jq -r .id <<<"$out")"; JE="$(jq -r .journal <<<"$out")"
+  env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-end" "$RE" "$1" >/dev/null 2>"$TMP/err"
+}
+run_and_end ended; rc=$?
+out="$(tail -n 1 "$JE/events.jsonl")"
+[ "$rc" = 0 ] && [ ! -f "$KH/runs/active/$RE.json" ] && expect_jq "run-end ID ended: accepted, as the default" '.type == "run.end" and .outcome == "ended"' \
+  || ko "run-end ID ended was refused" "exit $rc: $(cat "$TMP/err")"
+run_and_end great; rc=$?
+if [ ! -f "$KH/runs/active/$RE.json" ]; then
+  out="$(tail -n 1 "$JE/events.jsonl")"
+  expect_jq "run-end with an outcome outside the list: the run is closed all the same, recorded as ended" '.type == "run.end" and .outcome == "ended"'
+else
+  ko "an outcome outside the list left the run open"
+fi
+[ "$rc" = 2 ] && grep -q "great" "$TMP/err" && ok "... said on stderr, and exit 2" || ko "an outcome outside the list was silent" "exit $rc: $(cat "$TMP/err")"
 [ "$(mode_of "$KH/runs/pr-review-$WSRUN/enrich.log")" = 600 ] && ok "... its log readable by its owner only" || ko "enrich.log mode" "$(mode_of "$KH/runs/pr-review-$WSRUN/enrich.log")"
 
 echo
