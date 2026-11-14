@@ -147,7 +147,8 @@ def main(argv):
         page.keyboard.press("Enter")
         check("Enter on the reasoning's summary opens it", page.locator("#panel details[open]").count() == 1)
         page.keyboard.press("Space")
-        check("... and Space closes it", page.locator("#panel details[open]").count() == 0)
+        check("... and Space closes it, without playing", page.locator("#panel details[open]").count() == 0
+              and stage.get_attribute("data-state") != "playing", stage.get_attribute("data-state"))
         page.keyboard.press("Escape")
 
         print("detail, views, text log")
@@ -187,6 +188,10 @@ def main(argv):
         page.keyboard.press("1")
         check("the text log has one row per event", *counted(page.locator("#log li"), len(run["events"])))
         check("... and one current row", page.locator("#log li[aria-current]").count() == 1)
+        page.focus("#tab-log")
+        page.keyboard.press("Space")
+        check("Space on a focused tab does not play", stage.get_attribute("data-state") != "playing" and page.locator("#log").is_visible(),
+              stage.get_attribute("data-state"))
         page.focus("#help-open")
         page.keyboard.press("Tab")   # onto the first row: a row clips what it paints outside itself (content-visibility)
         ring = page.locator("#log li").first.locator("button").evaluate(
@@ -217,17 +222,18 @@ def main(argv):
         page.focus(".diagram .scroll")
         page.keyboard.press("0")
         size = "[document.querySelector('.diagram .scroll').clientWidth, +document.querySelector('.diagram .canvas').getAttribute('width')]"
-        for _ in range(20):   # zoom in until a screen is less than a third of the longest model turn
+        for presses in range(21):   # zoom in until a screen is less than a third of the longest model turn
             seen, canvas = page.evaluate(size)
             zoom = (canvas - 24) / run["time"]["width"]
-            if seen / zoom < turn["dur"] / 3:
+            if seen / zoom < turn["dur"] / 3 or presses == 20:
                 break
             page.keyboard.press("+")
         page.evaluate("(x) => { document.querySelector('.diagram .scroll').scrollLeft = x; }",
                       12 + (turn["u"] + turn["dur"] / 2) * zoom - seen / 2)
         page.wait_for_timeout(200)
-        check("zoomed into the middle of a long model turn, its bar is still drawn",
-              page.locator(f'.diagram .mark.bar[data-i="{turn["i"]}"]').count() == 1, f"screen {seen / zoom:.0f} ms of {turn['dur']}")
+        check("zoomed into the middle of a long model turn (a screen under a third of it), its bar is still drawn",
+              seen / zoom < turn["dur"] / 3 and page.locator(f'.diagram .mark.bar[data-i="{turn["i"]}"]').count() == 1,
+              f"screen {seen / zoom:.0f} ms of {turn['dur']}")
         page.keyboard.press("0")
         page.focus("#home")
         page.keyboard.press("Enter")
