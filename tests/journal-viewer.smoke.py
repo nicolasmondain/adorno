@@ -136,6 +136,22 @@ def main(argv):
         page.locator(".t-agent-return").first.click()
         page.wait_for_selector("#panel:not([hidden])")
         check("a click on a mark opens its detail", "returns" in page.locator("#panel .label").text_content())
+        lanes = {lane["id"]: lane for lane in run["lanes"]}
+        returns = [e for e in run["events"] if e["type"] == "agent.return"]
+        planner = lanes[returns[0]["from"]]["wrote"]
+        check("an agent's return lists what it wrote, a file of the run as a button",
+              page.locator("#panel .wrote li").all_text_contents() == [w["path"] for w in planner]
+              and page.locator("#panel .wrote button").count() == sum(1 for w in planner if w["file"]),
+              str(page.locator("#panel .wrote li").all_text_contents()))
+        page.locator("#panel .wrote button").first.click()
+        page.wait_for_selector("#panel .file-view:not([hidden])")
+        check("... which opens it in the panel", "paginate the teams list" in page.locator("#panel .file-view").text_content())
+        page.locator(".t-agent-return").nth(1).click()
+        builder = lanes[returns[1]["from"]]["wrote"]
+        check("... and a file outside the run as plain text",
+              page.locator("#panel .wrote code").all_text_contents() == [w["path"] for w in builder if not w["file"]] != []
+              and page.locator("#panel .wrote button").count() == 0, str(builder))
+        page.locator(".t-agent-return").first.click()
         page.locator("#panel .files button", has_text="plan.md").click()
         page.wait_for_selector("#panel .file-view:not([hidden])")
         check("a file of the run opens as text in the panel", "paginate the teams list" in page.locator("#panel .file-view").text_content())

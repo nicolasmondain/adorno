@@ -110,12 +110,11 @@ export function renderPanel(root, run, indices, handlers) {
   const e = run.events[indices[0]];
   const d = e.d;
   const about = d.agent ? lanes[`agent:${d.agent.id}`] : lanes[e.from];
-  const files = new Set(run.files.map((f) => f.path));
   const rows = [
     field("when", `${formatClock(e.t)} after the start${e.dur ? `, lasted ${formatDuration(e.dur)}` : ""}`),
     field("who", e.to ? `${lanes[e.from]?.label || e.from} → ${lanes[e.to]?.label || e.to}` : lanes[e.from]?.label || e.from),
     field("agent", d.agent ? [d.agent.type, d.agent.id].filter(Boolean).join(" · ") : null),
-    field("model", d.model || about?.model), field("tier", d.tier || about?.tier),
+    field("model", d.model || about?.model),
     field("tool", d.tool), field("input", d.input), field("script", d.script), field("arguments", d.args?.join(" ")),
     field("exit code", d.exit), field("failed", d.error ? "yes" : null),
     field("level asked", d.level), field("action", d.action), field("dry run", d.dry_run === undefined ? null : d.dry_run ? "yes" : "no"),
@@ -128,14 +127,17 @@ export function renderPanel(root, run, indices, handlers) {
     field("text", d.excerpt), field("length", d.chars ? `${d.chars} characters` : null),
     copyable("hash", d.hash), copyable("transcript", d.ref?.file || d.transcript), field("transcript line", d.ref?.id),
   ].filter(Boolean).flat();
-  const wrote = d.file && !d.line ? d.file : null;
+  // the files an agent wrote (the server reads them from its own Write and Edit calls), on its return only
+  const wrote = e.type === "agent.return" ? about?.wrote || [] : [];
   root.replaceChildren(head,
     el("p", { class: "label", text: e.label }),
     el("dl", {}, ...rows),
     e.tokens ? tokensTable(e.tokens) : null,
     d.reasoning ? el("details", {}, el("summary", { text: "reasoning" }), el("pre", { text: d.reasoning })) : null,
-    wrote ? el("p", {}, "wrote ", files.has(wrote)
-      ? el("button", { class: "file", text: wrote, on: { click: () => handlers.onFile(wrote) } }) : el("code", { text: wrote })) : null,
+    wrote.length ? el("section", { class: "wrote" }, el("h3", { text: "What it wrote" }),
+      el("ul", {}, ...wrote.map((w) => el("li", {}, w.file
+        ? el("button", { class: "file", text: w.path, on: { click: () => handlers.onFile(w.file) } }) : el("code", { text: w.path })))))
+      : null,
     run.files.length ? el("section", { class: "files" }, el("h3", { text: "Files of the run" }),
       el("ul", {}, ...run.files.map((f) => el("li", {}, el("button", { class: "file", text: f.path, on: { click: () => handlers.onFile(f.path) } })))))
       : null,

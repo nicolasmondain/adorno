@@ -79,7 +79,7 @@ export class Diagram {
       const spent = run.totals.by_lane[lane.id];
       const head = el("div", { class: `head ${lane.kind}${lane.orphan ? " orphan" : ""}`, "data-lane": lane.id },
         el("strong", { text: lane.label }),
-        el("small", { text: this.view === "tokens" ? formatTokens(spent) || "no tokens" : [lane.model, lane.tier].filter(Boolean).join(" · ") }));
+        el("small", { text: this.view === "tokens" ? formatTokens(spent) || "no tokens" : lane.model || "" }));
       head.style.height = `${heights[i]}px`;
       this.heads.append(head);
       const lived = lane.kind === "agent";

@@ -128,8 +128,8 @@ dd { margin: 0; overflow-wrap: anywhere; }
 pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0; border-top: var(--rule) solid var(--rule-soft); padding-top: 8px; }
 .tokens { width: auto; margin-bottom: var(--gap); }
 .tokens td { text-align: right; }
-.group, .files ul { list-style: none; margin: 0; padding: 0; }
-.group button, .files button { border: 0; padding: 2px 0; text-align: left; text-decoration: underline; }
+.group, .files ul, .wrote ul { list-style: none; margin: 0; padding: 0; }
+.group button, .files button, .wrote button { border: 0; padding: 2px 0; text-align: left; text-decoration: underline; }
 .copy { padding: 0 6px; }
 
 #help { border: var(--rule-heavy) solid var(--ink); background: var(--paper); color: var(--ink); }
