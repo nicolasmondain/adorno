@@ -27,12 +27,14 @@ def main(total):
                     "parent": "session" if actor.startswith("agent:") else None, "type": kind, **fields})
 
     event(0, "run.begin", workflow="workflow:feature:build", mode="auto", level="L2", repos=["acme/large"], dir="/synthetic")
-    per_agent = max(4, (total - 2 - 2 * AGENTS) // AGENTS)
+    per_agent = max(4, (total - 4 - 3 * AGENTS) // AGENTS)
     for n in range(AGENTS):
         name = f"agent:g{n:02d}"
         about = {"id": f"g{n:02d}", "type": "adorno-agent-feat-back" if n % 3 else "adorno-agent-review-code"}
         at = 1000 + n * 40000 + rng.randrange(2000)   # three agents alive at a time, give or take
-        event(at, "agent.spawn", agent=about, tool="claude", model="claude-opus-5-5")
+        event(at, "agent.spawn", agent=about, tool="claude")
+        # as the hooks record it: the model the instance runs on is on the session's Agent tool call
+        event(at + 1, "tool.call", tool="Agent", input=f"{about['type']}: part {n}", dur=4, agent=about, model="claude-opus-5-5")
         for k in range(per_agent):
             at += rng.randrange(20, 240)
             if k % 9 == 0:
