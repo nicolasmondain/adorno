@@ -524,8 +524,7 @@ def check(command, depth=0, cwd=None):
         redirected = any(t in (">", ">>") for t in cmd) and any(
             ADORNO_STATE.search(cmd[k + 1]) for k, t in enumerate(cmd[:-1]) if t in (">", ">>"))
         is_adorno_script = "adorno-github/scripts/" in words_[0] or "adorno-watch/scripts/" in words_[0] \
-            or "adorno-learn/scripts/" in words_[0] or "adorno-llm/scripts/" in words_[0] \
-            or "adorno-journal/scripts/" in words_[0]
+            or "adorno-learn/scripts/" in words_[0] or "adorno-llm/scripts/" in words_[0]
         if redirected or (writes_state and prog not in READ_ONLY and not is_adorno_script):
             return "state"
         # a cd into ~/.adorno, its runs or their grants is a read; what follows it there may only read, or be an
@@ -932,7 +931,7 @@ def record(event, decision, reason, command):
         session = str(event.get("session_id") or os.environ.get("CLAUDE_CODE_SESSION_ID") or "")
         actor = f"agent:{event['agent_id']}" if event.get("agent_id") else "session"
         journal.record("guard", {"decision": decision, "reason": reason, "command": command}, session, actor=actor)
-    except Exception:
+    except BaseException:  # a SystemExit from a broken writer too: the guard's exit code is its answer's
         pass
 
 

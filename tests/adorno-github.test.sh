@@ -721,6 +721,9 @@ guard deny "x=\$(jq '.a | select(.b)' f.json; git push origin fix/x)"
 guard pass 'cd ~/.adorno/runs && for d in r-*/; do echo "$d"; done | sort'
 guard deny "cd ~/.adorno/runs/active && echo '{}' > x.json"
 guard deny "cd ~/.adorno && cp x runs/active/y.json"
+# the journal's writer is called by the scripts and the hooks, never through the Bash tool: not exempt
+guard deny "$ROOT/src/skills/adorno-journal/scripts/journal.py prune ~/.adorno/runs/"
+guard deny "cd ~/.adorno/runs && $ROOT/src/skills/adorno-journal/scripts/journal.py prune"
 guard pass "cd ~/.adorno/worktrees/acme__docs/fix/x && git status && npm test"
 guard pass 'cd ~/.adorno/runs && for d in r-*/; do for p in "$d"pr-*/; do echo "$p"; done; done'
 guard ask 'C="node cdp.mjs 9222"; $C open http://localhost:8000'
@@ -1229,6 +1232,12 @@ expect_exit 0 "a journal that cannot be written: the script ends as usual" -- "$
 expect_jq "... with its output" '.repo == "acme/docs"'
 expect_exit 3 "... and a refusal keeps its exit code" -- "$S/pr-reply" foo/bar#1 T1 "$TMP/body.md"
 grep -q "not recorded" "$TMP/err" && ok "... and the journal says on stderr what it could not write" || ko "silent journal failure"
+# guard_says GUARD — what GUARD answers to a refused command, and its exit code (a hook's JSON counts only on exit 0)
+guard_says() {
+  out="$(jq -n '{tool_name: "Bash", tool_input: {command: "git push origin fix/x"}}' | python3 "$1" deny 2>"$TMP/err")"; rc=$?
+  jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null 2>&1 <<<"$out" && [ "$rc" = 0 ]
+}
+guard_says "$S/guard_bash.py" && ok "a journal that cannot be written: the guard still denies, and exits 0" || ko "guard with a read-only journal" "exit $rc: $out"
 chmod 700 "$JD"; chmod 600 "$JF"
 mkdir -p "$TMP/broken/adorno-github" "$TMP/broken/adorno-journal/scripts" "$TMP/alone/adorno-github"
 cp -R "$S" "$TMP/broken/adorno-github/scripts"; cp -R "$S" "$TMP/alone/adorno-github/scripts"
@@ -1236,6 +1245,7 @@ cp "$ROOT/src/skills/adorno-github/repos.json" "$TMP/broken/adorno-github/" 2>/d
 printf 'import sys\nsys.exit(3)\n' >"$TMP/broken/adorno-journal/scripts/journal.py"
 expect_exit 0 "a writer that fails: the script ends as usual" -- "$TMP/broken/adorno-github/scripts/repo-conf" acme/docs
 expect_exit 4 "... and a refusal keeps its exit code" -- "$TMP/broken/adorno-github/scripts/pr-resolve" acme/strict#7 T1
+guard_says "$TMP/broken/adorno-github/scripts/guard_bash.py" && ok "a writer that exits at import: the guard still denies, and exits 0" || ko "guard with a broken writer" "exit $rc: $out"
 n="$(wc -l <"$JF")"
 "$S/repo-conf" acme/docs >/dev/null
 [ "$(( $(wc -l <"$JF") ))" = "$((n + 1))" ] && ok "with the skill, the same call is recorded" || ko "repo-conf not recorded"
