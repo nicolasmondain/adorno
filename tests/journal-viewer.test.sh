@@ -64,8 +64,9 @@ SHOT="${ADORNO_SCREENSHOT:-$TMP/viewer.png}"
 if command -v uv >/dev/null 2>&1; then
   uv run --offline --script "$ROOT/tests/journal-viewer.smoke.py" "$URL" "$F1" "$F2" "$LARGE" "$SHOT" >"$TMP/smoke.out" 2>"$TMP/smoke.err"; rc=$?
   cat "$TMP/smoke.out"
-  # uv could not even start the script (Playwright is not in its cache, and nothing is downloaded here): no browser
-  if [ "$rc" != 0 ] && [ "$rc" != 77 ] && ! grep -q -E '^  (ok|FAIL) ' "$TMP/smoke.out"; then rc=77; fi
+  # uv could not even start the script (Playwright is not in its cache, and nothing is downloaded here): no browser.
+  # Any other failure, a script that crashes before its first check included, is a failure.
+  if [ "$rc" != 0 ] && [ "$rc" != 77 ] && grep -q 'No solution found when resolving script dependencies' "$TMP/smoke.err"; then rc=77; fi
 else
   rc=77; echo "uv is not installed" >"$TMP/smoke.err"
 fi
