@@ -52,32 +52,31 @@ export function renderPicker(root, runs, filters, compareWith, handlers) {
             ? el("button", { class: "compare", text: "compare", on: { click: () => handlers.onCompare(run.id) } }) : null))))));
 }
 
-// The same events as the diagram, as text: one row per event, a button that opens its detail.
+// The same events as the diagram, as text: one row per event, a button that opens its detail. Returns the rows by
+// event index (filled as the chunks are added), so the current one is found without querying the page.
 export function renderLog(root, run, view, onSelect) {
   const list = el("ol", { class: "log-rows" });
   root.replaceChildren(list);
   const names = Object.fromEntries(run.lanes.map((l) => [l.id, l.label]));
   const rows = run.events.filter((e) => visible(e, view));
   root.dataset.rows = String(rows.length);
+  const byIndex = [];
   let next = 0;
   const more = () => {
     if (!list.isConnected) return;
-    list.append(...rows.slice(next, next + LOG_CHUNK).map((e) => el("li", { "data-i": e.i },
-      el("button", { on: { click: () => onSelect([e.i]) } },
-        el("time", { text: formatClock(e.t) }),
-        el("span", { class: "who", text: e.to ? `${names[e.from] || e.from} → ${names[e.to] || e.to}` : names[e.from] || e.from }),
-        el("span", { class: "what", text: e.label })))));
+    list.append(...rows.slice(next, next + LOG_CHUNK).map((e) => {
+      byIndex[e.i] = el("li", { "data-i": e.i },
+        el("button", { on: { click: () => onSelect([e.i]) } },
+          el("time", { text: formatClock(e.t) }),
+          el("span", { class: "who", text: e.to ? `${names[e.from] || e.from} → ${names[e.to] || e.to}` : names[e.from] || e.from }),
+          el("span", { class: "what", text: e.label })));
+      return byIndex[e.i];
+    }));
     next += LOG_CHUNK;
     if (next < rows.length) setTimeout(more, 0);
   };
   more();
-}
-
-export function markLogRow(root, index) {
-  root.querySelector("[aria-current]")?.removeAttribute("aria-current");
-  const row = root.querySelector(`li[data-i="${index}"]`);
-  row?.setAttribute("aria-current", "true");
-  return row;
+  return byIndex;
 }
 
 function field(name, value) {

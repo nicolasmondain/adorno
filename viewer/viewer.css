@@ -109,10 +109,11 @@ thead th { border-bottom: var(--rule) solid var(--ink); font-weight: 500; text-t
 /* the text log */
 .log-rows { list-style: none; margin: 0; padding: 0; border-top: var(--rule) solid var(--ink); }
 .log-rows li { border-bottom: var(--rule) solid var(--rule-soft); content-visibility: auto; contain-intrinsic-size: auto 30px; }
-.log-rows button { display: grid; grid-template-columns: 64px minmax(120px, 240px) 1fr; gap: 8px; width: 100%; border: 0; text-align: left; padding: 4px 0; }
+.log-rows button { display: grid; grid-template-columns: 64px minmax(120px, 240px) 1fr; gap: 8px; width: 100%; border: 0; text-align: left; padding: 4px 0 4px 9px; }
 .log-rows .who { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .log-rows button:hover .who { color: inherit; }
-.log-rows li[aria-current] { border-left: var(--rule-heavy) solid var(--red); padding-left: 6px; }
+/* painted, not laid out: moving the current row while playing never lays the whole list out again */
+.log-rows li[aria-current] > button { box-shadow: inset var(--rule-heavy) 0 0 var(--red); }
 
 /* the detail */
 #panel {

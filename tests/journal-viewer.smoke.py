@@ -175,6 +175,15 @@ def main(argv):
         page.keyboard.press("1")
         expect(page.locator("#log li")).to_have_count(len(run["events"]))
         check("the text log has one row per event", page.locator("#log li[aria-current]").count() == 1)
+        page.evaluate("document.activeElement.blur()")
+        page.keyboard.press("Home")
+        page.keyboard.press("Space")
+        page.wait_for_timeout(400)
+        page.keyboard.press("Space")
+        marked = page.locator("#log li[aria-current]")
+        check("played in the text log, one row is current: the event the playhead is on",
+              marked.count() == 1 and marked.get_attribute("data-i") == stage.get_attribute("data-index") != "-1",
+              f'{marked.count()} {stage.get_attribute("data-index")}')
         page.keyboard.press("l")
         page.keyboard.press("3")
         heights = page.evaluate("[...document.querySelectorAll('.head')].map((h) => [h.dataset.lane, h.offsetHeight])")

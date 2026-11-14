@@ -4,11 +4,12 @@
 import { el } from "./dom.js";
 import { Diagram } from "./diagram.js";
 import { FULL_RUN_MS, SPEEDS, cursorAt, formatClock, formatTokens, tOf, tokenPrefix, uOf, visible } from "./model.js";
-import { KEYS, markLogRow, renderDelta, renderLog, renderPanel, renderPicker, showFile } from "./ui.js";
+import { KEYS, renderDelta, renderLog, renderPanel, renderPicker, showFile } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
 const calm = matchMedia("(prefers-reduced-motion: reduce)");
 const narrow = matchMedia("(max-width: 720px)");
+const LOG_SCROLL_MS = 200; // while playing, the text log follows the playhead at most this often
 
 const state = {
   runs: [],        // the list (GET /api/runs)
@@ -22,6 +23,9 @@ const state = {
   p: 1,            // progress of the replay
   index: -1,       // the event of the first run the reader is on
   tab: "diagram",
+  logRows: [],     // the text log's rows by event index
+  logMarked: null, // the row marked current
+  logScrolledAt: 0,
   frame: 0,
   before: 0,
   focusBack: null,
@@ -133,8 +137,9 @@ function tab(name) {
   $("diagrams").hidden = name !== "diagram";
   $("log").hidden = name !== "log";
   if (name === "log") {
-    renderLog($("log"), state.open[0], state.view, select);
-    setTimeout(() => markLogRow($("log"), state.index)?.scrollIntoView({ block: "nearest" }), 0);
+    state.logRows = renderLog($("log"), state.open[0], state.view, select);
+    state.logMarked = null;
+    setTimeout(() => markLog(true), 0);
   } else {
     for (const d of state.diagrams) d.fit();
     seek(state.p, { index: state.index });
@@ -145,7 +150,10 @@ function setView(view) {
   state.view = view;
   $("view").value = view;
   for (const d of state.diagrams) d.setView(view);
-  if (state.tab === "log") renderLog($("log"), state.open[0], view, select);
+  if (state.tab === "log") {
+    state.logRows = renderLog($("log"), state.open[0], view, select);
+    state.logMarked = null;
+  }
   seek(state.p, { index: state.index });
 }
 
@@ -165,11 +173,24 @@ function seek(p, { index, follow = false, announce = false } = {}) {
   $("spent").textContent = formatTokens(state.prefix[Math.max(0, state.index + 1)]);
   $("stage").dataset.state = state.playing ? "playing" : state.p >= 1 ? "ended" : "paused";
   $("stage").dataset.index = String(state.index);
-  if (state.tab === "log") {
-    const row = markLogRow($("log"), state.index);
-    if (follow) row?.scrollIntoView({ block: "nearest" });
-  }
+  if (state.tab === "log") markLog(follow);
   if (announce && state.index >= 0) $("live").textContent = a.events[state.index].label;
+}
+
+// The current row of the text log: its mark moves only when the event does, and while playing the log scrolls at
+// most every LOG_SCROLL_MS (a scroll lays the whole list out).
+function markLog(follow) {
+  const row = state.logRows[state.index];
+  if (row !== state.logMarked) {
+    state.logMarked?.removeAttribute("aria-current");
+    row?.setAttribute("aria-current", "true");
+    state.logMarked = row; // undefined while its chunk is not added: tried again at the next seek
+  }
+  const now = performance.now();
+  if (follow && row && (!state.playing || now - state.logScrolledAt >= LOG_SCROLL_MS)) {
+    row.scrollIntoView({ block: "nearest" });
+    state.logScrolledAt = now;
+  }
 }
 
 function tick(now) {
