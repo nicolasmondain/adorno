@@ -1,0 +1,41 @@
+diff --git a/server/services/subscriptions.test.ts b/server/services/subscriptions.test.ts
+index 21e75dd..e5c87a4 100644
+--- a/server/services/subscriptions.test.ts
++++ b/server/services/subscriptions.test.ts
+@@ -1,9 +1,16 @@
+ import assert from 'node:assert/strict';
+ import { test } from 'node:test';
+-import { monthlyPrice, type Subscription } from './subscriptions.ts';
++import { applyPlanChange, monthlyPrice, type Subscription } from './subscriptions.ts';
+ 
+ const subscription: Subscription = { accountId: 'acc_1', plan: 'pro', seats: 3 };
+ 
+ test('monthlyPrice multiplies the seat price of the plan', () => {
+   assert.equal(monthlyPrice(subscription), 5700);
+ });
++
++test('applyPlanChange moves the subscription to the new plan and seats', () => {
++  const changed = applyPlanChange(subscription, { accountId: 'acc_1', plan: 'team', seats: 5 });
++
++  assert.deepEqual(changed, { accountId: 'acc_1', plan: 'team', seats: 5 });
++  assert.equal(monthlyPrice(changed), 24500);
++});
+diff --git a/server/services/subscriptions.ts b/server/services/subscriptions.ts
+index 3493146..c078551 100644
+--- a/server/services/subscriptions.ts
++++ b/server/services/subscriptions.ts
+@@ -12,3 +12,14 @@ const MONTHLY_CENTS_PER_SEAT: Record<Plan, number> = { free: 0, pro: 1900, team:
+ export function monthlyPrice(subscription: Subscription): number {
+   return MONTHLY_CENTS_PER_SEAT[subscription.plan] * subscription.seats;
+ }
++
++// Payload of the `plan.changed` webhook sent by the billing provider.
++export interface PlanChangedEvent {
++  accountId: string;
++  plan: string;
++  seats: number;
++}
++
++export function applyPlanChange(subscription: Subscription, event: PlanChangedEvent): Subscription {
++  return { ...subscription, plan: event.plan as any, seats: event.seats };
++}

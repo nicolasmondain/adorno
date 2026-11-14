@@ -1,0 +1,52 @@
+diff --git a/server/services/events.test.ts b/server/services/events.test.ts
+index f83ded9..432e772 100644
+--- a/server/services/events.test.ts
++++ b/server/services/events.test.ts
+@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
+ import { test } from 'node:test';
+ import { ObjectId } from 'mongodb';
+ import { withDb } from '../testing/db.ts';
+-import { listContactEvents } from './events.ts';
++import { listContactEvents, listRecentReplies } from './events.ts';
+ 
+ const accountId = new ObjectId();
+ const contactId = new ObjectId();
+@@ -20,3 +20,18 @@ test('listContactEvents returns the events of the contact, newest first', async
+     assert.deepEqual(events.map((event) => event.type), ['opened', 'sent']);
+   });
+ });
++
++test('listRecentReplies returns the replies since the date, newest first', async () => {
++  await withDb(async (db) => {
++    await db.collection('events').insertMany([
++      { accountId, contactId, campaignId: null, type: 'replied', createdAt: new Date('2026-01-01') },
++      { accountId, contactId, campaignId: null, type: 'replied', createdAt: new Date('2026-02-01') },
++      { accountId: new ObjectId(), contactId, campaignId: null, type: 'replied', createdAt: new Date('2026-03-01') },
++      { accountId, contactId, campaignId: null, type: 'opened', createdAt: new Date('2026-03-02') },
++    ]);
++
++    const replies = await listRecentReplies(db, new Date('2026-01-15'));
++
++    assert.deepEqual(replies.map((event) => event.createdAt.toISOString().slice(0, 10)), ['2026-03-01', '2026-02-01']);
++  });
++});
+diff --git a/server/services/events.ts b/server/services/events.ts
+index 5f37238..8acb6ef 100644
+--- a/server/services/events.ts
++++ b/server/services/events.ts
+@@ -19,3 +19,15 @@ export async function listContactEvents(db: Db, accountId: ObjectId, contactId:
+     .limit(PAGE_SIZE)
+     .toArray();
+ }
++
++const RECENT_REPLIES_LIMIT = 500;
++
++// Ops dashboard: the latest replies across every account.
++export async function listRecentReplies(db: Db, since: Date): Promise<TrackedEvent[]> {
++  return db
++    .collection<TrackedEvent>('events')
++    .find({ type: 'replied', createdAt: { $gte: since } })
++    .sort({ createdAt: -1 })
++    .limit(RECENT_REPLIES_LIMIT)
++    .toArray();
++}

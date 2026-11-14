@@ -1,0 +1,56 @@
+diff --git a/server/routes/account.test.ts b/server/routes/account.test.ts
+index 2167d68..9443f94 100644
+--- a/server/routes/account.test.ts
++++ b/server/routes/account.test.ts
+@@ -4,7 +4,7 @@ import express from 'express';
+ import request from 'supertest';
+ import type { Db } from 'mongodb';
+ import { withDb } from '../testing/db.ts';
+-import { accountRouter } from './account.ts';
++import { accountRouter, type Account } from './account.ts';
+ 
+ function api(db: Db) {
+   return request(express().use(express.json()).use(accountRouter(db)));
+@@ -16,3 +16,20 @@ test('GET /health answers ok', async () => {
+     assert.deepEqual(res.body, { ok: true });
+   });
+ });
++
++const acme: Account = { _id: 'acc_1', name: 'Acme', plan: 'pro', apiToken: 'tok_FAKE_0001' };
++
++test('POST /account/lookup returns the account behind the token', async () => {
++  await withDb(async (db) => {
++    await db.collection<Account>('accounts').insertOne(acme);
++    const res = await api(db).post('/account/lookup').send({ token: 'tok_FAKE_0001' }).expect(200);
++    assert.deepEqual(res.body, { id: 'acc_1', name: 'Acme', plan: 'pro' });
++  });
++});
++
++test('POST /account/lookup rejects an unknown token', async () => {
++  await withDb(async (db) => {
++    await db.collection<Account>('accounts').insertOne(acme);
++    await api(db).post('/account/lookup').send({ token: 'tok_FAKE_9999' }).expect(401);
++  });
++});
+diff --git a/server/routes/account.ts b/server/routes/account.ts
+index 1125be7..2aeaf27 100644
+--- a/server/routes/account.ts
++++ b/server/routes/account.ts
+@@ -15,5 +15,17 @@ export function accountRouter(db: Db): Router {
+     res.json({ ok: true });
+   });
+ 
++  // Used by the browser extension: resolves the account behind an API token.
++  router.post('/account/lookup', async (req, res) => {
++    const account = await db
++      .collection<Account>('accounts')
++      .findOne({ apiToken: req.body.token }, { projection: { name: 1, plan: 1 } });
++    if (!account) {
++      res.status(401).json({ error: 'invalid_token' });
++      return;
++    }
++    res.json({ id: account._id, name: account.name, plan: account.plan });
++  });
++
+   return router;
+ }

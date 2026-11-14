@@ -1,0 +1,45 @@
+{
+  "title": "feat(events): list the latest replies for the ops dashboard",
+  "description": "The internal ops dashboard shows the latest replies across every account. Adds `listRecentReplies(db, since)`, capped at 500 events.",
+  "rationale": "`events` holds hundreds of millions of documents and every index starts with `accountId`: a filter on `type` and `createdAt` scans the whole collection and sorts in memory. The change adds no index.",
+  "routing": {
+    "areas": [
+      "back",
+      "back.query",
+      "tests",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:back",
+      "agent:review:tests",
+      "agent:review:perf-back",
+      "agent:review:mongodb"
+    ]
+  },
+  "verdict": [
+    "fix"
+  ],
+  "findings": [
+    {
+      "file": "server/services/events.ts",
+      "lines": [
+        29,
+        30
+      ],
+      "category": "missing-index",
+      "severity": [
+        "major"
+      ],
+      "keywords": [
+        "\\bindex",
+        "collscan",
+        "(collection|full|table)[ -]scan",
+        "scans? (the )?(whole|entire|full)",
+        "in[ -]memory sort"
+      ],
+      "reviewer": "agent:review:mongodb"
+    }
+  ]
+}

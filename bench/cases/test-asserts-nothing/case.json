@@ -1,0 +1,45 @@
+{
+  "title": "feat(pricing): add VAT to a total",
+  "description": "Invoices need the total with VAT. Adds `addVat(totalCents, country)` for FR, DE and ES, with its tests.",
+  "rationale": "The test named \"applies the rate of each supported country\" calls `addVat` and asserts nothing: a wrong rate or a wrong rounding still passes.",
+  "routing": {
+    "areas": [
+      "back",
+      "tests",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:back",
+      "agent:review:tests",
+      "agent:review:perf-back"
+    ]
+  },
+  "verdict": [
+    "fix"
+  ],
+  "findings": [
+    {
+      "file": "server/services/pricing.test.ts",
+      "lines": [
+        13,
+        15
+      ],
+      "category": "test-without-assertion",
+      "severity": [
+        "major"
+      ],
+      "keywords": [
+        "assert",
+        "\\bexpect",
+        "(checks?|verif\\w+|tests?) nothing",
+        "does not (check|verify)",
+        "never (checks?|verif)",
+        "always pass",
+        "return(ed)? value"
+      ],
+      "reviewer": "agent:review:tests"
+    }
+  ]
+}

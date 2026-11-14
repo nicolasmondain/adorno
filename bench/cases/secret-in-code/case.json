@@ -1,0 +1,45 @@
+{
+  "title": "chore(config): boot without a payments key on a fresh checkout",
+  "description": "New developers could not start the server before asking for the payments key. `PAYMENTS_API_KEY` now falls back to our sandbox key, so `npm start` works right after cloning.",
+  "rationale": "An API key is committed in the source as a fallback: it ships in the repository and in every build, and a production start without the variable silently uses it instead of failing.",
+  "routing": {
+    "areas": [
+      "back",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:back",
+      "agent:review:tests",
+      "agent:review:perf-back"
+    ]
+  },
+  "verdict": [
+    "block"
+  ],
+  "findings": [
+    {
+      "file": "server/config.ts",
+      "lines": [
+        13,
+        13
+      ],
+      "category": "committed-secret",
+      "severity": [
+        "blocker"
+      ],
+      "keywords": [
+        "secret",
+        "hard-?coded",
+        "credential",
+        "commit(ted|s)?\\b",
+        "api key",
+        "sk_test",
+        "key in (the )?(source|code|repo)",
+        "rotate"
+      ],
+      "reviewer": "agent:review:code"
+    }
+  ]
+}

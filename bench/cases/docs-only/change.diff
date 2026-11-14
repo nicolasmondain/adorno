@@ -1,0 +1,17 @@
+diff --git a/README.md b/README.md
+index 5653b32..14feff0 100644
+--- a/README.md
++++ b/README.md
+@@ -10,3 +10,12 @@ npm start
+ ```
+ 
+ The server listens on the port given by `PORT` (3000 by default).
++
++## Test
++
++```sh
++npm test
++```
++
++Runs the unit tests with the Node.js test runner. Node.js 22 or later is required (see `engines` in
++`package.json`).
