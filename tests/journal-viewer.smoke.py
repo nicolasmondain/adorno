@@ -190,11 +190,14 @@ def main(argv):
         calm.goto(f"{base}/#run={run_id}")
         calm.wait_for_selector(".diagram .mark", state="attached")
         calm.focus(".diagram .scroll")
-        calm.keyboard.press("Home")
-        calm.keyboard.press("Space")
+        calm.keyboard.press("Space")   # right after opening: the playhead is at the end
         calm_stage = calm.locator("#stage")
-        check("with reduced motion, Space advances one event and nothing animates",
-              calm_stage.get_attribute("data-index") == "0" and calm_stage.get_attribute("data-state") == "paused")
+        check("with reduced motion, Space starts over from the first event and nothing animates",
+              calm_stage.get_attribute("data-index") == "0" and calm_stage.get_attribute("data-state") == "paused",
+              f'{calm_stage.get_attribute("data-index")} {calm_stage.get_attribute("data-state")}')
+        calm.keyboard.press("Space")
+        check("... then advances one event at a time", calm_stage.get_attribute("data-index") == "1",
+              calm_stage.get_attribute("data-index"))
         small = watch(browser.new_page(viewport={"width": 480, "height": 800}))
         small.goto(f"{base}/#run={run_id}")
         small.wait_for_selector("#log li")
