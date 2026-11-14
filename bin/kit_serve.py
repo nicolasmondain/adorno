@@ -257,11 +257,21 @@ def time_map(spans, width):
     return segments or [{"t0": 0, "t1": 0, "u0": 0, "u1": 0, "gap": False}]
 
 
-def drawn(segments, t):
-    for s in segments:
-        if s["t0"] <= t <= s["t1"]:
-            return s["u0"] if s["t1"] == s["t0"] else s["u0"] + (t - s["t0"]) * (s["u1"] - s["u0"]) // (s["t1"] - s["t0"])
-    return segments[-1]["u1"]
+def drawn(segments, times):
+    """The drawn instant of each of `times`, sorted: one forward walk over the segments (contiguous, in order), never
+    a scan per instant (a run with many idle gaps has as many segments as events)."""
+    out, k, last = [], 0, len(segments) - 1
+    for t in times:
+        while k < last and segments[k]["t1"] < t:
+            k += 1
+        s = segments[k]
+        if not s["t0"] <= t <= s["t1"]:
+            out.append(segments[-1]["u1"])
+        elif s["t1"] == s["t0"]:
+            out.append(s["u0"])
+        else:
+            out.append(s["u0"] + (t - s["t0"]) * (s["u1"] - s["u0"]) // (s["t1"] - s["t0"]))
+    return out
 
 
 def steps_of(events, lanes, t0, last):
@@ -367,8 +377,8 @@ def normalize(name, folder):
             out.append({"t": at + dur, "dur": 0, "type": "answer", "from": "you", "to": source,
                         "label": f"you answer: {e['answer']}", "tokens": None, "d": {"answer": e["answer"], "by": e.get("by")}})
     out.sort(key=lambda e: e["t"])
-    for i, e in enumerate(out):
-        e["i"], e["u"] = i, drawn(segments, e["t"])
+    for i, (e, u) in enumerate(zip(out, drawn(segments, [e["t"] for e in out]))):
+        e["i"], e["u"] = i, u
     roots = file_roots(folder, begin.get("dir"))
     return {"id": name, "run": begin.get("run") or events[0].get("run"), "workflow": begin.get("workflow"),
             "mode": begin.get("mode"), "level": begin.get("level"), "repos": begin.get("repos") or [],

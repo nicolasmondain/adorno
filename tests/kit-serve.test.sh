@@ -202,6 +202,30 @@ status 200 /app.js; [ "$(header content-type)" = "text/javascript; charset=utf-8
 status 200 /fonts/f.woff2; [ "$(header content-type)" = "font/woff2" ] && ok "fonts" || ko "font type"
 for bad in /.env /linked.txt /fonts /fonts/ /../runs/$F1/plan.md /%2e%2e/bin/kit /index.html/ /nope.js; do status 404 "$bad"; done
 
+echo "a run with many idle gaps"
+# thousands of the session's tool calls, a silence above GAP_MS every other one: as many segments in the time map
+GAPS="$TMP/runs-gaps"; G=gaps-20260103T000000-3000-1; mkdir -p "$GAPS/$G"
+python3 - "$GAPS/$G/events.jsonl" <<'EOF'
+import json, sys
+from datetime import datetime, timedelta, timezone
+t0, run = datetime(2026, 1, 3, tzinfo=timezone.utc), "20260103T000000-3000-1"
+def event(ms, kind, **fields):
+    t = (t0 + timedelta(milliseconds=ms)).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    return {"v": 1, "t": t, "run": run, "session": "sess-g", "actor": "session", "parent": None, "type": kind, **fields}
+out, ms = [event(0, "run.begin", workflow="workflow:test:gaps", mode="auto", level="L1", repos=["acme/app"], dir="/synthetic")], 0
+for i in range(10000):
+    ms += 6000 if i % 2 == 0 else 50
+    out.append(event(ms, "tool.call", tool="Read", input=f"src/f{i % 40}.ts", dur=20))
+out.append(event(ms + 100, "run.end", workflow="workflow:test:gaps", outcome="done"))
+with open(sys.argv[1], "w") as f:
+    f.writelines(json.dumps(e, separators=(",", ":")) + "\n" for e in out)
+EOF
+"${KIT[@]}" serve --port 0 --runs "$GAPS" >"$TMP/url3" 2>"$TMP/serve3.err" & SERVERS="$SERVERS $!"
+URL="$(wait_url "$TMP/url3")"
+took="$(curl -s -o "$TMP/body" -w '%{time_total}' "$URL/api/runs/$G")"; out="$(cat "$TMP/body")"
+expect_jq "10 002 events, 10 000 segments or more" '(.events | length) == 10002 and (.time.segments | length) >= 10000 and ([.events[].u] | . == sort)'
+python3 -c 'import sys; sys.exit(float(sys.argv[1]) >= 1.5)' "$took" && ok "... read in ${took}s (the walk over the segments is linear)" || ko "a run with many gaps is slow to read" "${took}s"
+
 echo "read-only"
 [ -z "$(find "$RUNS" -newer "$TMP/stamp" ! -path "$RUNS/$F3/events.jsonl" ! -path "$RUNS/$F2/events.jsonl" ! -path "$RUNS/$F2" ! -path "$RUNS/$F3")" ] \
   && ok "the server wrote nothing in the runs folder" || ko "the server wrote in the runs folder" "$(find "$RUNS" -newer "$TMP/stamp" | head -5)"
