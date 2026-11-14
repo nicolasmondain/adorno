@@ -112,6 +112,8 @@ thead th { border-bottom: var(--rule) solid var(--ink); font-weight: 500; text-t
 .log-rows button { display: grid; grid-template-columns: 64px minmax(120px, 240px) 1fr; gap: 8px; width: 100%; border: 0; text-align: left; padding: 4px 0 4px 9px; }
 .log-rows .who { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .log-rows button:hover .who { color: inherit; }
+/* a row clips what it paints outside itself (content-visibility): its focus ring is drawn inside the button */
+.log-rows button:focus-visible { outline-offset: calc(-1 * var(--rule-heavy)); }
 /* painted, not laid out: moving the current row while playing never lays the whole list out again */
 .log-rows li[aria-current] > button { box-shadow: inset var(--rule-heavy) 0 0 var(--red); }
 

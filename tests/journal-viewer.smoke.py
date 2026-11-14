@@ -6,6 +6,7 @@
 
 Usage: uv run --script tests/journal-viewer.smoke.py URL RUN OTHER_RUN LARGE_RUN SCREENSHOT.png
        uv run --script tests/journal-viewer.smoke.py --install     (downloads the pinned Chromium, once)
+A second screenshot, the text log with a focused row, goes next to the first as viewer-log-focus.png.
 Exit: 0 every check passed, 1 a check failed, 77 no browser to run them in (tests/journal-viewer.test.sh says so).
 The one place where the Playwright version is pinned; the test runs it with `uv run --offline`, so nothing is
 downloaded behind your back.
@@ -183,6 +184,15 @@ def main(argv):
         page.keyboard.press("1")
         check("the text log has one row per event", *counted(page.locator("#log li"), len(run["events"])))
         check("... and one current row", page.locator("#log li[aria-current]").count() == 1)
+        page.focus("#help-open")
+        page.keyboard.press("Tab")   # onto the first row: a row clips what it paints outside itself (content-visibility)
+        ring = page.locator("#log li").first.locator("button").evaluate(
+            "(b) => { const s = getComputedStyle(b); return [b === document.activeElement && b.matches(':focus-visible'),"
+            " s.outlineStyle, parseFloat(s.outlineWidth), parseFloat(s.outlineOffset)]; }")
+        check("Tab onto a log row draws its focus ring inside the button",
+              ring[0] and ring[1] != "none" and ring[2] > 0 and ring[2] + ring[3] <= 0, str(ring))
+        page.mouse.move(0, 0)   # no hovered row in the picture
+        page.screenshot(path=os.path.join(os.path.dirname(shot), "viewer-log-focus.png"))
         page.evaluate("document.activeElement.blur()")
         page.keyboard.press("Home")
         page.keyboard.press("Space")
