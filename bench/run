@@ -1,0 +1,371 @@
+#!/usr/bin/env python3
+"""Usage: run [--case ID]… [--tool claude] [--model X] [--repeat N] [--label NAME] [--budget-usd N]
+           [--repo owner/repo] [--parallel N] [--cases DIR] [--results DIR]
+
+Runs the review stage of workflow:pr:review on the benchmark cases, headless and without GitHub. This calls models
+and costs money: it never runs in CI. For each case and each repeat:
+
+  1. a throwaway workspace: base/ committed, change.diff committed on top (diffBase = the first commit);
+  2. the routing of bench/route (pr-areas with the settings of --repo, `adorno/bench` by default: declare it once in
+     local/adorno.yaml, or pass a repo your registry declares);
+  3. every reviewer pr-areas picks, --parallel at a time (3 by default, as max_parallel), each writing
+     reviews/<name>.json;
+  4. review-merge; a review that is missing or that it reports invalid is run once more;
+  5. the agent:adorno pass on the merged review (review-final.json, review-notes.md).
+
+The prompts are those of this working tree (dist/, public layer only): the agents come from dist/claude-plugin and
+the instructions from dist/AGENTS.md, placed in the workspace as .claude/rules/adorno.md. Your user settings, your
+global instructions and your hooks are not loaded. An agent runs sandboxed: it writes inside its workspace only and
+has no network. --model replaces the model of every agent; without it each agent runs on its own tier.
+
+Results go to RESULTS/<label>/ (bench/results by default, ignored by git):
+  run.json                     the run: tool, model, prompts (sha, dirty), cost, what the budget skipped
+  <case>/<n>/run.json          one case run: diffBase, routing_ok, missing and invalid reviews, cost
+  <case>/<n>/areas.json        the pr-areas output
+  <case>/<n>/reviews/*.json    each reviewer's review; review.json the merged one
+  <case>/<n>/review-final.json, review-notes.md   what agent:adorno wrote
+  <case>/<n>/meta/<name>.json  per agent: models actually used, tokens, cost, duration, attempts, delivered
+  <case>/<n>/messages/<name>.md  the agent's last message
+
+--budget-usd relies on the cost the tool reports: no case starts once the spent amount plus the dearest case so far
+would exceed it, and each call is capped by what is left. Exits 2 on wrong usage, 3 when --repo is not declared.
+"""
+import argparse
+import concurrent.futures
+import datetime
+import json
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+SCRIPTS = ROOT / "src" / "skills" / "adorno-github" / "scripts"
+PLUGIN = ROOT / "dist" / "claude-plugin"
+INSTRUCTIONS = ROOT / "dist" / "AGENTS.md"
+RUN_DIR = ".agent-run/review"
+ADORNO = "agent:adorno"
+TIMEOUT = 900  # seconds, for one agent
+GIT = ["git", "-c", "user.email=bench@example.test", "-c", "user.name=bench", "-c", "commit.gpgsign=false",
+       "-c", "core.hooksPath=/dev/null"]
+
+
+def die(message, code=1):
+    print(f"run: {message}", file=sys.stderr)
+    sys.exit(code)
+
+
+def out(cmd, cwd=None):
+    return subprocess.run([str(c) for c in cmd], cwd=cwd, check=True, capture_output=True, text=True).stdout
+
+
+def write_json(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+
+
+# ── tools: how to start one agent headless, and how to read what the tool reports ─────────────────────────────────
+# Claude Code. Verified on 2.1.325: --setting-sources project,local leaves the user's settings, instructions, agents
+# and hooks out; the sandbox confines Bash to the workspace and cuts the network, with no way out of it; dontAsk
+# refuses everything the allow list does not name, so Write and Edit only reach the run folder.
+CLAUDE_SETTINGS = {"autoMemoryEnabled": False,
+                   "sandbox": {"enabled": True, "autoAllowBashIfSandboxed": True, "allowUnsandboxedCommands": False}}
+
+
+def claude_command(agent, prompt, model, budget):
+    name = "adorno:adorno" if agent == ADORNO else "adorno:adorno-" + agent.replace(":", "-")
+    cmd = ["claude", "-p", prompt, "--agent", name, "--output-format", "json", "--no-session-persistence",
+           "--setting-sources", "project,local", "--settings", json.dumps(CLAUDE_SETTINGS), "--strict-mcp-config",
+           "--plugin-dir", str(PLUGIN), "--permission-mode", "dontAsk"]
+    if model:
+        cmd += ["--model", model]
+    if budget is not None:
+        cmd += ["--max-budget-usd", f"{budget:.4f}"]
+    return cmd + ["--allowedTools", "Bash", "Read", "Grep", "Glob", f"Edit({RUN_DIR}/**)"]
+
+
+def claude_parse(stdout):
+    data = json.loads(stdout)
+    usage = data.get("modelUsage") or {}
+
+    def total(key):
+        return sum(int(m.get(key) or 0) for m in usage.values())
+
+    return {"message": data.get("result") or "", "is_error": bool(data.get("is_error")), "stop": data.get("subtype"),
+            "cost_usd": data.get("total_cost_usd"), "duration_ms": data.get("duration_ms") or 0,
+            "turns": data.get("num_turns") or 0, "denied": len(data.get("permission_denials") or []),
+            "models": sorted(usage),
+            "tokens": {"input": total("inputTokens"), "cache_read": total("cacheReadInputTokens"),
+                       "cache_write": total("cacheCreationInputTokens"), "output": total("outputTokens")}}
+
+
+TOOLS = {"claude": {"command": claude_command, "parse": claude_parse, "version": ["claude", "--version"]}}
+
+
+def call_agent(tool, agent, prompt, workspace, model, budget):
+    """One headless call -> what the tool reported. A crash, a timeout or an unreadable answer is an error, not a
+    review."""
+    failed = {"message": "", "is_error": True, "stop": "tool_failed", "cost_usd": None, "duration_ms": 0, "turns": 0,
+              "denied": 0, "models": [], "tokens": {"input": 0, "cache_read": 0, "cache_write": 0, "output": 0}}
+    try:
+        done = subprocess.run(tool["command"](agent, prompt, model, budget), cwd=workspace, capture_output=True,
+                              text=True, timeout=TIMEOUT, stdin=subprocess.DEVNULL)
+    except subprocess.TimeoutExpired:
+        return dict(failed, stop="timeout", message=f"no answer after {TIMEOUT} s")
+    try:
+        return tool["parse"](done.stdout)
+    except (ValueError, AttributeError):
+        return dict(failed, message=(done.stderr or done.stdout)[-2000:])
+
+
+# ── one case ──────────────────────────────────────────────────────────────────────────────────────────────────────
+def short(agent):
+    return agent.split(":")[-1]
+
+
+def fill(template, values):
+    for key, value in values.items():
+        template = template.replace("{{" + key + "}}", value)
+    return template
+
+
+def make_workspace(case_dir, workspace, title):
+    """base/ then change.diff as two commits -> diffBase. The change is committed under the case's title, a
+    Conventional Commit header like the pull request's, so that no reviewer has the commit message to report. The
+    instructions sit where `kit install` puts them in a repo that has its own CLAUDE.md; they and the run folder
+    stay out of the diff."""
+    shutil.copytree(case_dir / "base", workspace)
+    out(GIT + ["init", "-q", "-b", "main", "."], workspace)
+    out(GIT + ["add", "-A"], workspace)
+    out(GIT + ["commit", "-q", "-m", "chore: initial commit"], workspace)
+    diff_base = out(GIT + ["rev-parse", "HEAD"], workspace).strip()
+    out(GIT + ["apply", str(case_dir / "change.diff")], workspace)
+    out(GIT + ["add", "-A"], workspace)
+    out(GIT + ["commit", "-q", "-m", title], workspace)
+    with open(workspace / ".git" / "info" / "exclude", "a") as exclude:
+        exclude.write(".claude/\n.agent-run/\n")
+    rules = workspace / ".claude" / "rules"
+    rules.mkdir(parents=True)
+    shutil.copy(INSTRUCTIONS, rules / "adorno.md")
+    (workspace / RUN_DIR / "reviews").mkdir(parents=True)
+    return diff_base
+
+
+def brief(routed, always, agent):
+    """The files and skills a reviewer gets, as step 6 of workflow:pr:review: the files of the areas that name it
+    (every file for the `always` reviewers), and the skills of every area those files fall in."""
+    areas, by_area = routed["areas"], routed["by_area"]
+    everything = sorted({f for files in areas.values() for f in files} | set(routed["other"]))
+    own = [a for a in areas if agent in by_area[a]["review"]]
+    files = everything if agent in always or not own else sorted({f for a in own for f in areas[a]})
+    skills = []
+    for area in areas:
+        if set(areas[area]) & set(files):
+            skills += [s for s in by_area[area]["skills"] if s not in skills]
+    return files, skills
+
+
+def salvage(message):
+    """The review an agent gave in its message instead of writing its file, or None."""
+    decoder = json.JSONDecoder()
+    for start, char in enumerate(message):
+        if char != "{":
+            continue
+        try:
+            found, _ = decoder.raw_decode(message[start:])
+        except ValueError:
+            continue
+        if isinstance(found, dict) and "verdict" in found and "findings" in found:
+            return found
+    return None
+
+
+def add_attempt(meta, attempt):
+    meta["attempts"] += 1
+    meta["is_error"], meta["stop"] = attempt["is_error"], attempt["stop"]
+    meta["duration_ms"] += attempt["duration_ms"]
+    meta["turns"] += attempt["turns"]
+    meta["denied"] += attempt["denied"]
+    meta["models"] = sorted(set(meta["models"]) | set(attempt["models"]))
+    for key, value in attempt["tokens"].items():
+        meta["tokens"][key] += value
+    if attempt["cost_usd"] is not None:
+        meta["cost_usd"] = (meta["cost_usd"] or 0) + attempt["cost_usd"]
+
+
+def run_case(args, tool, case_id, entry, always, state, dest):
+    case_dir = args.cases / case_id
+    case = json.loads((case_dir / "case.json").read_text())
+    routed, parallel = entry["routed"], args.parallel
+    templates = {name: (ROOT / "bench" / "prompts" / f"{name}.md").read_text() for name in ("reviewer", "adorno")}
+    tmp = Path(tempfile.mkdtemp(prefix="adorno-bench-"))
+    workspace = tmp / "ws"
+    metas, messages = {}, {}
+
+    def left():
+        return None if args.budget_usd is None else max(args.budget_usd - state["spent"], 0.0)
+
+    def exhausted():
+        return args.budget_usd is not None and state["spent"] >= args.budget_usd
+
+    def play(agent, prompt, budget):
+        attempt = call_agent(tool, agent, prompt, workspace, args.model, budget)
+        meta = metas.setdefault(agent, {"agent": agent, "attempts": 0, "delivered": "none", "is_error": False,
+                                        "stop": None, "models": [], "cost_usd": None, "duration_ms": 0, "turns": 0,
+                                        "denied": 0, "tokens": {"input": 0, "cache_read": 0, "cache_write": 0,
+                                                                "output": 0}})
+        add_attempt(meta, attempt)
+        messages[agent] = attempt["message"]
+        return attempt
+
+    try:
+        diff_base = make_workspace(case_dir, workspace, case["title"])
+        run_dir = workspace / RUN_DIR
+        common = {"diff_base": diff_base, "title": case["title"], "description": case["description"],
+                  "run_dir": RUN_DIR}
+
+        def review(agent, budget):
+            files, skills = brief(routed, always, agent)
+            prompt = fill(templates["reviewer"], dict(common, agent=agent, name=short(agent), files=", ".join(files),
+                                                      skills=", ".join(skills) or "none"))
+            return agent, play(agent, prompt, budget)
+
+        pending, merged = list(routed["review"]), {}
+        for attempt_number in (1, 2):
+            share = None if left() is None else max(left() / min(parallel, len(pending)), 0.01)
+            with concurrent.futures.ThreadPoolExecutor(max_workers=parallel) as pool:
+                for agent, attempt in pool.map(lambda a: review(a, share), pending):
+                    if attempt["cost_usd"] is not None:
+                        state["spent"] += attempt["cost_usd"]
+                    target = run_dir / "reviews" / f"{short(agent)}.json"
+                    if target.is_file():
+                        metas[agent]["delivered"] = "file"
+                    else:
+                        found = salvage(attempt["message"])
+                        if found is not None:
+                            write_json(target, found)
+                            metas[agent]["delivered"] = "salvaged"
+            merged = json.loads(out([SCRIPTS / "review-merge", run_dir / "reviews"]))
+            pending = [a for a in routed["review"] if not (run_dir / "reviews" / f"{short(a)}.json").is_file()
+                       or f"{short(a)}.json" in merged["invalid"]]
+            if not pending or attempt_number == 2 or exhausted():
+                break
+            for agent in pending:  # as step 7 of workflow:pr:review: run that specialist once more
+                (run_dir / "reviews" / f"{short(agent)}.json").unlink(missing_ok=True)
+                metas[agent]["delivered"] = "none"
+        write_json(run_dir / "review.json", merged)
+        missing = [a for a in routed["review"] if not (run_dir / "reviews" / f"{short(a)}.json").is_file()]
+
+        if not exhausted():
+            attempt = play(ADORNO, fill(templates["adorno"], common), left())
+            if attempt["cost_usd"] is not None:
+                state["spent"] += attempt["cost_usd"]
+            if (run_dir / "review-final.json").is_file() or (run_dir / "review-notes.md").is_file():
+                metas[ADORNO]["delivered"] = "file"
+
+        write_json(dest / "areas.json", routed)
+        shutil.copytree(run_dir / "reviews", dest / "reviews")
+        for name in ("review.json", "review-final.json", "review-notes.md"):
+            if (run_dir / name).is_file():
+                shutil.copy(run_dir / name, dest / name)
+        for agent, meta in metas.items():
+            write_json(dest / "meta" / f"{short(agent)}.json", meta)
+            (dest / "messages").mkdir(exist_ok=True)
+            (dest / "messages" / f"{short(agent)}.md").write_text(messages[agent] + "\n")
+        costs = [m["cost_usd"] for m in metas.values() if m["cost_usd"] is not None]
+        summary = {"case": case_id, "diff_base": diff_base, "routing_ok": entry["ok"], "missing": missing,
+                   "invalid": merged["invalid"], "verdict": merged["verdict"],
+                   "budget_exhausted": exhausted(), "cost_usd": sum(costs) if costs else None,
+                   "duration_ms": sum(m["duration_ms"] for m in metas.values())}
+        write_json(dest / "run.json", summary)
+        return summary
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ── the run ───────────────────────────────────────────────────────────────────────────────────────────────────────
+def main():
+    parser = argparse.ArgumentParser(prog="run", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--case", action="append", default=[])
+    parser.add_argument("--tool", default="claude")
+    parser.add_argument("--model")
+    parser.add_argument("--repeat", type=int, default=1)
+    parser.add_argument("--label")
+    parser.add_argument("--budget-usd", type=float)
+    parser.add_argument("--repo", default="adorno/bench")
+    parser.add_argument("--parallel", type=int, default=3)
+    parser.add_argument("--cases", type=Path, default=ROOT / "bench" / "cases")
+    parser.add_argument("--results", type=Path, default=ROOT / "bench" / "results")
+    args = parser.parse_args()  # exits 2 on wrong usage
+    if args.tool not in TOOLS:
+        die(f"unknown tool: {args.tool} (known: {', '.join(TOOLS)})", 2)
+    if args.repeat < 1 or args.parallel < 1:
+        die("--repeat and --parallel must be at least 1", 2)
+    tool = TOOLS[args.tool]
+    cases = args.case or sorted(d.name for d in args.cases.iterdir() if (d / "case.json").is_file())
+    for case_id in cases:
+        if not (args.cases / case_id / "case.json").is_file():
+            die(f"unknown case: {case_id}", 2)
+    if not PLUGIN.is_dir() or not INSTRUCTIONS.is_file():
+        die("dist/ is missing: run bin/kit build")
+    started = datetime.datetime.now(datetime.timezone.utc)
+    label = args.label or f"{started:%Y%m%d-%H%M%S}-{args.tool}-{args.model or 'tiers'}"
+    top = args.results / label
+    if top.exists():
+        die(f"{top} already exists: pick another --label", 2)
+
+    route = [ROOT / "bench" / "route", "--repo", args.repo, "--cases", args.cases]
+    for case_id in cases:
+        route += ["--case", case_id]
+    routed = subprocess.run([str(c) for c in route], capture_output=True, text=True)
+    if routed.returncode not in (0, 1):  # 1: a routing differs from case.json, which the run records and goes on
+        sys.stderr.write(routed.stderr)
+        sys.exit(routed.returncode)
+    entries = {entry["case"]: entry for entry in json.loads(routed.stdout)}
+    # the `always` reviewers are those a file of no area gets: they read the whole change, not one area
+    always = json.loads(out([SCRIPTS / "pr-areas", args.repo, "--files", "no-area.bench"]))["review"]
+
+    try:
+        sha = out(["git", "rev-parse", "HEAD"], ROOT).strip()
+        dirty = bool(out(["git", "status", "--porcelain", "--", "src", "dist"], ROOT).strip())
+    except (subprocess.CalledProcessError, OSError):
+        sha, dirty = None, None
+    try:
+        version = out(tool["version"]).strip()
+    except (subprocess.CalledProcessError, OSError):
+        die(f"{args.tool} is not installed or does not start")
+
+    state = {"spent": 0.0}
+    runs, skipped, dearest = [], [], 0.0
+    for n in range(1, args.repeat + 1):
+        for case_id in cases:
+            if args.budget_usd is not None and (skipped or state["spent"] + dearest > args.budget_usd):
+                skipped.append({"case": case_id, "n": n, "reason": "budget"})
+                continue
+            print(f"run: {case_id} #{n}", file=sys.stderr)
+            summary = run_case(args, tool, case_id, entries[case_id], always, state, top / case_id / str(n))
+            runs.append({"case": case_id, "n": n, "cost_usd": summary["cost_usd"]})
+            dearest = max(dearest, summary["cost_usd"] or 0.0)
+            if summary["budget_exhausted"]:
+                print(f"run: budget reached during {case_id} #{n}", file=sys.stderr)
+    priced = any(r["cost_usd"] is not None for r in runs)
+    if args.budget_usd is not None and runs and not priced:
+        print(f"run: {args.tool} reports no cost: --budget-usd did not apply", file=sys.stderr)
+    report = {"label": label, "tool": args.tool, "tool_version": version, "model": args.model, "repo": args.repo,
+              "repeat": args.repeat, "cases": cases, "prompts": {"sha": sha, "dirty": dirty},
+              "started_at": started.isoformat(timespec="seconds"),
+              "finished_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+              "budget_usd": args.budget_usd, "cost_usd": state["spent"] if priced else None,
+              "runs": runs, "skipped": skipped}
+    write_json(top / "run.json", report)
+    print(json.dumps(report, indent=2))
+    if skipped:
+        print(f"run: budget of {args.budget_usd} USD reached, {len(skipped)} case run(s) skipped", file=sys.stderr)
+    if not runs:
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

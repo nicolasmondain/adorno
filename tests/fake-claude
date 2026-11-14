@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Stand-in for `claude -p` in tests: plays one agent of a benchmark run (bench/run) without calling any model.
+# Reads --agent, --model and the working directory, logs every call (FAKE_CLAUDE_LOG: one JSON array of arguments
+# per line), and answers with the envelope of `claude -p --output-format json` (FAKE_CLAUDE_ENVELOPE: the fixture
+# captured from the real tool), with its own message, cost and model.
+# What the agent does comes from FAKE_CLAUDE_DIR, by agent name (mongodb, perf-back, adorno…):
+#   NAME.json         the review it writes to .agent-run/review/reviews/NAME.json (default: a pass, no finding)
+#   NAME.first.json   written instead on its first call in a workspace (a malformed review, then the retry)
+#   NAME.message      its last message; with no NAME.json next to it, it writes no file at all
+#   adorno.final.json, adorno.notes.md   what agent:adorno writes as review-final.json and review-notes.md
+# FAKE_CLAUDE_COST: the cost of one call (0.01 by default). FAKE_CLAUDE_COMMITS: file that gets the commit subjects
+# of the workspace, newest first, at each call.
+set -euo pipefail
+
+[ "${1:-}" != "--version" ] || { echo "0.0.0 (fake claude)"; exit 0; }
+log="[" sep=""
+for arg in "$@"; do log="$log$sep$(printf '%s' "$arg" | jq -Rs .)"; sep=","; done
+if [ -n "${FAKE_CLAUDE_LOG:-}" ]; then  # the reviewers run in parallel: append each line in one write
+  line="$(mktemp)"; printf '%s]\n' "$log" >"$line"; cat "$line" >>"$FAKE_CLAUDE_LOG"; rm -f "$line"
+fi
+[ -z "${FAKE_CLAUDE_COMMITS:-}" ] || git log --format=%s >"$FAKE_CLAUDE_COMMITS"
+agent="" model="fake-tier-model"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --agent) agent="$2"; shift ;;
+    --model) model="$2"; shift ;;
+  esac
+  shift
+done
+[ -n "$agent" ] || { echo "fake-claude: no --agent" >&2; exit 2; }
+
+dir="${FAKE_CLAUDE_DIR:-/nonexistent}"
+run=".agent-run/review"
+name="${agent#adorno:}"; name="${name#adorno-agent-review-}"
+message="Verdict: pass."
+if [ "$name" = adorno ]; then
+  [ ! -f "$dir/adorno.final.json" ] || cp "$dir/adorno.final.json" "$run/review-final.json"
+  if [ -f "$dir/adorno.notes.md" ]; then cp "$dir/adorno.notes.md" "$run/review-notes.md"; else echo "Clean." >"$run/review-notes.md"; fi
+else
+  if [ -f "$dir/$name.first.json" ] && [ ! -f "$run/.fake-$name" ]; then
+    cp "$dir/$name.first.json" "$run/reviews/$name.json"
+  elif [ -f "$dir/$name.json" ]; then
+    cp "$dir/$name.json" "$run/reviews/$name.json"
+  elif [ ! -f "$dir/$name.message" ]; then
+    printf '{"agent": "agent:review:%s", "verdict": "pass", "findings": []}\n' "$name" >"$run/reviews/$name.json"
+  fi
+  : >"$run/.fake-$name"
+fi
+[ ! -f "$dir/$name.message" ] || message="$(cat "$dir/$name.message")"
+
+jq --arg result "$message" --arg model "$model" --argjson cost "${FAKE_CLAUDE_COST:-0.01}" '
+  .result = $result | .total_cost_usd = $cost
+  | .modelUsage = {($model): (.modelUsage | to_entries[0].value | .costUSD = $cost)}' \
+  "${FAKE_CLAUDE_ENVELOPE:?set FAKE_CLAUDE_ENVELOPE to the captured envelope}"
