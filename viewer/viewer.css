@@ -116,6 +116,10 @@ thead th { border-bottom: var(--rule) solid var(--ink); font-weight: 500; text-t
 .log-rows button:focus-visible { outline-offset: calc(-1 * var(--rule-heavy)); }
 /* painted, not laid out: moving the current row while playing never lays the whole list out again */
 .log-rows li[aria-current] > button { box-shadow: inset var(--rule-heavy) 0 0 var(--red); }
+/* forced colours draw no shadow: an outline, painted too, inside the row that clips it */
+@media (forced-colors: active) {
+  .log-rows li[aria-current] > button { outline: var(--rule-heavy) solid var(--forced-mark); outline-offset: calc(-1 * var(--rule-heavy)); }
+}
 
 /* the detail */
 #panel {

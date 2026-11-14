@@ -57,14 +57,17 @@ def main(argv):
             return NO_BROWSER
         problems, elsewhere = [], []
 
-        def counted(locator, n):
-            """A count the page reaches in time (retried: the page's policy forbids the eval a wait_for_function needs),
-            as (ok, detail) for check()."""
+        def retried(assertion):
+            """A state the page reaches in time (a retried Playwright assertion: the page's policy forbids the eval a
+            wait_for_function needs), as (ok, detail) for check()."""
             try:
-                expect(locator).to_have_count(n)
+                assertion()
                 return True, ""
             except AssertionError as e:
                 return False, str(e).strip().splitlines()[0]
+
+        def counted(locator, n):
+            return retried(lambda: expect(locator).to_have_count(n))
 
         def watch(page):
             page.on("console", lambda m: problems.append(m.text) if m.type == "error" else None)
@@ -268,7 +271,7 @@ def main(argv):
         nodes = page.evaluate("document.querySelectorAll('.diagram .marks *').length")
         check("... zoomed in too: only what is near the window is in the page", 0 < nodes <= 1500, str(nodes))
 
-        print("reduced motion, narrow window")
+        print("reduced motion, forced colours, narrow window")
         calm = watch(browser.new_page(viewport={"width": 1280, "height": 800}, reduced_motion="reduce"))
         calm.goto(f"{base}/#run={run_id}")
         calm.wait_for_selector(".diagram .mark", state="attached")
@@ -281,6 +284,14 @@ def main(argv):
         calm.keyboard.press("Space")
         check("... then advances one event at a time", calm_stage.get_attribute("data-index") == "1",
               calm_stage.get_attribute("data-index"))
+        contrast = watch(browser.new_page(viewport={"width": 1280, "height": 800}, forced_colors="active"))
+        contrast.goto(f"{base}/#run={run_id}")
+        contrast.wait_for_selector(".diagram .mark", state="attached")
+        contrast.keyboard.press("l")
+        current = contrast.locator("#log li[aria-current] > button")
+        found = retried(lambda: expect(current).to_have_count(1))
+        check("in forced colours, where a shadow is not drawn, the current row of the text log keeps a mark",
+              found[0] and current.evaluate("(b) => getComputedStyle(b).outlineStyle") != "none", found[1])
         small = watch(browser.new_page(viewport={"width": 480, "height": 800}))
         small.goto(f"{base}/#run={run_id}")
         small.wait_for_selector("#log li")

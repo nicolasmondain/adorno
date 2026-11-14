@@ -8,6 +8,7 @@
   --ink-soft: #5a564c;
   --rule-soft: #c8c3b4;
   --red: #c8231a;
+  --forced-mark: Highlight; /* a system colour: forced-colors mode keeps it where it replaces the others */
 
   --font-sans: "Jost", "Futura", "Avenir Next", "Century Gothic", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
