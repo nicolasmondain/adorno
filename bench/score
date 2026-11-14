@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+"""Usage: score --label NAME [--results DIR] [--cases DIR]
+
+Scores a benchmark run (bench/run) against the cases, at no model cost: reads RESULTS/<label>/, writes
+RESULTS/<label>/score.json and prints it. Run it again after grading extras in a case.json: the cases are read from
+--cases as they are now.
+
+A reported finding MATCHES an expected one when it is on the same file, within 3 lines of the expected range
+(anywhere in the file when `lines` is null), and one of the keywords (regex, case-insensitive) is found in its
+`title`, `detail` or `fix`. Every reported finding gets one class:
+  matched    it matches an expected finding (several on the same one: the others are duplicates, not errors)
+  valid      it matches an entry of case.json › extras with `valid: true`: a real point the case did not plan
+  invalid    it matches an entry of extras with `valid: false`: a false positive
+  ungraded   nothing matches: listed for the owner to grade, and counted against precision meanwhile
+
+Per case run, on the merged review (review.json):
+  recall      expected findings found / expected findings
+  precision   matched / (matched + invalid + ungraded)
+  severity    found findings whose highest reported severity is one the case accepts
+  attribution found findings that the expected reviewer raised
+  verdict     the merged verdict is one the case accepts
+  false_alarms  on a case without defect: findings reported, minus the valid extras
+  invalid_reviews  reviews that review-merge rejected, or that never came
+The same matching is applied to what agent:adorno kept (review-final.json, inline comments; severity and verdict read
+from the badges). Over several repeats, `recall` and `precision` are {mean, min, max}: the pooled value of each
+repeat, then its spread. Exits 2 on wrong usage.
+"""
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+WINDOW = 3  # lines around the expected range
+RANK = {"question": 0, "minor": 1, "major": 2, "blocker": 3}
+BADGES = [(r"issue \(blocking\)", "blocker"), (r"issue \(non-blocking\)", "major"),
+          (r"(suggestion|nitpick) \(non-blocking\)", "minor"), (r"question \(non-blocking\)", "question")]
+
+
+def die(message, code=1):
+    print(f"score: {message}", file=sys.stderr)
+    sys.exit(code)
+
+
+def load(path):
+    return json.loads(path.read_text())
+
+
+def matches(expected, finding):
+    """The matching rule, in one place: same file, lines within the window, one keyword."""
+    if str(finding.get("file") or "").lstrip("./") != expected["file"].lstrip("./"):
+        return False
+    if expected.get("lines") is not None:
+        line = finding.get("line")
+        first, last = expected["lines"]
+        if not isinstance(line, int) or not first - WINDOW <= line <= last + WINDOW:
+            return False
+    text = " ".join(str(finding.get(key) or "") for key in ("title", "detail", "fix"))
+    return any(re.search(keyword, text, re.IGNORECASE) for keyword in expected["keywords"])
+
+
+def classify(finding, case):
+    """-> (class, index of the expected finding or None)."""
+    for index, expected in enumerate(case["findings"]):
+        if matches(expected, finding):
+            return "matched", index
+    for extra in case.get("extras", []):
+        if matches(extra, finding):
+            return ("valid" if extra["valid"] else "invalid"), None
+    return "ungraded", None
+
+
+def ratio(part, whole):
+    return round(part / whole, 4) if whole else None
+
+
+def measure(findings, case):
+    """The measures that depend on the findings alone, and each finding with its class."""
+    expected = case["findings"]
+    classes = [classify(finding, case) for finding in findings]
+    hits = {index: [f for f, (kind, i) in zip(findings, classes) if kind == "matched" and i == index]
+            for index in range(len(expected))}
+    found = [index for index in hits if hits[index]]
+    count = {kind: sum(1 for k, _ in classes if k == kind) for kind in ("matched", "valid", "invalid", "ungraded")}
+
+    def top(index):
+        return max((f.get("severity") for f in hits[index] if f.get("severity") in RANK), key=RANK.get, default=None)
+
+    listed = [{"file": f.get("file"), "line": f.get("line"), "severity": f.get("severity"), "title": f.get("title"),
+               "agents": f.get("agents", []), "class": kind, "expected": index}
+              for f, (kind, index) in zip(findings, classes)]
+    return {"expected": len(expected), "found": len(found), "reported": len(findings), "matched": count["matched"],
+            "duplicates": count["matched"] - len(found), "valid_extras": count["valid"],
+            "invalid_extras": count["invalid"], "ungraded": count["ungraded"],
+            "recall": ratio(len(found), len(expected)),
+            "precision": ratio(count["matched"], count["matched"] + count["invalid"] + count["ungraded"]),
+            "severity_ok": sum(1 for i in found if top(i) in expected[i]["severity"]),
+            "attribution_ok": sum(1 for i in found
+                                  if expected[i]["reviewer"] in {a for f in hits[i] for a in f.get("agents", [])}),
+            "false_alarms": None if expected else len(findings) - count["valid"]}, listed
+
+
+def final_findings(path):
+    """What agent:adorno would post, as findings: one per inline comment, its severity read from the badge."""
+    if not path.is_file():
+        return []
+    try:
+        comments = load(path).get("comments") or []
+    except (ValueError, AttributeError):
+        return []
+    findings = []
+    for comment in comments:
+        body = str(comment.get("body") or "")
+        severity = next((s for pattern, s in BADGES if re.search(pattern, body, re.IGNORECASE)), None)
+        findings.append({"file": comment.get("path"), "line": comment.get("line"), "title": body,
+                         "severity": severity})
+    return findings
+
+
+def score_run(case, folder, n):
+    run, review = load(folder / "run.json"), load(folder / "review.json")
+    metas = [load(path) for path in sorted((folder / "meta").glob("*.json"))]
+    costs = [m["cost_usd"] for m in metas if m["cost_usd"] is not None]
+    result, listed = measure(review["findings"], case)
+    kept = final_findings(folder / "review-final.json")
+    final, final_listed = measure(kept, case)
+    severities = {f["severity"] for f in kept}
+    final_verdict = "block" if "blocker" in severities else "fix" if "major" in severities else "pass"
+    del final["attribution_ok"]  # a comment of the final review names no agent
+    final.update({"reviewed": (folder / "review-final.json").is_file(), "verdict": final_verdict,
+                  "verdict_ok": final_verdict in case["verdict"], "findings": final_listed})
+    result.update({
+        "n": n, "routing_ok": run["routing_ok"], "verdict": review["verdict"],
+        "verdict_ok": review["verdict"] in case["verdict"],
+        "invalid_reviews": len(run["invalid"]) + len(run["missing"]),
+        "budget_exhausted": run["budget_exhausted"], "cost_usd": round(sum(costs), 4) if costs else None,
+        "tokens_in": sum(m["tokens"]["input"] + m["tokens"]["cache_read"] + m["tokens"]["cache_write"] for m in metas),
+        "tokens_out": sum(m["tokens"]["output"] for m in metas),
+        "duration_ms": sum(m["duration_ms"] for m in metas), "final": final, "findings": listed})
+    return result, metas
+
+
+def spread(values):
+    values = [v for v in values if v is not None]
+    if not values:
+        return None
+    return {"mean": round(sum(values) / len(values), 4), "min": min(values), "max": max(values)}
+
+
+def pooled(runs, part, whole):
+    return ratio(sum(part(r) for r in runs), sum(whole(r) for r in runs))
+
+
+def denominator(r):
+    return r["matched"] + r["invalid_extras"] + r["ungraded"]
+
+
+def summarize(runs):
+    """Several case runs as one line: the cases of one repeat pooled, then the spread over the repeats."""
+    repeats = sorted({r["n"] for r in runs})
+    by_repeat = [[r for r in runs if r["n"] == n] for n in repeats]
+    priced = [r["cost_usd"] for r in runs if r["cost_usd"] is not None]
+    clean = [r for r in runs if r["expected"] == 0]
+    return {
+        "runs": len(runs),
+        "recall": spread([pooled(rs, lambda r: r["found"], lambda r: r["expected"]) for rs in by_repeat]),
+        "precision": spread([pooled(rs, lambda r: r["matched"], denominator) for rs in by_repeat]),
+        "expected": sum(r["expected"] for r in runs), "found": sum(r["found"] for r in runs),
+        "severity_ok": sum(r["severity_ok"] for r in runs), "attribution_ok": sum(r["attribution_ok"] for r in runs),
+        "verdict_ok": sum(1 for r in runs if r["verdict_ok"]), "routing_ok": sum(1 for r in runs if r["routing_ok"]),
+        "invalid_reviews": sum(r["invalid_reviews"] for r in runs),
+        "duplicates": sum(r["duplicates"] for r in runs), "valid_extras": sum(r["valid_extras"] for r in runs),
+        "invalid_extras": sum(r["invalid_extras"] for r in runs), "ungraded": sum(r["ungraded"] for r in runs),
+        "clean": {"runs": len(clean), "false_alarms": sum(r["false_alarms"] for r in clean),
+                  "verdict_ok": sum(1 for r in clean if r["verdict_ok"])},
+        "final": {
+            "recall": spread([pooled(rs, lambda r: r["final"]["found"], lambda r: r["expected"]) for rs in by_repeat]),
+            "precision": spread([pooled(rs, lambda r: r["final"]["matched"], lambda r: denominator(r["final"]))
+                                 for rs in by_repeat]),
+            "found": sum(r["final"]["found"] for r in runs), "comments": sum(r["final"]["reported"] for r in runs),
+            "severity_ok": sum(r["final"]["severity_ok"] for r in runs),
+            "verdict_ok": sum(1 for r in runs if r["final"]["verdict_ok"])},
+        "cost_usd": round(sum(priced), 4) if priced else None,
+        "tokens_in": sum(r["tokens_in"] for r in runs), "tokens_out": sum(r["tokens_out"] for r in runs),
+        "duration_ms": sum(r["duration_ms"] for r in runs)}
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="score", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--label", required=True)
+    parser.add_argument("--results", type=Path, default=ROOT / "bench" / "results")
+    parser.add_argument("--cases", type=Path, default=ROOT / "bench" / "cases")
+    args = parser.parse_args()
+    top = args.results / args.label
+    if not (top / "run.json").is_file():
+        die(f"no run named {args.label} in {args.results}", 2)
+    run = load(top / "run.json")
+
+    cases, every, agents, ungraded = {}, [], {}, []
+    for entry in run["runs"]:
+        case_id, n = entry["case"], entry["n"]
+        if not (args.cases / case_id / "case.json").is_file():
+            die(f"the run has a case that {args.cases} does not: {case_id}", 2)
+        case = load(args.cases / case_id / "case.json")
+        result, metas = score_run(case, top / case_id / str(n), n)
+        cases.setdefault(case_id, {"runs": []})["runs"].append(result)
+        every.append(result)
+        ungraded += [dict(f, case=case_id, n=n) for f in result["findings"] if f["class"] == "ungraded"]
+        for meta in metas:
+            agent = agents.setdefault(meta["agent"], {"runs": 0, "calls": 0, "models": [], "cost_usd": None,
+                                                      "tokens_in": 0, "tokens_out": 0, "duration_ms": 0,
+                                                      "delivered": {"file": 0, "salvaged": 0, "none": 0}})
+            agent["runs"] += 1
+            agent["calls"] += meta["attempts"]
+            agent["models"] = sorted(set(agent["models"]) | set(meta["models"]))
+            if meta["cost_usd"] is not None:
+                agent["cost_usd"] = round((agent["cost_usd"] or 0) + meta["cost_usd"], 4)
+            agent["tokens_in"] += meta["tokens"]["input"] + meta["tokens"]["cache_read"] + meta["tokens"]["cache_write"]
+            agent["tokens_out"] += meta["tokens"]["output"]
+            agent["duration_ms"] += meta["duration_ms"]
+            agent["delivered"][meta["delivered"]] += 1
+    for case in cases.values():
+        case["summary"] = summarize(case["runs"])
+    score = {"label": run["label"],
+             "run": {key: run[key] for key in ("tool", "tool_version", "model", "repo", "repeat", "prompts",
+                                               "started_at", "budget_usd", "skipped")},
+             "overall": summarize(every), "cases": cases, "agents": agents, "ungraded": ungraded}
+    (top / "score.json").write_text(json.dumps(score, indent=2, ensure_ascii=False) + "\n")
+    print(json.dumps(score, indent=2, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()

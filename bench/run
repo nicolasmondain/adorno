@@ -28,7 +28,8 @@ Results go to RESULTS/<label>/ (bench/results by default, ignored by git):
   <case>/<n>/messages/<name>.md  the agent's last message
 
 --budget-usd relies on the cost the tool reports: no case starts once the spent amount plus the dearest case so far
-would exceed it, and each call is capped by what is left. Exits 2 on wrong usage, 3 when --repo is not declared.
+would exceed it, and each call is capped by what is left. The run ends with its report (bench/report), printed.
+Exits 2 on wrong usage, 3 when --repo is not declared.
 """
 import argparse
 import concurrent.futures
@@ -360,11 +361,12 @@ def main():
               "budget_usd": args.budget_usd, "cost_usd": state["spent"] if priced else None,
               "runs": runs, "skipped": skipped}
     write_json(top / "run.json", report)
-    print(json.dumps(report, indent=2))
     if skipped:
         print(f"run: budget of {args.budget_usd} USD reached, {len(skipped)} case run(s) skipped", file=sys.stderr)
     if not runs:
         sys.exit(1)
+    sys.exit(subprocess.run([sys.executable, str(ROOT / "bench" / "report"), "--label", label, "--results",
+                             str(args.results), "--cases", str(args.cases)]).returncode)
 
 
 if __name__ == "__main__":

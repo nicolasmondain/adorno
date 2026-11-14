@@ -36,9 +36,6 @@
         "n\\s*\\+\\s*1",
         "per[ -](order|item|row|iteration)",
         "(in|inside) (a|the) loop",
-        "\\$in\\b",
-        "\\$lookup",
-        "\\bbatch",
         "one (query|findOne|round[ -]?trip) (per|for each)",
         "quer(y|ies) (per|for each|in a loop)",
         "sequential"
