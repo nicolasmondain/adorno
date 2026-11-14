@@ -135,6 +135,32 @@ for secret in "$GH" "https://bob:$PW@example.test/x"; do
 done
 grep -q "ghp_" "$f" && ko "part of a token crossing the cut reached the journal" || ok "no part of a token crossing the cut is written"
 grep -q "hunter2" "$f" && ko "a URL password crossing the cut reached the journal" || ok "no URL password crossing the cut is written"
+# a secret across character 2 000 of any other string (a tool call's input, a script's argument), nothing before it
+long_in="$(printf 'x%.0s' $(seq 1 1990)) $GH $(printf 'y%.0s' $(seq 1 100))"
+python3 "$J" event tool.call "$(jq -n --arg c "$long_in" '{tool: "Bash", input: $c}')" --session sess-a
+last 20260101T100000-1-1
+expect_jq "an input whose token crosses character 2 000 is cut after redaction" '(.input | length) == 2001 and (.input | test("ghp_") | not) and (.input | endswith(" [redacted…"))'
+python3 "$J" event script.call "$(jq -n --arg a "$long_in" '{script: "x", exit: 0, args: [$a]}')" --session sess-a
+last 20260101T100000-1-1
+expect_jq "... and so is a script's argument" '(.args[0] | length) == 2001 and (.args[0] | test("ghp_") | not) and (.args[0] | endswith(" [redacted…"))'
+# earlier redactions shrink the text: a 1 200-character bearer token, then a token across the raw window's end
+# (500 + 1 024 for an excerpt, 2 000 + 1 024 for any other string): still redacted whole, then cut
+big_jwt="eyJ$(printf 'a%.0s' $(seq 1 600)).$(printf 'b%.0s' $(seq 1 300)).$(printf 'c%.0s' $(seq 1 295))"
+lead="Authorization: Bearer $big_jwt
+"
+text="$lead$(printf 'x%.0s' $(seq 1 288)) $GH $(printf 'y%.0s' $(seq 1 1000))"
+[ "${text:1512:4}" = ghp_ ] && ok "(the token starts at character 1 512, across 1 524)" || ko "token position in the text"
+python3 "$J" event message "$(jq -n --arg t "$text" '{from: "you", to: "session", kind: "prompt", text: $t}')" --session sess-a
+last 20260101T100000-1-1
+expect_jq "a text whose token crosses 1 524 after a long redaction: redacted, then cut" \
+  '(.excerpt | length) == 501 and (.excerpt | test("ghp_") | not) and (.excerpt | test("\\[redacted:authorization\\]\nx+ \\[redacted:github\\] y+…$"))'
+long_in="$lead$(printf 'x%.0s' $(seq 1 1788)) $GH $(printf 'y%.0s' $(seq 1 3000))"
+[ "${long_in:3012:4}" = ghp_ ] && ok "(the token starts at character 3 012, across 3 024)" || ko "token position in the input"
+python3 "$J" event tool.call "$(jq -n --arg c "$long_in" '{tool: "Bash", input: $c}')" --session sess-a
+last 20260101T100000-1-1
+expect_jq "an input whose token crosses 3 024 after a long redaction: redacted, then cut" \
+  '(.input | length) == 2001 and (.input | test("ghp_") | not) and (.input | test("\\[redacted:authorization\\]\nx+ \\[redacted:github\\] y+…$"))'
+grep -q "ghp_" "$f" && ko "part of a token past a shrunk window reached the journal" || ok "no part of a token past a shrunk window is written"
 # the shapes Bash commands carry most
 cmd='curl -u admin:hunter3pw https://x.test; S=sk_live_0123456789abcdefABCD; G=glpat-0123456789abcdefghijKL; TOKEN="abc defquoted" ./run --token "two wordsquoted"; curl --user=bob:pw4sure x'
 python3 "$J" event tool.call "$(jq -n --arg c "$cmd" '{tool: "Bash", input: $c}')" --session sess-a

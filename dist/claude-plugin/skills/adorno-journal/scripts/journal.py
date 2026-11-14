@@ -83,16 +83,29 @@ def redact_string(text):
     return text
 
 
+def redacted_head(text, keep):
+    """The first `keep` characters of text once redacted (with "…" when cut), redacted before they are cut: the raw
+    window doubles until WINDOW redacted characters follow the cut or the whole text is in, since each redaction
+    shortens it and a secret across a fixed raw window's end would be cut first, then written in part. The patterns
+    are linear, so the doubling costs at most twice redacting the whole text."""
+    n = keep + WINDOW
+    red = redact_string(text[:n])
+    while n < len(text) and len(red) < keep + WINDOW:
+        n *= 2
+        red = redact_string(text[:n])
+    return red if len(text) <= keep and len(red) <= keep else red[:keep] + "…"
+
+
 def redact(value, key=""):
     """value with every secret replaced, strings cut to their limit. A string under a key named like a secret, or
     after a flag named like one in a list of arguments, goes whole; numbers and booleans never do (`tokens` holds
-    counts). A long string is redacted on its first MAX_STRING + WINDOW characters, then cut: never cut first."""
+    counts). A long string is redacted, then cut (redacted_head): never cut first."""
     if isinstance(value, str):
         if SECRET_NAME_RE.search(key):
             return "[redacted:secret]"
         if key == "reasoning" or len(value) <= MAX_STRING:
             return redact_string(value)
-        return redact_string(value[:MAX_STRING + WINDOW])[:MAX_STRING] + "…"
+        return redacted_head(value, MAX_STRING)
     if isinstance(value, dict):
         return {k: redact(v, str(k)) for k, v in value.items()}
     if isinstance(value, list):
@@ -103,12 +116,11 @@ def redact(value, key=""):
 
 def text_fields(text):
     """A long text (prompt, result, message) as the journal keeps it: an excerpt, and the hash and length of the whole
-    so the full text can be matched in the transcript. The excerpt is redacted before it is cut (a secret across the
-    cut is recognised whole); the hash and the length are those of the raw text, as the transcript holds it."""
+    so the full text can be matched in the transcript. The excerpt is redacted before it is cut (redacted_head: a
+    secret across the cut is recognised whole); the hash and the length are those of the raw text, as the transcript
+    holds it."""
     text = str(text)
-    red = redact_string(text[:EXCERPT + WINDOW])
-    cut = red if len(text) <= EXCERPT and len(red) <= EXCERPT else red[:EXCERPT] + "…"
-    return {"excerpt": cut, "hash": hashlib.sha256(text.encode()).hexdigest(), "chars": len(text)}
+    return {"excerpt": redacted_head(text, EXCERPT), "hash": hashlib.sha256(text.encode()).hexdigest(), "chars": len(text)}
 
 
 def started(dur_ms=0):
