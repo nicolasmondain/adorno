@@ -47,6 +47,7 @@ slug="$(printf '%s' "$workflow" | sed 's/^workflow://; s/:/-/g')"
 # the run's journal (adorno-journal) is private: always under ~/.adorno/runs, even when --dir is inside a workspace
 journal="$(kit_home)/runs/$slug-$id"
 [ -n "$dir" ] || dir="$journal"
+(umask 077; mkdir -p "$journal")
 mkdir -p "$dir" "$(runs_dir)"
 case "$ttl" in *m) secs=$(( ${ttl%m} * 60 )) ;; *h) secs=$(( ${ttl%h} * 3600 )) ;; esac
 jq -n --arg id "$id" --arg w "$workflow" --arg m "$mode" --arg l "$level" --arg d "$deny" --argjson dry "$dry" \

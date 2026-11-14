@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
-# Usage: run-end ID
-# Ends a run started with run-begin: its grant is withdrawn; its run folder stays, with the deliverables.
+# Usage: run-end ID [OUTCOME]
+# Ends a run started with run-begin: its grant is withdrawn; its run folder stays, with the deliverables. OUTCOME is
+# how it ended, recorded in the journal's run.end: done, draft (left as a draft at a cap), stopped (at a stop point)
+# or failed; default ended.
 . "$(dirname "$0")/_lib.sh"
 
-id="${1:-}"
-[[ "$id" =~ ^[0-9T]+-[0-9]+-[0-9]+$ ]] || die "usage: run-end ID (as printed by run-begin)" "$E_USAGE"
+id="${1:-}" outcome="${2:-ended}"
+[[ "$id" =~ ^[0-9T]+-[0-9]+-[0-9]+$ ]] || die "usage: run-end ID [done|draft|stopped|failed] (ID as printed by run-begin)" "$E_USAGE"
+case "${2:-}" in ""|done|draft|stopped|failed) ;; *) die "OUTCOME: done, draft, stopped or failed" "$E_USAGE" ;; esac
 f="$(runs_dir)/$id.json"
 [ -f "$f" ] || die "no active run $id (already ended or expired)" "$E_USAGE"
 jq '{ended: .id, workflow, dir}' "$f"
-journal_event run.end "$(jq '{workflow, outcome: "ended"}' "$f")" --run "$id"
+trap - EXIT  # run.end is this script's event: on exit, its grant is gone and the call would land in another run
+journal_event run.end "$(jq --arg o "$outcome" '{workflow, outcome: $o}' "$f")" --run "$id"
 # what the hooks do not carry (models, tokens) is read from the session's transcripts, without making run-end wait;
 # what goes wrong is said in the journal's enrich.log, and `journal.py enrich ID` runs it again
 journal="$(jq -r '.journal // empty' "$f")"
 if journal_on && [ -d "$journal" ]; then
-  ( python3 "$JOURNAL_PY" enrich "$id" >/dev/null 2>>"$journal/enrich.log" </dev/null & )
+  ( umask 077; python3 "$JOURNAL_PY" enrich "$id" >/dev/null 2>>"$journal/enrich.log" </dev/null & )
 fi
 rm -f "$f"

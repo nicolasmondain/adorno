@@ -1259,7 +1259,17 @@ expect_exit 0 "a run whose folder is in a workspace" -- env CLAUDE_CODE_SESSION_
 WSRUN="$(jq -r .id <<<"$out")"
 expect_jq "the journal is not in --dir" '.dir == "'"$TMP"'/ws/.agent-run/review-1" and .journal == "'"$KH"'/runs/pr-review-'"$WSRUN"'"'
 [ -z "$(find "$TMP/ws" -name '*.jsonl')" ] && [ -f "$KH/runs/pr-review-$WSRUN/events.jsonl" ] && ok "nothing recorded in the workspace" || ko "journal in the workspace"
+mode_of() { stat -f %Lp "$1" 2>/dev/null || stat -c %a "$1"; }
+expect_exit 0 "a second run in that session, without --dir" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-begin" --workflow workflow:pr:ship \
+  --mode draft --level L2 --repo acme/docs
+RUN2="$(jq -r .id <<<"$out")"; J2="$(jq -r .journal <<<"$out")"
+[ "$(jq -r .dir <<<"$out")" = "$J2" ] && [ "$(mode_of "$J2")" = 700 ] && ok "... its folder is the journal's, readable by its owner only" || ko "journal folder mode" "$(mode_of "$J2")"
 expect_exit 0 "run-end closes the journal" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-end" "$WSRUN"
+grep -q '"script":"run-end"' "$J2/events.jsonl" && ko "run-end's own call landed in the session's other run" || ok "run-end's own call lands in no other run: run.end is its event"
+expect_exit 2 "run-end: an outcome outside done, draft, stopped, failed is refused" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-end" "$RUN2" great
+[ -f "$KH/runs/active/$RUN2.json" ] && out="$(tail -n 1 "$J2/events.jsonl")" && expect_jq "... the run stays open, the refusal recorded" '.type == "script.call" and .script == "run-end" and .exit == 2'
+expect_exit 0 "run-end with an outcome" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-end" "$RUN2" draft
+out="$(tail -n 1 "$J2/events.jsonl")"; expect_jq "... recorded in run.end" '.type == "run.end" and .outcome == "draft" and .workflow == "workflow:pr:ship"'
 out="$(jq -cs . "$KH/runs/pr-review-$WSRUN/events.jsonl")"
 expect_jq "from run.begin (with the run's folder) to run.end, for that session only" \
   '.[0].type == "run.begin" and .[0].dir == "'"$TMP"'/ws/.agent-run/review-1" and .[0].dry_run == true and .[-1].type == "run.end" and .[-1].outcome == "ended" and all(.[]; .session == "sess-j")'
@@ -1267,6 +1277,7 @@ expect_exit 0 "that journal is valid" -- python3 "$JPY" validate "$KH/runs/pr-re
 tries=0; until [ -f "$KH/runs/pr-review-$WSRUN/enriched.jsonl" ] || [ "$tries" -ge 100 ]; do tries=$((tries + 1)); sleep 0.2; done
 [ -f "$KH/runs/pr-review-$WSRUN/enriched.jsonl" ] && [ -f "$KH/runs/pr-review-$WSRUN/enrich.log" ] \
   && ok "run-end starts the reading of the transcripts, without waiting for it" || ko "no enrichment after run-end"
+[ "$(mode_of "$KH/runs/pr-review-$WSRUN/enrich.log")" = 600 ] && ok "... its log readable by its owner only" || ko "enrich.log mode" "$(mode_of "$KH/runs/pr-review-$WSRUN/enrich.log")"
 
 echo
 echo "$pass passed, $fail failed"
