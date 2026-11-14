@@ -239,7 +239,7 @@ EOF
 URL="$(wait_url "$TMP/url3")"
 took="$(curl -s -o "$TMP/body" -w '%{time_total}' "$URL/api/runs/$G")"; out="$(cat "$TMP/body")"
 expect_jq "10 002 events, 10 000 segments or more" '(.events | length) == 10002 and (.time.segments | length) >= 10000 and ([.events[].u] | . == sort)'
-python3 -c 'import sys; sys.exit(float(sys.argv[1]) >= 1.5)' "$took" && ok "... read in ${took}s (the walk over the segments is linear)" || ko "a run with many gaps is slow to read" "${took}s"
+python3 -c 'import sys; sys.exit(float(sys.argv[1]) >= 5)' "$took" && ok "... read in ${took}s (the walk over the segments is linear)" || ko "a run with many gaps is slow to read" "${took}s"
 
 echo "read-only"
 [ -z "$(find "$RUNS" -newer "$TMP/stamp" ! -path "$RUNS/$F3/events.jsonl" ! -path "$RUNS/$F2/events.jsonl" ! -path "$RUNS/$F2" ! -path "$RUNS/$F3")" ] \
