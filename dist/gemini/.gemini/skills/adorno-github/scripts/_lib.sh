@@ -129,7 +129,7 @@ _journal_exit() {
       '{script: $s, args: $ARGS.positional, exit: $rc, dur: $dur}
        + (if $l == "" then {} else {level: $l} end) + (if $act == "" then {} else {action: $act} end)
        + (if $dry == "" then {} else {dry_run: ($dry == "true")} end)' \
-      --args ${JOURNAL_ARGS[@]+"${JOURNAL_ARGS[@]}"})"
+      --args -- ${JOURNAL_ARGS[@]+"${JOURNAL_ARGS[@]}"})"  # `--`: a script's own flags are not jq's
   fi
   exit "$rc"
 }

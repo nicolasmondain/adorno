@@ -1171,12 +1171,15 @@ expect_jq "run-begin opens the journal with the run's grant" \
 expect_jq "a script's call: its name, arguments, exit code, the level and action it asked for" \
   'any(.[]; .type == "script.call" and .script == "pr-reply" and .exit == 0 and .level == "L3" and .action == "reply" and .args[0] == "acme/docs#42" and .dry_run == false)'
 expect_jq "a refusal is recorded with its exit code (4 policy, 5 level, 2 usage, 3 unregistered)" \
-  '[.[] | select(.type == "script.call") | .exit] | (index(4) and index(5) and index(2) and index(3)) != null'
+  '[.[] | select(.type == "script.call") | .exit] | ([4, 5, 2, 3] - .) == []'
+expect_jq "a script called with flags is recorded with them (run-begin's own call)" \
+  'any(.[]; .type == "script.call" and .script == "run-begin" and .exit == 0
+       and .args[0:4] == ["--workflow", "workflow:test:suite", "--mode", "auto"] and (.args | index("--repo")) != null)'
 expect_jq "a dry run is recorded as one" 'any(.[]; .type == "script.call" and .dry_run == true)'
 expect_jq "a write that reached GitHub: action, target, url" \
   'any(.[]; .type == "github" and .action == "reply" and (.target | test("^acme/docs#42 thread ")) and (.url | test("^https://")))'
 expect_jq "... for each kind of write" \
-  '[.[] | select(.type == "github") | .action] | unique | (index("push") and index("open_pr") and index("comment") and index("resolve") and index("rerequest")) != null'
+  '[.[] | select(.type == "github") | .action] | (["push", "open_pr", "comment", "resolve", "rerequest"] - .) == []'
 expect_jq "review-merge: each finding as produced, then as merged" \
   'any(.[]; .type == "finding" and .stage == "produced" and .reviewer == "agent:review:code" and .severity == "minor" and .file == "a.ts" and .line == 3)
    and any(.[]; .type == "finding" and .stage == "merged" and .severity == "blocker" and .reviewer == "agent:review:back, agent:review:code")
@@ -1188,15 +1191,28 @@ expect_jq "what the guard lets through is not an event" \
 expect_jq "scripts that set their own exit trap are recorded too (pr-areas, with_lock in pr-workspace)" \
   'any(.[]; .type == "script.call" and .script == "pr-areas" and .exit == 0) and any(.[]; .type == "script.call" and .script == "pr-workspace" and .exit == 0)'
 n="$(count '.type == "github"')"
+"$S/pr-reply" acme/docs#42 T1 "$TMP/body.md" >/dev/null
+[ "$(count '.type == "github"')" = "$((n + 1))" ] && ok "the same reply, posted: one github event" || ko "no github event for a posted reply"
+n="$(count '.type == "github"')"
 ADORNO_DRY_RUN=1 "$S/pr-reply" acme/docs#42 T1 "$TMP/body.md" >/dev/null
 [ "$(count '.type == "github"')" = "$n" ] && ok "a dry run reaches nothing: no github event" || ko "github event in a dry run"
 n="$(count '.script == "run-check"')"
 guard_at allow "$C" "" "git push origin fix/lem-8-x"
 [ "$(count '.script == "run-check"')" = "$n" ] && ok "the guard's own probes are not the run's doing" || ko "guard probes recorded"
 n="$(wc -l <"$JF")"
+"$S/repo-conf" acme/docs >/dev/null
+[ "$(( $(wc -l <"$JF") ))" = "$((n + 1))" ] && ok "repo-conf, as usual: one script.call" || ko "repo-conf not recorded"
+(cd "$C" && "$S/repo-conf" >/dev/null); out="$(tail -n 1 "$JF")"
+expect_jq "a script called without arguments records an empty list" '.type == "script.call" and .script == "repo-conf" and .args == []'
+n="$(wc -l <"$JF")"
 ADORNO_JOURNAL=0 "$S/repo-conf" acme/docs >/dev/null
 [ "$(wc -l <"$JF")" = "$n" ] && ok "ADORNO_JOURNAL=0 records nothing" || ko "ADORNO_JOURNAL=0"
+n="$(count '.script == "pr-comment"')"
 "$S/pr-comment" acme/docs#42 "$TMP/norun.md" --attach "$TMP/ghp_0123456789abcdefghijABCDEFGHIJ012345.png" >/dev/null 2>&1
+jl
+expect_jq "a call with --attach is recorded, its token redacted" \
+  '[.[] | select(.type == "script.call" and .script == "pr-comment")] | length == '"$((n + 1))"'
+   and (.[-1].args | index("--attach")) != null and (.[-1].args | any(test("redacted:github")))'
 grep -q "ghp_0123456789" "$JF" && ko "a token in an argument reached the journal" || ok "a token in an argument never reaches the journal"
 expect_exit 0 "run-mark: a step starts" -- "$S/run-mark" step-begin 2 build
 expect_exit 0 "run-mark: a round starts" -- "$S/run-mark" round 1 2 "1 major"
@@ -1220,6 +1236,9 @@ cp "$ROOT/src/skills/adorno-github/repos.json" "$TMP/broken/adorno-github/" 2>/d
 printf 'import sys\nsys.exit(3)\n' >"$TMP/broken/adorno-journal/scripts/journal.py"
 expect_exit 0 "a writer that fails: the script ends as usual" -- "$TMP/broken/adorno-github/scripts/repo-conf" acme/docs
 expect_exit 4 "... and a refusal keeps its exit code" -- "$TMP/broken/adorno-github/scripts/pr-resolve" acme/strict#7 T1
+n="$(wc -l <"$JF")"
+"$S/repo-conf" acme/docs >/dev/null
+[ "$(( $(wc -l <"$JF") ))" = "$((n + 1))" ] && ok "with the skill, the same call is recorded" || ko "repo-conf not recorded"
 n="$(wc -l <"$JF")"
 expect_exit 0 "without the adorno-journal skill: the script ends as usual" -- "$TMP/alone/adorno-github/scripts/repo-conf" acme/docs
 [ "$(wc -l <"$JF")" = "$n" ] && ok "... and records nothing" || ko "recorded without the skill"
