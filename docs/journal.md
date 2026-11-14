@@ -84,7 +84,7 @@ bin/kit serve            # http://127.0.0.1:8765 — or --port N, --runs DIR
 - **Replay**: play, pause, speed (0.5× to 8×), step, a scrubber. Elapsed time and tokens add up as it plays.
 - **Detail**: click a mark (or press Enter on the current event) for its prompt excerpt, model, tokens, tool call,
   exit code, and the run's files (reviews, plan, status), opened as text. The return of an agent also lists the files
-  it wrote, read from its own Write, Edit and NotebookEdit calls.
+  it wrote, read from its own Write, Edit and NotebookEdit calls that did not fail.
 - **Views**: everything; agents only (no tool calls); tokens (a lane is as tall as what it spent); workflow (the
   steps of the run plan, or phases derived from the delegations when the run did not mark them).
 - **Text log**: the same events, one per row, for a screen reader or a narrow window.

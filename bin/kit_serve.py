@@ -166,8 +166,8 @@ def lanes_of(events, t0, last, roots):
     """The lanes, top to bottom: you, the main session, each agent instance in spawn order, scripts, the guard,
     GitHub. An agent seen without its spawn (hooks missed it, the run opened late) still gets a lane, marked orphan;
     one that never returned (still running, or its return missed) lives until the end of what was recorded. An
-    agent's `wrote`: the files its own Write, Edit and NotebookEdit calls name, once each, in order, with the path
-    the file endpoint takes for them (`file`, None when it cannot serve it)."""
+    agent's `wrote`: the files its own Write, Edit and NotebookEdit calls name (a failed one wrote nothing), once
+    each, in order, with the path the file endpoint takes for them (`file`, None when it cannot serve it)."""
     agents, models, written = {}, {}, {}
     for e in events:
         at = ms_between(t0, e["t"])
@@ -188,7 +188,7 @@ def lanes_of(events, t0, last, roots):
                 a["end"] = at
             if about:  # the Agent tool call names the model the instance runs on
                 a["model"] = a["model"] or e.get("model")
-            if (lane == actor and e["type"] == "tool.call" and e.get("tool") in WRITING_TOOLS
+            if (lane == actor and e["type"] == "tool.call" and e.get("tool") in WRITING_TOOLS and not e.get("error")
                     and isinstance(e.get("input"), str) and e["input"] not in written.setdefault(lane, {""})):
                 written[lane].add(e["input"])
                 a["wrote"].append({"path": e["input"], "file": servable(roots, e["input"])})

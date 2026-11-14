@@ -157,6 +157,10 @@ expect_jq "the files of its .agent-run folder" '[.files[].path] == ["reviews/cod
 expect_jq "a file an agent wrote in the run's .agent-run folder can be opened" \
   '(.lanes[] | select(.id == "agent:r1") | .wrote) == [{"path": "'"$TMP"'/workspaces/acme__app/pr-7/.agent-run/review-1/reviews/code.json", "file": "reviews/code.json"}]
    and all(.lanes[] | select(.id == "agent:r2" or .id == "agent:zz"); .wrote == [])'
+printf '%s\n' '{"v":1,"t":"2026-01-01T12:00:39.500Z","run":"20260101T120000-1001-2","session":"sess-f2","actor":"agent:r1","parent":"session","type":"tool.call","tool":"Edit","input":"'"$TMP"'/workspaces/acme__app/pr-7/src/failed.ts","dur":3,"error":true,"excerpt":"old_string not found","hash":"0000000000000000000000000000000000000000000000000000000000000000","chars":20}' >>"$RUNS/$F2/events.jsonl"
+get "/api/runs/$F2"
+expect_jq "a failed Edit is not a file the agent wrote" \
+  '(.events | length) == 14 and ([.lanes[] | select(.id == "agent:r1") | .wrote[].path] == ["'"$TMP"'/workspaces/acme__app/pr-7/.agent-run/review-1/reviews/code.json"])'
 status 200 "/api/runs/$F3"
 expect_jq "a damaged journal still reads: what is unknown is kept as a mark" \
   '.bad_lines == 1 and .workflow == null and any(.events[]; .type == "future.thing" and .from == "session" and .to == null)'
