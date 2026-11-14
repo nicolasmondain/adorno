@@ -217,16 +217,20 @@ def problems(value, schema, where="event"):
 
 
 def append(folder, event):
-    """One line, one write, on a file opened for append: concurrent writers (hooks, scripts) never interleave."""
+    """One line, one write, on a file opened for append: concurrent writers (hooks, scripts) never interleave. A
+    write cut short (a full disk) is taken back, so no half line is left for the next one to be glued to."""
     root = os.path.realpath(runs_root())
     real = os.path.realpath(folder)
     if os.path.dirname(real) != root or os.path.basename(real) == "active":
         raise ValueError(f"{folder} is not a run folder of {root}")
     os.makedirs(real, mode=0o700, exist_ok=True)
-    line = json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n"
+    line = (json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n").encode()
     fd = os.open(os.path.join(real, JOURNAL_FILES[0]), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
     try:
-        os.write(fd, line.encode())
+        written = os.write(fd, line)
+        if written != len(line):
+            os.ftruncate(fd, os.lseek(fd, 0, os.SEEK_CUR) - written)   # the offset is the end of what was written
+            raise OSError(f"short write ({written} of {len(line)} bytes), taken back")
     finally:
         os.close(fd)
 
@@ -500,11 +504,12 @@ def cmd_enrich(argv):
                 warn(str(e))
     out.sort(key=lambda e: e["t"])
     target = os.path.join(folders[0], JOURNAL_FILES[1])
-    fd = os.open(target + ".tmp", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    tmp = f"{target}.{os.getpid()}.tmp"   # two passes at once (run-end's, a manual one) never share it
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         for event in out:
             f.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
-    os.replace(target + ".tmp", target)
+    os.replace(tmp, target)
     print(json.dumps({"run": begin.get("run"), "transcripts": read, "file": target,
                       "model_turns": sum(e["type"] == "model.turn" for e in out),
                       "messages": sum(e["type"] == "message" for e in out)}))

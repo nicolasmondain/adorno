@@ -96,7 +96,7 @@ expect_exit 0 "a journal folder elsewhere is refused" -- python3 "$J" event loop
 [ ! -e "$TMP/repo" ] && grep -q "not a run folder" "$TMP/err" && ok "nothing written outside" || ko "written outside"
 jq --arg j "$KH/runs/active" '.journal = $j' "$KH/runs/active/20260101T100000-2-2.json" >"$TMP/a.json" && mv "$TMP/a.json" "$KH/runs/active/20260101T100000-2-2.json"
 expect_exit 0 "the grants folder is refused" -- python3 "$J" event loop '{"round":1,"cap":2}' --session sess-b
-[ ! -e "$KH/runs/active/events.jsonl" ] && ok "nothing written next to the grants" || ko "written in active/"
+[ ! -e "$KH/runs/active/events.jsonl" ] && grep -q "not a run folder" "$TMP/err" && ok "nothing written next to the grants, and said" || ko "written in active/"
 
 echo "redaction"
 GH="ghp_0123456789abcdefghijABCDEFGHIJ012345"; SK="sk-ant-0123456789abcdefghij"; PW="hunter2-s3cret"
@@ -164,6 +164,9 @@ for c in a -; do
 done
 kit_names="$(grep -o 'SECRET_ENV_RE = re.compile(r"[^"]*"' "$ROOT/bin/kit" | sed 's/.*r"//; s/"$//')"
 grep -qF "SECRET_NAME = r\"$kit_names\"" "$J" && ok "same secret names as bin/kit (SECRET_ENV_RE)" || ko "secret names differ from bin/kit" "$kit_names"
+kit_settings="$(grep -o 'for k in conf if k not in ([^)]*)' "$ROOT/bin/kit" | grep -o '"[a-z_]*"' | tr -d '"' | sort | tr '\n' ' ')"
+own_settings="$(python3 -B -c 'import sys; sys.path.insert(0, sys.argv[1]); import journal; print(" ".join(sorted(journal.DEFAULTS)))' "$(dirname "$J")") "
+[ -n "$kit_settings" ] && [ "$kit_settings" = "$own_settings" ] && ok "same journal settings as bin/kit (validate_journal)" || ko "journal settings differ from bin/kit" "kit: $kit_settings / journal.py: $own_settings"
 
 echo "hooks (Claude Code payloads, shapes read on 2.1.325)"
 open_run 20260101T100000-7-7 sess-h
@@ -208,7 +211,9 @@ expect_jq "PostCompact" '.type == "session" and .kind == "compact" and .source =
 hook "{\"hook_event_name\":\"SessionEnd\",$common,\"reason\":\"other\"}"; hl
 expect_jq "SessionEnd" '.type == "session" and .kind == "end" and .source == "other"'
 n="$(wc -l <"$H")"
-hook "{\"hook_event_name\":\"Notification\",$common,\"message\":\"x\"}"; hook 'not json' 2>/dev/null; hook '{}'
+expect_exit 0 "a hook event the journal does not map exits 0" -- hook "{\"hook_event_name\":\"Notification\",$common,\"message\":\"x\"}"
+expect_exit 0 "a payload that is not JSON exits 0 (a hook's exit 2 would block Claude Code)" -- hook 'not json'
+expect_exit 0 "an empty payload exits 0" -- hook '{}'
 [ "$(wc -l <"$H")" = "$n" ] && ok "an event the journal does not map, or a broken payload, writes nothing and fails nothing" || ko "unmapped hook event written"
 hook "{\"hook_event_name\":\"Stop\",\"session_id\":\"sess-other\",\"last_assistant_message\":\"x\"}"
 [ "$(wc -l <"$H")" = "$n" ] && ok "a session without an open run is not recorded" || ko "foreign session recorded"
@@ -331,9 +336,27 @@ chmod 700 "$KH/runs/test-20260101T100000-1-1"; chmod 600 "$f"
 n="$(wc -l <"$f")"
 expect_exit 0 "a disk that takes no more" -- sh -c "ulimit -f 0; python3 '$J' event loop '{\"round\":1,\"cap\":2}' --session sess-a 2>&1 | cat"
 case "$out" in *"not recorded"*) ok "said, and the caller goes on" ;; *) ko "a failed write was silent" "$out" ;; esac
-[ "$(wc -l <"$f")" = "$n" ] && ok "the journal is left as it was, no half line" || ko "the journal changed on a failed write"
+[ "$(wc -l <"$f")" = "$n" ] && ok "the journal is left as it was" || ko "the journal changed on a failed write"
+# a disk that fills up partway through a line: the write takes part of it and says how much. Simulated (macOS does
+# not apply a file size limit to a write in append mode, so `ulimit -f` cannot cut one short there)
+size="$(( $(wc -c <"$f") ))"
+short_write() {
+  python3 -B -c 'import os, sys
+sys.path.insert(0, sys.argv[1])
+import journal
+real = os.write
+os.write = lambda fd, data: real(fd, data[:len(data) // 2])  # half the bytes land, as on a disk that fills up
+sys.exit(journal.main(["event", "loop", "{\"round\": 1, \"cap\": 2, \"reason\": \"" + "r" * 1500 + "\"}", "--session", "sess-a"]))' "$(dirname "$J")"
+}
+expect_exit 0 "a write cut short by a full disk: the caller goes on" -- short_write
+grep -q "not recorded" "$TMP/err" && ok "... said on stderr" || ko "a short write was silent" "$(cat "$TMP/err")"
+[ "$(( $(wc -c <"$f") ))" = "$size" ] && tail -n 1 "$f" | jq -e . >/dev/null && ok "... and no half line is left" || ko "a half line was left" "$size -> $(wc -c <"$f")"
 expect_exit 0 "no arguments" -- python3 "$J"
-expect_exit 0 "a broken run file is skipped" -- sh -c "printf '{' >'$KH/runs/active/broken.json'; python3 '$J' event loop '{\"round\":1,\"cap\":2}' --session sess-a"
+n="$(lines 20260101T100000-1-1)"
+printf '{' >"$KH/runs/active/broken.json"
+expect_exit 0 "a broken run file is skipped" -- python3 "$J" event loop '{"round":1,"cap":2}' --session sess-a
+[ "$(lines 20260101T100000-1-1)" = "$((n + 1))" ] && [ ! -s "$TMP/err" ] && ok "... and the session's run still gets the event, silently" || ko "a broken run file stopped the event" "$(cat "$TMP/err")"
+rm -f "$KH/runs/active/broken.json"
 
 echo
 echo "$pass passed, $fail failed"
