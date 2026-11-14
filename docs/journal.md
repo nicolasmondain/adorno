@@ -11,16 +11,19 @@ A run opened by `run-begin` gets a journal, one event per line:
 
 | Recorded | By |
 | --- | --- |
-| the run opening and closing | `run-begin`, `run-end` |
+| the run opening and closing, with how it ended (`done`, `draft`, `stopped`, `failed`) | `run-begin`, `run-end` |
 | each adorno script: its name, arguments, exit code, the level and action it asked for, a dry run | the script itself, as it exits |
 | each write that reached GitHub | the write scripts |
-| each review finding, as produced then as merged | `review-merge` |
+| each review finding, as produced then as merged, and the merged verdict | `review-merge` |
 | each refusal or question of the guard | the guard hook |
 | the steps of a run plan and the fix rounds | the session, with `run-mark` |
 | your prompts and the session's replies, each tool call, each question asked to you, each subagent starting and returning | Claude Code hooks, installed by `bin/kit install` |
 | each model response: model, tokens, thinking time; the texts the models wrote | a reading of Claude Code's transcripts, started by `run-end` |
 
 Codex and Gemini sessions record what the scripts and the guard do; their turns and tool calls are not recorded.
+
+The writer, `journal.py`, is called by adorno's scripts and hooks: it is not a command for agents, and the guard does
+not let it through. An agent marks a run with `run-mark`.
 
 A tool call is recorded by what it was about (a command, a path, a pattern), never by the content it carried: an edit
 is its file, not its code. A prompt, a result or a message is kept as its first 500 characters, the hash of the whole
@@ -38,9 +41,12 @@ The files are readable by you only.
 
 ## What is redacted
 
-Every string goes through the redaction before it is written: GitHub tokens, `sk-…` keys, AWS and Slack keys, JWTs,
-private key blocks, `Authorization` headers, `Bearer …`, credentials in a URL, and any value whose key, variable or
-flag is named like a secret (`key`, `token`, `secret`, `password`). Each becomes `[redacted:<kind>]`.
+Every string goes through the redaction before it is written, and before it is cut to its excerpt, so a secret
+across the cut is recognised whole: GitHub and GitLab tokens, `sk-…` and `sk_live_…` keys, AWS and Slack keys, JWTs,
+private key blocks, `Authorization` headers, `Bearer …`, credentials in a URL or after `-u` / `--user`, and any value
+whose key, variable or flag is named like a secret (`key`, `token`, `secret`, `password`), a quoted value with its
+spaces. Each becomes `[redacted:<kind>]`. For a tool the writer does not know (an MCP tool), a call keeps only numbers,
+booleans and short identifier-like strings; any other value is written as `…`.
 
 It is best effort: a secret that looks like none of these is written as it is. A journal also holds commands, paths,
 excerpts of prompts and names. Treat it as private; it has no export.
@@ -75,7 +81,8 @@ bin/kit serve            # http://127.0.0.1:8765 — or --port N, --runs DIR
   guard's lane is a refusal.
 - **Replay**: play, pause, speed (0.5× to 8×), step, a scrubber. Elapsed time and tokens add up as it plays.
 - **Detail**: click a mark (or press Enter on the current event) for its prompt excerpt, model, tokens, tool call,
-  exit code, and the run's files (reviews, plan, status), opened as text.
+  exit code, and the run's files (reviews, plan, status), opened as text. The return of an agent also lists the files
+  it wrote, read from its own Write, Edit and NotebookEdit calls.
 - **Views**: everything; agents only (no tool calls); tokens (a lane is as tall as what it spent); workflow (the
   steps of the run plan, or phases derived from the delegations when the run did not mark them).
 - **Text log**: the same events, one per row, for a screen reader or a narrow window.
@@ -94,7 +101,8 @@ bin/kit serve            # http://127.0.0.1:8765 — or --port N, --runs DIR
 | `R` | read the run again (a run still open grows) |
 | `?` | the keys |
 
-With "reduce motion" set in your system, nothing animates: Space advances one event.
+Enter and Space keep their usual job on a link, a button or a summary. With "reduce motion" set in your system,
+nothing animates: Space advances one event, from the start when the run is at its end.
 
 The server is read-only and listens on `127.0.0.1` only. It serves a run's files from its journal folder, and from
 the run's own folder only when that is an `.agent-run/` folder; never a transcript: the viewer shows its path, to copy.
@@ -123,5 +131,8 @@ journal of an open run. By hand: remove `events.jsonl`, `enriched.jsonl` and `en
 - A run that does not call `run-mark` shows no step nor round; the viewer then derives phases from the delegations
   and says so.
 - A session opened before the run records nothing for the time before `run-begin`.
+- Not recorded: an agent's tier (the hooks give the model it resolved to, not the tier it was declared with), a
+  consult between agents, and a handoff through a file. An agent's written files are not recorded as such: the viewer
+  derives them from its Write, Edit and NotebookEdit calls.
 - The viewer's colours are those named for the public page (paper, black rules, one red); its fonts fall back to the
   system's until Jost and IBM Plex Mono are added next to `viewer/tokens.css`, the one file to change.

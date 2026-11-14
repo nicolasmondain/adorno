@@ -40,6 +40,20 @@ Consequences:
 - The browser test pins Playwright (`tests/journal-viewer.smoke.py`) and runs offline: nothing is downloaded by a test.
 - The redaction patterns are the writer's own (none existed to reuse); the secret names are those of `bin/kit`
   (`SECRET_ENV_RE`), kept equal by a test.
+- An agent's `tier` is not recorded: no producer knows it (a hook gives the model the agent resolved to, not the tier
+  its definition declared), and a field nothing can fill is a field readers would learn to ignore. It is reopened by a
+  producer that knows it, e.g. the installed agent definition carrying its tier.
+- The files an agent wrote are not declared by anyone: the server derives them from the agent's own `Write`, `Edit` and
+  `NotebookEdit` calls (each agent lane's `wrote`), so the list cannot disagree with what happened and no agent has
+  to remember to report it.
+- `consult` and a handoff through a file are not events in this version: nothing in a run emits them, and an event
+  type with no writer would be dead. The merged `verdict` is one (a `message` from `scripts` to `session`, written by
+  `review-merge`).
+- `run.end` carries an outcome the workflow passes (`run-end <id> done | draft | stopped | failed`, `ended` without
+  one): the script cannot know how the workflow went, only the workflow can.
+- The writer is not a command for agents: the guard does not exempt `adorno-journal/scripts/*`, and scripts and hooks
+  call it. An agent that could write events could write any, so a journal would stop being a record; it marks a run
+  with `run-mark`.
 - The writer checks every event against the schema before writing it, with a standard-library checker limited to
   the keywords the schema uses (`journal.py validate` runs the same check on a file): no dependency for one schema,
   and no line a reader would have to guess at.
