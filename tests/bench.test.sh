@@ -310,7 +310,7 @@ expect_jq "the clean case raises no alarm" '.overall.clean == {"runs": 1, "false
 expect_jq "cost, tokens and time are summed, per run and per agent" \
   '(.overall | .cost_usd == 1.5 and .tokens_in == 3000 and .tokens_out == 150 and .duration_ms == 180000) and (.agents["agent:review:mongodb"] | .runs == 3 and .calls == 3 and .models == ["m-1"] and .cost_usd == 1.5 and .delivered == {"file": 3, "salvaged": 0, "none": 0})'
 expect_jq "what agent:adorno kept is scored the same way, from its inline comments and badges" \
-  '(.cases.defect.runs[0].final | .reviewed and .found == 1 and .recall == 1 and .severity_ok == 1 and .verdict == "fix" and .verdict_ok) and (.cases.whole.runs[0].final | (.reviewed | not) and .found == 0 and .verdict == "pass")'
+  '(.cases.defect.runs[0].final | .state == "ok" and .found == 1 and .recall == 1 and .severity_ok == 1 and .verdict == "fix" and .verdict_ok) and (.cases.whole.runs[0].final | .state == "absent" and .found == 0 and .verdict == null and .verdict_ok == null)'
 if [ -f "$R/perfect/score.json" ]; then ok "score.json is written next to the results"; else ko "score.json is written next to the results"; fi
 
 result missed defect 1 "$(review pass)"
@@ -401,6 +401,18 @@ score blocking "a final review harsher than the case"
 expect_jq "is scored on its own: found, wrong severity, wrong verdict, one comment to grade" \
   '.cases.defect.runs[0].final | .found == 1 and .severity_ok == 0 and .verdict == "block" and (.verdict_ok | not) and .reported == 2 and .ungraded == 1 and .precision == 0.5'
 
+# agent:adorno's pass: readable (ok), unreadable or with a comment that is not an object (invalid), never written (absent)
+result final-states defect 1 "$(review fix "$FOUND")" "$KEPT"
+result final-states defect 2 "$(review fix "$FOUND")" '{oops'
+result final-states whole 1 "$(review pass "$STALE")" '{"body":"","comments":["x"]}'
+result final-states clean 1 "$(review pass)"
+close final-states "defect:1 whole:1 clean:1 defect:2"
+score final-states "agent:adorno passes that are unreadable or absent"
+expect_jq "are recorded as such, with no verdict" \
+  '(.cases.defect.runs[0].final | .state == "ok" and .verdict == "fix" and .verdict_ok) and ([.cases.defect.runs[1].final, .cases.whole.runs[0].final] | all(.state == "invalid" and .verdict == null and .verdict_ok == null)) and (.cases.clean.runs[0].final | .state == "absent" and .verdict == null and .verdict_ok == null)'
+expect_jq "and the measures after agent:adorno pool the readable passes only" \
+  '.overall.final | .runs == 1 and .invalid == 2 and .absent == 1 and .recall == {"mean": 1, "min": 1, "max": 1} and .precision.mean == 1 and .found == 1 and .verdict_ok == 1'
+
 expect_exit 2 "score: unknown run" -- "$B/score" --label nope --results "$R" --cases "$SC"
 expect_exit 2 "score: a case the cases folder does not have" -- "$B/score" --label perfect --results "$R" --cases "$TMP/graded-true"
 expect_exit 2 "score: no label" -- "$B/score" --results "$R"
@@ -425,6 +437,8 @@ fi
 report "a run with findings to grade" --label extra
 has "lists them with where to grade them" '- `defect` #1 🟡 `b.ts:3` Rename this helper (code)'
 has "and says how" 'case.json` › `extras`'
+report "a run whose agent:adorno pass broke" --label final-states
+has "counts the passes left out after agent:adorno" "| after agent:adorno | recall 100%, precision 100% | 1 inline comments, verdict 1/1, 1 absent, 2 invalid |"
 report "a run over several repeats" --label repeats
 has "shows the mean, the worst and the best run" "| recall | 50% (worst 0%, best 100%) |"
 

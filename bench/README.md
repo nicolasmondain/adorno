@@ -27,7 +27,7 @@ Per case and overall, on the merged review (`review.json`):
 | verdict | the merged verdict (`pass`, `fix`, `block`) is one the case accepts |
 | clean cases | on a case without defect: findings reported (false alarms), and the verdict must be `pass` |
 | reviews | reviews that `review-merge` rejected or that never came, after one retry |
-| after `agent:adorno` | the same recall and precision on what it kept (`review-final.json`, inline comments and their badges) |
+| after `agent:adorno` | the same recall and precision on what it kept (`review-final.json`, inline comments and their badges), over the runs where that file is readable; the runs where it is absent or invalid are counted apart |
 | cost | tokens in and out, the cost the tool reports, agent time, the model that really ran, per agent and in total |
 | stability | over several repeats: mean, worst and best run of recall and precision |
 

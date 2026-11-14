@@ -22,7 +22,8 @@ Per case run, on the merged review (review.json):
   false_alarms  on a case without defect: findings reported, minus the valid extras
   invalid_reviews  reviews that review-merge rejected, or that never came
 The same matching is applied to what agent:adorno kept (review-final.json, inline comments; severity and verdict read
-from the badges). Over several repeats, `recall` and `precision` are {mean, min, max}: the pooled value of each
+from the badges), over the case runs where that file is a readable final review: `final.state` is ok, invalid (not
+JSON, not an object, a comment that is not one) or absent, and the last two are counted apart, with no verdict. Over several repeats, `recall` and `precision` are {mean, min, max}: the pooled value of each
 repeat, then its spread. Exits 2 on wrong usage.
 """
 import argparse
@@ -102,13 +103,15 @@ def measure(findings, case):
 
 
 def final_findings(path):
-    """What agent:adorno would post, as findings: one per inline comment, its severity read from the badge."""
-    if not path.is_file():
-        return []
+    """What agent:adorno would post, as findings: one per inline comment, its severity read from the badge. None when
+    the file is not a final review: unreadable, not an object, or a comment that is not one."""
     try:
-        comments = load(path).get("comments") or []
-    except (ValueError, AttributeError):
-        return []
+        data = load(path)
+    except ValueError:
+        return None
+    comments = (data.get("comments") or []) if isinstance(data, dict) else None
+    if not isinstance(comments, list) or not all(isinstance(comment, dict) for comment in comments):
+        return None
     findings = []
     for comment in comments:
         body = str(comment.get("body") or "")
@@ -123,13 +126,18 @@ def score_run(case, folder, n):
     metas = [load(path) for path in sorted((folder / "meta").glob("*.json"))]
     costs = [m["cost_usd"] for m in metas if m["cost_usd"] is not None]
     result, listed = measure(review["findings"], case)
-    kept = final_findings(folder / "review-final.json")
-    final, final_listed = measure(kept, case)
-    severities = {f["severity"] for f in kept}
-    final_verdict = "block" if "blocker" in severities else "fix" if "major" in severities else "pass"
+    path = folder / "review-final.json"
+    kept = final_findings(path) if path.is_file() else None
+    state = "ok" if kept is not None else "invalid" if path.is_file() else "absent"
+    final, final_listed = measure(kept or [], case)
+    final_verdict = None
+    if state == "ok":
+        severities = {f["severity"] for f in kept}
+        final_verdict = "block" if "blocker" in severities else "fix" if "major" in severities else "pass"
     del final["attribution_ok"]  # a comment of the final review names no agent
-    final.update({"reviewed": (folder / "review-final.json").is_file(), "verdict": final_verdict,
-                  "verdict_ok": final_verdict in case["verdict"], "findings": final_listed})
+    final.update({"state": state, "verdict": final_verdict,
+                  "verdict_ok": None if final_verdict is None else final_verdict in case["verdict"],
+                  "findings": final_listed})
     result.update({
         "n": n, "routing_ok": run["routing_ok"], "verdict": review["verdict"],
         "verdict_ok": review["verdict"] in case["verdict"],
@@ -162,6 +170,8 @@ def summarize(runs):
     by_repeat = [[r for r in runs if r["n"] == n] for n in repeats]
     priced = [r["cost_usd"] for r in runs if r["cost_usd"] is not None]
     clean = [r for r in runs if r["expected"] == 0]
+    reviewed = [r for r in runs if r["final"]["state"] == "ok"]  # an unreadable or absent pass measures nothing
+    reviewed_by_repeat = [[r for r in rs if r["final"]["state"] == "ok"] for rs in by_repeat]
     return {
         "runs": len(runs),
         "recall": spread([pooled(rs, lambda r: r["found"], lambda r: r["expected"]) for rs in by_repeat]),
@@ -175,12 +185,17 @@ def summarize(runs):
         "clean": {"runs": len(clean), "false_alarms": sum(r["false_alarms"] for r in clean),
                   "verdict_ok": sum(1 for r in clean if r["verdict_ok"])},
         "final": {
-            "recall": spread([pooled(rs, lambda r: r["final"]["found"], lambda r: r["expected"]) for rs in by_repeat]),
+            "runs": len(reviewed),
+            "absent": sum(1 for r in runs if r["final"]["state"] == "absent"),
+            "invalid": sum(1 for r in runs if r["final"]["state"] == "invalid"),
+            "recall": spread([pooled(rs, lambda r: r["final"]["found"], lambda r: r["expected"])
+                              for rs in reviewed_by_repeat]),
             "precision": spread([pooled(rs, lambda r: r["final"]["matched"], lambda r: denominator(r["final"]))
-                                 for rs in by_repeat]),
-            "found": sum(r["final"]["found"] for r in runs), "comments": sum(r["final"]["reported"] for r in runs),
-            "severity_ok": sum(r["final"]["severity_ok"] for r in runs),
-            "verdict_ok": sum(1 for r in runs if r["final"]["verdict_ok"])},
+                                 for rs in reviewed_by_repeat]),
+            "found": sum(r["final"]["found"] for r in reviewed),
+            "comments": sum(r["final"]["reported"] for r in reviewed),
+            "severity_ok": sum(r["final"]["severity_ok"] for r in reviewed),
+            "verdict_ok": sum(1 for r in reviewed if r["final"]["verdict_ok"])},
         "cost_usd": round(sum(priced), 4) if priced else None,
         "tokens_in": sum(r["tokens_in"] for r in runs), "tokens_out": sum(r["tokens_out"] for r in runs),
         "duration_ms": sum(r["duration_ms"] for r in runs)}

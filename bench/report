@@ -144,7 +144,8 @@ def render(score, comparison):
         ["routing", f"{overall['routing_ok']}/{overall['runs']}", "areas and reviewers as case.json says"],
         ["reviews", f"{overall['invalid_reviews']} invalid or missing", ""],
         ["after agent:adorno", f"recall {spread(final['recall'])}, precision {spread(final['precision'])}",
-         f"{final['comments']} inline comments, verdict {final['verdict_ok']}/{overall['runs']}"],
+         f"{final['comments']} inline comments, verdict {final['verdict_ok']}/{final['runs']}, "
+         f"{final['absent']} absent, {final['invalid']} invalid"],
         ["cost", money(overall["cost_usd"]),
          f"{tokens(overall['tokens_in'])} tokens in, {tokens(overall['tokens_out'])} out, "
          f"{minutes(overall['duration_ms'])} of agent time"]]
