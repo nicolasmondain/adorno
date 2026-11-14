@@ -20,14 +20,14 @@
     <section id="stage" aria-label="Replay" data-state="paused" hidden>
       <div class="bar" role="toolbar" aria-label="Playback">
         <button id="back" aria-label="Previous event" title="Previous event (←)">◂</button>
-        <button id="play" aria-pressed="false" title="Play or pause (Space)">Play</button>
+        <button id="play" title="Play or pause (Space)">Play</button>
         <button id="forward" aria-label="Next event" title="Next event (→)">▸</button>
         <label>speed
           <select id="speed"></select>
         </label>
         <input id="scrub" type="range" min="0" max="1000" value="1000" step="1" aria-label="Position in the run">
-        <output id="clock" aria-label="Elapsed time"></output>
-        <output id="spent" aria-label="Tokens so far"></output>
+        <output id="clock" aria-live="off" aria-label="Elapsed time"></output>
+        <output id="spent" aria-live="off" aria-label="Tokens so far"></output>
       </div>
       <div class="bar" role="toolbar" aria-label="View">
         <label>view

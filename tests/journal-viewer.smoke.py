@@ -95,6 +95,10 @@ def main(argv):
         page.keyboard.press("Space")
         page.wait_for_selector('#stage[data-state="playing"]')
         check("Space plays from the start", page.locator(".mark:not(.drawn)").count() > 0)
+        check("the Play button says Pause, with no pressed state on top of its label",
+              page.locator("#play").text_content() == "Pause" and page.locator("#play").get_attribute("aria-pressed") is None)
+        check("the clock and the tokens, rewritten every frame, are not live regions",
+              page.locator("#clock").get_attribute("aria-live") == "off" and page.locator("#spent").get_attribute("aria-live") == "off")
         for _ in range(3):
             page.keyboard.press(">")
         check("> speeds up to 8×", page.input_value("#speed") == "8")
@@ -102,6 +106,8 @@ def main(argv):
         check("the replay reaches the end, every mark drawn", page.locator(".mark:not(.drawn)").count() == 0)
         check("the tokens add up to the run's total", page.locator("#spent").text_content() == "33k in · 5.9k out · 91k cache",
               page.locator("#spent").text_content())
+        check("the scrubber reads as the clock", page.locator("#scrub").get_attribute("aria-valuetext") == page.locator("#clock").text_content(),
+              str(page.locator("#scrub").get_attribute("aria-valuetext")))
         page.keyboard.press("Home")
         check("Home goes back to the start: nothing drawn", page.locator(".mark.drawn").count() == 0
               and stage.get_attribute("data-index") == "-1")

@@ -22,7 +22,6 @@ const state = {
   p: 1,            // progress of the replay
   index: -1,       // the event of the first run the reader is on
   tab: "diagram",
-  selected: null,  // indices shown in the detail panel
   frame: 0,
   before: 0,
   focusBack: null,
@@ -162,6 +161,7 @@ function seek(p, { index, follow = false, announce = false } = {}) {
   state.diagrams.forEach((d, i) => d.setPlayhead(state.p * d.run.time.width, follow, i === 0 ? state.index : undefined));
   $("scrub").value = String(Math.round(state.p * 1000));
   $("clock").textContent = `${formatClock(tOf(a, u))} / ${formatClock(a.duration_ms)}`;
+  $("scrub").setAttribute("aria-valuetext", $("clock").textContent);
   $("spent").textContent = formatTokens(state.prefix[Math.max(0, state.index + 1)]);
   $("stage").dataset.state = state.playing ? "playing" : state.p >= 1 ? "ended" : "paused";
   $("stage").dataset.index = String(state.index);
@@ -182,7 +182,6 @@ function tick(now) {
   if (p >= 1) {
     state.playing = false;
     $("play").textContent = "Play";
-    $("play").setAttribute("aria-pressed", "false");
     seek(1, { follow: true, announce: true });
     return;
   }
@@ -200,7 +199,6 @@ function play() {
   if (state.p >= 1) seek(0);
   state.playing = true;
   $("play").textContent = "Pause";
-  $("play").setAttribute("aria-pressed", "true");
   state.before = performance.now();
   $("stage").dataset.state = "playing";
   state.frame = requestAnimationFrame(tick);
@@ -211,7 +209,6 @@ function pause() {
   state.playing = false;
   cancelAnimationFrame(state.frame);
   $("play").textContent = "Play";
-  $("play").setAttribute("aria-pressed", "false");
   seek(state.p, { announce: true });
 }
 
@@ -271,7 +268,6 @@ function select(indices, which = 0) {
   const run = state.open[which];
   if (!run || !indices.length) return;
   if ($("panel").hidden) state.focusBack = document.activeElement;
-  state.selected = indices;
   if (which === 0 && indices.length === 1) seek(run.events[indices[0]].u / Math.max(1, run.time.width), { index: indices[0] });
   renderPanel($("panel"), run, indices, {
     onClose: closePanel,
@@ -293,7 +289,6 @@ function closePanel() {
   if ($("panel").hidden) return;
   $("panel").hidden = true;
   document.body.classList.remove("with-panel");
-  state.selected = null;
   (state.focusBack?.isConnected ? state.focusBack : state.diagrams[0]?.scroll)?.focus();
 }
 
