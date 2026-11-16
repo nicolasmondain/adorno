@@ -6,10 +6,9 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"; trap 'chmod -R u+w "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
 # python3 with PyYAML runs bin/kit directly; else uv, keeping its real cache (the throwaway HOME would hide it)
-if python3 -c 'import yaml' 2>/dev/null; then KIT=(python3 "$ROOT/bin/kit"); PY=(python3)
+if python3 -c 'import yaml' 2>/dev/null; then KIT=(python3 "$ROOT/bin/kit")
 elif command -v uv >/dev/null 2>&1; then
   UV_CACHE_DIR="${UV_CACHE_DIR:-$(uv cache dir 2>/dev/null)}"; export UV_CACHE_DIR; KIT=("$ROOT/bin/kit")
-  PY=(uv run --quiet --with pyyaml python3)
 else echo "needs python3 with PyYAML, or uv" >&2; exit 1; fi
 export HOME="$TMP/home" ADORNO_HOME="$TMP/home/.adorno" ADORNO_LOCAL="$TMP/local"
 mkdir -p "$HOME"
@@ -302,6 +301,7 @@ printf '%s\n' 'owner: {name: T, github: t, language: fr}' 'repos:' '  acme/app:'
   '      docs: [agent:review:security]' '      api: [agent:review:api, agent:review:security]' \
   '      mongodb: [agent:review:mongodb, agent:review:back]' '      always: [agent:review:code]' \
   '      front: [agent:review:code]' '  acme/web:' '    use: [node]' '    area_reviewers:' \
+  '      mongodb: [agent:review:mongodb]' '  acme/mix:' '    use: [mongodb]' '    area_reviewers:' \
   '      mongodb: [agent:review:mongodb]' >"$MIG/adorno.yaml"
 cp "$MIG/adorno.yaml" "$TMP/mig-before.yaml"
 out="$(ADORNO_LOCAL="$MIG" "${KIT[@]}" migrate areas 2>"$TMP/err")"; got=$?
@@ -315,12 +315,8 @@ expect_jq "always: a public reviewer missing from the old list becomes a removal
   '[.[] | select(.area_path == "areas.always.review")][0].new == ["-agent:review:ponytail"]'
 expect_jq "an area omitting a public reviewer gets its -x" \
   '[.[] | select(.area_path == "areas.front.review")][0].new == ["agent:review:code", "-agent:review:front", "-agent:review:perf"]'
-# the snippet of one scope, as parsed YAML (same interpreter as bin/kit)
-snippet() { awk -v h="# $1:" 'index($0, h) == 1 {on = 1; next} /^# / {on = 0} on' "$TMP/err" |
-  "${PY[@]}" -c 'import json, sys, yaml; print(json.dumps(yaml.safe_load(sys.stdin)))'; }
-out="$(snippet repos.acme/web)"
-expect_jq "a scope that already calls a preset keeps it, mongodb is appended" \
-  '.repos["acme/web"].use == ["node", "mongodb"] and .repos["acme/web"].areas.back.sub.mongodb.review == []'
+expect_jq "a scope that already calls a preset keeps it, mongodb is appended once" \
+  '([.[] | select(.scope == "repos.acme/web")][0].use == ["node", "mongodb"]) and ([.[] | select(.scope == "repos.acme/mix")][0].use == ["mongodb"])'
 check "migrate prints a YAML snippet per scope" 'grep -q "repos:" "$TMP/err" && grep -q "areas:" "$TMP/err"'
 check "migrate writes nothing" 'cmp -s "$MIG/adorno.yaml" "$TMP/mig-before.yaml" && [ "$(ls "$MIG")" = "adorno.yaml" ]'
 

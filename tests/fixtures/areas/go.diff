@@ -8,6 +8,13 @@ diff --git a/internal/handler/orders.go b/internal/handler/orders.go
 +++ b/internal/handler/orders.go
 @@ -1,0 +1,1 @@
 +	rows, err := h.db.QueryContext(ctx, "SELECT id FROM orders WHERE user_id = $1", uid)
+diff --git a/internal/store/orders.go b/internal/store/orders.go
+--- a/internal/store/orders.go
++++ b/internal/store/orders.go
+@@ -1,0 +1,3 @@
++	rows, err := s.db.QueryContext(
++		SELECT id, total
++		FROM orders`, uid)
 diff --git a/internal/service/orders.go b/internal/service/orders.go
 --- a/internal/service/orders.go
 +++ b/internal/service/orders.go
@@ -41,5 +48,6 @@ diff --git a/pkg/handlers/health.go b/pkg/handlers/health.go
 diff --git a/web/src/useOrders.tsx b/web/src/useOrders.tsx
 --- a/web/src/useOrders.tsx
 +++ b/web/src/useOrders.tsx
-@@ -1,0 +1,1 @@
+@@ -1,0 +1,2 @@
 +export const useOrders = () => useQuery(["orders"], fetchOrders)
++  UPDATE = "update",

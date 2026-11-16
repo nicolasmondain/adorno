@@ -201,7 +201,7 @@ presets:
         sub:
           sql:
             paths: ["*.sql"]
-            content: 'SELECT .+ FROM |INSERT INTO |UPDATE [A-Za-z_."]+ SET |DELETE FROM |ALTER TABLE |CREATE (UNIQUE )?INDEX '
+            content: '^[[:space:]]*(SELECT|UPDATE)( [^=:]|$)|[`"''(](SELECT|UPDATE) |INSERT INTO |DELETE FROM |ALTER TABLE |CREATE (UNIQUE )?INDEX '
             review: [agent:review:sql]
           migration:
             review: [agent:review:sql]
@@ -232,7 +232,7 @@ presets:
           go:
             paths: ["*.go"]
           go-sql:
-            content: '\.(Query|QueryRow|Exec)(Context)?\([^)]|sqlx\.|gorm\.|pgx\.'
+            content: '\.(Query|QueryRow|Exec)(Context)?\(([^)]|$)|sqlx\.|gorm\.|pgx\.'
             review: [agent:review:sql]
       api:
         sub:
@@ -244,10 +244,10 @@ presets:
       back:
         sub:
           rails:
-            paths: ["app/models/*", "app/controllers/*", "app/mailers/*", "lib/*", "*.rake"]
+            paths: ["app/models/*", "app/controllers/*", "app/mailers/*", "lib/*"]
           activerecord:
             paths: ["db/schema.rb", "db/structure.sql"]
-            content: '\.where\(|\.(joins|includes|pluck)\(:|find_by_sql|add_index|add_column'
+            content: '\.where\(|\.(joins|includes|pluck)\((\[?:|[a-z_]+: )|\.joins\(["'']|find_by_sql|add_index|add_column'
             review: [agent:review:sql]
       api:
         sub:
@@ -256,7 +256,7 @@ presets:
       front:
         sub:
           rails:
-            paths: ["app/javascript/*", "app/assets/*"]
+            paths: ["app/views/*", "app/javascript/*", "app/assets/*"]
 
 # Your real repos (reviewers, team, context, permissions, voice, vision) live in local/adorno.yaml, git-ignored
 # and applied by `bin/kit install`. Template: local.example/adorno.yaml. Result for a repo: `bin/kit conf`.

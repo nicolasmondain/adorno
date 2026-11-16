@@ -636,22 +636,22 @@ if [ -f "$REAL" ]; then
 
   expect_exit 0 "go + sql" -- "$S/pr-areas" acme/go "$A/go.diff"
   expect_jq "go: every file lands in an area" '.other == []'
-  expect_jq "go: .go files are back, database/sql calls are back.go-sql (not r.URL.Query(), not useQuery()), raw SQL is back.sql" \
-    "$(has back.go '["cmd/api/main.go","internal/handler/orders.go","internal/service/orders.go","pkg/handlers/health.go"]') and $(is back.go-sql '["internal/handler/orders.go"]') and $(is back.sql '["internal/handler/orders.go","migrations/0002_orders.up.sql"]')"
+  expect_jq "go: .go files are back, database/sql calls are back.go-sql (a call whose arguments start on the next line too, not r.URL.Query(), not useQuery()), raw SQL is back.sql (a multi-line query too, not a TS enum member)" \
+    "$(has back.go '["cmd/api/main.go","internal/handler/orders.go","internal/store/orders.go","internal/service/orders.go","pkg/handlers/health.go"]') and $(is back.go-sql '["internal/handler/orders.go","internal/store/orders.go"]') and $(is back.sql '["internal/handler/orders.go","internal/store/orders.go","migrations/0002_orders.up.sql"]')"
   expect_jq "go: handler/ and handlers/ are api, _test.go is tests, go.sum is deps, a React hook is front" \
     "$(is api.go '["internal/handler/orders.go","internal/handler/orders_test.go","pkg/handlers/health.go"]') and .areas.tests == [\"internal/handler/orders_test.go\"] and (.areas.deps | sort) == [\"go.mod\",\"go.sum\"] and .areas.front == [\"web/src/useOrders.tsx\"]"
   expect_jq "go: sql reviewer, no mongodb one; no perf agent for go, so the fallback" \
     '(.review | index("agent:review:sql")) and (.review | index("agent:review:mongodb") | not) and .by_area.back.perf == null and .build == "agent:feat:back"'
   expect_exit 0 "a test-only go change" -- "$S/pr-areas" acme/go --files pkg/x/foo_test.go
   expect_jq "today back.go and tests tie and config order gives build and fix to back (pinned: a follow-up gives a test-only change to tests)" \
-    '.areas["back.go"] == ["pkg/x/foo_test.go"] and .areas.tests == ["pkg/x/foo_test.go"] and .build == "agent:feat:back" and .fix == "agent:fix:patch"'
+    '.areas["back.go"] == ["pkg/x/foo_test.go"] and .areas.tests == ["pkg/x/foo_test.go"] and .build == "agent:feat:back" and .fix == "agent:fix:patch" and .perf == "agent:fix:patch" and (.skills | index("performance-optimization"))'
 
   expect_exit 0 "rails + sql" -- "$S/pr-areas" acme/rb "$A/rails.diff"
   expect_jq "rails: every file lands in an area" '.other == []'
-  expect_jq "rails: app/ and lib/ are back, ActiveRecord queries and schema are back.activerecord, not the JavaScript .includes( / .pluck(" \
-    "$(has back.rails '["app/models/order.rb","app/controllers/orders_controller.rb","app/mailers/order_mailer.rb","lib/pricing.rb","lib/tasks/orders.rake"]') and $(is back.activerecord '["app/controllers/orders_controller.rb","db/migrate/20261116000000_add_total_to_orders.rb","db/schema.rb","db/structure.sql"]') and .areas[\"back.migration\"] == [\"db/migrate/20261116000000_add_total_to_orders.rb\"]"
-  expect_jq "rails: routes and serializers are api, erb, app/javascript and app/assets front, specs tests, Gemfile deps" \
-    "$(has api '["app/controllers/api/v1/orders_controller.rb"]') and $(is api.rails '["config/routes.rb","app/serializers/order_serializer.rb"]') and $(has front '["app/views/orders/index.html.erb"]') and $(is front.rails '["app/javascript/tags.js","app/assets/config/manifest.js"]') and .areas.tests == [\"spec/models/order_spec.rb\"] and (.areas.deps | sort) == [\"Gemfile\",\"Gemfile.lock\"]"
+  expect_jq "rails: app/ and lib/ are back, ActiveRecord queries (symbol, hash, array and raw-join forms) and schema are back.activerecord, not the JavaScript .includes( / .pluck(" \
+    "$(has back.rails '["app/models/order.rb","app/controllers/orders_controller.rb","app/mailers/order_mailer.rb","lib/pricing.rb","lib/tasks/orders.rake"]') and $(is back.activerecord '["app/controllers/orders_controller.rb","app/controllers/api/v1/orders_controller.rb","app/mailers/order_mailer.rb","lib/pricing.rb","db/migrate/20261116000000_add_total_to_orders.rb","db/schema.rb","db/structure.sql"]') and .areas[\"back.migration\"] == [\"db/migrate/20261116000000_add_total_to_orders.rb\"]"
+  expect_jq "rails: routes and serializers are api, app/views (erb and slim), app/javascript and app/assets front, specs tests, Gemfile deps" \
+    "$(has api '["app/controllers/api/v1/orders_controller.rb"]') and $(is api.rails '["config/routes.rb","app/serializers/order_serializer.rb"]') and $(is front.rails '["app/views/orders/index.html.erb","app/views/orders/_row.html.slim","app/javascript/tags.js","app/assets/config/manifest.js"]') and .areas.tests == [\"spec/models/order_spec.rb\"] and (.areas.deps | sort) == [\"Gemfile\",\"Gemfile.lock\"]"
   expect_jq "rails: sql reviewer, never the mongodb one (@order.update is ActiveRecord)" \
     '(.review | index("agent:review:sql")) and (.review | index("agent:review:mongodb") | not)'
 

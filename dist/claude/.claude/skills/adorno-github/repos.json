@@ -293,7 +293,7 @@
               "paths": [
                 "*.sql"
               ],
-              "content": "SELECT .+ FROM |INSERT INTO |UPDATE [A-Za-z_.\"]+ SET |DELETE FROM |ALTER TABLE |CREATE (UNIQUE )?INDEX ",
+              "content": "^[[:space:]]*(SELECT|UPDATE)( [^=:]|$)|[`\"'(](SELECT|UPDATE) |INSERT INTO |DELETE FROM |ALTER TABLE |CREATE (UNIQUE )?INDEX ",
               "review": [
                 "agent:review:sql"
               ]
@@ -363,7 +363,7 @@
               ]
             },
             "go-sql": {
-              "content": "\\.(Query|QueryRow|Exec)(Context)?\\([^)]|sqlx\\.|gorm\\.|pgx\\.",
+              "content": "\\.(Query|QueryRow|Exec)(Context)?\\(([^)]|$)|sqlx\\.|gorm\\.|pgx\\.",
               "review": [
                 "agent:review:sql"
               ]
@@ -391,8 +391,7 @@
                 "app/models/*",
                 "app/controllers/*",
                 "app/mailers/*",
-                "lib/*",
-                "*.rake"
+                "lib/*"
               ]
             },
             "activerecord": {
@@ -400,7 +399,7 @@
                 "db/schema.rb",
                 "db/structure.sql"
               ],
-              "content": "\\.where\\(|\\.(joins|includes|pluck)\\(:|find_by_sql|add_index|add_column",
+              "content": "\\.where\\(|\\.(joins|includes|pluck)\\((\\[?:|[a-z_]+: )|\\.joins\\([\"']|find_by_sql|add_index|add_column",
               "review": [
                 "agent:review:sql"
               ]
@@ -421,6 +420,7 @@
           "sub": {
             "rails": {
               "paths": [
+                "app/views/*",
                 "app/javascript/*",
                 "app/assets/*"
               ]

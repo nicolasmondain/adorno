@@ -12,13 +12,19 @@ diff --git a/app/controllers/orders_controller.rb b/app/controllers/orders_contr
 diff --git a/app/controllers/api/v1/orders_controller.rb b/app/controllers/api/v1/orders_controller.rb
 --- a/app/controllers/api/v1/orders_controller.rb
 +++ b/app/controllers/api/v1/orders_controller.rb
-@@ -1,0 +1,1 @@
+@@ -1,0 +1,2 @@
++    @order = Order.includes(items: :product).find(params[:id])
 +    render json: @order
 diff --git a/app/views/orders/index.html.erb b/app/views/orders/index.html.erb
 --- a/app/views/orders/index.html.erb
 +++ b/app/views/orders/index.html.erb
 @@ -1,0 +1,1 @@
 +<%= render @orders %>
+diff --git a/app/views/orders/_row.html.slim b/app/views/orders/_row.html.slim
+--- a/app/views/orders/_row.html.slim
++++ b/app/views/orders/_row.html.slim
+@@ -1,0 +1,1 @@
++tr= order.total
 diff --git a/db/migrate/20261116000000_add_total_to_orders.rb b/db/migrate/20261116000000_add_total_to_orders.rb
 --- a/db/migrate/20261116000000_add_total_to_orders.rb
 +++ b/db/migrate/20261116000000_add_total_to_orders.rb
@@ -52,12 +58,14 @@ diff --git a/Gemfile.lock b/Gemfile.lock
 diff --git a/app/mailers/order_mailer.rb b/app/mailers/order_mailer.rb
 --- a/app/mailers/order_mailer.rb
 +++ b/app/mailers/order_mailer.rb
-@@ -1,0 +1,1 @@
+@@ -1,0 +1,2 @@
++    @lines = @order.items.includes([:product])
 +    mail(to: @order.email, subject: "Receipt")
 diff --git a/lib/pricing.rb b/lib/pricing.rb
 --- a/lib/pricing.rb
 +++ b/lib/pricing.rb
-@@ -1,0 +1,1 @@
+@@ -1,0 +1,2 @@
++    Order.joins("INNER JOIN customers ON customers.id = orders.customer_id")
 +  def self.total(items) = items.sum(&:price)
 diff --git a/lib/tasks/orders.rake b/lib/tasks/orders.rake
 --- a/lib/tasks/orders.rake
@@ -72,8 +80,9 @@ diff --git a/app/serializers/order_serializer.rb b/app/serializers/order_seriali
 diff --git a/app/javascript/tags.js b/app/javascript/tags.js
 --- a/app/javascript/tags.js
 +++ b/app/javascript/tags.js
-@@ -1,0 +1,2 @@
+@@ -1,0 +1,3 @@
 +if (tags.includes(tag)) return
++if (name.includes("x")) return
 +const ids = _.pluck(users, "id")
 diff --git a/app/assets/config/manifest.js b/app/assets/config/manifest.js
 --- a/app/assets/config/manifest.js

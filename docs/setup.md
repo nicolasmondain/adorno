@@ -154,10 +154,10 @@ agent outside its role's families (`build`: feat, test, docs, chore; `fix`: fix,
 | --- | --- | --- |
 | `node` | `back.perf` | `perf:nodejs` |
 | `mongodb` | `back.mongodb`: `*/models/*`, `.find(`, `.aggregate(`, `.createIndex(`, `new Schema(`, `$lookup`… | `perf:mongodb`, + `review:mongodb` (also on `back.migration`) |
-| `sql` | `back.sql`: `*.sql`, raw `SELECT … FROM`, `UPDATE <table> SET`, `ALTER TABLE`, `CREATE INDEX`… | + `review:sql` (also on `back.migration`) |
+| `sql` | `back.sql`: `*.sql`, raw `SELECT` / `UPDATE` at a statement start (line start, after a quote), `INSERT INTO`, `ALTER TABLE`, `CREATE INDEX`… | + `review:sql` (also on `back.migration`) |
 | `python` | `back.python` (`manage.py`, `views.py`, `tasks.py`, `management/`, `*settings*.py`), `back.django-orm` (`models.py`, `.objects.`, `select_related(`…), `api.python` (`urls.py`, `serializers.py`, `routers/`), `front.python` (`static/`) | + `review:sql` on `back.django-orm` |
 | `go` | `back.go` (`*.go`), `back.go-sql` (`.QueryContext(…`, `.Exec(…`, `sqlx.`, `gorm.`, `pgx.`), `api.go` (`handler/`, `handlers/`) | + `review:sql` on `back.go-sql` |
-| `rails` | `back.rails` (`app/models/`, `app/controllers/`, `app/mailers/`, `lib/`, `*.rake`), `back.activerecord` (`.where(`, `.includes(:`, `add_column`, `db/schema.rb`…), `api.rails` (`config/routes.rb`, `app/serializers/`), `front.rails` (`app/javascript/`, `app/assets/`) | + `review:sql` on `back.activerecord` |
+| `rails` | `back.rails` (`app/models/`, `app/controllers/`, `app/mailers/`, `lib/`), `back.activerecord` (`.where(`, `.includes(:x)` / `.includes(x: :y)`, `.joins("…")`, `add_column`, `db/schema.rb`…), `api.rails` (`config/routes.rb`, `app/serializers/`), `front.rails` (`app/views/`, `app/javascript/`, `app/assets/`) | + `review:sql` on `back.activerecord` |
 
 ```yaml
 workspaces:
