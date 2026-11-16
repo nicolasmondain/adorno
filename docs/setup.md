@@ -354,6 +354,25 @@ repos:
       pr_opened: {Lifecycle: "In Code Review", PR: "{{pr_url}}"}
 ```
 
+**A repo skill after the PR.** `after_pr` runs repo skills once the PR exists (`workflow:pr:ship`, after the default
+`adorno-pr-open` or a repo `pr_skill` alike), only in the runs of the workflows you list. `needs: notion` keeps the
+entry for requests that came with a Notion page; the skill gets the PR URL and, when the request has one, the Notion
+page's URL (rebuilt from its page id) as arguments. Example:
+fill the Notion ticket of a bug fixed through `workflow:issue:fix` on a repo:
+
+```yaml
+repos:
+  acme/app:
+    after_pr:
+      - skill: /acme-notion-fields
+        workflows: [workflow:issue:fix]
+        needs: notion
+```
+
+It runs inside the run's level, shows the call without running it in a `report` or L0 run, and is recorded in
+`after-pr.json` of the run folder so a resumed run does not repeat it. In an `--unattended` run, a skill that needs
+an answer from you is not run: it is skipped, its call at the top of the report, and the run goes on.
+
 These workflows are launched by hand, or from your own scheduler (a scheduled task that runs
 `workflow:slack:mentions` every hour, for example): adorno schedules nothing itself.
 

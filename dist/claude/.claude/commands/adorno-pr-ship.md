@@ -59,22 +59,36 @@ command.
    - a repo skill: run it in the worktree, as it is written. It may push and run `gh pr create` itself: inside the
      run the guard lets `git push origin <branch>` and `gh pr create` through (never forced, never the base, at the
      run's level). Then `pr-status owner/repo` again: no PR for the branch → stop and report what the skill did;
-     its description has no `## Proof` or misses a source of the run's `refs.json` (`## Sources`, `workflow:pr:open`
-     step 3) → `agent:adorno` appends what is missing and publishes it with `pr-edit owner/repo#N "<its title>"
-     <file> [--refs <run>/refs.json [--withhold <url>]…] --attach …`; opened as draft while the verdict is clean and
-     the proof complete → `pr-ready owner/repo#N`.
+     its description has no `## Proof`, misses a source of the run's `refs.json` (`## Sources`, `workflow:pr:open`
+     step 3) or the ponytail notes of `status.md` (under Impact / Risks) → `agent:adorno` appends what is missing
+     and publishes it with `pr-edit owner/repo#N "<its title>" <file> [--refs <run>/refs.json [--withhold <url>]…]
+     --attach …`; opened as draft while the verdict is clean and the proof complete → `pr-ready owner/repo#N`.
 7. **PR already open** → push, update, ready:
    - push: `pr-push owner/repo#N` (or the repo skill pushes itself, as above);
    - default update: `agent:adorno` compares the title and description to `git diff origin/<base>...HEAD` and the
-     proof to `qa/`. The scope moved (a new What or How, a new risk, a verification that no longer matches) or new
-     proof → new title and description in English, in the owner's voice (`adorno-voice`), keeping the current
-     `## Sources`, published by `pr-edit owner/repo#N "<title>" <file> [--refs <run>/refs.json [--withhold <url>]…]
-     [--attach <new media>]…` (`--refs` whenever the run has one). Unchanged → nothing. A repo skill: run it in
-     update mode (it receives `#N`); it may run `gh pr edit` itself, the new proof then goes out with `pr-edit`;
+     proof to `qa/`, and takes the new ponytail notes of `status.md` into account. The scope moved (a new What or
+     How, a new risk, a verification that no longer matches), new proof or a new ponytail note → new title and
+     description in English, in the owner's voice (`adorno-voice`), keeping the current `## Sources`, published by
+     `pr-edit owner/repo#N "<title>" <file> [--refs <run>/refs.json [--withhold <url>]…] [--attach <new media>]…`
+     (`--refs` whenever the run has one). Unchanged → nothing. A repo skill: run it in update mode (it receives
+     `#N`); it may run `gh pr edit` itself, the new proof and the new ponytail notes of `status.md` (Impact / Risks)
+     then go out with `pr-edit`;
    - still a draft, the verdict on the whole branch clean and the proof complete → `pr-ready owner/repo#N`.
-8. **Report** — commits (SHA, message), review rounds and what they fixed, push, PR URL and `opened | updated |
+8. **After the PR** — with an `.agent-run` folder (none → skip, one line in the report): the repo's `after_pr` (repo
+   skills to run once a PR exists, e.g. filling the Notion ticket of a fixed bug):
+   `adorno-github/scripts/after-pr plan <.agent-run folder> owner/repo --pr-url <PR URL> --workflow <the workflow of
+   the run you reuse, as given to run-begin>`. Not a PR of this run (nothing was opened or updated and the PR was
+   already open and unchanged): skip. `skip` in the answer → one line in the report, nothing to do (nothing
+   configured, another workflow, no Notion page: normal). Otherwise, per `skills[]` in order, with `dry_run` false:
+   run the skill (a value starting with `/` is a command of the repo, otherwise a skill: load it and follow it) with
+   its `args`, in order, then `after-pr done <skill> <.agent-run folder>`. `dry_run` true (a `report` or L0 run):
+   show the call, do not run it. The skill is the repo's own: it may write where it says (Notion included) at the
+   run's level, and nothing else widens. With `--unattended`, read the skill first: one that asks for an answer
+   (`AskUserQuestion`) is not started; its ready-to-run call (`<skill> <args…>`) goes at the top of the report, and
+   the run goes on (never answer for the owner). A failure goes in `status.md` and the report; the PR stays.
+9. **Report** — commits (SHA, message), review rounds and what they fixed, push, PR URL and `opened | updated |
    unchanged`, `ready | draft` (and why), the proof attached (or what is missing), the doc links withheld (count and
-   reason, never the URL), and what stopped the workflow if
+   reason, never the URL), the `after_pr` skills run (or skipped, and why), and what stopped the workflow if
    anything did — commits the cap held back:
    the worktree and their SHAs, and how to resume (fix, then `pr-push owner/repo#N`). Suggest
    `workflow:pr:watch owner/repo#N` when the caller does not run it.

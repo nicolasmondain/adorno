@@ -63,16 +63,24 @@ You do not review the code to judge it: you verify what it changed **in producti
    - **performance**: response time p50, p95, p99, throughput, job duration, slow queries;
    - **resources**: CPU, memory, connections, cost when visible;
    - **client**, when the PR touches the front end: Core Web Vitals, JavaScript errors, API errors seen from the
-     client (`shipping-and-launch` § What to Monitor).
+     client.
 6. **Confounders** — the other PRs merged and deployments in the same windows (`pr-merged` over the period),
    incidents, unusual traffic. A change that another cause explains just as well is not attributed to this PR.
 7. **Verdict** — `positive`, `neutral`, `regression`, `inconclusive` or `too_early`, with your confidence (high,
-   medium, low). The thresholds are those of `shipping-and-launch` § Rollout Decision Thresholds: each row also grades
-   the signals closest to it, and a signal with no close row is reported with its delta. The worst signal attributed to
-   this PR decides (a signal a confounder explains equally well is not graded against it): any red → `regression`,
-   else any yellow → `inconclusive` with what to look into, else green → `positive` when the expected effect from
-   step 1 shows beyond the noise, `neutral` otherwise. A regression always has its evidence (graph, query, link) and a
-   lead.
+   medium, low). Grade each signal against the before window:
+
+   | Signal | Green | Yellow | Red |
+   | --- | --- | --- | --- |
+   | error rate | within 10 % | 10 % to 2× | over 2× |
+   | p95 latency | within 20 % | +20 to +50 % | over +50 % |
+   | client errors | no new type | new, under 0.1 % of sessions | new, over 0.1 % of sessions |
+   | usage, business metric | stable or up | down under 5 % | down over 5 % |
+
+   Each row also grades the signals closest to it (p99 and job duration as p95, new server errors as error rate); a
+   signal with no close row is reported with its delta. The worst signal attributed to this PR decides (a signal a
+   confounder explains equally well is not graded against it): any red → `regression`, else any yellow →
+   `inconclusive` with what to look into, else green → `positive` when the expected effect from step 1 shows beyond
+   the noise, `neutral` otherwise. A regression always has its evidence (graph, query, link) and a lead.
 
 ## What you return
 

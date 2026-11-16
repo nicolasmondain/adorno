@@ -56,6 +56,7 @@ LEGACY_LOCAL = ROOT / "repos.local.yaml"
 USE_LOCAL = False   # set per command: install/check/list/conf use local/, build never does
 RESOLVER = ROOT / "src" / "skills" / "adorno-github" / "scripts" / "resolve.jq"
 LEVELS = ("L0", "L1", "L2", "L3", "L4")
+PONYTAIL_LEVELS = ("lite", "full", "ultra")
 ACTIONS = ("push", "reply", "comment", "resolve", "rerequest", "review", "submit", "open_pr", "ci_rerun")
 CLAUDE_RULES = ("allow", "ask", "deny")
 VISION_MAX_LINES = 60
@@ -495,11 +496,13 @@ def validate(cfg: Config, items: dict[str, dict[str, Item]]) -> list[str]:
     delegable = {i.id for i in items["agent"].values() if i.meta.get("delegable")}
     reg = registry()
     errors += validate_registry(reg, {i.id for i in items["agent"].values()} | set(items["agent"]), delegable,
-                                {i.name for i in items["skill"].values()} | set(items["skill"]))
+                                {i.name for i in items["skill"].values()} | set(items["skill"]),
+                                {w.id for w in items["workflow"].values()})
     errors += validate_roles(reg, items)
     if not local_on():   # the public registry must leave no agent unreachable
         for orphan in orphan_agents(reg, items):
             errors.append(f"orphan agent '{orphan}': no area role, fallback or entry names it")
+        errors += orphan_skills(cfg, items)
     return errors
 
 
@@ -566,6 +569,28 @@ def validate_roles(reg: dict, items: dict) -> list[str]:
 def orphan_agents(reg: dict, items: dict) -> list[str]:
     reached = {ref for _, ref in area_refs(reg.get("defaults") or {})}
     return sorted(i.id for i in items["agent"].values() if i.id not in reached and not i.meta.get("entry"))
+
+
+def orphan_skills(cfg: Config, items: dict) -> list[str]:
+    """An imported skill ships everywhere and its description can trigger it alone: one that no item of ours,
+    instruction or repos.yaml names must be listed in its import's `uncited` (called by hand)."""
+    texts = [json.dumps(i.meta, default=str) + i.body for g in items.values() for i in g.values() if i.origin == "local"]
+    texts += [p.read_text(encoding="utf-8") for p in sorted((SRC / "instructions").glob("*.md"))]
+    texts.append((ROOT / "repos.yaml").read_text(encoding="utf-8"))
+    corpus = "\n".join(texts)
+    errors: list[str] = []
+    for imp in cfg.manifest.get("imports") or []:
+        uncited = imp.get("uncited") or []
+        if not isinstance(uncited, list):
+            errors.append(f"kit.yaml: import {imp.get('name')}: uncited must be a list of skill names")
+            continue
+        mine = {i.name for i in items["skill"].values() if i.origin == imp.get("name")}
+        errors += [f"kit.yaml: import {imp.get('name')}: uncited '{n}' is not one of its skills"
+                   for n in uncited if n not in mine]
+        errors += [f"orphan skill '{n}' (import {imp.get('name')}): no item cites it; cite it or list it in uncited"
+                   for n in sorted(mine - set(uncited))
+                   if not re.search(rf"(?<![\w-]){re.escape(n)}(?![\w-])", corpus)]
+    return errors
 
 
 def validate_areas(conf: dict, where: str, scope: str, agent_ids: set, skill_names: set) -> list[str]:
@@ -805,7 +830,42 @@ def validate_notion_spec(spec, where: str) -> list[str]:
     return errors
 
 
-def validate_registry(reg: dict, agent_ids: set, delegable: set, skill_names: set) -> list[str]:
+AFTER_PR_NEEDS = ("notion",)  # what an after_pr entry can require of the run
+
+
+def validate_after_pr(entries, where: str, workflow_ids: set) -> list[str]:
+    """`after_pr`: repo skills run once the PR exists, each for the workflows that trigger it."""
+    if entries is None:
+        return []
+    if not isinstance(entries, list):
+        return [f"{where} must be a list of {{skill, workflows, needs}}"]
+    errors: list[str] = []
+    seen: set = set()
+    for i, e in enumerate(entries):
+        at = f"{where}[{i}]"
+        if not isinstance(e, dict):
+            errors.append(f"{at} must be a mapping with skill and workflows")
+            continue
+        for key in e.keys() - {"skill", "workflows", "needs"}:
+            errors.append(f"{at}: unknown key '{key}' (known: skill, workflows, needs)")
+        if not (isinstance(e.get("skill"), str) and re.fullmatch(r"/?[A-Za-z0-9:_-]+", e["skill"])):
+            errors.append(f"{at}.skill must be a skill or command name (like /acme-notion-fields)")
+        elif e["skill"] in seen:
+            errors.append(f"{at}.skill '{e['skill']}' is already listed: list several workflows in one entry")
+        else:
+            seen.add(e["skill"])
+        wf = e.get("workflows")
+        if not (isinstance(wf, list) and wf and all(isinstance(w, str) and re.fullmatch(r"workflow:[a-z0-9]+:[a-z0-9-]+", w) for w in wf)):
+            errors.append(f"{at}.workflows must be a non-empty list of workflow ids (like workflow:issue:fix)")
+        else:
+            errors += [f"{at}.workflows: unknown workflow '{w}'" for w in wf if w not in workflow_ids]
+        if e.get("needs") is not None and e["needs"] not in AFTER_PR_NEEDS:
+            errors.append(f"{at}.needs must be one of {', '.join(AFTER_PR_NEEDS)}")
+    return errors
+
+
+def validate_registry(reg: dict, agent_ids: set, delegable: set, skill_names: set,
+                      workflow_ids: set) -> list[str]:
     """repos.yaml and the personal layer: references, levels, permissions, shapes."""
     errors: list[str] = []
     if USE_LOCAL and LEGACY_LOCAL.exists():
@@ -827,6 +887,8 @@ def validate_registry(reg: dict, agent_ids: set, delegable: set, skill_names: se
                 errors.append(f"{where}: {scope}.use names unknown preset '{ref}'")
         if conf.get("max_level") is not None and conf["max_level"] not in LEVELS:
             errors.append(f"{where}: {scope}.max_level must be one of {', '.join(LEVELS)}")
+        if conf.get("ponytail") is not None and conf["ponytail"] not in PONYTAIL_LEVELS:
+            errors.append(f"{where}: {scope}.ponytail must be one of {', '.join(PONYTAIL_LEVELS)}")
         for key in ("context", "vision"):
             if conf.get(key) is not None and not (isinstance(conf[key], list)
                                                   and all(isinstance(x, str) for x in conf[key])):
@@ -849,6 +911,7 @@ def validate_registry(reg: dict, agent_ids: set, delegable: set, skill_names: se
                                                   and re.fullmatch(r"/?[A-Za-z0-9:_-]+", conf[key])):
                 errors.append(f"{where}: {scope}.{key} must be a skill or command name (like adorno-commit or /acme-pr)")
         errors += validate_notion_spec(conf.get("notion_spec"), f"{where}: {scope}.notion_spec")
+        errors += validate_after_pr(conf.get("after_pr"), f"{where}: {scope}.after_pr", workflow_ids)
         if conf.get("voice") is not None and not isinstance(conf["voice"], dict):
             errors.append(f"{where}: {scope}.voice must be a mapping")
         perms = conf.get("permissions")
