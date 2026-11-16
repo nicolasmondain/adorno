@@ -176,12 +176,15 @@ defaults:
 
 # What a run cost (run-end writes usage.json, run-usage computes it): $ per million tokens, per model id as the
 # transcripts name it; `<model>@fast` for fast mode. A model missing here is reported as unpriced, never as free.
-# Anthropic first-party API rates as of 2026-10-06 (cache write 1.25× input for 5 minutes, 2× for 1 hour). Override
-# or add models in local/adorno.yaml › prices.
+# Anthropic first-party API rates read on 2026-11-17 from https://platform.claude.com/docs/en/about-claude/pricing
+# (base input, 5-minute cache write, 1-hour cache write, cache hit, output). Haiku: the rates for prompts up to 100K
+# tokens; a longer Haiku prompt costs 5x, which is not distinguished here. Fast mode: that page gives only its input
+# and output rates, so no `@fast` entry. Override or add models in local/adorno.yaml › prices.
 prices:
+  claude-fable-5-2:  { input: 8,   cache_write_5m: 10,    cache_write_1h: 16,  cache_read: 0.20, output: 40 }
   claude-fable-5-1:  { input: 10,  cache_write_5m: 12.5,  cache_write_1h: 20,  cache_read: 0.25, output: 50 }
   claude-opus-5-5:   { input: 4,   cache_write_5m: 5,     cache_write_1h: 8,   cache_read: 0.20, output: 20 }
-  claude-sonnet-5-5: { input: 2,   cache_write_5m: 2.5,   cache_write_1h: 4,   cache_read: 0.20, output: 10 }
+  claude-sonnet-5-5: { input: 2,   cache_write_5m: 2.5,   cache_write_1h: 4,   cache_read: 0.10, output: 10 }
   claude-haiku-5-5:  { input: 0.1, cache_write_5m: 0.125, cache_write_1h: 0.2, cache_read: 0.01, output: 0.5 }
 
 # Your real repos (reviewers, team, context, permissions, voice, vision) live in local/adorno.yaml, git-ignored

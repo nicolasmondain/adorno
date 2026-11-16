@@ -61,13 +61,15 @@ for f in "$sub"/agent-*.meta.json; do
 done
 
 # One record per assistant message of the window, from every file; a line that does not parse (a transcript being
-# written) is counted, never guessed.
+# written) is counted, never guessed. Claude Code writes an API error or an interruption as an assistant record of
+# model `<synthetic>` with all-zero usage: no API call, so it is left out.
 records="$(jq -cRn --arg since "$since" --arg until "$until" '
   def epoch: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
   ($since | epoch) as $s | ($until | epoch) as $u
   | inputs | (fromjson? // {bad: true} | if type == "object" then . else {bad: true} end) as $r
   | if $r.bad then {bad: true}
-    elif $r.type == "assistant" and ($r.message.usage | type) == "object" and ($r.timestamp | type) == "string"
+    elif $r.type == "assistant" and $r.message.model != "<synthetic>"
+         and ($r.message.usage | type) == "object" and ($r.timestamp | type) == "string"
          and (($r.timestamp | epoch) as $t | $t >= $s and $t <= $u) then
       $r.message.usage as $x
       | {file: (input_filename | split("/") | last | sub("\\.jsonl$"; "")), id: ($r.message.id // $r.uuid),

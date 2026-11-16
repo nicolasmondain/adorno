@@ -92,6 +92,8 @@ expect_jq "... the agent: its type, real model, duration, tokens and cost" \
 expect_jq "... cost per model and in total (5m and 1h cache writes at their own rate)" \
   '(.session_usage.models["claude-opus-5-5"].usd * 1e6 | round) == 65040 and (.totals.usd * 1e6 | round) == 111060
    and .unpriced == [] and .skipped_lines == 1 and .duration_s == 1800'
+expect_jq "... a <synthetic> record (an API error, all-zero usage) left out, the run still priced" \
+  '(.totals.models | has("<synthetic>") | not) and .totals.messages == 3 and .unpriced == [] and (.totals.usd * 1e6 | round) == 111060'
 expect_jq "... and a one-line summary" '.summary == "30m · 1 agent · $0.11 (opus $0.07, sonnet $0.05) · 218k tokens (210k cache read)"'
 expect_exit 0 "a model with no price" -- U 2026-11-10T11:00:00Z
 expect_jq "... is unpriced, never free: the total is unknown" \
@@ -122,6 +124,23 @@ jq -e '.source == "claude-code" and .totals.agents == 3 and .unpriced == ["claud
 tail -n 1 "$UD/status.md" | grep -q '^Cost: ' && ok "... a Cost: line at the end of status.md" || ko "... a Cost: line at the end of status.md"
 jq -e --arg id "$UR" 'select(.id == $id) | .workflow == "workflow:pr:review" and .repos == ["acme/docs"] and (.agents | length) == 3' \
   "$KH/runs/usage.jsonl" >/dev/null && ok "... a summary line in runs/usage.jsonl" || ko "... a summary line in runs/usage.jsonl"
+jq -e '.overlap == false' "$UD/usage.json" >/dev/null \
+  && jq -e --arg id "$UR" 'select(.id == $id) | .overlap == false and .session == "sess-usage" and .started == "2026-11-10T10:00:00Z"' "$KH/runs/usage.jsonl" >/dev/null \
+  && ok "... alone in its session: no overlap" || ko "... alone in its session: no overlap"
+# Two runs of one session at once count the same messages: both say so. The first sees the second still active; the
+# second, ending alone, sees the first in runs/usage.jsonl (ended after it started).
+expect_exit 0 "two runs at once in one session" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
+OA="$(jq -r .id <<<"$out")"; OAD="$(jq -r .dir <<<"$out")"
+expect_exit 0 "... the second one" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:status --mode report --level L0 --repo acme/docs
+OB="$(jq -r .id <<<"$out")"; OBD="$(jq -r .dir <<<"$out")"
+jq '.started = "2026-11-10T10:00:00Z"' "$KH/runs/active/$OB.json" >"$TMP/ob.json" && mv "$TMP/ob.json" "$KH/runs/active/$OB.json"
+expect_exit 0 "... the first ends" -- "$S/run-end" "$OA"
+expect_exit 0 "... then the second" -- "$S/run-end" "$OB"
+for r in "$OA:$OAD" "$OB:$OBD"; do
+  jq -e '.overlap == true' "${r#*:}/usage.json" >/dev/null \
+    && jq -e --arg id "${r%%:*}" 'select(.id == $id) | .overlap == true' "$KH/runs/usage.jsonl" >/dev/null \
+    && ok "... run ${r%%:*} records the overlap" || ko "... run ${r%%:*} records the overlap" "$(jq -c .overlap "${r#*:}/usage.json")"
+done
 expect_exit 0 "a run outside any session" -- "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
 UR="$(jq -r .id <<<"$out")"; UD="$(jq -r .dir <<<"$out")"
 mkdir -p "$TMP/elsewhere"; printf '# Status\n' >"$TMP/elsewhere/status.md"
@@ -129,6 +148,7 @@ expect_exit 2 "--status takes a status.md only" -- "$S/run-end" "$UR" --status "
 expect_exit 0 "... ends with its duration only, into the status.md given" -- "$S/run-end" "$UR" --status "$TMP/elsewhere/status.md"
 expect_jq "... usage unavailable, said in the cost line" '(.usage | test("usage unavailable")) and (.status | endswith("elsewhere/status.md"))'
 grep -q '^Cost: .*usage unavailable' "$TMP/elsewhere/status.md" && ok "... written there" || ko "... written there"
+jq -e '.overlap == false' "$UD/usage.json" >/dev/null && ok "... no session, no overlap" || ko "... no session, no overlap"
 expect_exit 0 "a run whose usage cannot be read" -- env CLAUDE_CODE_SESSION_ID='bad id!' "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
 UR="$(jq -r .id <<<"$out")"; UD="$(jq -r .dir <<<"$out")"
 expect_exit 0 "... still ends" -- "$S/run-end" "$UR"

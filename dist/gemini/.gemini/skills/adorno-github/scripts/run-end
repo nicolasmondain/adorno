@@ -4,6 +4,8 @@
 # what it consumed (run-usage: duration, agents, model and tokens of each, cost) goes to <dir>/usage.json, a summary
 # line to ~/.adorno/runs/usage.jsonl, and a `Cost:` line to the run's status.md (FILE, else <dir>/status.md when it
 # exists). A usage that cannot be read is written as {source: "error"} and said on stderr, the run still ends.
+# `overlap: true` when another run of the same session counts the same messages: one still active, or one in
+# runs/usage.jsonl that ended after this one started. Both say it; the cost is not split. No session: false.
 # Prints {ended, workflow, dir, usage (the cost line), status (the status.md written, or null)}.
 . "$(dirname "$0")/_lib.sh"
 
@@ -31,11 +33,20 @@ if ! usage="$("$(dirname "$0")/run-usage" collect --session "$(jq -r '.session /
   usage="$(jq -n --arg e "$(cat "$err")" --arg s "$(jq -r '.started' <<<"$run")" --arg u "$ended" \
     '{source: "error", error: $e, started: $s, ended: $u, summary: "usage not recorded (run-usage failed)"}')"
 fi
+index="$(kit_home)/runs/usage.jsonl"
+[ -f "$index" ] || : >"$index"
+# The index is read as a file, not piped: `any` stops at the first match (a bad index line is skipped).
+overlap="$(jq -nR --argjson run "$run" --argjson active "$(active_runs)" '
+  ($run.session // "") as $s
+  | $s != "" and (any($active[]; .id != $run.id and .session == $s)
+                  or any(inputs | fromjson? | select(type == "object");
+                         .id != $run.id and .session == $s and (.ended | type == "string" and . > $run.started)))' "$index")"
+usage="$(jq --argjson o "$overlap" '. + {overlap: $o}' <<<"$usage")"
 mkdir -p "$dir"
 printf '%s\n' "$usage" >"$dir/usage.json"
-jq -c --argjson run "$run" '{id: $run.id, workflow: $run.workflow, repos: $run.repos, dir: $run.dir, ended,
-  source, duration_s, usd: .totals.usd, tokens: .totals.tokens,
-  agents: [(.agents // [])[] | {type, model, usd}]}' <<<"$usage" >>"$(kit_home)/runs/usage.jsonl"
+jq -c --argjson run "$run" '{id: $run.id, workflow: $run.workflow, repos: $run.repos, dir: $run.dir,
+  session: ($run.session // ""), started: $run.started, ended, source, duration_s, overlap, usd: .totals.usd,
+  tokens: .totals.tokens, agents: [(.agents // [])[] | {type, model, usd}]}' <<<"$usage" >>"$index"
 line="Cost: $(jq -r '.summary' <<<"$usage")"
 [ -n "$status" ] || { [ -f "$dir/status.md" ] && status="$dir/status.md"; }
 [ -z "$status" ] || printf '\n%s\n' "$line" >>"$status"
