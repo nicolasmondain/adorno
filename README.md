@@ -140,7 +140,8 @@ The public repo contains no profile: only templates, in `local.example/`.
 | `docs` | `write` | `docs` |
 
 Which agent builds, fixes, optimizes, reviews and checks a change, and which skills it loads, is decided per code area
-by `repos.yaml` › `areas`, overridable per repo ([setup](docs/setup.md#areas-and-roles)).
+by `repos.yaml` › `areas`, neutral by default, with stack presets (`node`, `mongodb`, `sql`, `python`, `go`, `rails`)
+called per repo with `use:`, and overridable per repo ([setup](docs/setup.md#areas-and-roles)).
 
 | Workflow | Does |
 | --- | --- |
