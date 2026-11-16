@@ -15,7 +15,7 @@
 #                         whose skills join `skills`. `by_area.<a>.perf` is the area's own perf or null: a dispatcher
 #                         reads `fallbacks.perf` (agent and skills) when it is null.
 #   review, skills        union over every detected area, plus `always`, deduplicated, in order.
-#   ponytail              the repo's ponytail level (lite | full | ultra, default full), passed to every agent.
+#   ponytail              the repo's ponytail level (lite | full | ultra, from repos.yaml › ponytail), passed to every agent.
 . "$(dirname "$0")/_lib.sh"
 
 split_repo "${1:-}"
@@ -108,4 +108,4 @@ jq -n --rawfile files "$tmp/files" --rawfile hits "$tmp/hits" --argjson conf "$c
       skills: ([$always | lst("skills")] + [$found[] | rules | lst("skills")]
                + [if $perf != null then empty else ($fb.perf.skills // []) end] | add // [] | uniq),
       fallbacks: $fb,
-      ponytail: ($conf.ponytail // "full") }'
+      ponytail: $conf.ponytail }'
