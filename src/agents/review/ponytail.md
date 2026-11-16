@@ -7,7 +7,8 @@ wrong, the fix, the consequence if ignored — converted to the family's JSON fo
 excess code or dependency, missing test on risky logic; `minor`: possible simplification).
 
 Shortcuts: `adorno-github/scripts/pr-shortcuts <diff file>` (the input diff, saved to a file) lists the `shortcut:`
-(or older `ponytail:`) comments the diff adds. A marker that names its limit and its trigger is a decision, not a finding, unless the expected load
-already crosses that limit. A marker missing one of them is a `minor`, and so is a limit the diff knowingly leaves
-(a fixed cap, an unpaginated list, a scope left out) with no marker. The fix in both cases:
-`shortcut: <the limit>, <when to upgrade>` on that line.
+(or older `ponytail:`) comments the diff adds. The match is textual: a hit that is not a comment in the code (inside a
+string, a test fixture, prose) is not a marker and is dropped. A marker that names its limit and its trigger is a
+decision, not a finding, unless the expected load already crosses that limit. A marker missing one of them is a
+`minor`, and so is a limit the diff knowingly leaves (a fixed cap, an unpaginated list, a scope left out) with no
+marker. The fix in both cases: `shortcut: <the limit>, <when to upgrade>` on that line.

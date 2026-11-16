@@ -56,7 +56,9 @@ command.
      run the guard lets `git push origin <branch>` and `gh pr create` through (never forced, never the base, at the
      run's level). Then `pr-status owner/repo` again: no PR for the branch → stop and report what the skill did;
      its description has no `## Proof`, misses a source of the run's `refs.json` (`## Sources`) or a marker of
-     `pr-shortcuts` on the branch's diff (`## Shortcuts`, both in `workflow:pr:open` step 3) → `agent:adorno` appends
+     `pr-shortcuts` (`## Shortcuts`, both in `workflow:pr:open` step 3; `workflow:pr:open` step 1 does not run here,
+     so write the whole branch's diff first: `git diff origin/<base>...HEAD > <run>/branch.diff`, then
+     `pr-shortcuts <run>/branch.diff`) → `agent:adorno` appends
      what is missing and publishes it with `pr-edit owner/repo#N "<its title>"
      <file> [--refs <run>/refs.json [--withhold <url>]…] --attach …`; opened as draft while the verdict is clean and
      the proof complete → `pr-ready owner/repo#N`.
@@ -65,7 +67,9 @@ command.
    - default update: `agent:adorno` compares the title and description to `git diff origin/<base>...HEAD` and the
      proof to `qa/`. The scope moved (a new What or How, a new risk, a verification that no longer matches, a marker
      of `pr-shortcuts` added or gone) or new proof → new title and description in English, in the owner's voice
-     (`adorno-voice`), keeping the current `## Sources`, `## Shortcuts` redone from the new diff, published by `pr-edit owner/repo#N "<title>" <file> [--refs <run>/refs.json [--withhold <url>]…]
+     (`adorno-voice`), keeping the current `## Sources`, `## Shortcuts` redone from the whole branch (rewrite
+     `<run>/branch.diff` with `git diff origin/<base>...HEAD`, run `pr-shortcuts <run>/branch.diff`, never only the new
+     commits), published by `pr-edit owner/repo#N "<title>" <file> [--refs <run>/refs.json [--withhold <url>]…]
      [--attach <new media>]…` (`--refs` whenever the run has one). Unchanged → nothing. A repo skill: run it in
      update mode (it receives `#N`); it may run `gh pr edit` itself, the new proof then goes out with `pr-edit`;
    - still a draft, the verdict on the whole branch clean and the proof complete → `pr-ready owner/repo#N`.
