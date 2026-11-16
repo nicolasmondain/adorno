@@ -257,6 +257,17 @@ mkdir -p "$SB/vendor/addy/skills/lonely"
 printf -- '---\nname: lonely\ndescription: An imported skill no item cites.\n---\n\nNothing.\n' >"$SB/vendor/addy/skills/lonely/SKILL.md"
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
 if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import addy): no item cites it" <<<"$out"; then ok "an imported skill no item cites fails the public check"; else ko "an imported skill no item cites fails the public check" "exit $got: $(tail -c 300 <<<"$out")"; fi
+printf 'Use `lonely-helper` for this.\n' >"$SB/src/instructions/99-probe.md"
+out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
+if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import addy)" <<<"$out"; then ok "a longer name containing the skill's is not a citation"; else ko "a longer name containing the skill's is not a citation" "exit $got: $(tail -c 300 <<<"$out")"; fi
+mkdir -p "$SB/vendor/addy/skills/other"
+printf -- '---\nname: other\ndescription: An imported skill that cites another.\n---\n\nSee `lonely`.\n' >"$SB/vendor/addy/skills/other/SKILL.md"
+out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
+if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import addy)" <<<"$out"; then ok "an imported skill citing it is not a citation"; else ko "an imported skill citing it is not a citation" "exit $got: $(tail -c 300 <<<"$out")"; fi
+rm -rf "$SB/vendor/addy/skills/other"
+printf 'Use `lonely` for this.\n' >"$SB/src/instructions/99-probe.md"
+expect_exit 0 "an instruction citing the exact name clears the orphan" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check
+rm -f "$SB/src/instructions/99-probe.md"
 sed -i.bak 's/^    source: github:addyosmani\/agent-skills$/&\n    uncited: [lonely]/' "$SB/kit.yaml"; rm -f "$SB/kit.yaml.bak"
 expect_exit 0 "listed in its import's uncited, it passes" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check
 sed -i.bak 's/uncited: \[lonely\]/uncited: [lonely, ghost]/' "$SB/kit.yaml"; rm -f "$SB/kit.yaml.bak"
