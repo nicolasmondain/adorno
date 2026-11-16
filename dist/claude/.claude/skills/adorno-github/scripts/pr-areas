@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Usage: pr-areas owner/repo DIFF_FILE
 #        pr-areas owner/repo --files PATH [PATH…]      (paths only, before any code exists: no `content` rules)
+#        pr-areas owner/repo --files -                 (same, one path per line on stdin: a whole repo's file list)
 # Classifies a change into the code areas of repos.yaml › areas (front, back, api, …) — path globs, plus a regex on
 # added lines when given a diff — and says which agents and skills to use. A sub-area is keyed `parent.sub`
 # (back.query): when detected it also adds its files to its parent. `always` is not an area. Files matching no area
@@ -20,7 +21,7 @@
 . "$(dirname "$0")/_lib.sh"
 
 split_repo "${1:-}"
-usage="usage: pr-areas owner/repo DIFF_FILE | pr-areas owner/repo --files PATH [PATH…]"
+usage="usage: pr-areas owner/repo DIFF_FILE | pr-areas owner/repo --files PATH [PATH…] | --files -"
 mode="diff"; diff="${2:-}"
 if [ "${2:-}" = "--files" ]; then
   mode=files; [ $# -ge 3 ] || die "$usage" "$E_USAGE"
@@ -33,7 +34,8 @@ tmp="$(work_dir)/areas-$$"; mkdir -p "$tmp"; trap 'rm -rf "$tmp"' EXIT
 : >"$tmp/raw"; : >"$tmp/files"; : >"$tmp/added"; : >"$tmp/hits"
 
 if [ "$mode" = files ]; then
-  shift 2; printf '%s\n' "$@" >"$tmp/files"
+  shift 2
+  if [ $# -eq 1 ] && [ "$1" = - ]; then cat >"$tmp/files"; else printf '%s\n' "$@" >"$tmp/files"; fi
 else
 # file list from the `--- a/x` / `+++ b/y` headers (new name for renames, old name for deletions; git quotes
 # names with spaces or non-ASCII characters and escapes them in octal), and `path<TAB>added line` per added line

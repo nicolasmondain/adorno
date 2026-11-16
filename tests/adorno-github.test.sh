@@ -553,6 +553,10 @@ if [ -f "$REAL" ]; then
 
   expect_exit 0 "--files mode, no content rules" -- "$S/pr-areas" acme/app --files server/services/x.js client/a.tsx
   expect_jq "--files detects by path" '.files == 2 and .areas.back == ["server/services/x.js"] and .areas.front == ["client/a.tsx"] and (.areas | has("back.query") | not)'
+  args_out="$out"; printf 'server/services/x.js\nclient/a.tsx\n' >"$TMP/paths"
+  expect_exit 0 "--files - reads the paths from stdin" -- "$S/pr-areas" acme/app --files - <"$TMP/paths"
+  if [ "$out" = "$args_out" ]; then ok "--files - gives the same output as the paths as arguments"
+  else ko "--files - gives the same output as the paths as arguments" "$out"; fi
   expect_exit 2 "--files needs paths" -- "$S/pr-areas" acme/app --files
   expect_exit 0 "docs only" -- "$S/pr-areas" acme/app --files docs/guide.md
   expect_jq "perf falls back to the fallback agent and its skills" \
