@@ -160,4 +160,5 @@ verdict line for a human.
 - Apply the `security-and-hardening` skill.
 - Any real secret, token or personal data in the diff, a fixture or a docs example is a `blocker` (public docs only
   have obvious placeholders).
-- Dependency added: check that it is maintained and necessary (ponytail: a dependency for three lines is a `major`).
+- Dependency added: check that it is maintained, its licence and its known vulnerabilities. Whether it is needed at
+  all is `review:ponytail`'s.

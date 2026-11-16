@@ -273,6 +273,14 @@ check "review:security opens with a step 0 qualification and a one-line pass" \
 check "review:security step 0 only dismisses content matches, never path matches nor on diff text" \
   'grep -q "Only a match of the security .content. regex can be dismissed" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md && grep -q "never evidence for a No" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md'
 
+P="$ROOT/src/agents/review/ponytail.md"
+check "review:ponytail keeps to the lean axis of ponytail-review" \
+  'grep -q "^Lean axis only" "$P" && grep -q "section 6 \"Lean\"" "$P"'
+check "review:ponytail names review:code's axes only in its out-of-scope line" \
+  '[ "$(grep -c "^Out of scope (owned elsewhere)" "$P")" = 1 ] && ! grep -v "^Out of scope (owned elsewhere)" "$P" | grep -qiE "correctness|security|missing test|performance|load|bug|flaw|blocker"'
+check "review:code and review:security leave the lean axis and dependency need to review:ponytail" \
+  'grep -q "lean axis is .review:ponytail..s" "$ROOT/src/agents/review/code.md" && grep -q "needed at" "$ROOT/src/agents/review/security.md" && grep -q "review:ponytail" "$ROOT/src/agents/review/security.md"'
+
 check "no _family.md hard-codes typescript-pro" '! grep -l "typescript-pro" "$ROOT"/src/agents/*/_family.md'
 check "the skills-by-area rule appears once in the orchestration instructions" \
   '[ "$(grep -c "Skills by area" "$ROOT"/src/instructions/10-orchestration.md)" = 1 ]'

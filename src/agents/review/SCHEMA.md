@@ -120,14 +120,13 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A["Input: diff and touched code"] --> B["Apply skill ponytail-review"]
-  B --> C["Per finding: what it does, what is wrong, fix, consequence"]
+  A["Input: diff and touched code"] --> B["Skill ponytail-review, section 6 Lean only"]
+  B --> O["Out of scope: correctness, security, tests, performance → review:code and area reviewers"]
+  B --> C["delete, reuse, stdlib or dependency, yagni, merge, shortcut without limit"]
   C --> D{"Kind?"}
-  D -->|"bug or flaw"| E["blocker"]
-  D -->|"excess code or dependency, missing test on risky logic"| F["major"]
+  D -->|"code or dependency that should not be added, shortcut without limit or plan"| F["major"]
   D -->|"possible simplification"| G["minor"]
-  E --> H["reviews/agent.json"]
-  F --> H
+  F --> H["reviews/agent.json"]
   G --> H
 ```
 
@@ -143,7 +142,7 @@ flowchart TD
   D -->|"yes"| E["blocker"]
   D -->|"no"| F{"Dependency added?"}
   E --> F
-  F -->|"yes"| G["Maintained and necessary? Three lines of use = major"]
+  F -->|"yes"| G["Maintained, licence, known vulnerabilities; whether it is needed → review:ponytail"]
   F -->|"no"| H["reviews/agent.json"]
   G --> H
 ```
