@@ -15,7 +15,8 @@ which commits, reviews and fixes the branch, then comes back here.
 No checkpoint: the PR opens without waiting for a "yes" (running the workflow is the request).
 
 1. **Local checks**, in the clone where the branch lives: name matches `branch_pattern`, up to date with the base
-   (`git fetch` then `git diff origin/<base>...HEAD`: the real scope), every commit in Conventional Commits format,
+   (`git fetch` then `git diff origin/<base>...HEAD > <run>/branch.diff`: the real scope, kept in the run folder,
+   never committed), every commit in Conventional Commits format,
    tests, lint and typecheck green. A failure: stop and report.
 2. **The verdict** of the review loop (`workflow:pr:ship` step 4, in the run's `reviews/`) and **the proof** (step 5,
    the run's `qa/`): clean and the proof complete → the PR goes out ready for review; a 🔴 or 🟠 still open after
@@ -25,6 +26,10 @@ No checkpoint: the PR opens without waiting for a "yes" (running the workflow is
    - the description following `process.md` § Pull requests: What / How / mermaid / Verification, `How to test` opened
      by the commands actually run and their result, link to the issue (`Fixes #n`, `Fixes owner/repo#n` from another
      repo), what the review loop fixed, the 🟡 and ❓ left (`Impact / Risks`). No real data;
+   - a `## Shortcuts` section, after `Impact / Risks`: the shortcuts this branch leaves in the code, from
+     `adorno-github/scripts/pr-shortcuts <run>/branch.diff` (only the lines the diff adds), one line per marker,
+     `` - `file:line` — <the limit> · upgrade: <the trigger> ``, taken from the comment; a marker that names no
+     trigger is tagged `no-trigger` (skill `ponytail-debt`). No marker: no section;
    - a `## Sources` section, before `## Proof`: one line per Notion page, doc (`url`) and Slack thread of the run's
      `refs.json`, in the request's order, its title from `source.md` § Sources
      (`- [Notion · Export CSV](https://www.notion.so/…)`), the URL copied verbatim from `refs.json`. A doc link is

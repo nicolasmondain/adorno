@@ -126,6 +126,9 @@ flowchart TD
   D -->|"bug or flaw"| E["blocker"]
   D -->|"excess code or dependency, missing test on risky logic"| F["major"]
   D -->|"possible simplification"| G["minor"]
+  A --> S["pr-shortcuts on the diff: shortcut: markers added"]
+  S -->|"limit or trigger missing, or a known limit left unmarked"| G
+  S -->|"limit and trigger named"| N["a decision, not a finding"]
   E --> H["reviews/agent.json"]
   F --> H
   G --> H
