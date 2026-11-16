@@ -1,6 +1,6 @@
 ---
 name: adorno-repo-onboard
-description: workflow:repo:onboard — Prepare a repo for the agents — detect stack, commands and checks, write AGENTS.md and CONSTRAINTS.md, propose its complete entry in local/adorno.yaml, then commit them and open the PR without asking (workflow:pr:ship); with --audit, also a read-only audit of the code kept on your machine (workflow:repo:audit). Do it once per repo.
+description: workflow:repo:onboard — Prepare a repo for the agents — detect stack, commands and checks, write AGENTS.md and CONSTRAINTS.md, propose its complete entry in local/adorno.yaml, then commit them and open the PR without asking (workflow:pr:ship); with --audit, then a read-only audit of the code in its own L0 run, kept on your machine (workflow:repo:audit). Do it once per repo.
 ---
 
 # workflow:repo:onboard
@@ -20,7 +20,7 @@ Input: the user’s request
    `workflow:pr:ship owner/repo chore/agents-onboarding <clone>`: the repo's `commit_skill` commits the two files
    (`chore(agents): …`), its `pr_skill` opens the PR. The repo's `max_level` below L3 or a denied `push` / `open_pr`:
    the files stay committed locally, and the report says so.
-5. **Audit** (`--audit` only), after the ship so the PR does not wait: `workflow:repo:audit owner/repo <clone>` in the
-   same run → `<dir>/audit/audit.md`, read-only. Its findings stay in that local report: never in the onboarding PR,
-   its description or `CONSTRAINTS.md`.
-6. Always `run-end <id>`, even after a failure.
+5. Always `run-end <id>`, even after a failure.
+6. **Audit** (`--audit` only), once the onboarding run is ended, so no L3 grant is open while the repo's code is read:
+   `workflow:repo:audit owner/repo <clone>`, which opens its own report L0 run; give the path of the `audit.md` it
+   prints. Its findings stay in that local report: never in the onboarding PR, its description or `CONSTRAINTS.md`.

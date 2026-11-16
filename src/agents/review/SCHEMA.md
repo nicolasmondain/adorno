@@ -129,6 +129,9 @@ flowchart TD
   E --> H["reviews/agent.json"]
   F --> H
   G --> H
+  M["Audit mode: clone and optional scope"] --> N["Apply skill ponytail-audit"]
+  N --> O["audit.md: Must fix / Should fix / Nice to have, Verdict, Lean, Not checked"]
+  O --> P["Written in the run folder only, never published"]
 ```
 
 ## `agent:review:security`

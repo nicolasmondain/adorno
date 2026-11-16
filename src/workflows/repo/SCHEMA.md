@@ -14,11 +14,12 @@ flowchart TD
   RB["run-begin L3 on the newly declared repo"]
   SH["workflow:pr:ship: commit_skill, pr_skill, no prompt"]
   AU{"--audit?"}
-  RA["workflow:repo:audit in the same run: local report only"]
   RE["run-end id - always"]
-  IN --> CL --> AG --> BR --> SU --> LY --> KI --> RB --> SH --> AU
-  AU -->|yes| RA --> RE
-  AU -->|no| RE
+  RA["workflow:repo:audit, its own report L0 run: local report only"]
+  DONE["Done"]
+  IN --> CL --> AG --> BR --> SU --> LY --> KI --> RB --> SH --> RE --> AU
+  AU -->|yes| RA
+  AU -->|no| DONE
 ```
 
 ## `workflow:repo:audit`
@@ -26,7 +27,7 @@ flowchart TD
 ```mermaid
 flowchart TD
   IN["Input: owner/repo, optional clone, --area / --path"]
-  RB["run-begin report L0 - or the onboarding run, reused"]
+  RB["run-begin report L0, always its own run"]
   CL["Clone: given path or shallow clone in the run folder"]
   SC["Scope: --path, --area via pr-areas --files, else whole repo minus generated and vendored code"]
   BIG{"More than ~15k lines?"}
