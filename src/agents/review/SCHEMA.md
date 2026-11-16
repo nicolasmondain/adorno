@@ -44,6 +44,7 @@ flowchart TD
   E --> E3["Architecture"]
   E --> E4["Security"]
   E --> E5["Performance"]
+  E --> L["Lean axis (code that need not exist, reuse, is a dependency needed) → review:ponytail"]
   E1 --> F["Check Conventional Commit type per commit"]
   E2 --> F
   E3 --> F
@@ -120,8 +121,8 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A["Input: diff and touched code"] --> B["Skill ponytail-review, section 6 Lean only"]
-  B --> O["Out of scope: correctness, security, tests, performance → review:code and area reviewers"]
+  A["Input: diff and touched code"] --> B["Skill ponytail-review, section 2 item 6 Lean only"]
+  B --> O["Out of scope: correctness, security, tests, performance, split → review:code and area reviewers"]
   B --> C["delete, reuse, stdlib or dependency, yagni, merge, shortcut without limit"]
   C --> D{"Kind?"}
   D -->|"code or dependency that should not be added, shortcut without limit or plan"| F["major"]

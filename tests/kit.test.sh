@@ -275,11 +275,11 @@ check "review:security step 0 only dismisses content matches, never path matches
 
 P="$ROOT/src/agents/review/ponytail.md"
 check "review:ponytail keeps to the lean axis of ponytail-review" \
-  'grep -q "^Lean axis only" "$P" && grep -q "section 6 \"Lean\"" "$P"'
-check "review:ponytail names review:code's axes only in its out-of-scope line" \
-  '[ "$(grep -c "^Out of scope (owned elsewhere)" "$P")" = 1 ] && ! grep -v "^Out of scope (owned elsewhere)" "$P" | grep -qiE "correctness|security|missing test|performance|load|bug|flaw|blocker"'
+  'grep -q "^Lean axis only" "$P" && grep -q "item 6 \"Lean\" of its section 2" "$P" && grep -q "^6\. \*\*Lean:\*\*" "$ROOT/vendor/ponytail/skills/ponytail-review/SKILL.md"'
+check "review:ponytail names review:code's axes only in its out-of-scope paragraph" \
+  '[ "$(grep -c "^Out of scope (owned elsewhere)" "$P")" = 1 ] && ! awk "/^Out of scope/{s=1} s&&/^\$/{s=0} !s" "$P" | grep -qiwE "correctness|security|bugs?|flaw|blocker|risk|speed|performance|load|injection|missing test"'
 check "review:code and review:security leave the lean axis and dependency need to review:ponytail" \
-  'grep -q "lean axis is .review:ponytail..s" "$ROOT/src/agents/review/code.md" && grep -q "needed at" "$ROOT/src/agents/review/security.md" && grep -q "review:ponytail" "$ROOT/src/agents/review/security.md"'
+  'grep -q "lean axis is .review:ponytail..s" "$ROOT/src/agents/review/code.md" && grep -q "is .review:ponytail..s" "$ROOT/src/agents/review/security.md"'
 
 check "no _family.md hard-codes typescript-pro" '! grep -l "typescript-pro" "$ROOT"/src/agents/*/_family.md'
 check "the skills-by-area rule appears once in the orchestration instructions" \
