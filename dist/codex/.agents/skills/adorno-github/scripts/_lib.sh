@@ -71,7 +71,7 @@ active_runs() {
 # Gemini, a terminal), only the runs opened outside any session do.
 session_id() { printf '%s' "${CLAUDE_CODE_SESSION_ID:-}"; }
 
-# grant [owner/repo] -> {level, deny, dry_run, runs, ids} for that repo: this session's active runs that name it,
+# grant [owner/repo] -> {level, deny, dry_run, runs, workflows, ids} for that repo: this session's active runs that name it,
 # lowered (never raised) by ADORNO_LEVEL. Without a repo: those that name any repo (used for dry_run only).
 grant() {
   active_runs | jq --arg env "${ADORNO_LEVEL:-}" --arg dry "${ADORNO_DRY_RUN:-0}" --arg repo "${1:-}" \
@@ -83,7 +83,7 @@ grant() {
     | {level: (if $env != "" and ($env | n) < ($runs | n) then $env else $runs end),
        deny: ([.[].deny // [] | .[]] | unique),
        dry_run: ($dry == "1" or any(.[]; .dry_run == true)),
-       runs: length, ids: map("\(.id) (\(.workflow), \(.mode))")}'
+       runs: length, workflows: map(.workflow), ids: map("\(.id) (\(.workflow), \(.mode))")}'
 }
 
 # dry_run — true when every write must only be printed (a report run applies, or ADORNO_DRY_RUN=1); uses $REPO when

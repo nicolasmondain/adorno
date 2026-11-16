@@ -86,6 +86,10 @@ repos:                                 # a specific repo, or a glob (`acme/docs-
     notion_spec:                       # a request whose spec is a Notion page: its properties at each step
       start: {Lifecycle: Ongoing, "Working date": "{{today}}"}   # spec or diagnosis validated, work starts
       pr_opened: {Lifecycle: "In Code Review"}                     # PR opened ({{pr_url}} available)
+    after_pr:                          # repo skills run once the PR exists (workflow:pr:ship), per workflow
+      - skill: /acme-notion-fields     # e.g. fill the Notion ticket of a fixed bug
+        workflows: [workflow:issue:fix]
+        needs: notion                  # only when the request came with a Notion page; gets the PR URL and that URL
     commit_skill: /acme-commit         # the repo's skill that commits (default: adorno-commit)
     pr_skill: /acme-pr                 # the repo's skill that opens or updates the PR (default: adorno-pr-open)
     setup_skill: null                  # skill that sets up a fresh worktree
