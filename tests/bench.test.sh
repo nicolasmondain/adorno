@@ -178,6 +178,7 @@ if [ -f "$REAL" ]; then
     '([.[] | select(.[index("--agent") + 1] == "adorno:adorno") | .[index("--model") + 1]] == ["other-model"]) and ([.[] | select(.[index("--agent") + 1] != "adorno:adorno") | index("--model")] | all(. == null))'
   expect_exit 2 "--agent-model with an unknown agent" -- "$B/run" --case docs-only --agent-model agent:review:nope=m --label x --results "$R"
   expect_exit 2 "--agent-model with no model" -- "$B/run" --case docs-only --agent-model agent:review:code --label x --results "$R"
+  expect_exit 2 "--agent-model with an agent that does not play in the bench" -- "$B/run" --case docs-only --agent-model agent:fix:patch=m --label x --results "$R"
 
   printf '{"nope":true}' >"$FK/back.first.json"
   expect_exit 0 "a malformed review" -- "$B/run" --case clean-refactor --label retry --results "$R"
@@ -295,14 +296,21 @@ finding() {
 }
 # review VERDICT [FINDING…]: a merged review, as review-merge prints it
 review() { local verdict="$1"; shift; local IFS=,; printf '{"verdict":"%s","counts":{},"findings":[%s],"agents":[],"invalid":[]}' "$verdict" "$*"; }
-# result LABEL CASE N REVIEW [FINAL]: what bench/run leaves for one case run (one agent, 0.5 USD, 1000 tokens in, 50 out)
+# meta DIR AGENT: what bench/run records of one agent's call (0.5 USD, 1000 tokens in, 50 out)
+meta() {
+  mkdir -p "$1/meta"
+  printf '{"agent":"%s","attempts":1,"delivered":"file","is_error":false,"stop":"success","models":["m-1"],"cost_usd":0.5,"duration_ms":60000,"turns":1,"denied":0,"tokens":{"input":100,"cache_read":800,"cache_write":100,"output":50}}' "$2" >"$1/meta/${2##*:}.json"
+}
+# result LABEL CASE N REVIEW [FINAL]: what bench/run leaves for one case run (one agent: agent:review:mongodb)
 result() {
   local d="$R/$1/$2/$3"; mkdir -p "$d/meta"
   printf '%s' "$4" >"$d/review.json"
   [ -z "${5:-}" ] || printf '%s' "$5" >"$d/review-final.json"
   printf '{"case":"%s","diff_base":"0","routing_ok":true,"missing":[],"invalid":[],"verdict":"-","budget_exhausted":false,"cost_usd":0.5,"duration_ms":60000}' "$2" >"$d/run.json"
-  printf '{"agent":"agent:review:mongodb","attempts":1,"delivered":"file","is_error":false,"stop":"success","models":["m-1"],"cost_usd":0.5,"duration_ms":60000,"turns":1,"denied":0,"tokens":{"input":100,"cache_read":800,"cache_write":100,"output":50}}' >"$d/meta/mongodb.json"
+  meta "$d" agent:review:mongodb
 }
+# edit LABEL CASE N FILTER: change the run.json of one case run
+edit() { jq "$4" "$R/$1/$2/$3/run.json" >"$TMP/run.json" && cp "$TMP/run.json" "$R/$1/$2/$3/run.json"; }
 # close LABEL "CASE:N …": the run.json of the whole run
 close() {
   jq -n --arg label "$1" --arg runs "$2" '{label: $label, tool: "claude", tool_version: "0", model: "m-1", repo: "adorno/bench", repeat: 1, cases: [], prompts: {sha: "abcdef0123456", dirty: false}, started_at: "2026-01-01T00:00:00+00:00", budget_usd: null, cost_usd: 1, skipped: [], runs: ($runs | split(" ") | map(split(":") | {case: .[0], n: (.[1] | tonumber), cost_usd: 0.5}))}' >"$R/$1/run.json"
@@ -394,7 +402,8 @@ score other "a finding raised by another reviewer than the expected one"
 expect_jq "is found, not attributed" '.cases.defect.runs[0] | .found == 1 and .attribution_ok == 0'
 
 result broken defect 1 "$(review fix "$FOUND")"
-jq '.invalid = ["back.json"] | .missing = ["agent:review:tests"] | .routing_ok = false' "$R/broken/defect/1/run.json" >"$TMP/run.json"; cp "$TMP/run.json" "$R/broken/defect/1/run.json"
+meta "$R/broken/defect/1" agent:review:back; meta "$R/broken/defect/1" agent:review:tests
+edit broken defect 1 '.invalid = ["back.json"] | .missing = ["agent:review:tests"] | .routing_ok = false'
 close broken "defect:1"
 score broken "invalid and missing reviews, a routing that differs"
 expect_jq "are counted" '.overall | .invalid_reviews == 2 and .routing_ok == 0'
@@ -426,10 +435,12 @@ expect_jq "are recorded as such, with no verdict" \
 expect_jq "and the measures after agent:adorno pool the readable passes only" \
   '.overall.final | .runs == 1 and .invalid == 2 and .absent == 1 and .recall == {"mean": 1, "min": 1, "max": 1} and .precision.mean == 1 and .found == 1 and .verdict_ok == 1'
 
-# own LABEL CASE N NAME AGENT [FINDING…]: the review one reviewer wrote, before the merge (reviews/NAME.json)
+# own LABEL CASE N NAME AGENT [FINDING…]: the review one reviewer wrote, before the merge (reviews/NAME.json), and
+# the meta of its call
 own() {
-  local d="$R/$1/$2/$3/reviews" agent="$5"; shift 5; mkdir -p "$d"; local IFS=,
-  printf '{"agent":"%s","verdict":"fix","findings":[%s]}' "$agent" "$*" >"$d/$(basename "$agent" | sed 's/.*://').json"
+  local d="$R/$1/$2/$3" agent="$5"; shift 5; mkdir -p "$d/reviews"; local IFS=,
+  printf '{"agent":"%s","verdict":"fix","findings":[%s]}' "$agent" "$*" >"$d/reviews/${agent##*:}.json"
+  [ -f "$d/meta/${agent##*:}.json" ] || meta "$d" "$agent"
 }
 result reviewers defect 1 "$(review fix "$FOUND")"
 own reviewers defect 1 mongodb agent:review:mongodb "$FOUND"
@@ -442,17 +453,49 @@ own reviewers clean 1 mongodb agent:review:mongodb
 own reviewers clean 1 code agent:review:code "$(finding c.ts 1 minor 'Could be shorter' code)"
 result reviewers clean 2 "$(review pass)"
 own reviewers clean 2 code agent:review:code
-jq '.invalid = ["mongodb.json"]' "$R/reviewers/clean/2/run.json" >"$TMP/run.json"; cp "$TMP/run.json" "$R/reviewers/clean/2/run.json"
-close reviewers "defect:1 clean:1 defect:2 clean:2"
+# review-merge rejected mongodb's review (a severity it does not know): the file stays on disk, as in a real run
+own reviewers clean 2 mongodb agent:review:mongodb "$(finding c.ts 1 high 'Could be shorter')"
+edit reviewers clean 2 '.invalid = ["mongodb.json"]'
+# code's review never came, on the case that expects its finding
+result reviewers whole 1 "$(review pass)"
+own reviewers whole 1 mongodb agent:review:mongodb
+meta "$R/reviewers/whole/1" agent:review:code
+edit reviewers whole 1 '.missing = ["agent:review:code"]'
+close reviewers "defect:1 clean:1 whole:1 defect:2 clean:2"
 score reviewers "each reviewer on its own review"
 expect_jq "a miss the merged review hides is the reviewer's miss" \
-  '.overall.recall.mean == 1 and (.reviewers["agent:review:mongodb"] | .own_expected == 2 and .own_found == 1 and .own_recall == {"mean": 0.5, "min": 0, "max": 1} and .own_severity_ok == 1)'
+  '.cases.defect.summary.recall.mean == 1 and (.reviewers["agent:review:mongodb"] | .own_expected == 2 and .own_found == 1 and .own_recall == {"mean": 0.5, "min": 0, "max": 1} and .own_severity_ok == 1)'
 expect_jq "its false alarms and its precision are its own" \
-  '(.reviewers["agent:review:code"] | .own_expected == 0 and .own_recall == null and .false_alarms == 1 and .clean_reviews == 2 and .reported == 2 and .ungraded == 1 and .precision == {"mean": 0.5, "min": 0, "max": 1}) and (.reviewers["agent:review:mongodb"] | .false_alarms == 0 and .precision.mean == 1)'
-expect_jq "a review review-merge rejected counts against the reviewer, and is not scored" \
-  '.reviewers["agent:review:mongodb"] | .reviews == 3 and .invalid_reviews == 1'
+  '(.reviewers["agent:review:code"] | .false_alarms == 1 and .clean_reviews == 2 and .precision == {"mean": 0.5, "min": 0, "max": 1} and ((has("reported") or has("ungraded")) | not)) and (.reviewers["agent:review:mongodb"] | .false_alarms == 0 and .precision.mean == 1)'
+expect_jq "a review review-merge rejected counts against the reviewer once, and is not scored" \
+  '.reviewers["agent:review:mongodb"] | .reviews == 4 and .invalid_reviews == 1 and .clean_reviews == 1 and (.runs | map(select(.case == "clean" and .n == 2)) == [{"agent": "agent:review:mongodb", "case": "clean", "n": 2, "invalid": true, "own_expected": 0, "own_found": 0, "own_severity_ok": 0, "matched": 0, "invalid_extras": 0, "ungraded": 0, "false_alarms": null, "calls": 1, "cost_usd": 0.5}])'
+expect_jq "a review that never came counts against the reviewer, and its own findings are missed" \
+  '.reviewers["agent:review:code"] | .reviews == 4 and .invalid_reviews == 1 and .own_expected == 1 and .own_found == 0 and .own_recall == {"mean": 0, "min": 0, "max": 0}'
+expect_jq "each reviewer keeps its case runs, without model text" \
+  '.reviewers["agent:review:code"].runs | length == 5 and (map([.case, .n]) | sort) == [["clean", 1], ["clean", 2], ["defect", 1], ["defect", 2], ["whole", 1]] and ([.. | objects | select(has("title") or has("findings"))] == [])'
 out="$(cat "$R/perfect/score.json")"
 expect_jq "an old run without reviews/ has no reviewer to score" '.reviewers == {}'
+
+result own-severity defect 1 "$(review fix "$FOUND")"
+own own-severity defect 1 mongodb agent:review:mongodb "$FOUND"
+result own-severity defect 2 "$(review block "$(finding a.ts 11 blocker 'N+1 in the loop')")"
+own own-severity defect 2 mongodb agent:review:mongodb "$(finding a.ts 11 blocker 'N+1 in the loop')"
+close own-severity "defect:1 defect:2"
+score own-severity "a reviewer's own finding at a severity the case refuses"
+expect_jq "is found, not at an accepted severity" '.reviewers["agent:review:mongodb"] | .own_found == 2 and .own_severity_ok == 1'
+
+result own-malformed defect 1 "$(review fix)"
+mkdir -p "$R/own-malformed/defect/1/reviews"; printf '{"agent":"agent:review:mongodb","verdict":"fix"}' >"$R/own-malformed/defect/1/reviews/mongodb.json"
+close own-malformed "defect:1"
+score own-malformed "a review with no findings list that run.json does not list as invalid"
+expect_jq "is rejected for its reviewer, never skipped" \
+  '.reviewers["agent:review:mongodb"] | .reviews == 0 and .invalid_reviews == 1 and .own_expected == 1 and .own_found == 0'
+result own-stray defect 1 "$(review fix "$FOUND")"
+own own-stray defect 1 mongodb agent:review:mongodb "$FOUND"
+printf '{"agent":"agent:review:stray","verdict":"pass","findings":[]}' >"$R/own-stray/defect/1/reviews/stray.json"
+close own-stray "defect:1"
+expect_exit 1 "score: a review file no agent of the case run played" -- "$B/score" --label own-stray --results "$R" --cases "$SC"
+if grep -q "reviews/stray.json: no agent of this case run" "$TMP/err"; then ok "names the file"; else ko "names the file" "$(cat "$TMP/err")"; fi
 
 expect_exit 2 "score: unknown run" -- "$B/score" --label nope --results "$R" --cases "$SC"
 expect_exit 2 "score: a case the cases folder does not have" -- "$B/score" --label perfect --results "$R" --cases "$TMP/graded-true"
@@ -496,17 +539,39 @@ report "a comparison between runs that do not hold the same cases" --label extra
 has "names the cases only one of them has" '- only in perfect: `clean`, `whole`'
 
 report "a run with reviews before the merge" --label reviewers
-has "has one line per reviewer, on its own review" '| `agent:review:mongodb` | 3 | 50% (worst 0%, best 100%) (1/2) | 100% | 1/1 | 0 on 1 | 1 | $0.50 | m-1 |'
-has "a reviewer the cases expect nothing from has no own recall" '| `agent:review:code` | 4 | – | 50% (worst 0%, best 100%) | – | 1 on 2 | 0 | – | – |'
+has "has one line per reviewer, on its own review" '| `agent:review:mongodb` | 4 | 50% (worst 0%, best 100%) (1/2) | 100% | 1/1 | 0 on 1 | 1 | $0.50 | m-1 |'
+has "a missing review is a miss of its own findings" '| `agent:review:code` | 4 | 0% (0/1) | 50% (worst 0%, best 100%) | – | 1 on 2 | 1 | $0.50 | m-1 |'
 cp -R "$R/reviewers" "$R/reviewers-cheaper"
-jq '.agent_models = {"agent:review:mongodb": "m-2"}' "$R/reviewers/run.json" >"$R/reviewers-cheaper/run.json"
-rm -r "$R/reviewers-cheaper/defect/1/reviews"; own reviewers-cheaper defect 1 mongodb agent:review:mongodb
+rm -r "$R/reviewers-cheaper/defect/1/reviews"
+own reviewers-cheaper defect 1 mongodb agent:review:mongodb; own reviewers-cheaper defect 1 code agent:review:code
+# two case runs the reference does not have: a false alarm, and a review that never came
+result reviewers-cheaper clean 3 "$(review pass "$(finding c.ts 2 minor 'Could be faster')")"
+own reviewers-cheaper clean 3 mongodb agent:review:mongodb "$(finding c.ts 2 minor 'Could be faster')"
+own reviewers-cheaper clean 3 code agent:review:code
+result reviewers-cheaper defect 3 "$(review pass)"
+own reviewers-cheaper defect 3 code agent:review:code
+edit reviewers-cheaper defect 3 '.missing = ["agent:review:mongodb"]'
+jq '.agent_models = {"agent:review:mongodb": "m-2"} | .runs += [{"case": "clean", "n": 3, "cost_usd": 0.5}, {"case": "defect", "n": 3, "cost_usd": 0.5}]' "$R/reviewers/run.json" >"$R/reviewers-cheaper/run.json"
 for f in "$R"/reviewers-cheaper/*/*/meta/mongodb.json; do jq '.cost_usd = 0.25' "$f" >"$TMP/m.json"; cp "$TMP/m.json" "$f"; done
 report "a reviewer on another model" --label reviewers-cheaper --against reviewers
 has "names the agent and its model" "model: m-1, agent:review:mongodb on m-2, prompts"
 has "says per reviewer what it lost and what it saves" 'recall -50 pts, precision –, alarms +0, invalid +0, cost -50%'
+has "on the case runs both runs have" "Against reviewers: on the 5 case runs both have."
 out="$(cat "$R/reviewers-cheaper/report.json")"
-expect_jq "the same in report.json" '.comparison.reviewers["agent:review:mongodb"] == {"own_recall": -50, "precision": null, "false_alarms": 0, "invalid_reviews": 0, "cost_pct": -50}'
+expect_jq "the same in report.json, the case runs only one run has left out" \
+  '.comparison.shared_runs == 5 and .comparison.reviewers["agent:review:mongodb"] == {"own_recall": -50, "precision": null, "false_alarms": 0, "invalid_reviews": 0, "cost_pct": -50}'
+report "a reviewer baseline" --label reviewers --save-baseline reviewers-ref
+out="$(cat "$BL/reviewers-ref.json")"
+expect_jq "keeps the case runs of each reviewer, and no text written by a model" \
+  '(.reviewers["agent:review:mongodb"].runs | length) == 5 and ([.. | objects | select(has("title") or has("findings"))] == [])'
+report "a comparison per reviewer with a baseline" --label reviewers-cheaper --against reviewers-ref
+out="$(cat "$R/reviewers-cheaper/report.json")"
+expect_jq "reads it like a run" '.comparison.reviewers["agent:review:mongodb"] == {"own_recall": -50, "precision": null, "false_alarms": 0, "invalid_reviews": 0, "cost_pct": -50}'
+jq '.label = "reviewers-old" | del(.reviewers[].runs)' "$BL/reviewers-ref.json" >"$BL/reviewers-old.json"
+report "a reference scored before the case runs per reviewer" --label reviewers-cheaper --against reviewers-old
+has "says it has no comparison per reviewer" "reviewers-old has no detail per case run (scored before it): no comparison per reviewer."
+out="$(cat "$R/reviewers-cheaper/report.json")"
+expect_jq "and report.json has none" '.comparison.reviewers == null'
 
 report "a run saved as a baseline" --label perfect --save-baseline reference
 out="$(cat "$BL/reference.json")"

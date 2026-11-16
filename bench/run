@@ -17,7 +17,7 @@ The prompts are those of this working tree (dist/, public layer only): the agent
 the instructions from dist/AGENTS.md, placed in the workspace as .claude/rules/adorno.md. Your user settings, your
 global instructions and your hooks are not loaded. An agent runs sandboxed: it writes inside its workspace only and
 has no network. --model replaces the model of every agent; without it each agent runs on its own tier.
---agent-model ID=X replaces the model of one agent (agent:review:ponytail=sonnet, agent:adorno=opus), over --model:
+--agent-model ID=X replaces the model of one reviewer or agent:adorno (agent:review:ponytail=sonnet), over --model:
 repeat it to compare a tier per reviewer while the others stay on theirs.
 
 Results go to RESULTS/<label>/ (bench/results by default, ignored by git):
@@ -361,8 +361,9 @@ def main():
     args.agent_models = {}
     for spec in args.agent_model:
         agent, _, model = spec.partition("=")
-        if not model or not (PLUGIN / "agents" / f"{plugin_name(agent)}.md").is_file():
-            die(f"--agent-model {spec}: expected ID=MODEL with an agent of dist/claude-plugin", 2)
+        if (not model or not (agent == ADORNO or agent.startswith("agent:review:"))
+                or not (PLUGIN / "agents" / f"{plugin_name(agent)}.md").is_file()):
+            die(f"--agent-model {spec}: expected ID=MODEL with a reviewer of dist/claude-plugin or {ADORNO}", 2)
         args.agent_models[agent] = model
     started = datetime.datetime.now(datetime.timezone.utc)
     label = args.label or (f"{started:%Y%m%d-%H%M%S}-{args.tool}-{args.model or 'tiers'}"

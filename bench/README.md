@@ -71,7 +71,7 @@ What a run is made of:
   instructions from `dist/AGENTS.md`. Your user settings, global instructions, installed agents and hooks are not
   loaded, so a result is tied to a commit (`prompts.sha`, and `dirty` when `src/` or `dist/` had uncommitted changes).
 - **Each agent on its own tier**, unless `--model` replaces the model of all of them, or `--agent-model ID=X`
-  that of one agent (repeat it; it wins over `--model`).
+  that of one reviewer or `agent:adorno` (repeat it; it wins over `--model`).
 - **A sandbox**: an agent writes inside its workspace only and has no network (Claude Code's sandbox, macOS or Linux).
   Nothing reaches GitHub, your registry or your learning notes. The runner, outside the sandbox, never follows a link
   an agent leaves in its run folder: that case run fails, nothing of it is kept, and the report names it at the top.
@@ -113,11 +113,11 @@ bench/run --label mixed --repeat 2 --budget-usd 45 \
 bench/report --label mixed --against deep
 ```
 
-The reviewers that did not move are the control: when their scores move as much as the others', the difference is
-noise, not the model. A reviewer holds on the cheaper model when it loses none of its own expected findings, its
-precision drops by 10 points at most, it raises at most one false alarm more on the clean cases, no more of its
-reviews are rejected, and one call costs at least 30 % less. The decisions taken this way are in
-[docs/models.md](../docs/models.md).
+Each reviewer is compared on the case runs both runs have, so that a case the budget skipped or a failed case run
+does not weigh on one side only. The reviewers that did not move are the control: when their scores move as much as
+the others', the difference is noise, not the model. A reviewer holds on the cheaper model when it loses none of its
+own expected findings, its precision drops by 10 points at most, it raises at most one false alarm more on the clean
+cases, no more of its reviews are rejected, and one call costs at least 30 % less.
 
 ## Findings to grade
 
