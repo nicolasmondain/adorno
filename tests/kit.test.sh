@@ -273,6 +273,7 @@ check "review:security opens with a step 0 qualification and a one-line pass" \
 check "review:security step 0 only dismisses content matches, never path matches nor on diff text" \
   'grep -q "Only a match of the security .content. regex can be dismissed" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md && grep -q "never evidence for a No" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md'
 
+# shellcheck disable=SC2034  # P is read by check's eval in the next checks
 P="$ROOT/src/agents/review/ponytail.md"
 check "review:ponytail keeps to the lean axis of ponytail-review" \
   'grep -q "^Lean axis only" "$P" && grep -q "item 6 \"Lean\" of its section 2" "$P" && grep -q "^6\. \*\*Lean:\*\*" "$ROOT/vendor/ponytail/skills/ponytail-review/SKILL.md"'
