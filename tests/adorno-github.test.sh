@@ -507,7 +507,7 @@ expect_jq "unregistered repo flagged" '(.[] | select(.number==12) | .registered)
 expect_jq "my pending review is surfaced" '(.[] | select(.number==10) | .pendingReview) and ((.[] | select(.number==11) | .pendingReview) | not)'
 
 echo "pr-areas (public default rules from repos.yaml)"
-REAL="$ROOT/dist/claude/.claude/skills/adorno-github/repos.json"
+REAL="$ROOT/dist/claude-plugin/skills/adorno-github/repos.json"
 if [ -f "$REAL" ]; then
   jq '.repos = {"acme/app": {}, "acme/leak": {"areas": {"back": {"sub": {"n": {"review": ["-agent:review:tests", "agent:review:code"], "skills": ["-typescript-pro"]}}}, "newa": {"review": ["-agent:review:api", "agent:review:code"]}}}, "acme/docs": {"ponytail": "ultra", "areas": {"back": {"review": ["-agent:review:tests", "agent:review:security"]}}}}' "$REAL" >"$TMP/areas-repos.json"
   reg "$TMP/areas-repos.json"

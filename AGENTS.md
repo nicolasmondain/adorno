@@ -47,7 +47,8 @@ adorno is a portable, reusable agent setup. Agents, workflows and skills are wri
 bin/kit check && bin/kit build && for t in tests/*.test.sh; do $t || break; done
 ```
 
-Commit `src/`, `dist/`, `vendor/`, `kit.yaml`, `kit.lock` and `repos.yaml` together: CI rejects a stale `dist/`.
+Commit `src/`, `dist/`, `vendor/`, `kit.yaml`, `kit.lock` and `repos.yaml` together: CI rejects a stale `dist/`. Only
+`dist/claude-plugin/` (the public plugin) and `dist/AGENTS.md` are committed; `.gitignore` keeps the other targets local.
 
 ## Branches and pull requests
 

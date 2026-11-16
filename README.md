@@ -187,7 +187,7 @@ src/
 repos.yaml              default public settings (code areas and their agents and skills, permissions)
 local.example/          template of your personal layer
 vendor/                 imported skills and agents (kit import), pinned in kit.lock
-dist/                   generated outputs (kit build), Claude Code plugin included
+dist/                   generated outputs (kit build); only claude-plugin/ and AGENTS.md are committed
 docs/                   guides
 bench/                  reviewer benchmark: cases, routing check, runner, scoring and report (bench/README.md)
 tests/                  tests of the adorno-github scripts against a fake gh
@@ -196,7 +196,7 @@ tests/                  tests of the adorno-github scripts against a fake gh
 ## Kit commands
 
 ```sh
-bin/kit check [--dist]       # validates (and checks that dist/ is up to date)
+bin/kit check [--dist]       # validates (and checks that the committed dist/ is up to date)
 bin/kit build                # regenerates dist/ and the marketplace (never with local/)
 bin/kit list                 # everything available, with its provenance
 bin/kit conf [owner/repo]    # the settings a repo resolves

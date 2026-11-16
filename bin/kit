@@ -1221,7 +1221,7 @@ def write_tree(base: Path, files: FileMap) -> None:
 
 def build_all(cfg: Config, items, out_root: Path) -> None:
     if local_on() and out_root == ROOT:
-        die("refusing to write the personal layer (local/) into dist/ (dist/ is committed and public)")
+        die("refusing to write the personal layer (local/) into dist/ (its plugin is committed and public)")
     dist = out_root / "dist"
     if dist.exists():
         shutil.rmtree(dist)
@@ -1241,6 +1241,18 @@ def tree_digest(base: Path) -> dict[str, str]:
         return {}
     return {p.relative_to(base).as_posix(): sha(p.read_bytes())
             for p in sorted(base.rglob("*")) if p.is_file()}
+
+
+def committed(digest: dict[str, str], prefix: str) -> dict[str, str]:
+    """The entries of a digest that git does not ignore: .gitignore alone decides what of dist/ is committed."""
+    if not digest:
+        return {}
+    res = subprocess.run(["git", "check-ignore", "--no-index", "--stdin"], cwd=ROOT, capture_output=True, text=True,
+                         input="".join(f"{prefix}/{p}\n" for p in digest))
+    if res.returncode not in (0, 1):   # 1: nothing ignored
+        die(f"git check-ignore failed: {res.stderr.strip()}")
+    ignored = set(res.stdout.splitlines())
+    return {p: h for p, h in digest.items() if f"{prefix}/{p}" not in ignored}
 
 
 # ───────────────────────────── commands ─────────────────────────────
@@ -1273,11 +1285,11 @@ def cmd_check(args) -> None:
     if args.dist:
         with tempfile.TemporaryDirectory() as tmp:
             build_all(cfg, items, Path(tmp))
-            fresh = tree_digest(Path(tmp) / "dist")
+            fresh = committed(tree_digest(Path(tmp) / "dist"), "dist")
             fresh_mp = tree_digest(Path(tmp) / ".claude-plugin")
-        if fresh != tree_digest(DIST) or fresh_mp != tree_digest(ROOT / ".claude-plugin"):
+        if fresh != committed(tree_digest(DIST), "dist") or fresh_mp != tree_digest(ROOT / ".claude-plugin"):
             die("dist/ is out of date — run `bin/kit build` and commit the result")
-        print("ok: dist/ is up to date")
+        print("ok: dist/ is up to date (committed part: the Claude plugin and AGENTS.md)")
 
 
 def cmd_conf(args) -> None:

@@ -1,6 +1,7 @@
 # adorno — manifest
 # Canonical source in src/, third-party imports in vendor/ (via `kit import`),
-# generated output in dist/ (via `kit build`). Never edit dist/ or vendor/ by hand.
+# generated output in dist/ (via `kit build`; only dist/claude-plugin and dist/AGENTS.md are committed).
+# Never edit dist/ or vendor/ by hand.
 
 # Claude Code plugin name: commands are called /adorno:<name>.
 name: adorno

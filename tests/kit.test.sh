@@ -148,7 +148,7 @@ expect_exit 1 "invalid settings: refused" -- "${KIT[@]}" install "$B" --targets 
 check "... before writing anything" '[ ! -e "$B/.adorno" ] && [ ! -e "$B/.claude/agents" ]'
 rm "$B/.claude/settings.local.json"
 mkdir -p "$B/.claude/skills/adorno-commit"
-cp "$ROOT/dist/claude/.claude/skills/adorno-commit/SKILL.md" "$B/.claude/skills/adorno-commit/SKILL.md"
+cp "$ROOT/dist/claude-plugin/skills/adorno-commit/SKILL.md" "$B/.claude/skills/adorno-commit/SKILL.md"
 expect_exit 0 "install next to an identical file of yours" -- "${KIT[@]}" install "$B" --targets claude
 expect_exit 0 "uninstall" -- "${KIT[@]}" uninstall "$B"
 check "your identical file survives uninstall" '[ -f "$B/.claude/skills/adorno-commit/SKILL.md" ]'
@@ -280,6 +280,12 @@ sed -i.bak 's/uncited: \[lonely\]/uncited: [lonely, ghost]/' "$SB/kit.yaml"; rm 
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
 if [ "$got" != 0 ] && grep -q "import addy: uncited 'ghost' is not one of its skills" <<<"$out"; then ok "an uncited entry naming no imported skill fails"; else ko "an uncited entry naming no imported skill fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
 rm -rf "$SB/vendor/addy/skills/lonely"; cp "$ROOT/kit.yaml" "$SB/kit.yaml"
+cp "$ROOT/.gitignore" "$SB/"; git init -q "$SB"
+expect_exit 0 "build into the sandbox" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" build
+rm -rf "$SB/dist/codex" "$SB/dist/claude"
+expect_exit 0 "check --dist compares only what .gitignore lets be committed" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check --dist
+echo stale >>"$SB/dist/claude-plugin/agents/adorno-agent-review-code.md"
+expect_exit 1 "a stale plugin file fails check --dist" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check --dist
 expect_exit 0 "the real registry passes with every dispatcher's roles covered" -- env ADORNO_LOCAL="$TMP/none" "${KIT[@]}" check
 check "no area_reviewers reader is left in src/" '! grep -rn "area_reviewers" "$ROOT/src" "$ROOT/bin/kit" | grep -v -e "src/skills/adorno-setup/" -e "bin/kit:.*AREA_REVIEWERS_MSG\|bin/kit:.*area_reviewers" -e SCHEMA.md | grep .'
 check "pr:ship leaves no family agent of its subject" '! grep -q "family agent of its subject" "$ROOT/src/workflows/pr/ship.md"'
@@ -306,10 +312,10 @@ check "migrate prints a YAML snippet per scope" 'grep -q "repos:" "$TMP/err" && 
 check "migrate writes nothing" 'cmp -s "$MIG/adorno.yaml" "$TMP/mig-before.yaml" && [ "$(ls "$MIG")" = "adorno.yaml" ]'
 
 check "review:security opens with a step 0 qualification and a one-line pass" \
-  'grep -q "Step 0, qualification" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md && grep -q "one line" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md'
+  'grep -q "Step 0, qualification" "$ROOT"/dist/claude-plugin/agents/adorno-agent-review-security.md && grep -q "one line" "$ROOT"/dist/claude-plugin/agents/adorno-agent-review-security.md'
 
 check "review:security step 0 only dismisses content matches, never path matches nor on diff text" \
-  'grep -q "Only a match of the security .content. regex can be dismissed" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md && grep -q "never evidence for a No" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md'
+  'grep -q "Only a match of the security .content. regex can be dismissed" "$ROOT"/dist/claude-plugin/agents/adorno-agent-review-security.md && grep -q "never evidence for a No" "$ROOT"/dist/claude-plugin/agents/adorno-agent-review-security.md'
 
 check "no _family.md hard-codes typescript-pro" '! grep -l "typescript-pro" "$ROOT"/src/agents/*/_family.md'
 check "the skills-by-area rule appears once in the orchestration instructions" \

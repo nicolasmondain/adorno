@@ -78,7 +78,7 @@ PY
 then ok "every keyword is a valid regular expression"; else ko "every keyword is a valid regular expression" "$(tail -c 300 "$TMP/err")"; fi
 
 echo "routing (public default rules from repos.yaml)"
-REAL="$ROOT/dist/claude/.claude/skills/adorno-github/repos.json"
+REAL="$ROOT/dist/claude-plugin/skills/adorno-github/repos.json"
 if [ -f "$REAL" ]; then
   # adorno/bare drops the `always` reviewers: docs-only then routes to no reviewer at all
   jq '.repos = {"adorno/bench": {}, "adorno/bare": {"areas": {"always": {"review": ["-agent:review:code", "-agent:review:ponytail"]}}}}' \
