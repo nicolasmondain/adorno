@@ -190,15 +190,22 @@ expect_exit 0 "a repo without after_pr" -- "$S/after-pr" plan "$AD" other/thing 
 expect_jq "... is skipped" '.skip | test("sets no after_pr")'
 expect_exit 5 "outside any run, even on a repo without after_pr" -- \
   env CLAUDE_CODE_SESSION_ID=sess-none "$S/after-pr" plan "$AD" other/thing --pr-url "$PR9" --workflow "$SUITE"
+grep -q "no active run" "$TMP/err" && ok "... and says no active run" || ko "... and says no active run" "$(cat "$TMP/err")"
+expect_exit 2 "--workflow that is not a workflow id" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow 'x;y'
 expect_exit 2 "--pr-url is required" -- "$S/after-pr" plan "$AD" acme/docs --workflow "$SUITE"
 expect_exit 2 "--pr-url that is not a PR URL" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "https://evil.example/x" --workflow "$SUITE"
 expect_exit 2 "unknown command" -- "$S/after-pr" run "$AD"
 expect_exit 2 "missing run folder" -- "$S/after-pr" plan "$TMP/nope" acme/docs --pr-url "$PR9" --workflow "$SUITE"
 AOTHER="$(env CLAUDE_CODE_SESSION_ID=sess-other "$S/run-begin" --workflow "$FIX" --mode auto --level L3 --repo acme/docs | jq -r .id)"
-AAPP="$("$S/run-begin" --workflow "$FIX" --mode auto --level L3 --repo acme/app | jq -r .id)"
-expect_exit 5 "a $FIX run of another session or on another repo only does not count" -- \
+[ -n "$AOTHER" ] && ok "a $FIX run opened by another session" || ko "a $FIX run opened by another session"
+expect_exit 5 "... does not count for this session" -- \
   "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
-"$S/run-end" "$AOTHER" >/dev/null; "$S/run-end" "$AAPP" >/dev/null
+"$S/run-end" "$AOTHER" >/dev/null
+AAPP="$("$S/run-begin" --workflow "$FIX" --mode auto --level L3 --repo acme/app | jq -r .id)"
+[ -n "$AAPP" ] && ok "a $FIX run of this session on another repo" || ko "a $FIX run of this session on another repo"
+expect_exit 5 "... does not count for acme/docs" -- \
+  "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
+"$S/run-end" "$AAPP" >/dev/null
 AFIX="$("$S/run-begin" --workflow "$FIX" --mode auto --level L3 --repo acme/docs --repo nobody/repo | jq -r .id)"
 expect_exit 3 "undeclared repo" -- "$S/after-pr" plan "$AD" nobody/repo --pr-url "$PR9" --workflow "$FIX"
 expect_exit 0 "under workflow:issue:fix with a Notion page" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
@@ -220,6 +227,7 @@ jq -e 'map(.skill) == ["/acme-notion-fields", "acme-changelog"]' "$AD/after-pr.j
   && ok "... after-pr.json holds both" || ko "... after-pr.json holds both" "$(cat "$AD/after-pr.json")"
 expect_exit 0 "a new plan once both ran" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
 expect_jq "... skips: already done" '.skip | test("already done")'
+expect_exit 2 "done after a skipped plan: nothing to record" -- "$S/after-pr" "done" acme-changelog "$AD"
 expect_exit 0 "--force" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX" --force
 expect_jq "... plans both again" '(.skills | length) == 2'
 expect_exit 2 "a plan that fails on a bad --pr-url" -- \

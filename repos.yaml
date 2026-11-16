@@ -34,8 +34,8 @@
 #                    value, `{{today}}`, `{{pr_url}}`; set in local/adorno.yaml only (adorno-notion-sync)
 #   after_pr         repo skills to run once the PR exists, in `workflow:pr:ship`: a list of {skill, workflows,
 #                    needs}: `workflows` = the workflows whose runs trigger it, `needs: notion` = only when the request
-#                    has a Notion page; the skill gets the PR URL (and that page's URL) as arguments; set in
-#                    local/adorno.yaml only (adorno-github/scripts/after-pr)
+#                    has a Notion page; the skill gets the PR URL (and that page's URL, rebuilt from its page id)
+#                    as arguments; set in local/adorno.yaml only (adorno-github/scripts/after-pr)
 #   impact           impact analysis of merged PRs (workflow:pr:impact): window compared before / after the
 #                    deployment, minimum delay before analysing, sources to query (connectors and hints:
 #                    dashboards, services, projects, alert channels), whether to post as a comment
