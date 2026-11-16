@@ -141,6 +141,19 @@ for r in "$OA:$OAD" "$OB:$OBD"; do
     && jq -e --arg id "${r%%:*}" 'select(.id == $id) | .overlap == true' "$KH/runs/usage.jsonl" >/dev/null \
     && ok "... run ${r%%:*} records the overlap" || ko "... run ${r%%:*} records the overlap" "$(jq -c .overlap "${r#*:}/usage.json")"
 done
+# Two runs of one session one after the other (the normal case) share no message: the earlier one, in
+# runs/usage.jsonl, ended no later than the second one started (same second counts as sequential).
+expect_exit 0 "two runs back to back in one session" -- env CLAUDE_CODE_SESSION_ID=sess-seq "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
+QA="$(jq -r .id <<<"$out")"; QAD="$(jq -r .dir <<<"$out")"
+expect_exit 0 "... the first ends" -- "$S/run-end" "$QA"
+expect_exit 0 "... then the second begins" -- env CLAUDE_CODE_SESSION_ID=sess-seq "$S/run-begin" --workflow workflow:pr:status --mode report --level L0 --repo acme/docs
+QB="$(jq -r .id <<<"$out")"; QBD="$(jq -r .dir <<<"$out")"
+expect_exit 0 "... and ends" -- "$S/run-end" "$QB"
+for r in "$QA:$QAD" "$QB:$QBD"; do
+  jq -e '.overlap == false' "${r#*:}/usage.json" >/dev/null \
+    && jq -e --arg id "${r%%:*}" 'select(.id == $id) | .overlap == false and .session == "sess-seq"' "$KH/runs/usage.jsonl" >/dev/null \
+    && ok "... run ${r%%:*}: sequential, no overlap" || ko "... run ${r%%:*}: sequential, no overlap" "$(jq -c .overlap "${r#*:}/usage.json")"
+done
 expect_exit 0 "a run outside any session" -- "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
 UR="$(jq -r .id <<<"$out")"; UD="$(jq -r .dir <<<"$out")"
 mkdir -p "$TMP/elsewhere"; printf '# Status\n' >"$TMP/elsewhere/status.md"
