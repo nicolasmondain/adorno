@@ -18,7 +18,9 @@ Input: {{args}}
    - **infra**: nothing to fix; report and stop.
    - **flaky**: `ci-rerun owner/repo <run>` only once, then `ci-wait`. Relapse → treat as a real failure.
    - **real failure**: the designated agent fixes on the PR's branch, in its worktree (`pr-workspace {{args}}`), with the `skills` of its files' areas (`pr-areas --files`);
-     tests and lint locally first, one typed commit. Then `workflow:pr:ship owner/repo <branch> <worktree>`: the
+     tests and lint locally first, one typed commit. The session copies the fixer's `Ponytail` note (if any) into
+     `<worktree>/.agent-run/<date>-ci-<branch slug>/status.md`. Then
+     `workflow:pr:ship owner/repo <branch> <worktree> <worktree>/.agent-run/<date>-ci-<branch slug>/`: the
      repo's `commit_skill` for what is left, `pr-push` (or the repo's `pr_skill` pushes itself), the title and
      description updated if the fix moved the scope.
 3. `ci-wait {{args}}`. Still red after two fix attempts: stop.

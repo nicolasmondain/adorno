@@ -19,7 +19,7 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | `pr-feedback-fetch owner/repo#N` | threads, comments and review summaries to handle (`needsReply`, `bot`), CI; `pending`: their ids keyed by last activity, for `watch-seen` | L0 |
 | `pr-workspace owner/repo#N` | your PR, run from your clone: its branch's worktree (created if missing); otherwise a dedicated workspace under `~/.adorno` (separate clone, detached at the head commit) | L0 * |
 | `pr-workspace --clean` | deletes the workspaces of closed PRs | L0 * |
-| `pr-areas owner/repo DIFF_FILE` or `owner/repo --files PATH…` | code areas touched (front, back, back.query…) and the agents to use: `build`, `fix`, `perf`, `qa`, `review`, and `skills` | L0 |
+| `pr-areas owner/repo DIFF_FILE` or `owner/repo --files PATH…` | code areas touched (front, back, back.query…) and the agents to use: `build`, `fix`, `perf`, `qa`, `review`, `skills`, and `ponytail` (the repo's level) | L0 |
 | `pr-diff owner/repo#N` | metadata + diff saved to a file | L0 |
 | `issue-fetch owner/repo#N` | issue + comments | L0 |
 | `pr-merged owner/repo [--since 14d] [--author LOGIN] [--pr N]` | merged PRs (yours by default): merge commit, files, whether an impact report was already posted | L0 |
@@ -28,6 +28,7 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | `ci-failed owner/repo#N [lines]` | failed runs on the latest commit + log tails in files | L0 |
 | `ci-rerun owner/repo RUN_ID` | re-runs the failed jobs, once per run | L2 |
 | `notion-step plan STEP RUN_DIR [owner/repo] [--pr-url URL] [--force]` · `done STEP RUN_DIR` | the properties your repo config sets for a workflow step (`notion_spec`) on the run's Notion spec page, or why there is nothing to do; `done` records it (skill `adorno-notion-sync`) | — |
+| `after-pr plan RUN_DIR [owner/repo] --pr-url URL --workflow ID [--force]` · `done SKILL RUN_DIR` | the repo skills your config says to run once the PR exists (`after_pr`), for `--workflow` (the workflow of an active run of this session on the repo, else exit 5), each with its `args` list, or why there is nothing to do; `done` records one (`workflow:pr:ship`) | — |
 | `run-begin --workflow ID --mode report\|draft\|pending\|comment\|auto --level Lx --repo owner/repo… [--deny a,b] [--ttl 2h]` | opens a run for the named repos: what it may write, its folder; `report` forces a dry run, `draft` refuses the conversation (code still goes out) | — |
 | `guard_bash.py deny\|ask [--format=claude\|codex\|gemini]` | hook (Claude Code, Codex, Gemini) installed by `bin/kit install`: refuses or asks to confirm a push, a GitHub publication, a write to the registry or to runs, whatever the shape of the command; blocks everything without `python3`. Inside a run (Claude Code): `allow` for `git add` / `git commit` with listed flags, `git push origin BRANCH\|HEAD`, `gh pr create` of the current branch and `gh pr edit\|ready N` on your own PR, and a closed list of scripts (never `run-begin`), at the run's level, so a repo's `commit_skill` / `pr_skill` run without a prompt | — |
 | `repo-audit [owner/repo…]` | read-only: type and scope of the `gh` token, default branch protection (ruleset, branch protection), admin rights; advice | — |

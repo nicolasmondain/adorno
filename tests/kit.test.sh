@@ -64,12 +64,29 @@ bad() {  # bad NAME YAML-APPENDED — the layer with YAML appended must fail che
 echo "validation"
 bad "unknown preset" $'  ghost/repo:\n    use: [nope]' "unknown preset 'nope'"
 bad "bad level" $'  ghost/repo:\n    max_level: L9' "max_level must be one of"
+bad "bad ponytail level" $'  ghost/repo:\n    ponytail: max' "ponytail must be one of"
+OKP="$TMP/okp"; mkdir -p "$OKP"
+for level in lite ultra; do
+  printf 'owner: {name: T, github: t, language: fr}\nrepos:\n  ghost/repo:\n    ponytail: %s\n' "$level" >"$OKP/adorno.yaml"
+  expect_exit 0 "ponytail: $level is accepted" -- env ADORNO_LOCAL="$OKP" "${KIT[@]}" check
+done
 bad "a commit_skill that is not a name" $'  ghost/repo:\n    commit_skill: [a, b]' "commit_skill must be a skill or command name"
 bad "a pr_skill with a shell command" $'  ghost/repo:\n    pr_skill: "gh pr create"' "pr_skill must be a skill or command name"
 bad "unknown notion_spec step" $'  ghost/repo:\n    notion_spec: {merged: {Lifecycle: Done}}' "unknown step 'merged'"
 bad "non-scalar notion_spec value" $'  ghost/repo:\n    notion_spec: {start: {Lifecycle: [a, b]}}' "must be a string, a number, a boolean or null"
 bad "unknown notion_spec placeholder" $'  ghost/repo:\n    notion_spec: {pr_opened: {PR: "{{pr-url}}"}}' "unknown placeholder"
 bad "pr_url before the PR" $'  ghost/repo:\n    notion_spec: {start: {PR: "{{pr_url}}"}}' "only exists once the PR is open"
+bad "after_pr that is not a list" $'  ghost/repo:\n    after_pr: {skill: /x}' "after_pr must be a list"
+bad "an after_pr skill with a shell command" $'  ghost/repo:\n    after_pr: [{skill: "npm publish", workflows: [workflow:issue:fix]}]' "after_pr\[0\].skill must be a skill or command name"
+bad "an after_pr entry without workflows" $'  ghost/repo:\n    after_pr: [{skill: /x}]' "workflows must be a non-empty list of workflow ids"
+bad "an after_pr workflow that is not an id" $'  ghost/repo:\n    after_pr: [{skill: /x, workflows: [issue-fix]}]' "workflows must be a non-empty list of workflow ids"
+bad "an unknown after_pr need" $'  ghost/repo:\n    after_pr: [{skill: /x, workflows: [workflow:issue:fix], needs: slack}]' "needs must be one of notion"
+bad "an unknown after_pr key" $'  ghost/repo:\n    after_pr: [{skill: /x, workflows: [workflow:issue:fix], when: always}]' "unknown key 'when'"
+bad "an after_pr workflow that does not exist" $'  ghost/repo:\n    after_pr: [{skill: /x, workflows: [workflow:issue:fixx]}]' "unknown workflow 'workflow:issue:fixx'"
+bad "the same after_pr skill twice" $'  ghost/repo:\n    after_pr: [{skill: /x, workflows: [workflow:issue:fix]}, {skill: /x, workflows: [workflow:feature:build]}]' "list several workflows in one entry"
+bad "an after_pr entry that is not a mapping" $'  ghost/repo:\n    after_pr: [x]' "after_pr\[0\] must be a mapping"
+bad "an after_pr entry with no workflow" $'  ghost/repo:\n    after_pr: [{skill: /x, workflows: []}]' "workflows must be a non-empty list of workflow ids"
+bad "an after_pr entry without skill" $'  ghost/repo:\n    after_pr: [{workflows: [workflow:issue:fix]}]' "after_pr\[0\].skill must be a skill or command name"
 bad "a commit_skill with a trailing newline" $'  ghost/repo:\n    commit_skill: "adorno-commit\\n"' "commit_skill must be a skill or command name"
 bad "an empty setup_skill" $'  ghost/repo:\n    setup_skill: ""' "setup_skill must be a skill or command name"
 bad "a pr_skill with a path" $'  ghost/repo:\n    pr_skill: "../x"' "pr_skill must be a skill or command name"
@@ -242,6 +259,27 @@ sed -i.bak 's/^roles: \[.*\]/roles: [fix, deploy]/' "$SB/src/workflows/pr/ship.m
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
 if [ "$got" != 0 ] && grep -q "roles: unknown role 'deploy'" <<<"$out"; then ok "an unknown role value fails"; else ko "an unknown role value fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
 cp "$ROOT/src/workflows/pr/ship.md" "$SB/src/workflows/pr/ship.md"
+mkdir -p "$SB/vendor/addy/skills/lonely"
+printf -- '---\nname: lonely\ndescription: An imported skill no item cites.\n---\n\nNothing.\n' >"$SB/vendor/addy/skills/lonely/SKILL.md"
+out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
+if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import addy): no item cites it" <<<"$out"; then ok "an imported skill no item cites fails the public check"; else ko "an imported skill no item cites fails the public check" "exit $got: $(tail -c 300 <<<"$out")"; fi
+printf 'Use `lonely-helper` for this.\n' >"$SB/src/instructions/99-probe.md"
+out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
+if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import addy)" <<<"$out"; then ok "a longer name containing the skill's is not a citation"; else ko "a longer name containing the skill's is not a citation" "exit $got: $(tail -c 300 <<<"$out")"; fi
+mkdir -p "$SB/vendor/addy/skills/other"
+printf -- '---\nname: other\ndescription: An imported skill that cites another.\n---\n\nSee `lonely`.\n' >"$SB/vendor/addy/skills/other/SKILL.md"
+out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
+if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import addy)" <<<"$out"; then ok "an imported skill citing it is not a citation"; else ko "an imported skill citing it is not a citation" "exit $got: $(tail -c 300 <<<"$out")"; fi
+rm -rf "$SB/vendor/addy/skills/other"
+printf 'Use `lonely` for this.\n' >"$SB/src/instructions/99-probe.md"
+expect_exit 0 "an instruction citing the exact name clears the orphan" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check
+rm -f "$SB/src/instructions/99-probe.md"
+sed -i.bak 's/^    source: github:addyosmani\/agent-skills$/&\n    uncited: [lonely]/' "$SB/kit.yaml"; rm -f "$SB/kit.yaml.bak"
+expect_exit 0 "listed in its import's uncited, it passes" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check
+sed -i.bak 's/uncited: \[lonely\]/uncited: [lonely, ghost]/' "$SB/kit.yaml"; rm -f "$SB/kit.yaml.bak"
+out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
+if [ "$got" != 0 ] && grep -q "import addy: uncited 'ghost' is not one of its skills" <<<"$out"; then ok "an uncited entry naming no imported skill fails"; else ko "an uncited entry naming no imported skill fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
+rm -rf "$SB/vendor/addy/skills/lonely"; cp "$ROOT/kit.yaml" "$SB/kit.yaml"
 expect_exit 0 "the real registry passes with every dispatcher's roles covered" -- env ADORNO_LOCAL="$TMP/none" "${KIT[@]}" check
 check "no area_reviewers reader is left in src/" '! grep -rn "area_reviewers" "$ROOT/src" "$ROOT/bin/kit" | grep -v -e "src/skills/adorno-setup/" -e "bin/kit:.*AREA_REVIEWERS_MSG\|bin/kit:.*area_reviewers" -e SCHEMA.md | grep .'
 check "pr:ship leaves no family agent of its subject" '! grep -q "family agent of its subject" "$ROOT/src/workflows/pr/ship.md"'
