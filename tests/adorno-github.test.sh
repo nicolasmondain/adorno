@@ -88,6 +88,9 @@ expect_exit 2 "missing PR number is a usage error" -- "$S/pr-feedback-fetch" acm
 expect_exit 0 "repo-conf merges defaults" -- "$S/repo-conf" acme/strict
 expect_jq "repo-conf: repo value wins, base filled from GitHub" \
   '.resolve_threads == "reviewer" and .reply_language == "en" and .base == "main"'
+expect_jq "repo-conf: the repo's ponytail level wins" '.ponytail == "ultra"'
+expect_exit 0 "repo-conf without a ponytail override" -- "$S/repo-conf" acme/docs
+expect_jq "repo-conf: ponytail from defaults" '.ponytail == "full"'
 
 for url in git@github.com:acme/strict.git https://github.com/acme/strict ssh://git@github.com/acme/strict.git \
     https://someone@github.com/acme/strict.git ssh://git@github.com:22/acme/strict.git; do
@@ -417,7 +420,7 @@ expect_jq "my pending review is surfaced" '(.[] | select(.number==10) | .pending
 echo "pr-areas (public default rules from repos.yaml)"
 REAL="$ROOT/dist/claude/.claude/skills/adorno-github/repos.json"
 if [ -f "$REAL" ]; then
-  jq '.repos = {"acme/app": {}, "acme/leak": {"areas": {"back": {"sub": {"n": {"review": ["-agent:review:tests", "agent:review:code"], "skills": ["-typescript-pro"]}}}, "newa": {"review": ["-agent:review:api", "agent:review:code"]}}}, "acme/docs": {"areas": {"back": {"review": ["-agent:review:tests", "agent:review:security"]}}}}' "$REAL" >"$TMP/areas-repos.json"
+  jq '.repos = {"acme/app": {}, "acme/leak": {"areas": {"back": {"sub": {"n": {"review": ["-agent:review:tests", "agent:review:code"], "skills": ["-typescript-pro"]}}}, "newa": {"review": ["-agent:review:api", "agent:review:code"]}}}, "acme/docs": {"ponytail": "ultra", "areas": {"back": {"review": ["-agent:review:tests", "agent:review:security"]}}}}' "$REAL" >"$TMP/areas-repos.json"
   reg "$TMP/areas-repos.json"
   expect_exit 0 "classifies a diff" -- "$S/pr-areas" acme/app "$ROOT/tests/fixtures/sample.diff"
   expect_jq "front by extension, with typescript" '.areas.front == ["client/app.tsx"] and .areas.typescript == ["client/app.tsx"] and (.skills | index("typescript-pro"))'
@@ -431,9 +434,11 @@ if [ -f "$REAL" ]; then
   expect_jq "no reviewers key, always is not an area" '(has("reviewers") | not) and (.areas | has("always") | not)'
   expect_jq "by_area carries the roles" '.by_area["back.query"].perf == "agent:perf:mongodb" and .by_area.front.perf == "agent:perf:front" and .by_area.docs.perf == null'
   expect_jq "no perf fallback when an area has one" '.skills | index("performance-optimization") | not'
+  expect_jq "ponytail level: the default" '.ponytail == "full"'
   expect_exit 0 "per-repo override" -- "$S/pr-areas" acme/docs "$ROOT/tests/fixtures/sample.diff"
   expect_jq "override adds a reviewer and removes one" \
     '.areas.front == ["client/app.tsx"] and (.review | index("agent:review:security")) and (.review | index("agent:review:tests") | not) and (.review | index("agent:review:back"))'
+  expect_jq "ponytail level: the repo's override" '.ponytail == "ultra"'
   expect_jq "no removal marker leaks" '[.review[] | select(startswith("-"))] == []'
   expect_exit 0 "removals in a new area and a new sub-area" -- "$S/repo-conf" acme/leak
   expect_jq "no -x marker leaks from an area without a lower layer" \

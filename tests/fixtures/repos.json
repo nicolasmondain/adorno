@@ -30,6 +30,7 @@
     },
     "acme/strict": {
       "resolve_threads": "reviewer",
+      "ponytail": "ultra",
       "required_checks": [
         "build"
       ]
