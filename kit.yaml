@@ -33,11 +33,21 @@ skill_data:
 # A local item can extend an imported one without copying it:
 #   extends: addy/code-reviewer   (its body is appended to the original)
 imports:
-  # 24 skills by phase (Define → Ship) and 3 reviewer agents (code, security, tests). MIT.
+  # The 21 skills an adorno item cites (Define → Ship) and 3 reviewer agents (code, security, tests). MIT.
+  # Left out on purpose: using-agent-skills (routes like core:router, stops to ask), git-workflow-and-versioning
+  # (feature/ branches, tags, no squash), doubt-driven-development (asks at every cycle, needs the main session),
+  # shipping-and-launch (deploying is L4).
   - name: addy
     source: github:addyosmani/agent-skills
     ref: main
-    include: ["skills/*", "agents/code-reviewer.md", "agents/security-auditor.md", "agents/test-engineer.md"]
+    include: [skills/api-and-interface-design, skills/browser-testing-with-devtools, skills/ci-cd-and-automation,
+              skills/code-review-and-quality, skills/code-simplification, skills/constraint-driven-development,
+              skills/context-engineering, skills/debugging-and-error-recovery, skills/deprecation-and-migration,
+              skills/documentation-and-adrs, skills/frontend-ui-engineering, skills/idea-refine,
+              skills/incremental-implementation, skills/interview-me, skills/observability-and-instrumentation,
+              skills/performance-optimization, skills/planning-and-task-breakdown, skills/security-and-hardening,
+              skills/source-driven-development, skills/spec-driven-development, skills/test-driven-development,
+              agents/code-reviewer.md, agents/security-auditor.md, agents/test-engineer.md]
 
   # "The least code that works" discipline + review, audit, debt ledger. MIT.
   - name: ponytail
