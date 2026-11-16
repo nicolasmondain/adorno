@@ -495,7 +495,18 @@ own own-stray defect 1 mongodb agent:review:mongodb "$FOUND"
 printf '{"agent":"agent:review:stray","verdict":"pass","findings":[]}' >"$R/own-stray/defect/1/reviews/stray.json"
 close own-stray "defect:1"
 expect_exit 1 "score: a review file no agent of the case run played" -- "$B/score" --label own-stray --results "$R" --cases "$SC"
-if grep -q "reviews/stray.json: no agent of this case run" "$TMP/err"; then ok "names the file"; else ko "names the file" "$(cat "$TMP/err")"; fi
+if grep -q "own-stray/defect/1/reviews/stray.json: no agent of this case run has a meta for it (it declares agent:review:stray), .*Move or delete the file, then run bench/report again" "$TMP/err"; then
+  ok "names the file, the agent it declares, and what to do"
+else
+  ko "names the file, the agent it declares, and what to do" "$(cat "$TMP/err")"
+fi
+printf '{oops' >"$R/own-stray/defect/1/reviews/stray.json"
+expect_exit 1 "score: an unreadable review file no agent played" -- "$B/score" --label own-stray --results "$R" --cases "$SC"
+if grep -q "reviews/stray.json: no agent of this case run has a meta for it, so" "$TMP/err" && ! grep -q "declares" "$TMP/err"; then
+  ok "names the file, and no agent"
+else
+  ko "names the file, and no agent" "$(cat "$TMP/err")"
+fi
 
 expect_exit 2 "score: unknown run" -- "$B/score" --label nope --results "$R" --cases "$SC"
 expect_exit 2 "score: a case the cases folder does not have" -- "$B/score" --label perfect --results "$R" --cases "$TMP/graded-true"

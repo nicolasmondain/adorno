@@ -140,9 +140,16 @@ def own_reviews(case_id, case, folder, n, run, metas):
     by_file = {agent.split(":")[-1] + ".json": agent for agent in by_agent}
 
     def owner(name):
-        if name not in by_file:
-            die(f"{folder}/reviews/{name}: no agent of this case run has a meta for it, so no reviewer owns it")
-        return by_file[name]
+        if name in by_file:
+            return by_file[name]
+        path = folder / "reviews" / name
+        try:
+            declared = load(path).get("agent")
+        except (OSError, ValueError, AttributeError):  # absent, not JSON, or not an object
+            declared = None
+        who = f" (it declares {declared})" if isinstance(declared, str) else ""
+        die(f"{path}: no agent of this case run has a meta for it{who}, so no reviewer owns it. Move or delete the "
+            "file, then run bench/report again.")
 
     broken = set(run["missing"]) | {owner(name) for name in run["invalid"]}
     reviews = {}
