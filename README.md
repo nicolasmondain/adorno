@@ -202,6 +202,7 @@ bin/kit list                 # everything available, with its provenance
 bin/kit conf [owner/repo]    # the settings a repo resolves
 bin/kit new agent fix:flaky  # or: new workflow ci:flaky, new skill <name>
 bin/kit import [--update]    # imported skills and agents (commits pinned in kit.lock)
+bin/kit import --check       # how far each import is behind upstream and which items changed (writes nothing)
 bin/kit install PATH|--global|--workspace NAME [--targets claude,codex] [--public-only] [--dry-run]
 bin/kit uninstall PATH|--global|--workspace NAME
 tests/adorno-github.test.sh     # tests of the GitHub scripts, no network
