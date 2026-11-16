@@ -9,7 +9,7 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/bin"; ln -s "$ROOT/tests/fake-gh" "$TMP/bin/gh"
 # a throwaway home: the scripts read the registry and the runs from ~/.adorno only
 export HOME="$TMP/home" PATH="$TMP/bin:$PATH"
-unset CLAUDE_CODE_SESSION_ID  # runs opened outside any session, unless a test sets one
+unset CLAUDE_CODE_SESSION_ID CLAUDE_CONFIG_DIR  # runs opened outside any session, unless a test sets one
 KH="$HOME/.adorno"; mkdir -p "$KH"
 reg() { rm -f "$KH/registry.json"; cp "$1" "$KH/registry.json"; chmod 400 "$KH/registry.json"; }  # reg FILE: use FILE as the registry
 reg "$ROOT/tests/fixtures/repos.json"
@@ -78,6 +78,64 @@ printf '{ half' >"$KH/runs/active/20990101T000000-1-1.json"
 expect_exit 5 "a half-written run file is ignored..." -- "$S/pr-comment" acme/docs#42 "$TMP/norun.md"
 [ -f "$KH/runs/active/20990101T000000-1-1.json" ] && ok "... and not deleted while it may be in progress" || ko "... and not deleted"
 rm -f "$KH/runs/active/20990101T000000-1-1.json"
+
+echo "runs: usage"
+mkdir -p "$HOME/.claude"; cp -R "$ROOT/tests/fixtures/claude-projects" "$HOME/.claude/projects"
+U() { "$S/run-usage" collect --session sess-usage --since 2026-11-10T10:00:00Z --until "$1"; }
+expect_exit 0 "usage of a session window" -- U 2026-11-10T10:30:00Z
+expect_jq "... duplicate lines of one message counted once, out-of-window messages and agents left out" \
+  '.source == "claude-code" and .session_usage.messages == 1 and .totals.messages == 3 and .totals.agents == 1
+   and .totals.tokens == {input: 20, cache_write: 4000, cache_read: 210000, output: 3500, total: 217520}'
+expect_jq "... the agent: its type, real model, duration, tokens and cost" \
+  '.agents == [.agents[0]] and .agents[0].type == "adorno-agent-review-code" and .agents[0].model == "claude-sonnet-5-5"
+   and .agents[0].duration_s == 120 and .agents[0].messages == 2 and (.agents[0].usd * 1e6 | round) == 46020'
+expect_jq "... cost per model and in total (5m and 1h cache writes at their own rate)" \
+  '(.session_usage.models["claude-opus-5-5"].usd * 1e6 | round) == 65040 and (.totals.usd * 1e6 | round) == 111060
+   and .unpriced == [] and .skipped_lines == 1 and .duration_s == 1800'
+expect_jq "... and a one-line summary" '.summary == "30m · 1 agent · $0.11 (opus $0.07, sonnet $0.05) · 218k tokens (210k cache read)"'
+expect_exit 0 "a model with no price" -- U 2026-11-10T11:00:00Z
+expect_jq "... is unpriced, never free: the total is unknown" \
+  '.unpriced == ["claude-mystery-1"] and .totals.usd == null and (.agents | map(.type)) == ["adorno-agent-review-code", "unknown"]
+   and (.summary | test("unpriced: claude-mystery-1"))'
+jq '.prices["claude-sonnet-5-5"] = {input: 2}' "$ROOT/tests/fixtures/repos.json" >"$TMP/partial-prices.json"; reg "$TMP/partial-prices.json"
+expect_exit 0 "an incomplete price" -- U 2026-11-10T10:30:00Z
+expect_jq "... is unpriced too, never priced at 0" '.unpriced == ["claude-sonnet-5-5"] and .agents[0].usd == null and .totals.usd == null'
+reg "$ROOT/tests/fixtures/repos.json"
+expect_exit 0 "no session: usage unavailable, the duration only" -- \
+  "$S/run-usage" collect --since 2026-11-10T10:00:00Z --until 2026-11-10T10:00:42Z
+expect_jq "... said, not zero" '.source == "unavailable" and .duration_s == 42 and (.reason | test("CLAUDE_CODE_SESSION_ID")) and (.agents == null)'
+expect_exit 0 "a session with no transcript" -- \
+  "$S/run-usage" collect --session nope --since 2026-11-10T10:00:00Z --until 2026-11-10T10:00:42Z
+expect_jq "... unavailable too" '.source == "unavailable" and (.reason | test("no transcript for session nope"))'
+expect_exit 2 "a date that is not UTC ISO is a usage error" -- "$S/run-usage" collect --since yesterday --until 2026-11-10T10:00:00Z
+
+expect_exit 0 "a run in the fixture session" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
+UR="$(jq -r .id <<<"$out")"; UD="$(jq -r .dir <<<"$out")"
+jq '.started = "2026-11-10T10:00:00Z"' "$KH/runs/active/$UR.json" >"$TMP/ur.json" && mv "$TMP/ur.json" "$KH/runs/active/$UR.json"
+printf '# Status\n' >"$UD/status.md"
+expect_exit 0 "run-end records the usage" -- "$S/run-end" "$UR"
+expect_jq "... its cost line and the status.md it went to" \
+  "(.usage | startswith(\"Cost: \")) and (.usage | test(\"3 agents\")) and .status == \"$UD/status.md\""
+[ ! -f "$KH/runs/active/$UR.json" ] && ok "... the grant is withdrawn" || ko "... the grant is withdrawn"
+jq -e '.source == "claude-code" and .totals.agents == 3 and .unpriced == ["claude-mystery-1"]' "$UD/usage.json" >/dev/null \
+  && ok "... usage.json in the run folder" || ko "... usage.json in the run folder" "$(head -c 300 "$UD/usage.json")"
+tail -n 1 "$UD/status.md" | grep -q '^Cost: ' && ok "... a Cost: line at the end of status.md" || ko "... a Cost: line at the end of status.md"
+jq -e --arg id "$UR" 'select(.id == $id) | .workflow == "workflow:pr:review" and .repos == ["acme/docs"] and (.agents | length) == 3' \
+  "$KH/runs/usage.jsonl" >/dev/null && ok "... a summary line in runs/usage.jsonl" || ko "... a summary line in runs/usage.jsonl"
+expect_exit 0 "a run outside any session" -- "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
+UR="$(jq -r .id <<<"$out")"; UD="$(jq -r .dir <<<"$out")"
+mkdir -p "$TMP/elsewhere"; printf '# Status\n' >"$TMP/elsewhere/status.md"
+expect_exit 2 "--status takes a status.md only" -- "$S/run-end" "$UR" --status "$TMP/elsewhere/notes.md"
+expect_exit 0 "... ends with its duration only, into the status.md given" -- "$S/run-end" "$UR" --status "$TMP/elsewhere/status.md"
+expect_jq "... usage unavailable, said in the cost line" '(.usage | test("usage unavailable")) and (.status | endswith("elsewhere/status.md"))'
+grep -q '^Cost: .*usage unavailable' "$TMP/elsewhere/status.md" && ok "... written there" || ko "... written there"
+expect_exit 0 "a run whose usage cannot be read" -- env CLAUDE_CODE_SESSION_ID='bad id!' "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
+UR="$(jq -r .id <<<"$out")"; UD="$(jq -r .dir <<<"$out")"
+expect_exit 0 "... still ends" -- "$S/run-end" "$UR"
+[ ! -f "$KH/runs/active/$UR.json" ] && ok "... grant withdrawn first" || ko "... grant withdrawn first"
+grep -q "usage of run $UR not recorded" "$TMP/err" && ok "... the failure said on stderr" || ko "... the failure said on stderr" "$(cat "$TMP/err")"
+jq -e '.source == "error" and (.error | length) > 0' "$UD/usage.json" >/dev/null && ok "... and recorded as an error" || ko "... and recorded as an error"
+
 # the rest of the suite runs inside one auto run at L3
 "$S/run-begin" --workflow workflow:test:suite --mode auto --level L3 \
   --repo acme/docs --repo acme/strict --repo acme/app --repo acme/docs-public --repo acme/readonly --repo other/thing >/dev/null
@@ -966,6 +1024,7 @@ guard_at deny "$C" "" "gh pr merge 42"
 guard_at deny "$C" "sess-other" "gh pr create --title t --body b"
 guard_at deny "$C" "" "gh pr create -R acme/readonly --title t --body b"
 guard_at allow "$C" "" "$S/repo-conf acme/docs"
+guard_at allow "$C" "" "$S/run-usage collect --session s --since 2026-11-10T10:00:00Z --until 2026-11-10T11:00:00Z"
 guard_at pass "$C" "" "$TMP/fake/adorno-github/scripts/repo-conf"
 guard_at deny "$C" "" "git push" codex
 guard_at pass "$C" "" "git add ." codex

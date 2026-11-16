@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# Usage: run-usage collect --session ID --since ISO --until ISO
+# What a run consumed, read from the Claude Code transcripts of its session (read-only):
+# ${CLAUDE_CONFIG_DIR:-~/.claude}/projects/<project>/<session>.jsonl for the orchestrating session, and
+# <session>/subagents/agent-*.jsonl (+ .meta.json: agentType) for each agent it started. Only the messages whose
+# timestamp falls in [since, until] count; an agent counts when it has at least one. One API message is written on
+# several lines with the same message.id: it is counted once. Cost: the registry's `prices` ($ per million tokens, per
+# model id; `<model>@fast` for fast mode); a model missing there gets usd null and is listed in `unpriced`, never 0.
+# Prints {source, session, started, ended, duration_s, session_usage, agents, totals, unpriced, summary}. Without a
+# session or a transcript (Codex, Gemini, a terminal): {source: "unavailable", reason, …, duration_s, summary}.
+# Called by run-end, which writes it to the run folder; also usable by hand on a past session.
+. "$(dirname "$0")/_lib.sh"
+
+[ "${1:-}" = "collect" ] || die "usage: run-usage collect --session ID --since ISO --until ISO" "$E_USAGE"
+shift
+session="" since="" until=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --session) session="${2:-}"; shift 2 ;;
+    --since) since="${2:-}"; shift 2 ;;
+    --until) until="${2:-}"; shift 2 ;;
+    *) die "unknown option $1" "$E_USAGE" ;;
+  esac
+done
+iso_re='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z$'
+[[ "$since" =~ $iso_re ]] && [[ "$until" =~ $iso_re ]] || die "--since and --until: UTC like 2026-11-10T17:00:00Z" "$E_USAGE"
+[[ -z "$session" || "$session" =~ ^[A-Za-z0-9_-]+$ ]] || die "--session: a session id" "$E_USAGE"
+
+prices="$(jq -c '.prices // {}' "$REGISTRY")"
+root="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects"
+main=""
+if [ -n "$session" ] && [ -d "$root" ]; then
+  main="$(find "$root" -mindepth 2 -maxdepth 2 -name "$session.jsonl" 2>/dev/null | head -n 1)"
+fi
+
+# The window, the duration and the one-line summary are shared by both outcomes.
+head_jq='
+  def epoch: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
+  def dur: if . >= 3600 then "\(. / 3600 | floor)h\(. % 3600 / 60 | floor | tostring | if length < 2 then "0" + . else . end)m"
+           elif . >= 60 then "\(. / 60 | floor)m" else "\(.)s" end;
+  def mtok: if . >= 1000000 then "\(. / 100000 | round / 10)M" elif . >= 1000 then "\(. / 1000 | round)k" else tostring end;
+  def money: if . == null then "$?" else "$\(. * 100 | round / 100)" end;
+  (($until | epoch) - ($since | epoch)) as $d'
+
+if [ -z "$main" ]; then
+  reason="no Claude Code session (CLAUDE_CODE_SESSION_ID was not set when the run began)"
+  [ -z "$session" ] || reason="no transcript for session $session under $root"
+  jq -n --arg session "$session" --arg since "$since" --arg until "$until" --arg reason "$reason" "$head_jq"'
+    | {source: "unavailable", reason: $reason, session: $session, started: $since, ended: $until, duration_s: $d,
+       summary: "\($d | dur) · usage unavailable (\($reason))"}'
+  exit 0
+fi
+
+sub="${main%.jsonl}/subagents"
+files=("$main")
+for f in "$sub"/agent-*.jsonl; do [ -e "$f" ] && files+=("$f"); done
+metas="{}"
+for f in "$sub"/agent-*.meta.json; do
+  [ -e "$f" ] || continue
+  metas="$(jq -c --arg k "$(basename "$f" .meta.json)" --argjson m "$metas" '$m + {($k): (.agentType // "unknown")}' "$f")"
+done
+
+# One record per assistant message of the window, from every file; a line that does not parse (a transcript being
+# written) is counted, never guessed.
+records="$(jq -cRn --arg since "$since" --arg until "$until" '
+  def epoch: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
+  ($since | epoch) as $s | ($until | epoch) as $u
+  | inputs | (fromjson? // {bad: true} | if type == "object" then . else {bad: true} end) as $r
+  | if $r.bad then {bad: true}
+    elif $r.type == "assistant" and ($r.message.usage | type) == "object" and ($r.timestamp | type) == "string"
+         and (($r.timestamp | epoch) as $t | $t >= $s and $t <= $u) then
+      $r.message.usage as $x
+      | {file: (input_filename | split("/") | last | sub("\\.jsonl$"; "")), id: ($r.message.id // $r.uuid),
+         t: ($r.timestamp | epoch), model: ($r.message.model // "unknown")
+                                         + (if $x.speed == "fast" then "@fast" else "" end),
+         input: ($x.input_tokens // 0),
+         cw5: ($x.cache_creation.ephemeral_5m_input_tokens // ($x.cache_creation_input_tokens // 0)),
+         cw1: ($x.cache_creation.ephemeral_1h_input_tokens // 0),
+         cache_read: ($x.cache_read_input_tokens // 0), output: ($x.output_tokens // 0)}
+    else empty end' "${files[@]}")"
+
+jq -n --arg session "$session" --arg since "$since" --arg until "$until" --arg main "$(basename "$main" .jsonl)" \
+  --argjson prices "$prices" --argjson metas "$metas" "$head_jq"'
+  | [inputs] as $all
+  | ($all | map(select(.bad)) | length) as $bad
+  | ($all | map(select(.bad | not)) | group_by(.file + "\u0000" + .id) | map(.[0])) as $msgs
+  | def cost: $prices[.model] as $p
+      | if $p == null or any($p.input, $p.cache_write_5m, $p.cache_write_1h, $p.cache_read, $p.output; . == null)
+        then null
+        else (.input * $p.input + .cw5 * $p.cache_write_5m + .cw1 * $p.cache_write_1h
+              + .cache_read * $p.cache_read + .output * $p.output) / 1000000 end;
+    def tokens: {input: (map(.input) | add // 0), cache_write: (map(.cw5 + .cw1) | add // 0),
+                 cache_read: (map(.cache_read) | add // 0), output: (map(.output) | add // 0)}
+                | . + {total: (.input + .cache_write + .cache_read + .output)};
+    def usd: map(cost) | if any(. == null) then null else (add // 0) end;
+    def by_model: group_by(.model) | map({key: .[0].model, value: (tokens + {usd: usd})}) | from_entries;
+  ($msgs | map(select(.file == $main))) as $own
+  | ($msgs | map(select(.file != $main)) | group_by(.file)
+     | map({id: .[0].file, type: ($metas[.[0].file] // "unknown"),
+            model: (group_by(.model) | max_by(length) | .[0].model), models: (map(.model) | unique),
+            duration_s: ((map(.t) | max) - (map(.t) | min) | round), messages: length,
+            tokens: tokens, usd: usd})
+     | sort_by(.type)) as $agents
+  | ($msgs | unique_by(.model) | map(select(cost == null) | .model)) as $unpriced
+  | ($msgs | tokens) as $tok | ($msgs | usd) as $total
+  | ($msgs | by_model) as $models
+  | {source: "claude-code", session: $session, started: $since, ended: $until, duration_s: $d,
+     session_usage: {messages: ($own | length), models: ($own | by_model)},
+     agents: $agents,
+     totals: {agents: ($agents | length), messages: ($msgs | length), tokens: $tok, usd: $total, models: $models},
+     unpriced: $unpriced, skipped_lines: $bad}
+  | .summary = "\($d | dur) · \($agents | length) agent\(if ($agents | length) == 1 then "" else "s" end) · \($total | money)"
+      + (if ($models | length) > 0
+         then " (" + ($models | to_entries | sort_by(-(.value.usd // 0))
+                      | map("\(.key | sub("^claude-"; "") | sub("-[0-9][^@]*"; "")) \(.value.usd | money)") | join(", ")) + ")"
+         else "" end)
+      + " · \($tok.total | mtok) tokens (\($tok.cache_read | mtok) cache read)"
+      + (if ($unpriced | length) > 0 then " · unpriced: \($unpriced | join(", "))" else "" end)' <<<"$records"

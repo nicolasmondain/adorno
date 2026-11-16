@@ -1,11 +1,43 @@
 #!/usr/bin/env bash
-# Usage: run-end ID
-# Ends a run started with run-begin: its grant is withdrawn; its run folder stays, with the deliverables.
+# Usage: run-end ID [--status FILE]
+# Ends a run started with run-begin: its grant is withdrawn first; its run folder stays, with the deliverables. Then
+# what it consumed (run-usage: duration, agents, model and tokens of each, cost) goes to <dir>/usage.json, a summary
+# line to ~/.adorno/runs/usage.jsonl, and a `Cost:` line to the run's status.md (FILE, else <dir>/status.md when it
+# exists). A usage that cannot be read is written as {source: "error"} and said on stderr, the run still ends.
+# Prints {ended, workflow, dir, usage (the cost line), status (the status.md written, or null)}.
 . "$(dirname "$0")/_lib.sh"
 
 id="${1:-}"
-[[ "$id" =~ ^[0-9T]+-[0-9]+-[0-9]+$ ]] || die "usage: run-end ID (as printed by run-begin)" "$E_USAGE"
+[[ "$id" =~ ^[0-9T]+-[0-9]+-[0-9]+$ ]] || die "usage: run-end ID [--status FILE] (ID as printed by run-begin)" "$E_USAGE"
+shift
+status=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --status) status="${2:-}"; [ "$(basename "$status")" = status.md ] || die "--status: a status.md path" "$E_USAGE"; shift 2 ;;
+    *) die "unknown option $1" "$E_USAGE" ;;
+  esac
+done
 f="$(runs_dir)/$id.json"
 [ -f "$f" ] || die "no active run $id (already ended or expired)" "$E_USAGE"
-jq '{ended: .id, workflow, dir}' "$f"
+run="$(cat "$f")"
 rm -f "$f"
+
+dir="$(jq -r '.dir' <<<"$run")"
+ended="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+err="$(mktemp)"; trap 'rm -f "$err"' EXIT
+if ! usage="$("$(dirname "$0")/run-usage" collect --session "$(jq -r '.session // ""' <<<"$run")" \
+       --since "$(jq -r '.started' <<<"$run")" --until "$ended" 2>"$err")"; then
+  log "usage of run $id not recorded: $(tr '\n' ' ' <"$err")"
+  usage="$(jq -n --arg e "$(cat "$err")" --arg s "$(jq -r '.started' <<<"$run")" --arg u "$ended" \
+    '{source: "error", error: $e, started: $s, ended: $u, summary: "usage not recorded (run-usage failed)"}')"
+fi
+mkdir -p "$dir"
+printf '%s\n' "$usage" >"$dir/usage.json"
+jq -c --argjson run "$run" '{id: $run.id, workflow: $run.workflow, repos: $run.repos, dir: $run.dir, ended,
+  source, duration_s, usd: .totals.usd, tokens: .totals.tokens,
+  agents: [(.agents // [])[] | {type, model, usd}]}' <<<"$usage" >>"$(kit_home)/runs/usage.jsonl"
+line="Cost: $(jq -r '.summary' <<<"$usage")"
+[ -n "$status" ] || { [ -f "$dir/status.md" ] && status="$dir/status.md"; }
+[ -z "$status" ] || printf '\n%s\n' "$line" >>"$status"
+jq --arg line "$line" --arg status "$status" \
+  '{ended: .id, workflow, dir, usage: $line, status: (if $status == "" then null else $status end)}' <<<"$run"

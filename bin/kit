@@ -57,6 +57,7 @@ USE_LOCAL = False   # set per command: install/check/list/conf use local/, build
 RESOLVER = ROOT / "src" / "skills" / "adorno-github" / "scripts" / "resolve.jq"
 LEVELS = ("L0", "L1", "L2", "L3", "L4")
 PONYTAIL_LEVELS = ("lite", "full", "ultra")
+PRICE_KEYS = ("input", "cache_write_5m", "cache_write_1h", "cache_read", "output")  # repos.yaml › prices, read by run-usage
 ACTIONS = ("push", "reply", "comment", "resolve", "rerequest", "review", "submit", "open_pr", "ci_rerun")
 CLAUDE_RULES = ("allow", "ask", "deny")
 VISION_MAX_LINES = 60
@@ -209,6 +210,8 @@ def _registry() -> dict:
         for key in ("slack", "notion"):  # owner-level watches (workflow:slack:*, workflow:notion:*)
             if loc.get(key):
                 data[key] = loc[key]
+        if loc.get("prices"):  # your own rates or models, over the public ones
+            data["prices"] = deep_merge(data.get("prices") or {}, loc["prices"])
     return data
 
 
@@ -928,6 +931,13 @@ def validate_registry(reg: dict, agent_ids: set, delegable: set, skill_names: se
         if scope.startswith("workspaces.") and not (conf.get("repos") or conf.get("paths")):
             errors.append(f"{where}: {scope} needs `repos` (GitHub globs) or `paths` (local folders)")
     errors += validate_watches(reg, where, agent_ids)
+    prices = reg.get("prices")
+    if prices is not None and not isinstance(prices, dict):
+        errors.append(f"{where}: prices must be a mapping of model id to rates")
+    for model, rates in (prices or {}).items() if isinstance(prices, dict) else ():
+        if not (isinstance(rates, dict) and set(rates) == set(PRICE_KEYS) and all(
+                isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0 for v in rates.values())):
+            errors.append(f"{where}: prices.{model}: numbers >= 0 ($ per million tokens) for all of {', '.join(PRICE_KEYS)}")
     # presets that use each other must not loop
     def walk(name: str, seen: tuple) -> None:
         if name in seen:

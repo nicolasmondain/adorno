@@ -27,7 +27,8 @@ its input.
 5. **Escalations**: a reviewer disputes the spec, or a test can only pass by changing the spec → back to
    `agent:core:intake`, not to the builder. Cap reached, missing right, unregistered repo → stop.
 6. After each step, update `status.md` in the run folder: step, result, rounds used, next action, and the `Ponytail`
-   note of an agent's deliverable (lite: the smaller option, ultra: the pushback).
+   note of an agent's deliverable (lite: the smaller option, ultra: the pushback). At the end,
+   `run-end <id> --status <run folder>/status.md` adds the run's cost line there.
 
 Deliverable: `status.md` up to date and a five-line report — what is done, what was verified, where it stopped and
-why, what waits for the owner.
+why, what waits for the owner, and the cost line `run-end` printed.
