@@ -23,7 +23,11 @@
           "Lifecycle": "In Code Review",
           "PR": "{{pr_url}}"
         }
-      }
+      },
+      "after_pr": [
+        {"skill": "/acme-notion-fields", "workflows": ["workflow:issue:fix"], "needs": "notion"},
+        {"skill": "acme-changelog", "workflows": ["workflow:issue:fix", "workflow:feature:build"]}
+      ]
     },
     "acme/readonly": {
       "max_level": "L0"
