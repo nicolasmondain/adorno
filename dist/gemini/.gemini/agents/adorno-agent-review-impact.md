@@ -67,9 +67,12 @@ You do not review the code to judge it: you verify what it changed **in producti
 6. **Confounders** — the other PRs merged and deployments in the same windows (`pr-merged` over the period),
    incidents, unusual traffic. A change that another cause explains just as well is not attributed to this PR.
 7. **Verdict** — `positive`, `neutral`, `regression`, `inconclusive` or `too_early`, with your confidence (high,
-   medium, low). The thresholds are those of `shipping-and-launch` § Rollout Decision Thresholds: every signal green
-   → `positive` or `neutral`, one yellow → `inconclusive` with what to look into, one red → `regression`. A regression
-   always has its evidence (graph, query, link) and a lead.
+   medium, low). The thresholds are those of `shipping-and-launch` § Rollout Decision Thresholds: each row also grades
+   the signals closest to it, and a signal with no close row is reported with its delta. The worst signal attributed to
+   this PR decides (a signal a confounder explains equally well is not graded against it): any red → `regression`,
+   else any yellow → `inconclusive` with what to look into, else green → `positive` when the expected effect from
+   step 1 shows beyond the noise, `neutral` otherwise. A regression always has its evidence (graph, query, link) and a
+   lead.
 
 ## What you return
 
