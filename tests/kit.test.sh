@@ -259,27 +259,29 @@ sed -i.bak 's/^roles: \[.*\]/roles: [fix, deploy]/' "$SB/src/workflows/pr/ship.m
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
 if [ "$got" != 0 ] && grep -q "roles: unknown role 'deploy'" <<<"$out"; then ok "an unknown role value fails"; else ko "an unknown role value fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
 cp "$ROOT/src/workflows/pr/ship.md" "$SB/src/workflows/pr/ship.md"
-mkdir -p "$SB/vendor/addy/skills/lonely"
-printf -- '---\nname: lonely\ndescription: An imported skill no item cites.\n---\n\nNothing.\n' >"$SB/vendor/addy/skills/lonely/SKILL.md"
+# a sandbox import of its own (the last one in kit.yaml), so the real `uncited` lists stay out of the way
+printf '  - name: fixture\n    source: ./fixture\n' >>"$SB/kit.yaml"
+mkdir -p "$SB/vendor/fixture/skills/lonely"
+printf -- '---\nname: lonely\ndescription: An imported skill no item cites.\n---\n\nNothing.\n' >"$SB/vendor/fixture/skills/lonely/SKILL.md"
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
-if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import addy): no item cites it" <<<"$out"; then ok "an imported skill no item cites fails the public check"; else ko "an imported skill no item cites fails the public check" "exit $got: $(tail -c 300 <<<"$out")"; fi
+if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import fixture): no item cites it" <<<"$out"; then ok "an imported skill no item cites fails the public check"; else ko "an imported skill no item cites fails the public check" "exit $got: $(tail -c 300 <<<"$out")"; fi
 printf 'Use `lonely-helper` for this.\n' >"$SB/src/instructions/99-probe.md"
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
-if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import addy)" <<<"$out"; then ok "a longer name containing the skill's is not a citation"; else ko "a longer name containing the skill's is not a citation" "exit $got: $(tail -c 300 <<<"$out")"; fi
-mkdir -p "$SB/vendor/addy/skills/other"
-printf -- '---\nname: other\ndescription: An imported skill that cites another.\n---\n\nSee `lonely`.\n' >"$SB/vendor/addy/skills/other/SKILL.md"
+if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import fixture)" <<<"$out"; then ok "a longer name containing the skill's is not a citation"; else ko "a longer name containing the skill's is not a citation" "exit $got: $(tail -c 300 <<<"$out")"; fi
+mkdir -p "$SB/vendor/fixture/skills/other"
+printf -- '---\nname: other\ndescription: An imported skill that cites another.\n---\n\nSee `lonely`.\n' >"$SB/vendor/fixture/skills/other/SKILL.md"
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
-if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import addy)" <<<"$out"; then ok "an imported skill citing it is not a citation"; else ko "an imported skill citing it is not a citation" "exit $got: $(tail -c 300 <<<"$out")"; fi
-rm -rf "$SB/vendor/addy/skills/other"
+if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import fixture)" <<<"$out"; then ok "an imported skill citing it is not a citation"; else ko "an imported skill citing it is not a citation" "exit $got: $(tail -c 300 <<<"$out")"; fi
+rm -rf "$SB/vendor/fixture/skills/other"
 printf 'Use `lonely` for this.\n' >"$SB/src/instructions/99-probe.md"
 expect_exit 0 "an instruction citing the exact name clears the orphan" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check
 rm -f "$SB/src/instructions/99-probe.md"
-sed -i.bak 's/^    source: github:addyosmani\/agent-skills$/&\n    uncited: [lonely]/' "$SB/kit.yaml"; rm -f "$SB/kit.yaml.bak"
+printf '    uncited: [lonely]\n' >>"$SB/kit.yaml"
 expect_exit 0 "listed in its import's uncited, it passes" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check
 sed -i.bak 's/uncited: \[lonely\]/uncited: [lonely, ghost]/' "$SB/kit.yaml"; rm -f "$SB/kit.yaml.bak"
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
-if [ "$got" != 0 ] && grep -q "import addy: uncited 'ghost' is not one of its skills" <<<"$out"; then ok "an uncited entry naming no imported skill fails"; else ko "an uncited entry naming no imported skill fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
-rm -rf "$SB/vendor/addy/skills/lonely"; cp "$ROOT/kit.yaml" "$SB/kit.yaml"
+if [ "$got" != 0 ] && grep -q "import fixture: uncited 'ghost' is not one of its skills" <<<"$out"; then ok "an uncited entry naming no imported skill fails"; else ko "an uncited entry naming no imported skill fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
+rm -rf "$SB/vendor/fixture"; cp "$ROOT/kit.yaml" "$SB/kit.yaml"
 expect_exit 0 "the real registry passes with every dispatcher's roles covered" -- env ADORNO_LOCAL="$TMP/none" "${KIT[@]}" check
 check "no area_reviewers reader is left in src/" '! grep -rn "area_reviewers" "$ROOT/src" "$ROOT/bin/kit" | grep -v -e "src/skills/adorno-setup/" -e "bin/kit:.*AREA_REVIEWERS_MSG\|bin/kit:.*area_reviewers" -e SCHEMA.md | grep .'
 check "pr:ship leaves no family agent of its subject" '! grep -q "family agent of its subject" "$ROOT/src/workflows/pr/ship.md"'
