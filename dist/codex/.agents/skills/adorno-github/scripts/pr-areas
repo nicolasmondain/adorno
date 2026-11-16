@@ -3,7 +3,7 @@
 #        pr-areas owner/repo --files PATH [PATH…]      (paths only, before any code exists: no `content` rules)
 # Classifies a change into the code areas of repos.yaml › areas (front, back, api, …) — path globs, plus a regex on
 # added lines when given a diff — and says which agents and skills to use. A sub-area is keyed `parent.sub`
-# (back.query): when detected it also adds its files to its parent. `always` is not an area. Files matching no area
+# (back.migration): when detected it also adds its files to its parent. `always` is not an area. Files matching no area
 # land in `other`.
 # Prints JSON {files, areas: {area: [paths]}, other: [paths],
 #              by_area: {area: {build, fix, perf, qa, review, skills}},

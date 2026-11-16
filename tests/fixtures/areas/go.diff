@@ -1,0 +1,35 @@
+diff --git a/cmd/api/main.go b/cmd/api/main.go
+--- a/cmd/api/main.go
++++ b/cmd/api/main.go
+@@ -1,0 +1,1 @@
++	srv := http.Server{Addr: ":8080"}
+diff --git a/internal/handler/orders.go b/internal/handler/orders.go
+--- a/internal/handler/orders.go
++++ b/internal/handler/orders.go
+@@ -1,0 +1,1 @@
++	rows, err := h.db.QueryContext(ctx, "SELECT id FROM orders WHERE user_id = $1", uid)
+diff --git a/internal/service/orders.go b/internal/service/orders.go
+--- a/internal/service/orders.go
++++ b/internal/service/orders.go
+@@ -1,0 +1,1 @@
++	return s.repo.List(ctx, uid)
+diff --git a/internal/handler/orders_test.go b/internal/handler/orders_test.go
+--- a/internal/handler/orders_test.go
++++ b/internal/handler/orders_test.go
+@@ -1,0 +1,1 @@
++func TestOrders(t *testing.T) {}
+diff --git a/migrations/0002_orders.up.sql b/migrations/0002_orders.up.sql
+--- a/migrations/0002_orders.up.sql
++++ b/migrations/0002_orders.up.sql
+@@ -1,0 +1,1 @@
++CREATE INDEX orders_user_id ON orders (user_id);
+diff --git a/go.mod b/go.mod
+--- a/go.mod
++++ b/go.mod
+@@ -1,0 +1,1 @@
++require github.com/jackc/pgx/v5 v5.7.1
+diff --git a/go.sum b/go.sum
+--- a/go.sum
++++ b/go.sum
+@@ -1,0 +1,1 @@
++github.com/jackc/pgx/v5 v5.7.1 h1:x

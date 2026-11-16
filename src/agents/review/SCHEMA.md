@@ -100,6 +100,22 @@ flowchart TD
   I -->|"consultation"| K["JSON: right, partly, wrong, unclear with evidence"]
 ```
 
+## `agent:review:sql`
+
+```mermaid
+flowchart TD
+  A["Input: diff with SQL, ORM queries or a migration, or a review comment"] --> B["Read repo rules, schema and migrations"]
+  B --> C["Queries: index coverage, bounded reads, columns used"]
+  C --> D["N+1: eager loading, join or IN"]
+  D --> E["Injection: bound parameters, allowlisted names"]
+  E --> F["Writes: atomic update, transaction scope"]
+  F --> G["Migrations: no long lock, expand then contract, index first"]
+  G --> H["New index: cost, duplicate leading columns, order"]
+  H --> I{"Mode?"}
+  I -->|"review"| J["reviews/agent.json + verdict line"]
+  I -->|"consultation"| K["JSON: right, partly, wrong, unclear with evidence"]
+```
+
 ## `agent:review:perf`
 
 ```mermaid

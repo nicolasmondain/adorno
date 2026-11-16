@@ -1,0 +1,51 @@
+diff --git a/app/models/order.rb b/app/models/order.rb
+--- a/app/models/order.rb
++++ b/app/models/order.rb
+@@ -1,0 +1,1 @@
++  belongs_to :customer
+diff --git a/app/controllers/orders_controller.rb b/app/controllers/orders_controller.rb
+--- a/app/controllers/orders_controller.rb
++++ b/app/controllers/orders_controller.rb
+@@ -1,0 +1,2 @@
++    @orders = current_user.orders.includes(:items).where(status: params[:status])
++    @order.update(order_params)
+diff --git a/app/controllers/api/v1/orders_controller.rb b/app/controllers/api/v1/orders_controller.rb
+--- a/app/controllers/api/v1/orders_controller.rb
++++ b/app/controllers/api/v1/orders_controller.rb
+@@ -1,0 +1,1 @@
++    render json: @order
+diff --git a/app/views/orders/index.html.erb b/app/views/orders/index.html.erb
+--- a/app/views/orders/index.html.erb
++++ b/app/views/orders/index.html.erb
+@@ -1,0 +1,1 @@
++<%= render @orders %>
+diff --git a/db/migrate/20261116000000_add_total_to_orders.rb b/db/migrate/20261116000000_add_total_to_orders.rb
+--- a/db/migrate/20261116000000_add_total_to_orders.rb
++++ b/db/migrate/20261116000000_add_total_to_orders.rb
+@@ -1,0 +1,1 @@
++    add_column :orders, :total, :decimal
+diff --git a/db/schema.rb b/db/schema.rb
+--- a/db/schema.rb
++++ b/db/schema.rb
+@@ -1,0 +1,1 @@
++    t.decimal "total"
+diff --git a/config/routes.rb b/config/routes.rb
+--- a/config/routes.rb
++++ b/config/routes.rb
+@@ -1,0 +1,1 @@
++  resources :orders
+diff --git a/spec/models/order_spec.rb b/spec/models/order_spec.rb
+--- a/spec/models/order_spec.rb
++++ b/spec/models/order_spec.rb
+@@ -1,0 +1,1 @@
++RSpec.describe Order do
+diff --git a/Gemfile b/Gemfile
+--- a/Gemfile
++++ b/Gemfile
+@@ -1,0 +1,1 @@
++gem "rails", "~> 8.0"
+diff --git a/Gemfile.lock b/Gemfile.lock
+--- a/Gemfile.lock
++++ b/Gemfile.lock
+@@ -1,0 +1,1 @@
++    rails (8.0.1)

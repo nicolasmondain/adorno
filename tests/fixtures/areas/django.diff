@@ -1,0 +1,51 @@
+diff --git a/shop/models.py b/shop/models.py
+--- a/shop/models.py
++++ b/shop/models.py
+@@ -1,0 +1,1 @@
++    total = models.DecimalField(max_digits=10, decimal_places=2)
+diff --git a/shop/views.py b/shop/views.py
+--- a/shop/views.py
++++ b/shop/views.py
+@@ -1,0 +1,1 @@
++    orders = Order.objects.filter(user=request.user).select_related("customer")
+diff --git a/shop/tasks.py b/shop/tasks.py
+--- a/shop/tasks.py
++++ b/shop/tasks.py
+@@ -1,0 +1,2 @@
++    for order in stale:
++        order.delete()
+diff --git a/shop/urls.py b/shop/urls.py
+--- a/shop/urls.py
++++ b/shop/urls.py
+@@ -1,0 +1,1 @@
++    path("orders/", views.orders),
+diff --git a/shop/migrations/0004_order_total.py b/shop/migrations/0004_order_total.py
+--- a/shop/migrations/0004_order_total.py
++++ b/shop/migrations/0004_order_total.py
+@@ -1,0 +1,1 @@
++        migrations.AddField(model_name="order", name="total", field=models.DecimalField())
+diff --git a/shop/templates/shop/orders.html b/shop/templates/shop/orders.html
+--- a/shop/templates/shop/orders.html
++++ b/shop/templates/shop/orders.html
+@@ -1,0 +1,1 @@
++<li>{{ order.total }}</li>
+diff --git a/shop/tests/test_views.py b/shop/tests/test_views.py
+--- a/shop/tests/test_views.py
++++ b/shop/tests/test_views.py
+@@ -1,0 +1,1 @@
++def test_orders(client):
+diff --git a/tests/test_api.py b/tests/test_api.py
+--- a/tests/test_api.py
++++ b/tests/test_api.py
+@@ -1,0 +1,1 @@
++def test_api(client):
+diff --git a/conftest.py b/conftest.py
+--- a/conftest.py
++++ b/conftest.py
+@@ -1,0 +1,1 @@
++import pytest
+diff --git a/pyproject.toml b/pyproject.toml
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -1,0 +1,1 @@
++  "django>=5.1",

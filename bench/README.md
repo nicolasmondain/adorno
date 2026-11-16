@@ -45,7 +45,7 @@ Once: `bin/kit build`, then declare the repo the cases are routed as. In `local/
 
 ```yaml
 repos:
-  adorno/bench: {}
+  adorno/bench: {use: [node, mongodb]}   # the cases are a Node.js + MongoDB codebase
 ```
 
 and `bin/kit install --global`. Or pass `--repo` with a repo your registry already declares: the routing then follows
@@ -142,7 +142,7 @@ A case is a folder `cases/<id>/`:
   "title": "feat(orders): list orders with the customer name",
   "description": "What the pull request says: the reviewers read it.",
   "rationale": "One line: the defect, and what a good review says.",
-  "routing": {"areas": ["back", "back.query", "tests", "typescript"],
+  "routing": {"areas": ["back", "back.mongodb", "tests", "typescript"],
               "review": ["agent:review:code", "agent:review:ponytail", "agent:review:back", "agent:review:tests",
                          "agent:review:perf-back", "agent:review:mongodb"],
               "skills": ["typescript-pro"]},
