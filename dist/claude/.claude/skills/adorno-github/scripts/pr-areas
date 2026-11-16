@@ -65,11 +65,13 @@ unit_rule='(.areas | if ($a | contains(".")) then .[($a | split(".")[0])].sub[($
 for area in $units; do
   globs="$(jq -r --arg a "$area" "$unit_rule | .paths // [] | .[]" <<<"$conf")"
   if [ -n "$globs" ]; then
+    # read the globs once (bash 3.2: no mapfile), not once per file
+    gl=(); while IFS= read -r g; do gl+=("$g"); done <<<"$globs"
     while IFS= read -r f; do
-      while IFS= read -r g; do
+      for g in "${gl[@]}"; do
         # shellcheck disable=SC2053  # $g is a glob on purpose
         if [[ "$f" == $g ]]; then printf '%s\t%s\n' "$area" "$f" >>"$tmp/hits"; break; fi
-      done <<<"$globs"
+      done
     done <"$tmp/files"
   fi
   regex="$(jq -r --arg a "$area" "$unit_rule | .content // empty" <<<"$conf")"
@@ -92,6 +94,7 @@ jq -n --rawfile files "$tmp/files" --rawfile hits "$tmp/hits" --argjson conf "$c
      | map(., (select(.area | contains(".")) | .area |= split(".")[0])) | unique) as $h
   | ($order | map(. as $u | {key: $u, value: [$h[] | select(.area == $u) | .file]} | select(.value | length > 0))
      | from_entries) as $areas
+  | ($h | map({key: .file, value: true}) | from_entries) as $hit
   | ($areas | keys_unsorted) as $found
   | ($found | map(. as $u | ($u | split(".")[0]) as $f
        | {u: $u, sub: contains("."), n: ($areas[$u] | length), i: ($order | index($u)),
@@ -103,7 +106,7 @@ jq -n --rawfile files "$tmp/files" --rawfile hits "$tmp/hits" --argjson conf "$c
     pick("perf") as $perf
   | { files: ($all | length),
       areas: $areas,
-      other: [$all[] | select(. as $f | $h | map(.file) | index($f) | not)],
+      other: [$all[] | select($hit[.] | not)],
       by_area: ($areas | with_entries(.value = (.key | rules
           | {build, fix, perf, qa, review: lst("review"), skills: lst("skills")}))),
       build: pick("build"), fix: pick("fix"), perf: ($perf // $fb.perf.agent), qa: pick("qa"),
