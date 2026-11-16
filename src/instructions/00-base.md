@@ -24,7 +24,8 @@
 - Minimal, surgical changes (`ponytail` skill, at the level the session passed you, else the repo's `ponytail` from
   `repo-conf`, `full` by default); where it overlaps the profile, the profile wins, and the repo wins over both. In an
   unattended run, `lite` and `ultra` do not wait for an answer: the smaller option (lite) or the pushback (ultra) goes
-  in `status.md` and in the PR description, and you build what was asked.
+  in your deliverable (the session copies it into `status.md`, the PR description picks it up), and you build what
+  was asked.
 - No secret (key, token, password) in a file, a command, a log, a commit or a published text.
 - Shell commands the permission rules can read: the program written literally (`node /abs/path/cdp.mjs 58624 open …`),
   never a variable or alias as program (`C="node …"; $C …`), no `eval`; one action per call rather than a chain of
