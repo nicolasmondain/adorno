@@ -1244,14 +1244,12 @@ def tree_digest(base: Path) -> dict[str, str]:
 
 
 def committed(digest: dict[str, str], prefix: str) -> dict[str, str]:
-    """The entries of a digest that git does not ignore: .gitignore alone decides what of dist/ is committed."""
-    if not digest:
-        return {}
-    res = subprocess.run(["git", "check-ignore", "--no-index", "--stdin"], cwd=ROOT, capture_output=True, text=True,
-                         input="".join(f"{prefix}/{p}\n" for p in digest))
+    """The entries of a digest that git does not ignore: git's ignore rules decide what of dist/ is committed."""
+    res = subprocess.run(["git", "check-ignore", "-z", "--no-index", "--stdin"], cwd=ROOT, capture_output=True,
+                         text=True, input="".join(f"{prefix}/{p}\0" for p in digest))
     if res.returncode not in (0, 1):   # 1: nothing ignored
         die(f"git check-ignore failed: {res.stderr.strip()}")
-    ignored = set(res.stdout.splitlines())
+    ignored = set(res.stdout.split("\0"))
     return {p: h for p, h in digest.items() if f"{prefix}/{p}" not in ignored}
 
 
@@ -1289,7 +1287,7 @@ def cmd_check(args) -> None:
             fresh_mp = tree_digest(Path(tmp) / ".claude-plugin")
         if fresh != committed(tree_digest(DIST), "dist") or fresh_mp != tree_digest(ROOT / ".claude-plugin"):
             die("dist/ is out of date — run `bin/kit build` and commit the result")
-        print("ok: dist/ is up to date (committed part: the Claude plugin and AGENTS.md)")
+        print("ok: dist/ is up to date")
 
 
 def cmd_conf(args) -> None:
