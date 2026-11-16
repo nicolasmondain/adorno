@@ -293,7 +293,7 @@
               "paths": [
                 "*.sql"
               ],
-              "content": "(SELECT|INSERT INTO|UPDATE|DELETE FROM|ALTER TABLE|CREATE (UNIQUE )?INDEX) ",
+              "content": "SELECT .+ FROM |INSERT INTO |UPDATE [A-Za-z_.\"]+ SET |DELETE FROM |ALTER TABLE |CREATE (UNIQUE )?INDEX ",
               "review": [
                 "agent:review:sql"
               ]
@@ -315,25 +315,16 @@
               "paths": [
                 "manage.py",
                 "*/views.py",
-                "*/views/*",
                 "*/tasks.py",
-                "*/forms.py",
-                "*/admin.py",
-                "*/signals.py",
                 "*/management/*",
-                "*settings*.py",
-                "*/settings/*",
-                "*/celery.py",
-                "*/wsgi.py",
-                "*/asgi.py"
+                "*settings*.py"
               ]
             },
             "django-orm": {
               "paths": [
-                "*/models.py",
-                "*/models/*.py"
+                "*/models.py"
               ],
-              "content": "\\.objects\\.|select_related\\(|prefetch_related\\(|cursor\\.execute\\(|\\.raw\\(",
+              "content": "\\.objects\\.|select_related\\(|prefetch_related\\(|cursor\\.execute\\(",
               "review": [
                 "agent:review:sql"
               ]
@@ -346,8 +337,7 @@
               "paths": [
                 "*/urls.py",
                 "*/serializers.py",
-                "*/routers/*",
-                "*/schemas.py"
+                "*/routers/*"
               ]
             }
           }
@@ -356,7 +346,6 @@
           "sub": {
             "python": {
               "paths": [
-                "*/templates/*",
                 "*/static/*"
               ]
             }
@@ -370,14 +359,11 @@
           "sub": {
             "go": {
               "paths": [
-                "*.go",
-                "cmd/*",
-                "internal/*",
-                "pkg/*"
+                "*.go"
               ]
             },
             "go-sql": {
-              "content": "(Query|QueryRow|Exec)(Context)?\\(|sqlx\\.|gorm\\.|pgx\\.|squirrel\\.",
+              "content": "\\.(Query|QueryRow|Exec)(Context)?\\([^)]|sqlx\\.|gorm\\.|pgx\\.",
               "review": [
                 "agent:review:sql"
               ]
@@ -389,8 +375,7 @@
             "go": {
               "paths": [
                 "*/handler/*",
-                "*/handlers/*",
-                "*.proto"
+                "*/handlers/*"
               ]
             }
           }
@@ -405,13 +390,9 @@
               "paths": [
                 "app/models/*",
                 "app/controllers/*",
-                "app/jobs/*",
-                "app/services/*",
                 "app/mailers/*",
-                "app/workers/*",
                 "lib/*",
-                "*.rake",
-                "config/initializers/*"
+                "*.rake"
               ]
             },
             "activerecord": {
@@ -419,7 +400,7 @@
                 "db/schema.rb",
                 "db/structure.sql"
               ],
-              "content": "\\.where\\(|\\.joins\\(|\\.includes\\(|\\.preload\\(|\\.eager_load\\(|find_by_sql|\\.pluck\\(|add_index|add_column|remove_column",
+              "content": "\\.where\\(|\\.(joins|includes|pluck)\\(:|find_by_sql|add_index|add_column",
               "review": [
                 "agent:review:sql"
               ]
@@ -431,8 +412,7 @@
             "rails": {
               "paths": [
                 "config/routes.rb",
-                "app/serializers/*",
-                "app/controllers/api/*"
+                "app/serializers/*"
               ]
             }
           }
@@ -441,10 +421,8 @@
           "sub": {
             "rails": {
               "paths": [
-                "app/views/*",
                 "app/javascript/*",
-                "app/assets/*",
-                "app/components/*"
+                "app/assets/*"
               ]
             }
           }

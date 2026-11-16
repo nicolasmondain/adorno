@@ -608,43 +608,50 @@ if [ -f "$REAL" ]; then
   reg "$TMP/stack-repos.json"
   A="$ROOT/tests/fixtures/areas"
   has() { printf '((.areas["%s"] // []) as $x | %s | all(. as $f | $x | index($f)))' "$1" "$2"; }  # has AREA JSON_LIST
+  is() { printf '((.areas["%s"] // []) | sort) == (%s | sort)' "$1" "$2"; }  # is AREA JSON_LIST: exactly these files
 
   expect_exit 0 "node + mongodb" -- "$S/pr-areas" acme/node "$A/node-mongodb.diff"
   expect_jq "node: every file lands in an area" '.other == []'
-  expect_jq "node: queries, schema and index are back.mongodb" \
-    "$(has back.mongodb '["server/services/orders.js","server/models/order.js","migrations/2026-11-16-orders.js"]')"
+  expect_jq "node: queries, schema and index are back.mongodb, nothing else" \
+    "$(is back.mongodb '["server/services/orders.js","server/models/order.js","migrations/2026-11-16-orders.js"]')"
   expect_jq "node: a root test/ folder is tests" '.areas.tests == ["test/orders.test.js"] and .areas["back.migration"] == ["migrations/2026-11-16-orders.js"]'
   expect_jq "node: mongodb reviewer and perf, no sql reviewer" \
     '(.review | index("agent:review:mongodb")) and (.review | index("agent:review:sql") | not) and .perf == "agent:perf:mongodb" and .by_area.back.perf == "agent:perf:nodejs"'
 
   expect_exit 0 "python + sql" -- "$S/pr-areas" acme/py "$A/django.diff"
   expect_jq "django: every file lands in an area" '.other == []'
-  expect_jq "django: ORM by path and by query, views and tasks are back" \
-    "$(has back.django-orm '["shop/models.py","shop/views.py"]') and $(has back.python '["shop/views.py","shop/tasks.py"]') and .areas[\"back.migration\"] == [\"shop/migrations/0004_order_total.py\"]"
-  expect_jq "django: urls are api, templates front, pytest files tests, pyproject deps" \
-    "$(has api '["shop/urls.py"]') and $(has front '["shop/templates/shop/orders.html"]') and (.areas.tests | sort) == ([\"conftest.py\",\"shop/tests/test_views.py\",\"tests/test_api.py\"] | sort) and .areas.deps == [\"pyproject.toml\"]"
+  expect_jq "django: ORM by path and by query only, views, tasks, manage.py, settings and commands are back" \
+    "$(is back.django-orm '["shop/models.py","shop/views.py"]') and $(has back.python '["shop/views.py","shop/tasks.py","manage.py","shop/settings.py","shop/management/commands/close_orders.py"]') and .areas[\"back.migration\"] == [\"shop/migrations/0004_order_total.py\"]"
+  expect_jq "django: urls, serializers and routers are api, templates and static front, pytest files tests, pyproject deps" \
+    "$(has api.python '["shop/urls.py","shop/serializers.py","api/routers/orders.py"]') and $(has front '["shop/templates/shop/orders.html"]') and $(is front.python '["shop/static/shop/orders.js"]') and (.areas.tests | sort) == ([\"conftest.py\",\"shop/tests/test_views.py\",\"tests/test_api.py\"] | sort) and .areas.deps == [\"pyproject.toml\"]"
+  expect_jq "django: SQL words in prose (a comment, a doc) are not back.sql" \
+    '(.areas | has("back.sql") | not) and .areas.docs == ["docs/orders.md"]'
   expect_jq "django: sql reviewer, never the mongodb one (order.delete() is the ORM)" \
     '(.review | index("agent:review:sql")) and (.review | index("agent:review:mongodb") | not) and .build == "agent:feat:back"'
 
   expect_exit 0 "the same django diff without a preset" -- "$S/pr-areas" acme/bare "$A/django.diff"
   expect_jq "neutral areas: no database reviewer, no Mongo false positive, the stack files stay in other" \
     '(.review | index("agent:review:mongodb") | not) and (.review | index("agent:review:sql") | not) and (.other | index("shop/views.py")) and .areas["back.migration"] == ["shop/migrations/0004_order_total.py"] and (.areas | has("back.mongodb") | not)'
+  expect_jq "neutral areas: back has no perf agent, so a perf finding goes to the fallback" '.by_area.back.perf == null'
 
   expect_exit 0 "go + sql" -- "$S/pr-areas" acme/go "$A/go.diff"
   expect_jq "go: every file lands in an area" '.other == []'
-  expect_jq "go: .go files are back, database/sql and raw SQL are back.go-sql and back.sql" \
-    "$(has back.go '["cmd/api/main.go","internal/handler/orders.go","internal/service/orders.go"]') and .areas[\"back.go-sql\"] == [\"internal/handler/orders.go\"] and $(has back.sql '["internal/handler/orders.go","migrations/0002_orders.up.sql"]')"
-  expect_jq "go: handlers are api, _test.go is tests, go.sum is deps" \
-    "$(has api '["internal/handler/orders.go"]') and .areas.tests == [\"internal/handler/orders_test.go\"] and (.areas.deps | sort) == [\"go.mod\",\"go.sum\"]"
+  expect_jq "go: .go files are back, database/sql calls are back.go-sql (not r.URL.Query(), not useQuery()), raw SQL is back.sql" \
+    "$(has back.go '["cmd/api/main.go","internal/handler/orders.go","internal/service/orders.go","pkg/handlers/health.go"]') and $(is back.go-sql '["internal/handler/orders.go"]') and $(is back.sql '["internal/handler/orders.go","migrations/0002_orders.up.sql"]')"
+  expect_jq "go: handler/ and handlers/ are api, _test.go is tests, go.sum is deps, a React hook is front" \
+    "$(is api.go '["internal/handler/orders.go","internal/handler/orders_test.go","pkg/handlers/health.go"]') and .areas.tests == [\"internal/handler/orders_test.go\"] and (.areas.deps | sort) == [\"go.mod\",\"go.sum\"] and .areas.front == [\"web/src/useOrders.tsx\"]"
   expect_jq "go: sql reviewer, no mongodb one; no perf agent for go, so the fallback" \
     '(.review | index("agent:review:sql")) and (.review | index("agent:review:mongodb") | not) and .by_area.back.perf == null and .build == "agent:feat:back"'
+  expect_exit 0 "a test-only go change" -- "$S/pr-areas" acme/go --files pkg/x/foo_test.go
+  expect_jq "today back.go and tests tie and config order gives build and fix to back (pinned: a follow-up gives a test-only change to tests)" \
+    '.areas["back.go"] == ["pkg/x/foo_test.go"] and .areas.tests == ["pkg/x/foo_test.go"] and .build == "agent:feat:back" and .fix == "agent:fix:patch"'
 
   expect_exit 0 "rails + sql" -- "$S/pr-areas" acme/rb "$A/rails.diff"
   expect_jq "rails: every file lands in an area" '.other == []'
-  expect_jq "rails: app/ is back, ActiveRecord queries and schema are back.activerecord" \
-    "$(has back.rails '["app/models/order.rb","app/controllers/orders_controller.rb"]') and $(has back.activerecord '["app/controllers/orders_controller.rb","db/migrate/20261116000000_add_total_to_orders.rb","db/schema.rb"]') and .areas[\"back.migration\"] == [\"db/migrate/20261116000000_add_total_to_orders.rb\"]"
-  expect_jq "rails: routes are api, erb front, specs tests, Gemfile deps" \
-    "$(has api '["config/routes.rb","app/controllers/api/v1/orders_controller.rb"]') and $(has front '["app/views/orders/index.html.erb"]') and .areas.tests == [\"spec/models/order_spec.rb\"] and (.areas.deps | sort) == [\"Gemfile\",\"Gemfile.lock\"]"
+  expect_jq "rails: app/ and lib/ are back, ActiveRecord queries and schema are back.activerecord, not the JavaScript .includes( / .pluck(" \
+    "$(has back.rails '["app/models/order.rb","app/controllers/orders_controller.rb","app/mailers/order_mailer.rb","lib/pricing.rb","lib/tasks/orders.rake"]') and $(is back.activerecord '["app/controllers/orders_controller.rb","db/migrate/20261116000000_add_total_to_orders.rb","db/schema.rb","db/structure.sql"]') and .areas[\"back.migration\"] == [\"db/migrate/20261116000000_add_total_to_orders.rb\"]"
+  expect_jq "rails: routes and serializers are api, erb, app/javascript and app/assets front, specs tests, Gemfile deps" \
+    "$(has api '["app/controllers/api/v1/orders_controller.rb"]') and $(is api.rails '["config/routes.rb","app/serializers/order_serializer.rb"]') and $(has front '["app/views/orders/index.html.erb"]') and $(is front.rails '["app/javascript/tags.js","app/assets/config/manifest.js"]') and .areas.tests == [\"spec/models/order_spec.rb\"] and (.areas.deps | sort) == [\"Gemfile\",\"Gemfile.lock\"]"
   expect_jq "rails: sql reviewer, never the mongodb one (@order.update is ActiveRecord)" \
     '(.review | index("agent:review:sql")) and (.review | index("agent:review:mongodb") | not)'
 
@@ -653,6 +660,11 @@ if [ -f "$REAL" ]; then
   expect_exit 0 "presets combine" -- "$S/repo-conf" acme/poly
   expect_jq "two database presets: both sub-areas, both reviewers on the migration" \
     '(.areas.back.sub | has("mongodb") and has("sql")) and (.areas.back.sub.migration.review | index("agent:review:mongodb")) and (.areas.back.sub.migration.review | index("agent:review:sql")) and .areas.back.perf == "agent:perf:nodejs"'
+  jq '.defaults.use = ["node", "mongodb"] | .repos = {"acme/plain": {}}' "$REAL" >"$TMP/defaults-use-repos.json"
+  reg "$TMP/defaults-use-repos.json"
+  expect_exit 0 "presets called from defaults.use, a repo without use:" -- "$S/pr-areas" acme/plain "$A/node-mongodb.diff"
+  expect_jq "every repo gets the presets: back.mongodb and the node perf agent" \
+    '(.areas | has("back.mongodb")) and .by_area.back.perf == "agent:perf:nodejs" and (.review | index("agent:review:mongodb"))'
   reg "$TMP/areas-repos.json"
 
   jq -e '.repos == {}' "$REAL" >/dev/null && ok "public registry has no repos" || ko "public registry has no repos"

@@ -49,3 +49,39 @@ diff --git a/pyproject.toml b/pyproject.toml
 +++ b/pyproject.toml
 @@ -1,0 +1,1 @@
 +  "django>=5.1",
+diff --git a/manage.py b/manage.py
+--- a/manage.py
++++ b/manage.py
+@@ -1,0 +1,1 @@
++    execute_from_command_line(sys.argv)
+diff --git a/shop/settings.py b/shop/settings.py
+--- a/shop/settings.py
++++ b/shop/settings.py
+@@ -1,0 +1,1 @@
++TIME_ZONE = "UTC"
+diff --git a/shop/management/commands/close_orders.py b/shop/management/commands/close_orders.py
+--- a/shop/management/commands/close_orders.py
++++ b/shop/management/commands/close_orders.py
+@@ -1,0 +1,2 @@
++    help = "Close the stale orders"
++        # UPDATE the cache before closing
+diff --git a/shop/serializers.py b/shop/serializers.py
+--- a/shop/serializers.py
++++ b/shop/serializers.py
+@@ -1,0 +1,1 @@
++class OrderSerializer(serializers.ModelSerializer):
+diff --git a/api/routers/orders.py b/api/routers/orders.py
+--- a/api/routers/orders.py
++++ b/api/routers/orders.py
+@@ -1,0 +1,1 @@
++router = APIRouter(prefix="/orders")
+diff --git a/shop/static/shop/orders.js b/shop/static/shop/orders.js
+--- a/shop/static/shop/orders.js
++++ b/shop/static/shop/orders.js
+@@ -1,0 +1,1 @@
++document.querySelector("#orders").hidden = false
+diff --git a/docs/orders.md b/docs/orders.md
+--- a/docs/orders.md
++++ b/docs/orders.md
+@@ -1,0 +1,1 @@
++Run SELECT count(*) on the orders table to see the backlog.

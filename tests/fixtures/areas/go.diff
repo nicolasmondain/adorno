@@ -33,3 +33,13 @@ diff --git a/go.sum b/go.sum
 +++ b/go.sum
 @@ -1,0 +1,1 @@
 +github.com/jackc/pgx/v5 v5.7.1 h1:x
+diff --git a/pkg/handlers/health.go b/pkg/handlers/health.go
+--- a/pkg/handlers/health.go
++++ b/pkg/handlers/health.go
+@@ -1,0 +1,1 @@
++	q := r.URL.Query().Get("id")
+diff --git a/web/src/useOrders.tsx b/web/src/useOrders.tsx
+--- a/web/src/useOrders.tsx
++++ b/web/src/useOrders.tsx
+@@ -1,0 +1,1 @@
++export const useOrders = () => useQuery(["orders"], fetchOrders)

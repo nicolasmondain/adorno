@@ -22,7 +22,7 @@
 #                    every workflow that touched code; a repo skill may push and run `gh pr create|edit` itself
 #   areas            code areas, each with detection and roles. Detection: `paths` (bash globs, `*` crosses folders)
 #                    and/or `content` (POSIX ERE run by awk on added lines: no `(?i)`, no `\d`). Roles: `build`, `fix`, `perf`, `qa` (one agent each) and
-#                    `review`, `skills` (lists). `sub` holds sub-areas, one level only (`back.query`, `back.mongodb`):
+#                    `review`, `skills` (lists). `sub` holds sub-areas, one level only (`back.migration`, `back.mongodb`):
 #                    detected on their own `paths`/`content`, they add their files to the parent and inherit its roles
 #                    (single role: own else parent's; list: parent's + own). `always` (`review`, `skills`) applies to
 #                    every change. pr-areas turns a diff into the agents and skills to use.
@@ -88,7 +88,7 @@ defaults:
     sources: []           # your per-repo hints, in local/adorno.yaml (see local.example/)
 
   # Neutral areas: a pattern here means one thing whatever the stack (file extensions, naming conventions of tests and
-  # lockfiles, CI folders). What depends on the stack (`models/`, `internal/`, query regexes, a language's perf agent)
+  # lockfiles, CI folders). What depends on the stack (`models/`, `handlers/`, query regexes, a language's perf agent)
   # lives in `presets` below, called per repo or workspace with `use:` in local/adorno.yaml.
   areas:
     always:
@@ -201,7 +201,7 @@ presets:
         sub:
           sql:
             paths: ["*.sql"]
-            content: '(SELECT|INSERT INTO|UPDATE|DELETE FROM|ALTER TABLE|CREATE (UNIQUE )?INDEX) '
+            content: 'SELECT .+ FROM |INSERT INTO |UPDATE [A-Za-z_."]+ SET |DELETE FROM |ALTER TABLE |CREATE (UNIQUE )?INDEX '
             review: [agent:review:sql]
           migration:
             review: [agent:review:sql]
@@ -211,54 +211,52 @@ presets:
       back:
         sub:
           python:
-            paths: ["manage.py", "*/views.py", "*/views/*", "*/tasks.py", "*/forms.py", "*/admin.py", "*/signals.py",
-                    "*/management/*", "*settings*.py", "*/settings/*", "*/celery.py", "*/wsgi.py", "*/asgi.py"]
+            paths: ["manage.py", "*/views.py", "*/tasks.py", "*/management/*", "*settings*.py"]
           django-orm:
-            paths: ["*/models.py", "*/models/*.py"]
-            content: '\.objects\.|select_related\(|prefetch_related\(|cursor\.execute\(|\.raw\('
+            paths: ["*/models.py"]
+            content: '\.objects\.|select_related\(|prefetch_related\(|cursor\.execute\('
             review: [agent:review:sql]
       api:
         sub:
           python:
-            paths: ["*/urls.py", "*/serializers.py", "*/routers/*", "*/schemas.py"]
+            paths: ["*/urls.py", "*/serializers.py", "*/routers/*"]
       front:
         sub:
           python:
-            paths: ["*/templates/*", "*/static/*"]
+            paths: ["*/static/*"]
 
   go:
     areas:
       back:
         sub:
           go:
-            paths: ["*.go", "cmd/*", "internal/*", "pkg/*"]
+            paths: ["*.go"]
           go-sql:
-            content: '(Query|QueryRow|Exec)(Context)?\(|sqlx\.|gorm\.|pgx\.|squirrel\.'
+            content: '\.(Query|QueryRow|Exec)(Context)?\([^)]|sqlx\.|gorm\.|pgx\.'
             review: [agent:review:sql]
       api:
         sub:
           go:
-            paths: ["*/handler/*", "*/handlers/*", "*.proto"]
+            paths: ["*/handler/*", "*/handlers/*"]
 
   rails:
     areas:
       back:
         sub:
           rails:
-            paths: ["app/models/*", "app/controllers/*", "app/jobs/*", "app/services/*", "app/mailers/*",
-                    "app/workers/*", "lib/*", "*.rake", "config/initializers/*"]
+            paths: ["app/models/*", "app/controllers/*", "app/mailers/*", "lib/*", "*.rake"]
           activerecord:
             paths: ["db/schema.rb", "db/structure.sql"]
-            content: '\.where\(|\.joins\(|\.includes\(|\.preload\(|\.eager_load\(|find_by_sql|\.pluck\(|add_index|add_column|remove_column'
+            content: '\.where\(|\.(joins|includes|pluck)\(:|find_by_sql|add_index|add_column'
             review: [agent:review:sql]
       api:
         sub:
           rails:
-            paths: ["config/routes.rb", "app/serializers/*", "app/controllers/api/*"]
+            paths: ["config/routes.rb", "app/serializers/*"]
       front:
         sub:
           rails:
-            paths: ["app/views/*", "app/javascript/*", "app/assets/*", "app/components/*"]
+            paths: ["app/javascript/*", "app/assets/*"]
 
 # Your real repos (reviewers, team, context, permissions, voice, vision) live in local/adorno.yaml, git-ignored
 # and applied by `bin/kit install`. Template: local.example/adorno.yaml. Result for a repo: `bin/kit conf`.

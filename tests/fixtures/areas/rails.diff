@@ -49,3 +49,39 @@ diff --git a/Gemfile.lock b/Gemfile.lock
 +++ b/Gemfile.lock
 @@ -1,0 +1,1 @@
 +    rails (8.0.1)
+diff --git a/app/mailers/order_mailer.rb b/app/mailers/order_mailer.rb
+--- a/app/mailers/order_mailer.rb
++++ b/app/mailers/order_mailer.rb
+@@ -1,0 +1,1 @@
++    mail(to: @order.email, subject: "Receipt")
+diff --git a/lib/pricing.rb b/lib/pricing.rb
+--- a/lib/pricing.rb
++++ b/lib/pricing.rb
+@@ -1,0 +1,1 @@
++  def self.total(items) = items.sum(&:price)
+diff --git a/lib/tasks/orders.rake b/lib/tasks/orders.rake
+--- a/lib/tasks/orders.rake
++++ b/lib/tasks/orders.rake
+@@ -1,0 +1,1 @@
++  task close: :environment do
+diff --git a/app/serializers/order_serializer.rb b/app/serializers/order_serializer.rb
+--- a/app/serializers/order_serializer.rb
++++ b/app/serializers/order_serializer.rb
+@@ -1,0 +1,1 @@
++  attributes :id, :total
+diff --git a/app/javascript/tags.js b/app/javascript/tags.js
+--- a/app/javascript/tags.js
++++ b/app/javascript/tags.js
+@@ -1,0 +1,2 @@
++if (tags.includes(tag)) return
++const ids = _.pluck(users, "id")
+diff --git a/app/assets/config/manifest.js b/app/assets/config/manifest.js
+--- a/app/assets/config/manifest.js
++++ b/app/assets/config/manifest.js
+@@ -1,0 +1,1 @@
++//= link_tree ../images
+diff --git a/db/structure.sql b/db/structure.sql
+--- a/db/structure.sql
++++ b/db/structure.sql
+@@ -1,0 +1,1 @@
++CREATE TABLE orders (id bigint);

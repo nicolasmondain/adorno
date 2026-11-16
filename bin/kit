@@ -1337,25 +1337,22 @@ def migrate_areas(public: dict, loc: dict) -> list[dict]:
         legacy = (conf or {}).get("area_reviewers") or {}
         for area, old in legacy.items():
             old = list(old or [])
-            if area == "always":
-                targets = [["always"]]
-            elif area == "mongodb" and "mongodb" not in public_areas:
-                targets = [["back", "sub", "mongodb"]]
-            else:
-                targets = [[area]]
-            for parts in targets:
-                node = mongo_areas if parts == ["back", "sub", "mongodb"] else public_areas
-                inherited: list = []
-                for part in parts:
-                    node = (node.get(part) if isinstance(node, dict) else None) or {}
-                    if part == "sub":
-                        inherited = list(parent.get("review") or [])
-                    parent = node
-                pub = list(node.get("review") or []) if isinstance(node, dict) else []
-                new = [x for x in old if x not in inherited + pub] + ["-" + x for x in pub if x not in old]
-                out.append({"scope": scope, "area_path": "areas." + ".".join(parts) + ".review",
-                            "old": old, "public": pub, "new": new,
-                            **({"use": ["mongodb"]} if parts == ["back", "sub", "mongodb"] else {})})
+            preset = area == "mongodb" and "mongodb" not in public_areas
+            parts = ["back", "sub", "mongodb"] if preset else [area]
+            node = mongo_areas if preset else public_areas
+            inherited: list = []
+            for part in parts:
+                node = (node.get(part) if isinstance(node, dict) else None) or {}
+                if part == "sub":
+                    inherited = list(parent.get("review") or [])
+                parent = node
+            pub = list(node.get("review") or []) if isinstance(node, dict) else []
+            new = [x for x in old if x not in inherited + pub] + ["-" + x for x in pub if x not in old]
+            # the scope's own `use:` stays, the preset is appended: pasting the snippet must not drop one
+            use = list((conf or {}).get("use") or [])
+            out.append({"scope": scope, "area_path": "areas." + ".".join(parts) + ".review",
+                        "old": old, "public": pub, "new": new,
+                        **({"use": use + ([] if "mongodb" in use else ["mongodb"])} if preset else {})})
     return out
 
 
@@ -1374,7 +1371,7 @@ def cmd_migrate(args) -> None:
         snippet: dict = {}
         for r in (r for r in rows if r["scope"] == scope):
             if r.get("use"):
-                snippet.setdefault("use", []).extend(r["use"])
+                snippet["use"] = r["use"]
             snippet = deep_merge(snippet, nest(r["area_path"], r["new"]))
         group, _, name = scope.partition(".")
         head = {group: {name: snippet}} if name else {group: snippet}

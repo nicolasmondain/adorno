@@ -146,7 +146,7 @@ agent outside its role's families (`build`: feat, test, docs, chore; `fix`: fix,
 
 #### Stack presets
 
-`repos.yaml` › `presets` holds what the neutral areas cannot know: folder conventions (`models/`, `internal/`,
+`repos.yaml` › `presets` holds what the neutral areas cannot know: folder conventions (`models/`, `handlers/`,
 `app/controllers/`), query regexes, a language's `perf` agent. A repo or a workspace calls them in
 `local/adorno.yaml`; `workflow:repo:onboard` proposes them from the files it finds (`agent:chore:repo`).
 
@@ -154,20 +154,24 @@ agent outside its role's families (`build`: feat, test, docs, chore; `fix`: fix,
 | --- | --- | --- |
 | `node` | `back.perf` | `perf:nodejs` |
 | `mongodb` | `back.mongodb`: `*/models/*`, `.find(`, `.aggregate(`, `.createIndex(`, `new Schema(`, `$lookup`… | `perf:mongodb`, + `review:mongodb` (also on `back.migration`) |
-| `sql` | `back.sql`: `*.sql`, raw `SELECT` / `UPDATE` / `ALTER TABLE` / `CREATE INDEX`… | + `review:sql` (also on `back.migration`) |
-| `python` | `back.python` (`views.py`, `tasks.py`, `management/`, settings…), `back.django-orm` (`models.py`, `.objects.`, `select_related(`…), `api.python` (`urls.py`, `serializers.py`), `front.python` (`templates/`, `static/`) | + `review:sql` on `back.django-orm` |
-| `go` | `back.go` (`*.go`, `cmd/`, `internal/`, `pkg/`), `back.go-sql` (`QueryContext(`, `sqlx.`, `gorm.`, `pgx.`…), `api.go` (`handler/`, `*.proto`) | + `review:sql` on `back.go-sql` |
-| `rails` | `back.rails` (`app/models/`, `app/controllers/`, `app/jobs/`, `lib/`…), `back.activerecord` (`.where(`, `.includes(`, `add_column`, `db/schema.rb`…), `api.rails` (`config/routes.rb`, `app/serializers/`), `front.rails` (`app/views/`, `app/javascript/`) | + `review:sql` on `back.activerecord` |
+| `sql` | `back.sql`: `*.sql`, raw `SELECT … FROM`, `UPDATE <table> SET`, `ALTER TABLE`, `CREATE INDEX`… | + `review:sql` (also on `back.migration`) |
+| `python` | `back.python` (`manage.py`, `views.py`, `tasks.py`, `management/`, `*settings*.py`), `back.django-orm` (`models.py`, `.objects.`, `select_related(`…), `api.python` (`urls.py`, `serializers.py`, `routers/`), `front.python` (`static/`) | + `review:sql` on `back.django-orm` |
+| `go` | `back.go` (`*.go`), `back.go-sql` (`.QueryContext(…`, `.Exec(…`, `sqlx.`, `gorm.`, `pgx.`), `api.go` (`handler/`, `handlers/`) | + `review:sql` on `back.go-sql` |
+| `rails` | `back.rails` (`app/models/`, `app/controllers/`, `app/mailers/`, `lib/`, `*.rake`), `back.activerecord` (`.where(`, `.includes(:`, `add_column`, `db/schema.rb`…), `api.rails` (`config/routes.rb`, `app/serializers/`), `front.rails` (`app/javascript/`, `app/assets/`) | + `review:sql` on `back.activerecord` |
 
 ```yaml
 workspaces:
   acme:
-    repos: ["acme/*"]
-    use: [node, mongodb]        # a Node.js + MongoDB stack
+    repos: ["acme/*"]           # Node.js and Django repos: no `use:` here
 repos:
+  acme/api:
+    use: [node, mongodb]        # a Node.js + MongoDB stack
   acme/billing:
     use: [python, sql]          # Django on Postgres
 ```
+
+`use:` adds up across layers (defaults, workspace, repo), and a more specific layer cannot remove a preset a broader
+one calls: put `use:` on a workspace only when all its repos share the stack, otherwise on each repo.
 
 A preset only adds: sub-areas named after its stack, which bring their files to the parent area and inherit its roles,
 and entries to the `review` and `skills` lists of a neutral sub-area. It never rewrites a neutral `paths`, so presets
