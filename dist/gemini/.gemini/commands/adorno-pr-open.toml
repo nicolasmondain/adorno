@@ -18,6 +18,10 @@ No checkpoint: the PR opens without waiting for a "yes" (running the workflow is
    - the description following `process.md` § Pull requests: What / How / mermaid / Verification, `How to test` opened
      by the commands actually run and their result, link to the issue (`Fixes #n`, `Fixes owner/repo#n` from another
      repo), what the review loop fixed, the 🟡 and ❓ left (`Impact / Risks`). No real data;
+   - in `Impact / Risks`, when the diff has them (`shipping-and-launch` § Infrastructure and § Rollback Strategy): what
+     the deploy needs (a new environment variable or setting, a migration and when to run it), whether a plain revert
+     is safe (data the change writes, a migration that does not roll back), and the signals to watch once deployed
+     (what `workflow:pr:impact` will measure). Nothing of the kind in the diff: nothing written;
    - a `## Sources` section, before `## Proof`: one line per Notion page, doc (`url`) and Slack thread of the run's
      `refs.json`, in the request's order, its title from `source.md` § Sources
      (`- [Notion · Export CSV](https://www.notion.so/…)`), the URL copied verbatim from `refs.json`. A doc link is

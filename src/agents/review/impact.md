@@ -25,11 +25,15 @@ You do not review the code to judge it: you verify what it changed **in producti
    - **usage**: calls, distinct users or teams, feature events;
    - **reliability**: error rate, new errors (signature, volume, first occurrence), alerts;
    - **performance**: response time p50, p95, p99, throughput, job duration, slow queries;
-   - **resources**: CPU, memory, connections, cost when visible.
+   - **resources**: CPU, memory, connections, cost when visible;
+   - **client**, when the PR touches the front end: Core Web Vitals, JavaScript errors, API errors seen from the
+     client (`shipping-and-launch` § What to Monitor).
 6. **Confounders** — the other PRs merged and deployments in the same windows (`pr-merged` over the period),
    incidents, unusual traffic. A change that another cause explains just as well is not attributed to this PR.
 7. **Verdict** — `positive`, `neutral`, `regression`, `inconclusive` or `too_early`, with your confidence (high,
-   medium, low). A regression always has its evidence (graph, query, link) and a lead.
+   medium, low). The thresholds are those of `shipping-and-launch` § Rollout Decision Thresholds: every signal green
+   → `positive` or `neutral`, one yellow → `inconclusive` with what to look into, one red → `regression`. A regression
+   always has its evidence (graph, query, link) and a lead.
 
 ## What you return
 
