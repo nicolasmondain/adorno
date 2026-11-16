@@ -65,7 +65,8 @@ flowchart TD
   P -->|"yes"| I["pr-push, pr-edit --attach if the scope moved or new proof"]
   H --> RD["Still a draft while clean: pr-ready"]
   I --> RD
-  RD --> J["Report: commits, rounds, PR URL, ready or draft"]
+  RD --> AP["after-pr plan: repo skills of after_pr for this run's workflow (needs, dry_run, unattended)"]
+  AP --> J["Report: commits, rounds, PR URL, ready or draft, after_pr skills"]
   K["Repo skill pushes or runs gh pr create, edit or ready itself"] -.->|"guard: allow inside the run, at its level"| H
   K -.-> I
   J --> L["A refusal (exit 4 or 5, guard deny): reported, never worked around"]
