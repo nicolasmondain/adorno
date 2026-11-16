@@ -211,9 +211,6 @@ expect_exit 0 "install --workspace" -- "${KIT[@]}" install --workspace acme --ta
 check "every repo of the workspace" '[ -f "$TMP/code/acme/app/.claude/agents/adorno.md" ] && [ -f "$TMP/code/acme/web/.claude/agents/adorno.md" ]'
 expect_exit 0 "uninstall --workspace" -- "${KIT[@]}" uninstall --workspace acme --force
 
-echo "the public build never sees the personal layer"
-check "dist/ has no template identity" '! grep -rq "janedoe" "$ROOT/dist"'
-
 echo "areas, entry and orphans"
 bad "an area role naming an unknown agent" $'  ghost/repo:\n    areas: {back: {build: "agent:feat:nope"}}' "areas.back.build names unknown agent 'agent:feat:nope'"
 bad "a role outside its families" $'  ghost/repo:\n    areas: {back: {build: "agent:review:code"}}' "not a feat/test/docs/chore agent"
@@ -281,15 +278,36 @@ out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
 if [ "$got" != 0 ] && grep -q "import addy: uncited 'ghost' is not one of its skills" <<<"$out"; then ok "an uncited entry naming no imported skill fails"; else ko "an uncited entry naming no imported skill fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
 rm -rf "$SB/vendor/addy/skills/lonely"; cp "$ROOT/kit.yaml" "$SB/kit.yaml"
 cp "$ROOT/.gitignore" "$SB/"; git init -q "$SB"
-expect_exit 0 "build into the sandbox" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" build
-rm -rf "$SB/dist/codex" "$SB/dist/claude"
-expect_exit 0 "check --dist compares only what .gitignore lets be committed" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check --dist
-echo stale >>"$SB/dist/claude-plugin/agents/adorno-agent-review-code.md"
+# the full build (every target), with the template layer present: CI never runs `kit build`, so $ROOT/dist only
+# holds the committed part there
+expect_exit 0 "build into the sandbox, the template layer present" -- "${SBKIT[@]}" build
+check "the sandbox build renders every target" '[ -d "$SB/dist/claude" ] && [ -d "$SB/dist/codex" ] && [ -d "$SB/dist/gemini" ]'
+check "entry never reaches a rendered agent, on any target" '! grep -rq "^entry:" "$SB/dist" --include=*.md --include=*.toml'
+check "the public build has no template identity, the layer present" '! grep -rq "janedoe" "$SB/dist"'
+
+echo "check --dist on a fresh clone"
+# a fresh clone: only what .gitignore lets be committed
+find "$SB/dist" -mindepth 1 -maxdepth 1 ! -name claude-plugin ! -name AGENTS.md -exec rm -rf {} +
+expect_exit 0 "check --dist passes with no ignored target" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check --dist
+PLUGIN_FILE="$SB/dist/claude-plugin/agents/adorno-agent-review-code.md"
+cp "$PLUGIN_FILE" "$TMP/plugin-file.bak"
+echo stale >>"$PLUGIN_FILE"
 expect_exit 1 "a stale plugin file fails check --dist" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check --dist
+cp "$TMP/plugin-file.bak" "$PLUGIN_FILE"
+echo stray >"$SB/dist/claude-plugin/stray.md"
+out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check --dist 2>&1)"; got=$?
+if [ "$got" = 1 ] && grep -q "dist/ is out of date" <<<"$out"; then ok "a stray plugin file fails check --dist as out of date"; else ko "a stray plugin file fails check --dist as out of date" "exit $got: $(tail -c 300 <<<"$out")"; fi
+rm -f "$SB/dist/claude-plugin/stray.md"
+mkdir -p "$SB/dist/claude"; echo x >"$SB/dist/claude/x"
+expect_exit 0 "a file under an ignored target passes check --dist" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check --dist
+rm -rf "$SB/dist/claude"
+mv "$SB/dist/AGENTS.md" "$TMP/agents.bak"
+expect_exit 1 "a missing dist/AGENTS.md fails check --dist" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check --dist
+mv "$TMP/agents.bak" "$SB/dist/AGENTS.md"
+
 expect_exit 0 "the real registry passes with every dispatcher's roles covered" -- env ADORNO_LOCAL="$TMP/none" "${KIT[@]}" check
 check "no area_reviewers reader is left in src/" '! grep -rn "area_reviewers" "$ROOT/src" "$ROOT/bin/kit" | grep -v -e "src/skills/adorno-setup/" -e "bin/kit:.*AREA_REVIEWERS_MSG\|bin/kit:.*area_reviewers" -e SCHEMA.md | grep .'
 check "pr:ship leaves no family agent of its subject" '! grep -q "family agent of its subject" "$ROOT/src/workflows/pr/ship.md"'
-check "entry never reaches a rendered agent" '! grep -rq "^entry:" "$ROOT/dist" --include=*.md --include=*.toml'
 
 echo "migrate areas"
 MIG="$TMP/mig"; mkdir -p "$MIG"
