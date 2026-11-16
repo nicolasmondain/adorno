@@ -75,12 +75,12 @@ fi
 done_skills="[]"
 if ! $force && [ -f "$log_file" ]; then done_skills="$(jq -c 'map(.skill)' "$log_file")"; fi
 
-plan="$(jq -n --argjson e "$entries" --argjson g "$g" --argjson done "$done_skills" --arg pr "$pr_url" \
+plan="$(jq -n --argjson e "$entries" --argjson g "$g" --argjson done_skills "$done_skills" --arg pr "$pr_url" \
   --arg w "$workflow" --arg notion "$notion" '
   {pr_url: $pr, dry_run: ($g.dry_run or $g.level == "L0"),
    skills: [$e[] | select(.workflows | index($w))
                  | select((.needs // "") != "notion" or $notion != "")
-                 | select(.skill as $s | $done | index($s) | not)
+                 | select(.skill as $s | $done_skills | index($s) | not)
                  | {skill, args: ([$pr] + (if $notion != "" then [$notion] else [] end))}]}')"
 [ "$(jq '.skills | length' <<<"$plan")" != 0 ] || skip "no after_pr entry applies to $workflow on $REPO (listed workflows, Notion page, or already done for this run)"
 printf '%s\n' "$plan" | tee "$planned"
