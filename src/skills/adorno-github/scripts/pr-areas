@@ -35,7 +35,10 @@ tmp="$(work_dir)/areas-$$"; mkdir -p "$tmp"; trap 'rm -rf "$tmp"' EXIT
 
 if [ "$mode" = files ]; then
   shift 2
-  if [ $# -eq 1 ] && [ "$1" = - ]; then cat >"$tmp/files"; else printf '%s\n' "$@" >"$tmp/files"; fi
+  # stdin: drop CRLF and empty lines, end every line (a last one without newline included) with a newline
+  if [ $# -eq 1 ] && [ "$1" = - ]; then
+    awk '{ sub(/\r$/, "") } length' >"$tmp/files"; [ -s "$tmp/files" ] || die "$usage" "$E_USAGE"
+  else printf '%s\n' "$@" >"$tmp/files"; fi
 else
 # file list from the `--- a/x` / `+++ b/y` headers (new name for renames, old name for deletions; git quotes
 # names with spaces or non-ASCII characters and escapes them in octal), and `path<TAB>added line` per added line
