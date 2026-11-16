@@ -77,9 +77,9 @@ flowchart TD
   D -->|"no"| T["Verdict too_early"]
   D -->|"yes"| E["Windows: impact.window before and after, same weekdays"]
   E --> F["Query sources: impact.sources then every connector, note queried, no data, unavailable"]
-  F --> G["Measure before/after: usage, reliability, performance, resources"]
+  F --> G["Measure before/after: usage, reliability, performance, resources, client (front end)"]
   G --> H["Confounders: pr-merged, incidents, traffic"]
-  H --> I["Verdict: positive, neutral, regression, inconclusive + confidence"]
+  H --> I["Verdict: grade each signal green/yellow/red, worst decides: positive, neutral, regression, inconclusive + confidence"]
   I --> J["impact/N.json and impact/N.md, aggregates only, every number sourced"]
   T --> J
 ```

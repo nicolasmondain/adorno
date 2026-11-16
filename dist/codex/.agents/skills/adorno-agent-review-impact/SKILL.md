@@ -69,15 +69,15 @@ You do not review the code to judge it: you verify what it changed **in producti
    | Signal | Green | Yellow | Red |
    | --- | --- | --- | --- |
    | error rate | within 10 % | 10 % to 2× | over 2× |
-   | p95 latency | within 20 % | +20 to +50 % | over +50 % |
-   | client errors | no new type | new, under 0.1 % of sessions | new, over 0.1 % of sessions |
+   | p95, p99 latency, job duration | within 20 % | +20 to +50 % | over +50 % |
+   | new error type (server or client) | none | new, under 0.1 % of requests or sessions | new, over 0.1 % of requests or sessions |
    | usage, business metric | stable or up | down under 5 % | down over 5 % |
 
-   Each row also grades the signals closest to it (p99 and job duration as p95, new server errors as error rate); a
-   signal with no close row is reported with its delta. The worst signal attributed to this PR decides (a signal a
-   confounder explains equally well is not graded against it): any red → `regression`, else any yellow →
-   `inconclusive` with what to look into, else green → `positive` when the expected effect from step 1 shows beyond
-   the noise, `neutral` otherwise. A regression always has its evidence (graph, query, link) and a lead.
+   The table grades a move against the PR: an improvement, or a move step 1 expects, is green. The worst signal
+   attributed to this PR decides: any red → `regression`, else any yellow → `inconclusive` with what to look into, else
+   green → `positive` when the expected effect from step 1 shows beyond the noise, `neutral` otherwise. No graded
+   signal → `inconclusive`, with the sources tried. A regression always has its evidence (graph, query, link) and a
+   lead.
 
 ## What you return
 
