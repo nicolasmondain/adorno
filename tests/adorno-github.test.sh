@@ -174,6 +174,95 @@ expect_exit 0 "under an auto run at L0 (untrusted inputs)" -- "$S/notion-step" p
 expect_jq "... dry run too" '.dry_run == true'
 "$S/run-end" "$NL0" >/dev/null
 
+echo "after-pr (repo skills run once the PR exists, per workflow)"
+AD="$TMP/run-after"; mkdir -p "$AD"
+"$ROOT/src/skills/adorno-inputs/scripts/input-refs" \
+  "bug https://www.notion.so/acme/Ticket-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" >"$AD/refs.json"
+PR9=https://github.com/acme/docs/pull/9
+FIX=workflow:issue:fix SUITE=workflow:test:suite
+ARGS_B='["https://github.com/acme/docs/pull/9", "https://www.notion.so/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"]'
+expect_exit 2 "--workflow is required" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9"
+expect_exit 5 "--workflow that is no active run's workflow" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
+grep -q "workflow:issue:fix" "$TMP/err" && ok "... and the refusal names it" || ko "... and the refusal names it" "$(cat "$TMP/err")"
+expect_exit 0 "a run of a workflow no entry lists" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$SUITE"
+expect_jq "... is skipped" '.skip | test("no after_pr entry applies to workflow:test:suite")'
+expect_exit 0 "a repo without after_pr" -- "$S/after-pr" plan "$AD" other/thing --pr-url "$PR9" --workflow "$SUITE"
+expect_jq "... is skipped" '.skip | test("sets no after_pr")'
+expect_exit 5 "outside any run, even on a repo without after_pr" -- \
+  env CLAUDE_CODE_SESSION_ID=sess-none "$S/after-pr" plan "$AD" other/thing --pr-url "$PR9" --workflow "$SUITE"
+grep -q "no active run" "$TMP/err" && ok "... and says no active run" || ko "... and says no active run" "$(cat "$TMP/err")"
+expect_exit 2 "--workflow that is not a workflow id" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow 'x;y'
+expect_exit 2 "--pr-url is required" -- "$S/after-pr" plan "$AD" acme/docs --workflow "$SUITE"
+expect_exit 2 "--pr-url that is not a PR URL" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "https://evil.example/x" --workflow "$SUITE"
+expect_exit 2 "unknown command" -- "$S/after-pr" run "$AD"
+expect_exit 2 "missing run folder" -- "$S/after-pr" plan "$TMP/nope" acme/docs --pr-url "$PR9" --workflow "$SUITE"
+AOTHER="$(env CLAUDE_CODE_SESSION_ID=sess-other "$S/run-begin" --workflow "$FIX" --mode auto --level L3 --repo acme/docs | jq -r .id)"
+[ -n "$AOTHER" ] && ok "a $FIX run opened by another session" || ko "a $FIX run opened by another session"
+expect_exit 5 "... does not count for this session" -- \
+  "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
+"$S/run-end" "$AOTHER" >/dev/null
+AAPP="$("$S/run-begin" --workflow "$FIX" --mode auto --level L3 --repo acme/app | jq -r .id)"
+[ -n "$AAPP" ] && ok "a $FIX run of this session on another repo" || ko "a $FIX run of this session on another repo"
+expect_exit 5 "... does not count for acme/docs" -- \
+  "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
+"$S/run-end" "$AAPP" >/dev/null
+AFIX="$("$S/run-begin" --workflow "$FIX" --mode auto --level L3 --repo acme/docs --repo nobody/repo | jq -r .id)"
+expect_exit 3 "undeclared repo" -- "$S/after-pr" plan "$AD" nobody/repo --pr-url "$PR9" --workflow "$FIX"
+expect_exit 0 "under workflow:issue:fix with a Notion page" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
+expect_jq "... both entries, args = [PR URL, Notion page URL]" \
+  ".dry_run == false and (.skills | map(.skill)) == [\"/acme-notion-fields\", \"acme-changelog\"]
+   and .skills[0].args == $ARGS_B and .skills[1].args == $ARGS_B"
+expect_exit 5 "outside any run: refused" -- \
+  env CLAUDE_CODE_SESSION_ID=sess-none "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
+[ ! -e "$AD/.after-pr.json" ] && ok "... and no previous plan is left for done" || ko "... and no previous plan is left for done"
+"$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX" >/dev/null
+expect_exit 0 "done records one skill" -- "$S/after-pr" "done" /acme-notion-fields "$AD"
+expect_jq "... with its args" ".skill == \"/acme-notion-fields\" and .args == $ARGS_B"
+expect_exit 2 "done twice: no longer planned" -- "$S/after-pr" "done" /acme-notion-fields "$AD"
+expect_exit 2 "done for a skill not in the plan" -- "$S/after-pr" "done" /acme-other "$AD"
+expect_exit 0 "a resumed run" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
+expect_jq "... does not redo what is done" '(.skills | map(.skill)) == ["acme-changelog"]'
+expect_exit 0 "done records the other skill" -- "$S/after-pr" "done" acme-changelog "$AD"
+jq -e 'map(.skill) == ["/acme-notion-fields", "acme-changelog"]' "$AD/after-pr.json" >/dev/null \
+  && ok "... after-pr.json holds both" || ko "... after-pr.json holds both" "$(cat "$AD/after-pr.json")"
+expect_exit 0 "a new plan once both ran" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
+expect_jq "... skips: already done" '.skip | test("already done")'
+expect_exit 2 "done after a skipped plan: nothing to record" -- "$S/after-pr" "done" acme-changelog "$AD"
+expect_exit 0 "--force" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX" --force
+expect_jq "... plans both again" '(.skills | length) == 2'
+expect_exit 2 "a plan that fails on a bad --pr-url" -- \
+  "$S/after-pr" plan "$AD" acme/docs --pr-url "https://evil.example/x" --workflow "$FIX" --force
+expect_exit 2 "... leaves nothing for done to record" -- "$S/after-pr" "done" acme-changelog "$AD"
+AI="$TMP/run-after-inject"; mkdir -p "$AI"
+"$ROOT/src/skills/adorno-inputs/scripts/input-refs" \
+  'see https://github.com/acme/docs/issues/3 then https://www.notion.so/acme/Ticket-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb?x=$(touch${IFS}/tmp/pwn);`id` and https://www.notion.so/acme/Other-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' >"$AI/refs.json"
+expect_exit 0 "a GitHub ref, then a Notion URL carrying shell syntax" -- "$S/after-pr" plan "$AI" acme/docs --pr-url "$PR9" --workflow "$FIX"
+expect_jq "... the first Notion page, rebuilt from its id: no shell syntax in the args" \
+  ".skills[0].args == $ARGS_B and (.skills | map(.args[]) | join(\" \") | test(\"[\$;\`()]\") | not)"
+mkdir -p "$TMP/run-after-plain"; "$ROOT/src/skills/adorno-inputs/scripts/input-refs" "fix acme/docs" >"$TMP/run-after-plain/refs.json"
+expect_exit 0 "a request without Notion page" -- "$S/after-pr" plan "$TMP/run-after-plain" acme/docs --pr-url "$PR9" --workflow "$FIX"
+expect_jq "... drops the entry that needs Notion, keeps the other, no Notion arg" \
+  '(.skills | map(.skill)) == ["acme-changelog"] and .skills[0].args == ["https://github.com/acme/docs/pull/9"]'
+expect_exit 0 "no refs.json at all" -- "$S/after-pr" plan "$TMP" acme/docs --pr-url "$PR9" --workflow "$FIX"
+expect_jq "... same" '(.skills | map(.skill)) == ["acme-changelog"]'
+printf '{ half' >"$TMP/run-after-plain/refs.json"
+expect_exit 1 "a corrupt refs.json fails, not skipped" -- "$S/after-pr" plan "$TMP/run-after-plain" acme/docs --pr-url "$PR9" --workflow "$FIX"
+ABUILD="$("$S/run-begin" --workflow workflow:feature:build --mode auto --level L3 --repo acme/docs | jq -r .id)"
+expect_exit 0 "workflow:feature:build alongside a $FIX run" -- \
+  "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow workflow:feature:build --force
+expect_jq "... only the entry listing feature:build, not the union of the runs" '(.skills | map(.skill)) == ["acme-changelog"]'
+"$S/run-end" "$ABUILD" >/dev/null; "$S/run-end" "$AFIX" >/dev/null
+AREP="$("$S/run-begin" --workflow "$FIX" --mode report --level L3 --repo acme/docs | jq -r .id)"
+expect_exit 0 "under a report run" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX" --force
+expect_jq "... dry run: shown, not run" '.dry_run == true'
+expect_exit 2 "done after a dry-run plan is refused" -- "$S/after-pr" "done" acme-changelog "$AD"
+"$S/run-end" "$AREP" >/dev/null
+AL0="$("$S/run-begin" --workflow "$FIX" --mode auto --level L0 --repo acme/docs | jq -r .id)"
+expect_exit 0 "under an auto run at L0 (untrusted inputs)" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX" --force
+expect_jq "... dry run too" '.dry_run == true'
+expect_exit 2 "... and done is refused" -- "$S/after-pr" "done" acme-changelog "$AD"
+"$S/run-end" "$AL0" >/dev/null
+
 echo "pr-feedback-fetch"
 expect_exit 0 "fetches" -- "$S/pr-feedback-fetch" acme/docs#42
 expect_jq "only unresolved threads" '[.threads[].id] == ["T1","T2"]'

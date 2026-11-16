@@ -77,9 +77,21 @@ command.
      [--attach <new media>]…` (`--refs` whenever the run has one). Unchanged → nothing. A repo skill: run it in
      update mode (it receives `#N`); it may run `gh pr edit` itself, the new proof then goes out with `pr-edit`;
    - still a draft, the verdict on the whole branch clean and the proof complete → `pr-ready owner/repo#N`.
-8. **Report** — commits (SHA, message), review rounds and what they fixed, push, PR URL and `opened | updated |
+8. **After the PR** — with an `.agent-run` folder (none → skip, one line in the report): the repo's `after_pr` (repo
+   skills to run once a PR exists, e.g. filling the Notion ticket of a fixed bug):
+   `adorno-github/scripts/after-pr plan <.agent-run folder> owner/repo --pr-url <PR URL> --workflow <the workflow of
+   the run you reuse, as given to run-begin>`. Not a PR of this run (nothing was opened or updated and the PR was
+   already open and unchanged): skip. `skip` in the answer → one line in the report, nothing to do (nothing
+   configured, another workflow, no Notion page: normal). Otherwise, per `skills[]` in order, with `dry_run` false:
+   run the skill (a value starting with `/` is a command of the repo, otherwise a skill: load it and follow it) with
+   its `args`, in order, then `after-pr done <skill> <.agent-run folder>`. `dry_run` true (a `report` or L0 run):
+   show the call, do not run it. The skill is the repo's own: it may write where it says (Notion included) at the
+   run's level, and nothing else widens. With `--unattended`, read the skill first: one that asks for an answer
+   (`AskUserQuestion`) is not started; its ready-to-run call (`<skill> <args…>`) goes at the top of the report, and
+   the run goes on (never answer for the owner). A failure goes in `status.md` and the report; the PR stays.
+9. **Report** — commits (SHA, message), review rounds and what they fixed, push, PR URL and `opened | updated |
    unchanged`, `ready | draft` (and why), the proof attached (or what is missing), the doc links withheld (count and
-   reason, never the URL), and what stopped the workflow if
+   reason, never the URL), the `after_pr` skills run (or skipped, and why), and what stopped the workflow if
    anything did — commits the cap held back:
    the worktree and their SHAs, and how to resume (fix, then `pr-push owner/repo#N`). Suggest
    `workflow:pr:watch owner/repo#N` when the caller does not run it.
