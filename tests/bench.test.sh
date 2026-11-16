@@ -47,7 +47,12 @@ VALID='
   and (.extras // [] | type == "array" and all(.[];
         (.file | text) and (.lines == null or (.lines | type == "array" and length == 2 and .[0] >= 1 and .[0] <= .[1]))
         and (.keywords | type == "array" and length > 0 and all(.[]; text)) and (.valid | type == "boolean")))
-  and (.findings != [] or .verdict == ["pass"])'
+  and (.findings != [] or .verdict == ["pass"])
+  and (.kind // "review" | among(["review", "adorno"]))
+  and (if .kind == "adorno" then .planted | type == "array" and length > 0 and all(.[];
+          (.file | text) and (.lines == null or (.lines | type == "array" and length == 2 and .[0] >= 1 and .[0] <= .[1]))
+          and (.keywords | type == "array" and length > 0 and all(.[]; text)) and (.why | text))
+       else has("planted") | not end)'
 n=0
 for dir in "$B"/cases/*/; do
   dir="${dir%/}"; id="$(basename "$dir")"; n=$((n + 1))
@@ -67,11 +72,35 @@ for dir in "$B"/cases/*/; do
   if [ -z "$bad" ]; then ok "$id: expected findings are in the change"; else ko "$id: expected findings are in the change" "$bad"; fi
 done
 if [ "$n" -ge 12 ]; then ok "the first set is there ($n cases)"; else ko "the first set is there" "$n cases"; fi
+# a case of kind adorno brings one valid review per routed reviewer, where every expected and planted finding is
+HIT='def hit($m; $e): any($m.findings[]; .file == $e.file
+       and ($e.lines == null or (.line != null and .line >= $e.lines[0] - 3 and .line <= $e.lines[1] + 3))
+       and ("\(.title) \(.detail // "") \(.fix // "")" as $t | any($e.keywords[]; . as $k | $t | test($k; "i"))));'
+adorno_cases=0
+for dir in "$B"/cases/*/; do
+  dir="${dir%/}"; id="$(basename "$dir")"
+  [ "$(jq -r '.kind // "review"' "$dir/case.json")" = adorno ] || continue
+  adorno_cases=$((adorno_cases + 1))
+  want="$(jq -r '[.routing.review[] | split(":")[-1] + ".json"] | sort | join(" ")' "$dir/case.json")"
+  got="$(find "$dir/reviews" -name '*.json' -exec basename {} \; 2>/dev/null | sort | tr '\n' ' ')"
+  if [ "$got" = "$want " ]; then ok "$id: one review per routed reviewer"; else ko "$id: one review per routed reviewer" "want $want, got $got"; fi
+  merged="$("$ROOT/src/skills/adorno-github/scripts/review-merge" "$dir/reviews")"
+  if jq -e --slurpfile c "$dir/case.json" "$HIT"' . as $m | .invalid == [] and all($c[0].findings[]; hit($m; .)) and all($c[0].planted[]; hit($m; .))' <<<"$merged" >/dev/null; then
+    ok "$id: the reviews are valid and hold every expected and planted finding"
+  else
+    ko "$id: the reviews are valid and hold every expected and planted finding" "$(head -c 400 <<<"$merged")"
+  fi
+  bad="$(jq -r '.planted[] | "\(.file)\t\(.lines // [1, 1] | .[1])"' "$dir/case.json" | while IFS=$'\t' read -r f last; do
+    [ -f "$TMP/ws/$id/$f" ] && [ "$(wc -l <"$TMP/ws/$id/$f")" -ge "$last" ] || printf '%s:%s ' "$f" "$last"
+  done)"
+  if [ -z "$bad" ]; then ok "$id: planted findings point into the changed repo"; else ko "$id: planted findings point into the changed repo" "$bad"; fi
+done
+if [ "$adorno_cases" -ge 2 ]; then ok "cases of kind adorno are there ($adorno_cases)"; else ko "cases of kind adorno are there" "$adorno_cases"; fi
 if python3 - "$B/cases" 2>"$TMP/err" <<'PY'
 import json, pathlib, re, sys
 for path in sorted(pathlib.Path(sys.argv[1]).glob("*/case.json")):
     case = json.loads(path.read_text())
-    for entry in case["findings"] + case.get("extras", []):
+    for entry in case["findings"] + case.get("extras", []) + case.get("planted", []):
         for keyword in entry["keywords"]:
             re.compile(keyword)  # the scoring searches them as regular expressions
 PY
@@ -158,6 +187,23 @@ if [ -f "$REAL" ]; then
   expect_jq "an always reviewer gets every file" \
     '[.[] | select(.[index("--agent") + 1] == "adorno:adorno-agent-review-ponytail") | .[1]] | length == 2 and (.[0] | test("Files of your area: README.md\n") and test("Skills of your areas: documentation-and-adrs\n")) and (.[1] | test("Files of your area: server/services/orders.test.ts, server/services/orders.ts\n"))'
   expect_jq "agent:adorno gets the merged review" '.[-1][1] | test("Situation 2") and test(".agent-run/review/review.json")'
+
+  expect_exit 0 "a case of kind adorno" -- "$B/run" --case adorno-false-positives --label fixed --results "$R"
+  has_line() { if grep -qF -- "$2" <<<"$out"; then ok "$1"; else ko "$1" "no '$2' in: $(head -c 900 <<<"$out")"; fi; }
+  has_line "its report gives agent:adorno its own section" "## agent:adorno on a fixed review"
+  has_line "what it kept and what it dropped" "| dropped | 100% | 3/3 planted false findings left out |"
+  calls
+  expect_jq "starts agent:adorno alone" 'length == 1 and (.[0] | .[index("--agent") + 1] == "adorno:adorno")'
+  D="$R/fixed/adorno-false-positives/1"
+  out="$(cat "$D/review.json")"
+  expect_jq "on the merged reviews the case brings" '.verdict == "block" and (.findings | length) == 4 and .invalid == [] and (.agents | length) == 6'
+  out="$(cat "$D/run.json")"
+  expect_jq "with no review missing or invalid" '.missing == [] and .invalid == [] and .verdict == "block"'
+  if [ "$(find "$D/reviews" -name '*.json' | wc -l)" -eq 6 ] && [ -f "$D/review-final.json" ]; then
+    ok "the reviews given and what agent:adorno wrote are kept"
+  else
+    ko "the reviews given and what agent:adorno wrote are kept" "$(find "$D" -type f | head -20)"
+  fi
 
   expect_exit 0 "--repeat and --model" -- "$B/run" --case docs-only --repeat 2 --model some-model --label twice --results "$R"
   if [ -f "$R/twice/docs-only/1/run.json" ] && [ -f "$R/twice/docs-only/2/run.json" ]; then ok "one folder per repeat"; else ko "one folder per repeat"; fi
@@ -413,6 +459,40 @@ expect_jq "are recorded as such, with no verdict" \
 expect_jq "and the measures after agent:adorno pool the readable passes only" \
   '.overall.final | .runs == 1 and .invalid == 2 and .absent == 1 and .recall == {"mean": 1, "min": 1, "max": 1} and .precision.mean == 1 and .found == 1 and .verdict_ok == 1'
 
+# cases of kind adorno: the true finding of `defect`, planted false findings on a.ts lines 20 and 30
+mkdir -p "$SC/fixed" "$SC/fixed-clean"
+PLANT_T='{"file":"a.ts","lines":[20,20],"keywords":["tenant"],"why":"w"}' PLANT_P='{"file":"a.ts","lines":[30,30],"keywords":["projection"],"why":"w"}'
+jq --argjson t "$PLANT_T" --argjson p "$PLANT_P" '.kind = "adorno" | .planted = [$t, $p]' "$SC/defect/case.json" >"$SC/fixed/case.json"
+jq --argjson t "$PLANT_T" '.kind = "adorno" | .planted = [$t]' "$SC/clean/case.json" >"$SC/fixed-clean/case.json"
+TENANT="$(finding a.ts 20 blocker 'Not scoped to the tenant' back)"
+PROJ="$(finding a.ts 30 major 'No projection' perf-back)"
+N1='{"path":"a.ts","line":11,"body":"issue (non-blocking): N+1, one query per item."}'
+POST_T='{"path":"a.ts","line":20,"body":"issue (blocking): not scoped to the tenant."}'
+POST_P='{"path":"a.ts","line":30,"body":"issue (non-blocking): no projection."}'
+# adorno RUN-LABEL FINAL-COMMENTS-OF-fixed: fixed, fixed-clean (notes, nothing posted) and the review case defect
+adorno_run() {
+  result "$1" fixed 1 "$(review block "$FOUND" "$TENANT" "$PROJ")" "{\"body\":\"\",\"comments\":[$2]}"
+  result "$1" fixed-clean 1 "$(review fix "$TENANT")"; printf 'Nothing worth posting.\n' >"$R/$1/fixed-clean/1/review-notes.md"
+  result "$1" defect 1 "$(review fix "$FOUND")" "$KEPT"
+  close "$1" "fixed:1 fixed-clean:1 defect:1"
+}
+adorno_run adorno "$N1,$POST_T"
+score adorno "cases of kind adorno"
+expect_jq "are kept apart from the reviewers' measures" \
+  '.overall.runs == 1 and .overall.recall.mean == 1 and .overall.precision.mean == 1 and .adorno.runs == 2 and .cases.fixed.kind == "adorno" and .cases.defect.kind == "review"'
+expect_jq "measure what agent:adorno kept and what it dropped" \
+  '.adorno | .recall.mean == 1 and .found == 1 and .expected == 1 and .planted == 3 and .planted_kept == 1 and .dropped.mean == 0.6667 and .precision.mean == 0.5 and .verdict_ok == 1 and .none == 1 and .reviewed == 2'
+expect_jq "a planted finding it posts is classed planted, never to grade" \
+  '(.cases.fixed.runs[0].final.findings | map(.class)) == ["matched", "planted"] and .ungraded == [] and .cases.fixed.summary.dropped.mean == 0.5'
+expect_jq "notes and no final review: nothing worth posting, a readable pass with the verdict pass" \
+  '.cases["fixed-clean"].runs[0].final | .state == "none" and .verdict == "pass" and .verdict_ok and .reported == 0'
+adorno_run adorno-worse "$N1,$POST_T,$POST_P"
+score adorno-worse "agent:adorno keeping every planted finding"
+expect_jq "drops less" '.cases.fixed.summary.dropped.mean == 0 and .adorno.dropped.mean == 0.3333'
+adorno_run adorno-extra "$N1,{\"path\":\"z.ts\",\"line\":2,\"body\":\"nitpick (non-blocking): naming.\"}"
+score adorno-extra "a comment of agent:adorno that matches nothing"
+expect_jq "is listed to grade, as agent:adorno's" '.ungraded | length == 1 and .[0].case == "fixed" and .[0].file == "z.ts" and .[0].agents == ["agent:adorno"]'
+
 expect_exit 2 "score: unknown run" -- "$B/score" --label nope --results "$R" --cases "$SC"
 expect_exit 2 "score: a case the cases folder does not have" -- "$B/score" --label perfect --results "$R" --cases "$TMP/graded-true"
 expect_exit 2 "score: no label" -- "$B/score" --results "$R"
@@ -438,7 +518,7 @@ report "a run with findings to grade" --label extra
 has "lists them with where to grade them" '- `defect` #1 🟡 `b.ts:3` Rename this helper (code)'
 has "and says how" 'case.json` › `extras`'
 report "a run whose agent:adorno pass broke" --label final-states
-has "counts the passes left out after agent:adorno" "| after agent:adorno | recall 100%, precision 100% | 1 inline comments, verdict 1/1, 1 absent, 2 invalid |"
+has "counts the passes left out after agent:adorno" "| after agent:adorno | recall 100%, precision 100% | 1 inline comments, verdict 1/1, 0 with nothing to post, 1 absent, 2 invalid |"
 report "a run over several repeats" --label repeats
 has "shows the mean, the worst and the best run" "| recall | 50% (worst 0%, best 100%) |"
 
@@ -460,6 +540,19 @@ expect_jq "keeps the scores under its own name, and no text written by a model" 
   '.label == "reference" and .overall.recall.mean == 1 and (has("ungraded") | not) and ([.. | objects | select(has("title") or has("findings"))] == [])'
 report "a comparison with a baseline" --label missed --against reference
 has "reads it like a run" '- **regressed** `defect`: recall -100 pts'
+report "a run with cases of kind adorno" --label adorno
+has "gives agent:adorno its own section" "## agent:adorno on a fixed review"
+has "what it kept" "| kept | 100% | 1/1 true findings kept |"
+has "what it dropped" "| dropped | 67% | 2/3 planted false findings left out |"
+has "one line per case of kind adorno" '| `fixed` | 100% | 50% | 50% | 0/1 (block) | 0 | $0.50 |'
+if [ "$(grep -c '`fixed-clean`' <<<"$out")" = 1 ]; then ok "and leaves them out of the reviewers' table"; else ko "and leaves them out of the reviewers' table" "$(grep '`fixed-clean`' <<<"$out")"; fi
+report "a comparison of agent:adorno passes" --label adorno-worse --against adorno
+has "says what it dropped less" '- **regressed** `fixed`: recall =, precision -17 pts, severity =, verdict =, dropped -50 pts'
+has "and the overall difference" "| dropped | 33% | 1/3 planted false findings left out | -33 pts |"
+report "a run with cases of kind adorno saved as a baseline" --label adorno --save-baseline adorno-reference
+out="$(cat "$BL/adorno-reference.json")"
+expect_jq "keeps no text written by a model either" '.adorno.dropped.mean == 0.6667 and ([.. | objects | select(has("title") or has("findings"))] == [])'
+
 expect_exit 2 "a baseline is never overwritten" -- "$B/report" --results "$R" --cases "$SC" --baselines "$BL" --label missed --save-baseline reference
 expect_exit 2 "report: nothing to compare with" -- "$B/report" --results "$R" --cases "$SC" --baselines "$BL" --label missed --against nope
 expect_exit 2 "report: unknown run" -- "$B/report" --results "$R" --cases "$SC" --baselines "$BL" --label nope

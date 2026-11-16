@@ -1,0 +1,5 @@
+{"agent": "agent:review:perf-back", "verdict": "fix", "findings": [
+  {"severity": "major", "file": "server/services/orders.ts", "line": 38,
+   "title": "No projection: the whole customer document is fetched to read its name",
+   "detail": "Each lookup returns the full customer document while only the name is used.",
+   "fix": "Pass a projection that keeps the name only."}]}

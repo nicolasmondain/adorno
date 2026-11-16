@@ -1,0 +1,90 @@
+{
+  "kind": "adorno",
+  "title": "feat(orders): list orders with the customer name",
+  "description": "The orders page needs the customer name next to each order. Adds `listOrdersWithCustomer`, which returns the page of orders with `customerName` (null when the customer was deleted).",
+  "rationale": "agent:adorno gets the merged review of six specialists: the real N+1 (mongodb) and three false findings the code contradicts. It must keep the N+1 and drop the other three: the lookup filter has accountId, it has a projection on name, and the test covers a deleted customer.",
+  "routing": {
+    "areas": [
+      "back",
+      "back.query",
+      "tests",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:back",
+      "agent:review:tests",
+      "agent:review:perf-back",
+      "agent:review:mongodb"
+    ]
+  },
+  "verdict": [
+    "fix"
+  ],
+  "findings": [
+    {
+      "file": "server/services/orders.ts",
+      "lines": [
+        35,
+        39
+      ],
+      "category": "n-plus-one",
+      "severity": [
+        "major"
+      ],
+      "keywords": [
+        "n\\s*\\+\\s*1",
+        "per[ -](order|item|row|iteration)",
+        "(in|inside) (a|the) loop",
+        "one (query|findOne|round[ -]?trip) (per|for each)",
+        "quer(y|ies) (per|for each|in a loop)",
+        "sequential"
+      ],
+      "reviewer": "agent:review:mongodb"
+    }
+  ],
+  "planted": [
+    {
+      "file": "server/services/orders.ts",
+      "lines": [
+        38,
+        38
+      ],
+      "keywords": [
+        "tenant",
+        "another account",
+        "not scoped",
+        "cross[- ]account"
+      ],
+      "why": "the findOne filter is { _id: order.customerId, accountId }: it is scoped to the account"
+    },
+    {
+      "file": "server/services/orders.ts",
+      "lines": [
+        38,
+        38
+      ],
+      "keywords": [
+        "projection",
+        "whole (customer )?document",
+        "full (customer )?document"
+      ],
+      "why": "the findOne passes { projection: { name: 1 } }"
+    },
+    {
+      "file": "server/services/orders.ts",
+      "lines": [
+        39,
+        39
+      ],
+      "keywords": [
+        "deleted",
+        "(customer|it) (is|was) gone",
+        "no longer exists",
+        "null branch"
+      ],
+      "why": "orders.test.ts adds an order whose customer does not exist and expects customerName null"
+    }
+  ]
+}
