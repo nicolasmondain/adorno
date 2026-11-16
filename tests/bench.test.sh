@@ -461,6 +461,8 @@ result reviewers whole 1 "$(review pass)"
 own reviewers whole 1 mongodb agent:review:mongodb
 meta "$R/reviewers/whole/1" agent:review:code
 edit reviewers whole 1 '.missing = ["agent:review:code"]'
+# back plays one case run only (the comparison below moves it to a case run the other run does not have)
+own reviewers whole 1 back agent:review:back
 close reviewers "defect:1 clean:1 whole:1 defect:2 clean:2"
 score reviewers "each reviewer on its own review"
 expect_jq "a miss the merged review hides is the reviewer's miss" \
@@ -552,32 +554,48 @@ has "names the cases only one of them has" '- only in perfect: `clean`, `whole`'
 report "a run with reviews before the merge" --label reviewers
 has "has one line per reviewer, on its own review" '| `agent:review:mongodb` | 4 | 50% (worst 0%, best 100%) (1/2) | 100% | 1/1 | 0 on 1 | 1 | $0.50 | m-1 |'
 has "a missing review is a miss of its own findings" '| `agent:review:code` | 4 | 0% (0/1) | 50% (worst 0%, best 100%) | – | 1 on 2 | 1 | $0.50 | m-1 |'
+# the same run with mongodb on a cheaper model. On the case runs both runs have, mongodb misses its finding on defect/1,
+# raises a false alarm on clean/1 (its only own finding there: precision 100% -> 0%) and never delivers on defect/2
+# after one retry (two calls, $0.25 each: one call still costs 50% less, where the total cost would say -40%)
 cp -R "$R/reviewers" "$R/reviewers-cheaper"
 rm -r "$R/reviewers-cheaper/defect/1/reviews"
 own reviewers-cheaper defect 1 mongodb agent:review:mongodb; own reviewers-cheaper defect 1 code agent:review:code
-# two case runs the reference does not have: a false alarm, and a review that never came
+own reviewers-cheaper clean 1 mongodb agent:review:mongodb "$(finding c.ts 2 minor 'Could be faster')"
+rm "$R/reviewers-cheaper/defect/2/reviews/mongodb.json"
+edit reviewers-cheaper defect 2 '.missing = ["agent:review:mongodb"]'
+# two case runs the reference does not have: a false alarm, and a review that never came; back plays only there
 result reviewers-cheaper clean 3 "$(review pass "$(finding c.ts 2 minor 'Could be faster')")"
 own reviewers-cheaper clean 3 mongodb agent:review:mongodb "$(finding c.ts 2 minor 'Could be faster')"
 own reviewers-cheaper clean 3 code agent:review:code
 result reviewers-cheaper defect 3 "$(review pass)"
 own reviewers-cheaper defect 3 code agent:review:code
+own reviewers-cheaper defect 3 back agent:review:back
+rm "$R/reviewers-cheaper/whole/1/reviews/back.json" "$R/reviewers-cheaper/whole/1/meta/back.json"
 edit reviewers-cheaper defect 3 '.missing = ["agent:review:mongodb"]'
 jq '.agent_models = {"agent:review:mongodb": "m-2"} | .runs += [{"case": "clean", "n": 3, "cost_usd": 0.5}, {"case": "defect", "n": 3, "cost_usd": 0.5}]' "$R/reviewers/run.json" >"$R/reviewers-cheaper/run.json"
 for f in "$R"/reviewers-cheaper/*/*/meta/mongodb.json; do jq '.cost_usd = 0.25' "$f" >"$TMP/m.json"; cp "$TMP/m.json" "$f"; done
+jq '.attempts = 2 | .cost_usd = 0.5 | .delivered = "none"' "$R/reviewers-cheaper/defect/2/meta/mongodb.json" >"$TMP/m.json"
+cp "$TMP/m.json" "$R/reviewers-cheaper/defect/2/meta/mongodb.json"
+MONGODB_VS='{"own_recall": -50, "precision": -100, "false_alarms": 1, "invalid_reviews": 1, "cost_pct": -50}'
 report "a reviewer on another model" --label reviewers-cheaper --against reviewers
 has "names the agent and its model" "model: m-1, agent:review:mongodb on m-2, prompts"
-has "says per reviewer what it lost and what it saves" 'recall -50 pts, precision –, alarms +0, invalid +0, cost -50%'
+has "says per reviewer what it lost and what it saves" 'recall -50 pts, precision -100 pts, alarms +1, invalid +1, cost -50%'
 has "on the case runs both runs have" "Against reviewers: on the 5 case runs both have."
+has "a reviewer on no case run both have gets no comparison" '| `agent:review:back` | 1 | – | – | – | 0 on 0 | 0 | $0.50 | m-1 | – |'
 out="$(cat "$R/reviewers-cheaper/report.json")"
 expect_jq "the same in report.json, the case runs only one run has left out" \
-  '.comparison.shared_runs == 5 and .comparison.reviewers["agent:review:mongodb"] == {"own_recall": -50, "precision": null, "false_alarms": 0, "invalid_reviews": 0, "cost_pct": -50}'
+  ".comparison.shared_runs == 5 and .comparison.reviewers[\"agent:review:mongodb\"] == $MONGODB_VS"
+expect_jq "a reviewer that did not move is at zero on every measure" \
+  '.comparison.reviewers["agent:review:code"] == {"own_recall": 0, "precision": 0, "false_alarms": 0, "invalid_reviews": 0, "cost_pct": 0}'
+expect_jq "a reviewer in both runs but on no case run both have gets no delta" \
+  '(.comparison.reviewers | has("agent:review:back") | not) and (.score.reviewers | has("agent:review:back"))'
 report "a reviewer baseline" --label reviewers --save-baseline reviewers-ref
 out="$(cat "$BL/reviewers-ref.json")"
 expect_jq "keeps the case runs of each reviewer, and no text written by a model" \
   '(.reviewers["agent:review:mongodb"].runs | length) == 5 and ([.. | objects | select(has("title") or has("findings"))] == [])'
 report "a comparison per reviewer with a baseline" --label reviewers-cheaper --against reviewers-ref
 out="$(cat "$R/reviewers-cheaper/report.json")"
-expect_jq "reads it like a run" '.comparison.reviewers["agent:review:mongodb"] == {"own_recall": -50, "precision": null, "false_alarms": 0, "invalid_reviews": 0, "cost_pct": -50}'
+expect_jq "reads it like a run" ".comparison.reviewers[\"agent:review:mongodb\"] == $MONGODB_VS"
 jq '.label = "reviewers-old" | del(.reviewers[].runs)' "$BL/reviewers-ref.json" >"$BL/reviewers-old.json"
 report "a reference scored before the case runs per reviewer" --label reviewers-cheaper --against reviewers-old
 has "says it has no comparison per reviewer" "reviewers-old has no detail per case run (scored before it): no comparison per reviewer."
