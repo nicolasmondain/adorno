@@ -56,10 +56,9 @@
         38
       ],
       "keywords": [
-        "not scoped",
-        "cross[- ]tenant",
-        "_id only",
-        "another account's"
+        "(is|are) not scoped",
+        "cross[- ]tenant (read|leak|access)",
+        "(looked up|queried|lookup) by _id only"
       ],
       "why": "the findOne filter is { _id: order.customerId, accountId }: it is scoped to the account"
     },
@@ -71,8 +70,8 @@
       ],
       "keywords": [
         "no projection",
-        "without (a )?projection",
-        "(whole|full) (customer )?document"
+        "(fetches|returns|reads) the (whole|full) (customer )?document",
+        "(whole|full) (customer )?document is (fetched|returned|read)"
       ],
       "why": "the findOne passes { projection: { name: 1 } }"
     },
@@ -83,8 +82,8 @@
         39
       ],
       "keywords": [
-        "no test",
-        "untested",
+        "no test (for|covers|of)",
+        "(is|are) untested",
         "never (exercised|tested)"
       ],
       "why": "orders.test.ts adds an order whose customer does not exist and expects customerName null"

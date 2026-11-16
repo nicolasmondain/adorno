@@ -348,15 +348,16 @@ finding() {
 review() { local verdict="$1"; shift; local IFS=,; printf '{"verdict":"%s","counts":{},"findings":[%s],"agents":[],"invalid":[]}' "$verdict" "$*"; }
 # result LABEL CASE N REVIEW [FINAL] [ADORNO_ERROR]: what bench/run leaves for one case run (one agent, 0.5 USD, 1000
 # tokens in, 50 out); ADORNO_ERROR: agent:adorno also wrote its notes, and its meta ended with false (success), true
-# (an error) or turns (no error, but cut by the turns) (no cost, no tokens, so the sums above stay those of the one agent)
+# (an error, its stop success, as an API error leaves it) or turns (no error, but cut by the turns) (no cost, no tokens,
+# so the sums above stay those of the one agent)
 result() {
   local d="$R/$1/$2/$3"; mkdir -p "$d/meta"
   printf '%s' "$4" >"$d/review.json"
   [ -z "${5:-}" ] || printf '%s' "$5" >"$d/review-final.json"
   if [ -n "${6:-}" ]; then
     local error=false stop=error_max_turns
-    [ "$6" != false ] || stop=success
-    [ "$6" != true ] || { error=true; stop=error_during_execution; }
+    [ "$6" = turns ] || stop=success
+    [ "$6" != true ] || error=true
     printf 'Nothing worth posting.\n' >"$d/review-notes.md"
     printf '{"agent":"agent:adorno","attempts":1,"delivered":"file","is_error":%s,"stop":"%s","models":["m-1"],"cost_usd":null,"duration_ms":0,"turns":1,"denied":0,"tokens":{"input":0,"cache_read":0,"cache_write":0,"output":0}}' "$error" "$stop" >"$d/meta/adorno.json"
   fi
@@ -549,6 +550,14 @@ result real-n1 "$AF" 1 "$(review block)" "$(posted 36 'issue (non-blocking): thi
 close real-n1 "$AF:1"
 score real-n1 "a true N+1 comment that names the projection and the deleted customer" "$B/cases"
 expect_jq "is the true finding, and keeps no planted one" ".cases[\"$AF\"].runs[0].final | .found == 1 and .matched == 1 and .planted_kept == 0"
+result real-n1-keep "$AF" 1 "$(review block)" "$(posted 38 'issue (non-blocking): one $in query keeping accountId in the filter so it never returns another account'"'"'s customer; keep the projection, do not fetch the full customer document.')"
+close real-n1-keep "$AF:1"
+score real-n1-keep "a true N+1 comment that says to keep the tenant key and the projection" "$B/cases"
+expect_jq "is the true finding, and keeps no planted one" ".cases[\"$AF\"].runs[0].final | .found == 1 and .matched == 1 and .planted_kept == 0"
+result real-n1-test "$AF" 1 "$(review block)" "$(posted 39 'issue (non-blocking): N+1: batch the findOne calls with $in. No test change needed: the null case is covered.')"
+close real-n1-test "$AF:1"
+score real-n1-test "a true N+1 comment that says the test needs no change" "$B/cases"
+expect_jq "is the true finding, and keeps no planted one" ".cases[\"$AF\"].runs[0].final | .found == 1 and .matched == 1 and .planted_kept == 0"
 # every finding of the given reviews posted verbatim: each true one is found, each planted one is kept
 BADGE='{"blocker": "issue (blocking)", "major": "issue (non-blocking)", "minor": "suggestion (non-blocking)", "question": "question (non-blocking)"}'
 for dir in "$B"/cases/*/; do
@@ -558,8 +567,9 @@ for dir in "$B"/cases/*/; do
   result "verbatim-$id" "$id" 1 "$merged" "$(jq -c --argjson badge "$BADGE" '{body: "", comments: [.findings[] | {path: .file, line, side: "RIGHT", body: "\($badge[.severity]): \(.title) \(.detail // "") \(.fix // "")"}]}' <<<"$merged")"
   close "verbatim-$id" "$id:1"
   score "verbatim-$id" "$id: every given finding posted verbatim" "$B/cases"
-  expect_jq "$id: each true finding is found, each planted one is kept, none is to grade" \
-    ".cases[\"$id\"].runs[0].final | .found == .expected and .planted_kept == .planted and .ungraded == 0"
+  expect_jq "$id: each true finding is found, each planted one is kept and classed planted, none is to grade" \
+    ".cases[\"$id\"].runs[0].final | .found == .expected and .planted_kept == .planted and .planted_comments == .planted and .matched + .planted_comments == .reported and .ungraded == 0"
+  [ "$id" != "$AF" ] || expect_jq "$id: the inflated N+1 counts as a duplicate of the true one" ".cases[\"$id\"].runs[0].final.duplicates == 1"
 done
 
 expect_exit 2 "score: unknown run" -- "$B/score" --label nope --results "$R" --cases "$SC"

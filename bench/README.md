@@ -142,19 +142,20 @@ for the price of one pass. Its folder holds, on top of `base/` and `change.diff`
   it must drop, same `file`, `lines`, `keywords`, plus `why`: what in the code contradicts it).
 
 ```json
-"planted": [{"file": "server/services/orders.ts", "lines": [38, 38], "keywords": ["not scoped", "cross[- ]tenant"],
+"planted": [{"file": "server/services/orders.ts", "lines": [38, 38],
+             "keywords": ["(is|are) not scoped", "cross[- ]tenant (read|leak|access)"],
              "why": "the findOne filter is { _id: order.customerId, accountId }: it is scoped to the account"}]
 ```
 
 A comment of `agent:adorno` matching a planted finding counts against precision and `dropped` (against `dropped` even
 when it also matches a true finding); one matching nothing is to grade, like a reviewer's. `adorno-false-positives`
-keeps the N+1 of `mongo-n-plus-one`, reported a second time at an inflated `blocker`, among four false findings (one
-on a line the diff does not touch); `adorno-clean` gives two false findings on the refactor of `clean-refactor`, where nothing is worth
-posting. Plant false findings that a careful reader refutes from the code alone: a filter or projection that is
-there, a test that exists, a behavior the diff does not change. Give a planted finding the keywords of its false
-claim only, so a true comment on the same lines does not match it. `tests/bench.test.sh` checks that every expected
-and planted finding is in the given reviews, and that posting them all verbatim scores each true one found and each
-planted one kept.
+keeps the N+1 of `mongo-n-plus-one`, reported a second time at an inflated `blocker`, among four false findings (one on
+a line the diff does not touch); `adorno-clean` gives two false findings on the refactor of `clean-refactor`, where
+nothing is worth posting. Plant false findings that a careful reader refutes from the code alone: a filter or projection
+that is there, a test that exists, a behavior the diff does not change. Give a planted finding the keywords of its false
+claim only, so a true comment on the same lines does not match it. `tests/bench.test.sh` checks that every expected and
+planted finding is in the given reviews, and that posting them all verbatim scores each true one found and each planted
+one kept.
 
 ## Add a case
 
