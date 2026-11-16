@@ -72,11 +72,12 @@ command.
    - push: `pr-push owner/repo#N` (or the repo skill pushes itself, as above);
    - default update: `agent:adorno` compares the title and description to `git diff origin/<base>...HEAD` and the
      proof to `qa/`, and takes the new ponytail notes of `status.md` into account. The scope moved (a new What or
-     How, a new risk, a verification that no longer matches) or new
-     proof → new title and description in English, in the owner's voice (`adorno-voice`), keeping the current
-     `## Sources`, published by `pr-edit owner/repo#N "<title>" <file> [--refs <run>/refs.json [--withhold <url>]…]
-     [--attach <new media>]…` (`--refs` whenever the run has one). Unchanged → nothing. A repo skill: run it in
-     update mode (it receives `#N`); it may run `gh pr edit` itself, the new proof then goes out with `pr-edit`;
+     How, a new risk, a verification that no longer matches) or new proof → new title and description in English, in
+     the owner's voice (`adorno-voice`), keeping the current `## Sources`, published by
+     `pr-edit owner/repo#N "<title>" <file> [--refs <run>/refs.json [--withhold <url>]…] [--attach <new media>]…`
+     (`--refs` whenever the run has one). Unchanged → nothing. A repo skill: run it in update mode (it receives
+     `#N`); it may run `gh pr edit` itself, the new proof and the new ponytail notes of `status.md` (Impact / Risks)
+     then go out with `pr-edit`;
    - still a draft, the verdict on the whole branch clean and the proof complete → `pr-ready owner/repo#N`.
 8. **Report** — commits (SHA, message), review rounds and what they fixed, push, PR URL and `opened | updated |
    unchanged`, `ready | draft` (and why), the proof attached (or what is missing), the doc links withheld (count and
