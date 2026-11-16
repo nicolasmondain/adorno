@@ -1,10 +1,10 @@
 ---
-description: Prepare a repo for the agents — detect stack, commands and checks, write AGENTS.md and CONSTRAINTS.md, propose its complete entry in local/adorno.yaml, then commit them and open the PR without asking (workflow:pr:ship). Do it once per repo.
-args: "<owner/repo> [path of the local clone]"
+description: Prepare a repo for the agents — detect stack, commands and checks, write AGENTS.md and CONSTRAINTS.md, propose its complete entry in local/adorno.yaml, then commit them and open the PR without asking (workflow:pr:ship); with --audit, also a read-only audit of the code kept on your machine (workflow:repo:audit). Do it once per repo.
+args: "<owner/repo> [path of the local clone] [--audit]"
 uses:
   skills: [adorno-github, adorno-setup]
   agents: [agent:chore:repo]
-  workflows: [workflow:pr:ship]
+  workflows: [workflow:pr:ship, workflow:repo:audit]
 model: balanced
 ---
 
@@ -19,5 +19,9 @@ Input: {{args}}
 4. **Ship**, without asking, once the repo is declared (before, no run can cover it):
    `adorno-github/scripts/run-begin --workflow workflow:repo:onboard --mode auto --level L3 --repo owner/repo`, then
    `workflow:pr:ship owner/repo chore/agents-onboarding <clone>`: the repo's `commit_skill` commits the two files
-   (`chore(agents): …`), its `pr_skill` opens the PR. Always `run-end <id>`, even after a failure. The repo's
-   `max_level` below L3 or a denied `push` / `open_pr`: the files stay committed locally, and the report says so.
+   (`chore(agents): …`), its `pr_skill` opens the PR. The repo's `max_level` below L3 or a denied `push` / `open_pr`:
+   the files stay committed locally, and the report says so.
+5. **Audit** (`--audit` only), after the ship so the PR does not wait: `workflow:repo:audit owner/repo <clone>` in the
+   same run → `<dir>/audit/audit.md`, read-only. Its findings stay in that local report: never in the onboarding PR,
+   its description or `CONSTRAINTS.md`.
+6. Always `run-end <id>`, even after a failure.
