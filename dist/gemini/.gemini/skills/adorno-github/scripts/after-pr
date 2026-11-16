@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Usage: after-pr plan RUN_DIR [owner/repo] --pr-url URL [--force]
+#        after-pr done SKILL RUN_DIR
+# Repo skills to run once a PR exists (`after_pr` in local/adorno.yaml), for the workflow of the current run: e.g. fill
+# the Notion ticket after `workflow:issue:fix`. This script only decides; the agent runs each skill
+# (workflow:pr:ship), then records it with `done`.
+#   plan → {pr_url, dry_run, skills: [{skill, args}]}: the entries whose `workflows` holds the workflow of an active
+#          run of this session for the repo, whose `needs` is met (`notion`: the request has a Notion page in
+#          RUN_DIR/refs.json), and not already done for this run (RUN_DIR/after-pr.json; --force plans them again).
+#          `args` = the PR URL, then the first Notion page URL when the request has one.
+#          Or {skip: reason} when nothing applies.
+#   done → appends {skill, at, args} to RUN_DIR/after-pr.json once the skill has run.
+# No level above the run's: the repo config is the opt-in. Never outside a run (exit 5); a report or L0 run makes
+# dry_run true: the skill is shown, not run.
+. "$(dirname "$0")/_lib.sh"
+
+usage="usage: after-pr plan RUN_DIR [owner/repo] --pr-url URL [--force] | done SKILL RUN_DIR"
+cmd="${1:-}"
+case "$cmd" in plan|done) ;; *) die "$usage" "$E_USAGE" ;; esac
+skill="" dir=""
+if [ "$cmd" = "done" ]; then skill="${2:-}"; dir="${3:-}"; shift $(( $# < 3 ? $# : 3 ))
+else dir="${2:-}"; shift $(( $# < 2 ? $# : 2 )); fi
+[ -n "$dir" ] && [ -d "$dir" ] || die "run folder not found: '${dir}'" "$E_USAGE"
+log_file="$dir/after-pr.json" planned="$dir/.after-pr.json"
+
+if [ "$cmd" = "done" ]; then
+  [ -f "$planned" ] || die "nothing planned in $dir: run after-pr plan first" "$E_USAGE"
+  ! jq -e '.dry_run' "$planned" >/dev/null || die "the plan was a dry run: nothing ran to record" "$E_USAGE"
+  entry="$(jq -c --arg s "$skill" '.skills | map(select(.skill == $s)) | first // empty' "$planned")"
+  [ -n "$entry" ] || die "'$skill' is not in the plan of $dir" "$E_USAGE"
+  [ -f "$log_file" ] || echo '[]' >"$log_file"
+  jq --argjson e "$entry" '. + [$e + {at: (now | todate)}]' "$log_file" >"$log_file.tmp"
+  mv "$log_file.tmp" "$log_file"
+  jq --arg s "$skill" '.skills |= map(select(.skill != $s))' "$planned" >"$planned.tmp"
+  mv "$planned.tmp" "$planned"
+  jq --arg s "$skill" 'map(select(.skill == $s)) | last' "$log_file"
+  exit 0
+fi
+
+repo="" pr_url="" force=false
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --pr-url)
+      [[ "${2:-}" =~ ^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/[0-9]+$ ]] \
+        || die "--pr-url: a GitHub PR URL (https://github.com/owner/repo/pull/N)" "$E_USAGE"
+      pr_url="$2"; shift 2 ;;
+    --force) force=true; shift ;;
+    -*) die "unknown option $1" "$E_USAGE" ;;
+    *) [ -z "$repo" ] || die "$usage" "$E_USAGE"; repo="$1"; shift ;;
+  esac
+done
+[ -n "$pr_url" ] || die "--pr-url is required" "$E_USAGE"
+
+rm -f "$planned"   # `done` records only what this plan returns
+skip() { jq -n --arg r "$1" '{skip: $r}'; exit 0; }
+split_repo "${repo:-$(current_repo)}"
+entries="$(repo_conf "$REPO" | jq -c '.after_pr // []')"
+[ "$entries" != "[]" ] || skip "$REPO sets no after_pr"
+
+g="$(grant "$REPO")"
+[ "$(jq -r .runs <<<"$g")" != 0 ] || die "no active run covers $REPO: start the workflow with run-begin" "$E_LEVEL"
+refs="$dir/refs.json"
+notion=""
+if [ -f "$refs" ]; then
+  notion="$(jq -r '[.refs[]? | select(.kind == "notion")] | first | .url // empty' "$refs")" || die "cannot read $refs"
+fi
+done_skills="[]"
+if ! $force && [ -f "$log_file" ]; then done_skills="$(jq -c 'map(.skill)' "$log_file")"; fi
+
+plan="$(jq -n --argjson e "$entries" --argjson g "$g" --argjson done "$done_skills" --arg pr "$pr_url" --arg notion "$notion" '
+  {pr_url: $pr, dry_run: ($g.dry_run or $g.level == "L0"),
+   skills: [$e[] | select(.workflows - ($g.workflows | unique) != .workflows)
+                 | select((.needs // "") != "notion" or $notion != "")
+                 | select(.skill as $s | $done | index($s) | not)
+                 | {skill, args: ([$pr] + (if $notion != "" then [$notion] else [] end) | join(" "))}]}')"
+[ "$(jq '.skills | length' <<<"$plan")" != 0 ] || skip "no after_pr entry applies to $(jq -r '.workflows | join(", ")' <<<"$g") (workflow, Notion page or already done)"
+printf '%s\n' "$plan" | tee "$planned"

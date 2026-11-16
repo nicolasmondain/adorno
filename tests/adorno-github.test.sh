@@ -174,6 +174,51 @@ expect_exit 0 "under an auto run at L0 (untrusted inputs)" -- "$S/notion-step" p
 expect_jq "... dry run too" '.dry_run == true'
 "$S/run-end" "$NL0" >/dev/null
 
+echo "after-pr (repo skills run once the PR exists, per workflow)"
+AD="$TMP/run-after"; mkdir -p "$AD"
+"$ROOT/src/skills/adorno-inputs/scripts/input-refs" \
+  "bug https://www.notion.so/acme/Ticket-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" >"$AD/refs.json"
+PR9=https://github.com/acme/docs/pull/9
+expect_exit 0 "no run of a listed workflow" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9"
+expect_jq "... is skipped" '.skip | test("no after_pr entry applies")'
+expect_exit 0 "a repo without after_pr" -- "$S/after-pr" plan "$AD" other/thing --pr-url "$PR9"
+expect_jq "... is skipped" '.skip | test("sets no after_pr")'
+expect_exit 2 "--pr-url is required" -- "$S/after-pr" plan "$AD" acme/docs
+expect_exit 2 "--pr-url that is not a PR URL" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "https://evil.example/x"
+expect_exit 2 "unknown command" -- "$S/after-pr" run "$AD"
+expect_exit 2 "missing run folder" -- "$S/after-pr" plan "$TMP/nope" acme/docs --pr-url "$PR9"
+expect_exit 3 "undeclared repo" -- "$S/after-pr" plan "$AD" nobody/repo --pr-url "$PR9"
+AFIX="$("$S/run-begin" --workflow workflow:issue:fix --mode auto --level L3 --repo acme/docs | jq -r .id)"
+expect_exit 0 "under workflow:issue:fix with a Notion page" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9"
+expect_jq "... both entries, PR then Notion URL as args" \
+  '.dry_run == false and (.skills | map(.skill)) == ["/acme-notion-fields", "acme-changelog"]
+   and .skills[0].args == "https://github.com/acme/docs/pull/9 https://www.notion.so/acme/Ticket-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"'
+expect_exit 0 "done records one skill" -- "$S/after-pr" "done" /acme-notion-fields "$AD"
+expect_jq "... with its args" '.skill == "/acme-notion-fields" and (.args | test("notion.so"))'
+expect_exit 2 "done for a skill not in the plan" -- "$S/after-pr" "done" /acme-other "$AD"
+expect_exit 0 "a resumed run" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9"
+expect_jq "... does not redo what is done" '(.skills | map(.skill)) == ["acme-changelog"]'
+expect_exit 0 "--force" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --force
+expect_jq "... plans both again" '(.skills | length) == 2'
+mkdir -p "$TMP/run-after-plain"; "$ROOT/src/skills/adorno-inputs/scripts/input-refs" "fix acme/docs" >"$TMP/run-after-plain/refs.json"
+expect_exit 0 "a request without Notion page" -- "$S/after-pr" plan "$TMP/run-after-plain" acme/docs --pr-url "$PR9"
+expect_jq "... drops the entry that needs Notion, keeps the other, no Notion arg" \
+  '(.skills | map(.skill)) == ["acme-changelog"] and .skills[0].args == "https://github.com/acme/docs/pull/9"'
+expect_exit 0 "no refs.json at all" -- "$S/after-pr" plan "$TMP" acme/docs --pr-url "$PR9"
+expect_jq "... same" '(.skills | map(.skill)) == ["acme-changelog"]'
+printf '{ half' >"$TMP/run-after-plain/refs.json"
+expect_exit 1 "a corrupt refs.json fails, not skipped" -- "$S/after-pr" plan "$TMP/run-after-plain" acme/docs --pr-url "$PR9"
+"$S/run-end" "$AFIX" >/dev/null
+AREP="$("$S/run-begin" --workflow workflow:issue:fix --mode report --level L3 --repo acme/docs | jq -r .id)"
+expect_exit 0 "under a report run" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --force
+expect_jq "... dry run: shown, not run" '.dry_run == true'
+expect_exit 2 "done after a dry-run plan is refused" -- "$S/after-pr" "done" acme-changelog "$AD"
+"$S/run-end" "$AREP" >/dev/null
+ABUILD="$("$S/run-begin" --workflow workflow:feature:build --mode auto --level L3 --repo acme/docs | jq -r .id)"
+expect_exit 0 "under workflow:feature:build" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --force
+expect_jq "... only the entry listing it" '(.skills | map(.skill)) == ["acme-changelog"]'
+"$S/run-end" "$ABUILD" >/dev/null
+
 echo "pr-feedback-fetch"
 expect_exit 0 "fetches" -- "$S/pr-feedback-fetch" acme/docs#42
 expect_jq "only unresolved threads" '[.threads[].id] == ["T1","T2"]'
