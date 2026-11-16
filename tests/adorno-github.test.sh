@@ -152,6 +152,8 @@ jq -e '.overlap == false' "$UD/usage.json" >/dev/null && ok "... no session, no 
 expect_exit 0 "a run whose usage cannot be read" -- env CLAUDE_CODE_SESSION_ID='bad id!' "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
 UR="$(jq -r .id <<<"$out")"; UD="$(jq -r .dir <<<"$out")"
 expect_exit 0 "... still ends" -- "$S/run-end" "$UR"
+expect_jq "... no status.md in its folder: none reported" '.status == null'
+[ ! -e "$UD/status.md" ] && ok "... and none created" || ko "... and none created" "$(head -c 300 "$UD/status.md")"
 [ ! -f "$KH/runs/active/$UR.json" ] && ok "... grant withdrawn first" || ko "... grant withdrawn first"
 grep -q "usage of run $UR not recorded" "$TMP/err" && ok "... the failure said on stderr" || ko "... the failure said on stderr" "$(cat "$TMP/err")"
 jq -e '.source == "error" and (.error | length) > 0' "$UD/usage.json" >/dev/null && ok "... and recorded as an error" || ko "... and recorded as an error"
