@@ -29,6 +29,7 @@ skill_data:
 #   include  glob patterns relative to the repo (default: every folder containing a SKILL.md)
 #   type     type of the .md files found outside skills: agent (default) or workflow
 #   prefix   prefix added to names to avoid collisions
+#   uncited  imported skills no item cites, kept on purpose (called by hand); `kit check` fails on any other
 #
 # A local item can extend an imported one without copying it:
 #   extends: addy/code-reviewer   (its body is appended to the original)
@@ -54,6 +55,7 @@ imports:
     source: github:DietrichGebert/ponytail
     ref: main
     include: [skills/ponytail, skills/ponytail-review, skills/ponytail-audit, skills/ponytail-debt]
+    uncited: [ponytail-audit, ponytail-debt]   # /ponytail-audit, /ponytail-debt: called by hand
 
   # Browser QA: screenshots, WebM video, traces, test generation (`@playwright/cli` CLI). Apache-2.0.
   - name: playwright
