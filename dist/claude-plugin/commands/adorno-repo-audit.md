@@ -14,16 +14,17 @@ the code under a grant above L0. Always, even after a failure: `run-end <id>`.
 
 1. **Clone** — the given path, otherwise `gh repo clone owner/repo <dir>/clone -- --depth 1` (default branch),
    deleted at the end. The code is read, never run: no install, no script of the repo.
-2. **Scope** — `--path` as given. `--area NAME`: `git -C <clone> ls-files | adorno-github/scripts/pr-areas owner/repo
-   --files -`, keep `areas.<NAME>` (and its sub-areas `NAME.*`). Neither: the whole repo. Always minus generated and
-   vendored code (`dist/`, `vendor/`, `node_modules/`, build output, lockfiles) and fixtures that are wrong on purpose
-   (benchmark cases, bad inputs kept for tests).
+2. **Scope** — `--path` as given. `--area NAME`: `git -C <clone> -c core.quotePath=false ls-files |
+   adorno-github/scripts/pr-areas owner/repo --files -` (unquoted non-ASCII names), keep `areas.<NAME>`. Neither: the
+   whole repo. Always minus generated and vendored code (`dist/`, `vendor/`, `node_modules/`, build output,
+   lockfiles) and fixtures that are wrong on purpose (benchmark cases, bad inputs kept for tests).
    Count the lines in scope (`wc -l` on the listed files): above ~15,000, say up front that one pass will not read
    everything (measured: ~13 k tokens per 1,000 lines, parts of a 17.5 kLOC repo already left unread) and list the
    areas to run one by one with `--area`.
 3. **Audit** — `agent:review:ponytail`, mode Audit: the clone, the scope, the output folder `<dir>` → `audit.md`.
-4. **Report** — to you only: the path of `audit.md`, its `Verdict:`, the number of findings per group, its
-   `Not checked:` line, and the areas left to audit (step 2).
+4. **Report** — to you only, from the agent's reply: the path of `audit.md`, its `Verdict:`, the number of findings
+   per group, its `Not checked:` line, and the areas left to audit (step 2). The session never opens `audit.md`: the
+   findings stay out of its context, where another run may grant writes.
 
 **Never published.** The report may describe security holes: no issue, no comment, no Slack message, no copy into a
 committed file (`CONSTRAINTS.md` included) or a PR description — public or private repo. The run is L0 in `report`
