@@ -56,18 +56,20 @@ command.
    - a repo skill: run it in the worktree, as it is written. It may push and run `gh pr create` itself: inside the
      run the guard lets `git push origin <branch>` and `gh pr create` through (never forced, never the base, at the
      run's level). Then `pr-status owner/repo` again: no PR for the branch → stop and report what the skill did;
-     its description has no `## Proof` or misses a source of the run's `refs.json` (`## Sources`, `workflow:pr:open`
-     step 3) → `agent:adorno` appends what is missing and publishes it with `pr-edit owner/repo#N "<its title>"
-     <file> [--refs <run>/refs.json [--withhold <url>]…] --attach …`; opened as draft while the verdict is clean and
-     the proof complete → `pr-ready owner/repo#N`.
+     its description has no `## Proof`, misses a source of the run's `refs.json` (`## Sources`, `workflow:pr:open`
+     step 3) or the ponytail notes of `status.md` (under Impact / Risks) → `agent:adorno` appends what is missing
+     and publishes it with `pr-edit owner/repo#N "<its title>" <file> [--refs <run>/refs.json [--withhold <url>]…]
+     --attach …`; opened as draft while the verdict is clean and the proof complete → `pr-ready owner/repo#N`.
 7. **PR already open** → push, update, ready:
    - push: `pr-push owner/repo#N` (or the repo skill pushes itself, as above);
    - default update: `agent:adorno` compares the title and description to `git diff origin/<base>...HEAD` and the
-     proof to `qa/`. The scope moved (a new What or How, a new risk, a verification that no longer matches) or new
-     proof → new title and description in English, in the owner's voice (`adorno-voice`), keeping the current
-     `## Sources`, published by `pr-edit owner/repo#N "<title>" <file> [--refs <run>/refs.json [--withhold <url>]…]
-     [--attach <new media>]…` (`--refs` whenever the run has one). Unchanged → nothing. A repo skill: run it in
-     update mode (it receives `#N`); it may run `gh pr edit` itself, the new proof then goes out with `pr-edit`;
+     proof to `qa/`, and takes the new ponytail notes of `status.md` into account. The scope moved (a new What or
+     How, a new risk, a verification that no longer matches), new proof or a new ponytail note → new title and
+     description in English, in the owner's voice (`adorno-voice`), keeping the current `## Sources`, published by
+     `pr-edit owner/repo#N "<title>" <file> [--refs <run>/refs.json [--withhold <url>]…] [--attach <new media>]…`
+     (`--refs` whenever the run has one). Unchanged → nothing. A repo skill: run it in update mode (it receives
+     `#N`); it may run `gh pr edit` itself, the new proof and the new ponytail notes of `status.md` (Impact / Risks)
+     then go out with `pr-edit`;
    - still a draft, the verdict on the whole branch clean and the proof complete → `pr-ready owner/repo#N`.
 8. **After the PR** — with an `.agent-run` folder (none → skip, one line in the report): the repo's `after_pr` (repo
    skills to run once a PR exists, e.g. filling the Notion ticket of a fixed bug):

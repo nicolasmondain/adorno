@@ -60,7 +60,8 @@ A lower repo `max_level` always wins.
 6. **Fix and ship** (`draft` and `auto` modes) — every confirmed item, in the workspace, each fix by the designated
    agent (`fix` or `perf` of the file's area, `fallbacks.nit`, `fallbacks.test`): one typed commit per
    item, message citing the comment, repo tests and lint green, three rounds at most. Then, without asking,
-   `workflow:pr:ship owner/repo <branch> <workspace>`: the repo's `commit_skill` for what is left, its review loop on
+   `workflow:pr:ship owner/repo <branch> <workspace> <workspace>/.agent-run/feedback-<date>/` (the PR's run folder,
+   where the fixers' `Ponytail` notes are in `status.md`): the repo's `commit_skill` for what is left, its review loop on
    the new commits (every 🔴 or 🟠 fixed in the flow, two rounds), `pr-push` (never forced) or the repo's `pr_skill`
    pushing itself, the title and description updated if the fixes moved the scope, a draft PR marked ready once the
    whole branch is clean. Each commit's SHA, its item and the review outcome (`clean`, or `blocker left` after the
