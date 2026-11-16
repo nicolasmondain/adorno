@@ -502,6 +502,7 @@ def validate(cfg: Config, items: dict[str, dict[str, Item]]) -> list[str]:
     if not local_on():   # the public registry must leave no agent unreachable
         for orphan in orphan_agents(reg, items):
             errors.append(f"orphan agent '{orphan}': no area role, fallback or entry names it")
+        errors += orphan_skills(cfg, items)
     return errors
 
 
@@ -568,6 +569,28 @@ def validate_roles(reg: dict, items: dict) -> list[str]:
 def orphan_agents(reg: dict, items: dict) -> list[str]:
     reached = {ref for _, ref in area_refs(reg.get("defaults") or {})}
     return sorted(i.id for i in items["agent"].values() if i.id not in reached and not i.meta.get("entry"))
+
+
+def orphan_skills(cfg: Config, items: dict) -> list[str]:
+    """An imported skill ships everywhere and its description can trigger it alone: one that no item of ours,
+    instruction or repos.yaml names must be listed in its import's `uncited` (called by hand)."""
+    texts = [json.dumps(i.meta, default=str) + i.body for g in items.values() for i in g.values() if i.origin == "local"]
+    texts += [p.read_text(encoding="utf-8") for p in sorted((SRC / "instructions").glob("*.md"))]
+    texts.append((ROOT / "repos.yaml").read_text(encoding="utf-8"))
+    corpus = "\n".join(texts)
+    errors: list[str] = []
+    for imp in cfg.manifest.get("imports") or []:
+        uncited = imp.get("uncited") or []
+        if not isinstance(uncited, list):
+            errors.append(f"kit.yaml: import {imp.get('name')}: uncited must be a list of skill names")
+            continue
+        mine = {i.name for i in items["skill"].values() if i.origin == imp.get("name")}
+        errors += [f"kit.yaml: import {imp.get('name')}: uncited '{n}' is not one of its skills"
+                   for n in uncited if n not in mine]
+        errors += [f"orphan skill '{n}' (import {imp.get('name')}): no item cites it; cite it or list it in uncited"
+                   for n in sorted(mine - set(uncited))
+                   if not re.search(rf"(?<![\w-]){re.escape(n)}(?![\w-])", corpus)]
+    return errors
 
 
 def validate_areas(conf: dict, where: str, scope: str, agent_ids: set, skill_names: set) -> list[str]:
