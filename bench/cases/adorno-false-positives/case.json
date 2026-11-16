@@ -2,7 +2,7 @@
   "kind": "adorno",
   "title": "feat(orders): list orders with the customer name",
   "description": "The orders page needs the customer name next to each order. Adds `listOrdersWithCustomer`, which returns the page of orders with `customerName` (null when the customer was deleted).",
-  "rationale": "agent:adorno gets the merged review of six specialists: the real N+1 (mongodb) and three false findings the code contradicts. It must keep the N+1 and drop the other three: the lookup filter has accountId, it has a projection on name, and the test covers a deleted customer.",
+  "rationale": "agent:adorno gets the merged review of six specialists: the real N+1 (mongodb), the same N+1 again from perf-back at an inflated blocker, and four false findings: three the code contradicts and one on a line the diff does not touch. It must keep the N+1 once, at major, and drop the other four: the lookup filter has accountId, it has a projection on name, the test covers a deleted customer, and listOrders already has its limit and is not part of the change.",
   "routing": {
     "areas": [
       "back",
@@ -39,7 +39,11 @@
         "(in|inside) (a|the) loop",
         "one (query|findOne|round[ -]?trip) (per|for each)",
         "quer(y|ies) (per|for each|in a loop)",
-        "sequential"
+        "sequential",
+        "\\$in",
+        "batch",
+        "(each|every) order",
+        "round[ -]?trips?"
       ],
       "reviewer": "agent:review:mongodb"
     }
@@ -52,10 +56,10 @@
         38
       ],
       "keywords": [
-        "tenant",
-        "another account",
         "not scoped",
-        "cross[- ]account"
+        "cross[- ]tenant",
+        "_id only",
+        "another account's"
       ],
       "why": "the findOne filter is { _id: order.customerId, accountId }: it is scoped to the account"
     },
@@ -66,9 +70,9 @@
         38
       ],
       "keywords": [
-        "projection",
-        "whole (customer )?document",
-        "full (customer )?document"
+        "no projection",
+        "without (a )?projection",
+        "(whole|full) (customer )?document"
       ],
       "why": "the findOne passes { projection: { name: 1 } }"
     },
@@ -79,12 +83,24 @@
         39
       ],
       "keywords": [
-        "deleted",
-        "(customer|it) (is|was) gone",
-        "no longer exists",
-        "null branch"
+        "no test",
+        "untested",
+        "never (exercised|tested)"
       ],
       "why": "orders.test.ts adds an order whose customer does not exist and expects customerName null"
+    },
+    {
+      "file": "server/services/orders.ts",
+      "lines": [
+        22,
+        22
+      ],
+      "keywords": [
+        "unbounded",
+        "no limit",
+        "without (a )?limit"
+      ],
+      "why": "line 24 caps the find with .limit(PAGE_SIZE), and line 22 lies outside the hunks: the diff does not change listOrders"
     }
   ]
 }

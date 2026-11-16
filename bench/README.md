@@ -27,7 +27,7 @@ Per case and overall, on the merged review (`review.json`):
 | verdict | the merged verdict (`pass`, `fix`, `block`) is one the case accepts |
 | clean cases | on a case without defect: findings reported (false alarms), and the verdict must be `pass` |
 | reviews | reviews that `review-merge` rejected or that never came, after one retry |
-| after `agent:adorno` | the same recall and precision on what it kept (`review-final.json`, inline comments and their badges), over the runs where that file is readable, or where it wrote only its notes (nothing worth posting: no comment, verdict `pass`); the runs where it wrote nothing or an invalid file are counted apart |
+| after `agent:adorno` | the same recall and precision on what it kept (`review-final.json`, inline comments and their badges), over the runs where that file is readable, or where it wrote only its notes (nothing worth posting: no comment, verdict `pass`) when its pass ended without error; the runs where it wrote nothing, an invalid file, or notes from a pass cut by the budget or the turns are counted apart |
 | `agent:adorno` on a fixed review | on the cases of kind `adorno` (below), apart from the reviewers' measures: true findings kept, planted false findings dropped, precision, severity and verdict of what it would post |
 | cost | tokens in and out, the cost the tool reports, agent time, the model that really ran, per agent and in total |
 | stability | over several repeats: mean, worst and best run of recall and precision |
@@ -142,16 +142,19 @@ for the price of one pass. Its folder holds, on top of `base/` and `change.diff`
   it must drop, same `file`, `lines`, `keywords`, plus `why`: what in the code contradicts it).
 
 ```json
-"planted": [{"file": "server/services/orders.ts", "lines": [38, 38], "keywords": ["tenant", "not scoped"],
+"planted": [{"file": "server/services/orders.ts", "lines": [38, 38], "keywords": ["not scoped", "cross[- ]tenant"],
              "why": "the findOne filter is { _id: order.customerId, accountId }: it is scoped to the account"}]
 ```
 
-A comment of `agent:adorno` matching a planted finding counts against precision and `dropped`; one matching nothing
-is to grade, like a reviewer's. `adorno-false-positives` keeps the N+1 of `mongo-n-plus-one` among three false
-findings; `adorno-clean` gives two false findings on the refactor of `clean-refactor`, where nothing is worth
+A comment of `agent:adorno` matching a planted finding counts against precision and `dropped` (against `dropped` even
+when it also matches a true finding); one matching nothing is to grade, like a reviewer's. `adorno-false-positives`
+keeps the N+1 of `mongo-n-plus-one`, reported a second time at an inflated `blocker`, among four false findings (one
+on a line the diff does not touch); `adorno-clean` gives two false findings on the refactor of `clean-refactor`, where nothing is worth
 posting. Plant false findings that a careful reader refutes from the code alone: a filter or projection that is
-there, a test that exists, a behavior the diff does not change. `tests/bench.test.sh` checks that every expected and
-planted finding is in the given reviews.
+there, a test that exists, a behavior the diff does not change. Give a planted finding the keywords of its false
+claim only, so a true comment on the same lines does not match it. `tests/bench.test.sh` checks that every expected
+and planted finding is in the given reviews, and that posting them all verbatim scores each true one found and each
+planted one kept.
 
 ## Add a case
 

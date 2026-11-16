@@ -1,1 +1,5 @@
-{"agent": "agent:review:code", "verdict": "pass", "findings": []}
+{"agent": "agent:review:code", "verdict": "fix", "findings": [
+  {"severity": "major", "file": "server/services/orders.ts", "line": 22,
+   "title": "listOrders reads unbounded: no limit on find",
+   "detail": "find({ accountId }) returns every order of the account, however many there are.",
+   "fix": "Cap the query with a limit."}]}

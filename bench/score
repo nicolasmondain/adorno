@@ -26,11 +26,14 @@ The same matching is applied to what agent:adorno kept (review-final.json, inlin
 from the badges), over the case runs where that file is a readable final review: `final.state` is ok, invalid (not
 JSON, not an object, a comment that is not one) or absent, and the last two are counted apart, with no verdict; `none`
 when it wrote its notes and no review-final.json, as it does when nothing is worth posting: no comment, verdict pass.
+Only a pass that ended well (meta/adorno.json: is_error false, stop success) is `none`: notes left by a pass the
+budget or the turns cut are `absent`.
 Over several repeats, `recall` and `precision` are {mean, min, max}: the pooled value of each repeat, then its spread.
 
 A case of kind `adorno` measures agent:adorno alone, on the fixed review it brings: it is left out of `overall` and
 summed in `adorno`, on what agent:adorno kept: `recall` (true findings kept), `dropped` (planted findings it posted no
-comment on / planted findings), precision, severity and verdict. Exits 2 on wrong usage.
+comment on / planted findings), precision, severity and verdict. A comment counts toward `dropped` on its own: one that
+matches a planted finding keeps it, even when its class is matched. Exits 2 on wrong usage.
 """
 import argparse
 import json
@@ -105,7 +108,8 @@ def measure(findings, case):
             "duplicates": count["matched"] - len(found), "valid_extras": count["valid"],
             "invalid_extras": count["invalid"], "ungraded": count["ungraded"],
             "planted": len(case.get("planted", [])), "planted_comments": count["planted"],
-            "planted_kept": len({index for kind, index in classes if kind == "planted"}),
+            "planted_kept": len({index for index, planted in enumerate(case.get("planted", []))
+                                 if any(matches(planted, f) for f in findings)}),
             "recall": ratio(len(found), len(expected)),
             "precision": ratio(count["matched"], count["matched"] + count["invalid"] + count["planted"]
                                + count["ungraded"]),
@@ -143,8 +147,9 @@ def score_run(case, folder, n):
     if path.is_file():
         kept = final_findings(path)
         state = "ok" if kept is not None else "invalid"
-    else:  # notes without a final review: nothing worth posting
-        kept, state = ([], "none") if (folder / "review-notes.md").is_file() else (None, "absent")
+    else:  # notes without a final review, from a pass that ended well: nothing worth posting
+        ended = any(m["agent"] == "agent:adorno" and not m["is_error"] and m["stop"] == "success" for m in metas)
+        kept, state = ([], "none") if ended and (folder / "review-notes.md").is_file() else (None, "absent")
     final, final_listed = measure(kept or [], case)
     final_verdict = None
     if kept is not None:
