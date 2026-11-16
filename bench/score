@@ -23,8 +23,16 @@ Per case run, on the merged review (review.json):
   invalid_reviews  reviews that review-merge rejected, or that never came
 The same matching is applied to what agent:adorno kept (review-final.json, inline comments; severity and verdict read
 from the badges), over the case runs where that file is a readable final review: `final.state` is ok, invalid (not
-JSON, not an object, a comment that is not one) or absent, and the last two are counted apart, with no verdict. Over several repeats, `recall` and `precision` are {mean, min, max}: the pooled value of each
-repeat, then its spread. Exits 2 on wrong usage.
+JSON, not an object, a comment that is not one) or absent, and the last two are counted apart, with no verdict.
+
+Per reviewer (`reviewers`), on its own review (reviews/<name>.json, before the merge, so that another reviewer finding the same
+defect does not hide a miss):
+  own_recall  the expected findings whose `reviewer` is this agent, that it raised itself
+  precision   matched / (matched + invalid + ungraded), over its own findings
+  false_alarms  its findings on the cases without defect, minus the valid extras
+  invalid_reviews  its reviews that review-merge rejected, or that never came
+Over several repeats, `recall`, `precision` and `own_recall` are {mean, min, max}: the pooled value of each repeat,
+then its spread. Exits 2 on wrong usage.
 """
 import argparse
 import json
@@ -121,6 +129,49 @@ def final_findings(path):
     return findings
 
 
+def own_reviews(case, folder, n, run, metas):
+    """Each reviewer scored on its own review: one entry per reviewer of the case run, a missing or rejected review
+    counted as such."""
+    by_file = {meta["agent"].split(":")[-1] + ".json": meta["agent"] for meta in metas}
+    broken = set(run.get("missing", [])) | {by_file.get(name, "agent:review:" + name.removesuffix(".json")) for name in run.get("invalid", [])}
+    entries = [{"agent": agent, "n": n, "invalid": True} for agent in sorted(broken)]
+    for path in sorted((folder / "reviews").glob("*.json")) if (folder / "reviews").is_dir() else []:
+        try:
+            review = load(path)
+        except ValueError:
+            continue  # review-merge rejected it: counted in `broken`
+        agent = by_file.get(path.name) or (review.get("agent") if isinstance(review, dict) else None)
+        if agent in broken or not isinstance(agent, str) or not isinstance(review.get("findings"), list):
+            continue
+        result, listed = measure(review["findings"], case)
+        mine = {i for i, expected in enumerate(case["findings"]) if expected["reviewer"] == agent}
+        raised = {f["expected"] for f in listed if f["class"] == "matched"}
+        top = {i: max((f["severity"] for f in listed if f["expected"] == i and f["severity"] in RANK),
+                      key=RANK.get, default=None) for i in mine & raised}
+        entries.append({"agent": agent, "n": n, "invalid": False, "own_expected": len(mine),
+                        "own_found": len(mine & raised),
+                        "own_severity_ok": sum(1 for i, s in top.items() if s in case["findings"][i]["severity"]),
+                        "matched": result["matched"], "invalid_extras": result["invalid_extras"],
+                        "ungraded": result["ungraded"], "reported": result["reported"],
+                        "false_alarms": result["false_alarms"]})
+    return entries
+
+
+def summarize_agent(entries):
+    """One reviewer over the whole run: its own recall and precision, pooled per repeat, then spread."""
+    scored = [e for e in entries if not e["invalid"]]
+    by_repeat = [[e for e in scored if e["n"] == n] for n in sorted({e["n"] for e in scored})]
+    alarms = [e["false_alarms"] for e in scored if e["false_alarms"] is not None]
+    return {"reviews": len(scored), "invalid_reviews": len(entries) - len(scored),
+            "own_expected": sum(e["own_expected"] for e in scored), "own_found": sum(e["own_found"] for e in scored),
+            "own_severity_ok": sum(e["own_severity_ok"] for e in scored),
+            "own_recall": spread([pooled(es, lambda e: e["own_found"], lambda e: e["own_expected"])
+                                  for es in by_repeat]),
+            "precision": spread([pooled(es, lambda e: e["matched"], denominator) for es in by_repeat]),
+            "reported": sum(e["reported"] for e in scored), "ungraded": sum(e["ungraded"] for e in scored),
+            "clean_reviews": len(alarms), "false_alarms": sum(alarms)}
+
+
 def score_run(case, folder, n):
     run, review = load(folder / "run.json"), load(folder / "review.json")
     metas = [load(path) for path in sorted((folder / "meta").glob("*.json"))]
@@ -146,7 +197,7 @@ def score_run(case, folder, n):
         "tokens_in": sum(m["tokens"]["input"] + m["tokens"]["cache_read"] + m["tokens"]["cache_write"] for m in metas),
         "tokens_out": sum(m["tokens"]["output"] for m in metas),
         "duration_ms": sum(m["duration_ms"] for m in metas), "final": final, "findings": listed})
-    return result, metas
+    return result, metas, own_reviews(case, folder, n, run, metas)
 
 
 def spread(values):
@@ -213,13 +264,15 @@ def main():
         die(f"no run named {args.label} in {args.results}", 2)
     run = load(top / "run.json")
 
-    cases, every, agents, ungraded = {}, [], {}, []
+    cases, every, agents, ungraded, own = {}, [], {}, [], {}
     for entry in run["runs"]:
         case_id, n = entry["case"], entry["n"]
         if not (args.cases / case_id / "case.json").is_file():
             die(f"the run has a case that {args.cases} does not: {case_id}", 2)
         case = load(args.cases / case_id / "case.json")
-        result, metas = score_run(case, top / case_id / str(n), n)
+        result, metas, reviewed = score_run(case, top / case_id / str(n), n)
+        for entry in reviewed:
+            own.setdefault(entry["agent"], []).append(entry)
         cases.setdefault(case_id, {"runs": []})["runs"].append(result)
         every.append(result)
         ungraded += [dict(f, case=case_id, n=n) for f in result["findings"] if f["class"] == "ungraded"]
@@ -238,11 +291,14 @@ def main():
             agent["delivered"][meta["delivered"]] += 1
     for case in cases.values():
         case["summary"] = summarize(case["runs"])
+
     score = {"label": run["label"],
              "run": {key: run[key] for key in ("tool", "tool_version", "model", "repo", "repeat", "prompts",
                                                "started_at", "budget_usd", "skipped")}
-             | {"failed": run.get("failed", [])},
-             "overall": summarize(every), "cases": cases, "agents": agents, "ungraded": ungraded}
+             | {"failed": run.get("failed", []), "agent_models": run.get("agent_models", {})},
+             "overall": summarize(every), "cases": cases, "agents": agents,
+             "reviewers": {agent: summarize_agent(entries) for agent, entries in sorted(own.items())},
+             "ungraded": ungraded}
     (top / "score.json").write_text(json.dumps(score, indent=2, ensure_ascii=False) + "\n")
     print(json.dumps(score, indent=2, ensure_ascii=False))
 

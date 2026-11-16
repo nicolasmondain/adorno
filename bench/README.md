@@ -27,6 +27,7 @@ Per case and overall, on the merged review (`review.json`):
 | verdict | the merged verdict (`pass`, `fix`, `block`) is one the case accepts |
 | clean cases | on a case without defect: findings reported (false alarms), and the verdict must be `pass` |
 | reviews | reviews that `review-merge` rejected or that never came, after one retry |
+| per reviewer | each reviewer on its own review, before the merge: own recall (the expected findings the case gives to it, that it raised itself), precision of its findings, false alarms on the clean cases, rejected or missing reviews, cost per call |
 | after `agent:adorno` | the same recall and precision on what it kept (`review-final.json`, inline comments and their badges), over the runs where that file is readable; the runs where it is absent or invalid are counted apart |
 | cost | tokens in and out, the cost the tool reports, agent time, the model that really ran, per agent and in total |
 | stability | over several repeats: mean, worst and best run of recall and precision |
@@ -57,7 +58,7 @@ bench/run --label tiers --budget-usd 30               # the 13 cases
 bench/report --label tiers                            # the report again, after grading extras for instance
 ```
 
-`bench/run [--case ID]… [--model X] [--repeat N] [--label NAME] [--budget-usd N] [--repo owner/repo] [--parallel N]`
+`bench/run [--case ID]… [--model X] [--agent-model ID=X]… [--repeat N] [--label NAME] [--budget-usd N] [--repo owner/repo] [--parallel N]`
 builds a throwaway workspace per case (`base/` committed, then `change.diff`), starts every reviewer `pr-areas` picks
 (`--parallel` at a time), merges with `review-merge`, runs a missing or invalid review once more, then starts
 `agent:adorno` on the merged review. It ends with the report. Everything goes to `bench/results/<label>/`, ignored by
@@ -69,7 +70,8 @@ What a run is made of:
 - **The prompts of this working tree** (`dist/`, public layer only): the agents come from `dist/claude-plugin`, the
   instructions from `dist/AGENTS.md`. Your user settings, global instructions, installed agents and hooks are not
   loaded, so a result is tied to a commit (`prompts.sha`, and `dirty` when `src/` or `dist/` had uncommitted changes).
-- **Each agent on its own tier**, unless `--model` replaces the model of all of them.
+- **Each agent on its own tier**, unless `--model` replaces the model of all of them, or `--agent-model ID=X`
+  that of one agent (repeat it; it wins over `--model`).
 - **A sandbox**: an agent writes inside its workspace only and has no network (Claude Code's sandbox, macOS or Linux).
   Nothing reaches GitHub, your registry or your learning notes. The runner, outside the sandbox, never follows a link
   an agent leaves in its run folder: that case run fails, nothing of it is kept, and the report names it at the top.
@@ -98,6 +100,24 @@ bench/report --label haiku --against 2026-11-opus
 
 A baseline holds scores, tokens, costs, model names and the sha of the prompts, and no text written by a model. It is
 never overwritten, and it is yours to create and commit.
+
+## Compare a tier per reviewer
+
+The merged review hides a reviewer that got worse when another one finds the same defect. To judge one reviewer on
+a cheaper model, move it alone and read the "Per reviewer" table, which scores each one on its own review:
+
+```sh
+bench/run --label deep --repeat 2 --budget-usd 55
+bench/run --label mixed --repeat 2 --budget-usd 45 \
+  --agent-model agent:review:ponytail=sonnet --agent-model agent:review:tests=sonnet
+bench/report --label mixed --against deep
+```
+
+The reviewers that did not move are the control: when their scores move as much as the others', the difference is
+noise, not the model. A reviewer holds on the cheaper model when it loses none of its own expected findings, its
+precision drops by 10 points at most, it raises at most one false alarm more on the clean cases, no more of its
+reviews are rejected, and one call costs at least 30 % less. The decisions taken this way are in
+[docs/models.md](../docs/models.md).
 
 ## Findings to grade
 

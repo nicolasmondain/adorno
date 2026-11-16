@@ -166,6 +166,19 @@ if [ -f "$REAL" ]; then
   calls
   expect_jq "--model reaches every call" 'length == 6 and all(.[]; .[index("--model") + 1] == "some-model")'
 
+  expect_exit 0 "--agent-model over --model" -- "$B/run" --case docs-only --model some-model --agent-model agent:review:ponytail=other-model --label mixed --results "$R"
+  calls
+  expect_jq "replaces the model of that agent only" \
+    'length == 3 and ([.[] | select(.[index("--agent") + 1] == "adorno:adorno-agent-review-ponytail") | .[index("--model") + 1]] == ["other-model"]) and ([.[] | select(.[index("--agent") + 1] != "adorno:adorno-agent-review-ponytail") | .[index("--model") + 1]] | all(. == "some-model"))'
+  out="$(cat "$R/mixed/run.json")"
+  expect_jq "and is recorded in the run" '.model == "some-model" and .agent_models == {"agent:review:ponytail": "other-model"}'
+  expect_exit 0 "--agent-model alone" -- "$B/run" --case docs-only --agent-model agent:adorno=other-model --label adorno-only --results "$R"
+  calls
+  expect_jq "leaves the others on their tier" \
+    '([.[] | select(.[index("--agent") + 1] == "adorno:adorno") | .[index("--model") + 1]] == ["other-model"]) and ([.[] | select(.[index("--agent") + 1] != "adorno:adorno") | index("--model")] | all(. == null))'
+  expect_exit 2 "--agent-model with an unknown agent" -- "$B/run" --case docs-only --agent-model agent:review:nope=m --label x --results "$R"
+  expect_exit 2 "--agent-model with no model" -- "$B/run" --case docs-only --agent-model agent:review:code --label x --results "$R"
+
   printf '{"nope":true}' >"$FK/back.first.json"
   expect_exit 0 "a malformed review" -- "$B/run" --case clean-refactor --label retry --results "$R"
   out="$(cat "$R/retry/clean-refactor/1/meta/back.json")"
@@ -413,6 +426,34 @@ expect_jq "are recorded as such, with no verdict" \
 expect_jq "and the measures after agent:adorno pool the readable passes only" \
   '.overall.final | .runs == 1 and .invalid == 2 and .absent == 1 and .recall == {"mean": 1, "min": 1, "max": 1} and .precision.mean == 1 and .found == 1 and .verdict_ok == 1'
 
+# own LABEL CASE N NAME AGENT [FINDING…]: the review one reviewer wrote, before the merge (reviews/NAME.json)
+own() {
+  local d="$R/$1/$2/$3/reviews" agent="$5"; shift 5; mkdir -p "$d"; local IFS=,
+  printf '{"agent":"%s","verdict":"fix","findings":[%s]}' "$agent" "$*" >"$d/$(basename "$agent" | sed 's/.*://').json"
+}
+result reviewers defect 1 "$(review fix "$FOUND")"
+own reviewers defect 1 mongodb agent:review:mongodb "$FOUND"
+own reviewers defect 1 code agent:review:code
+result reviewers defect 2 "$(review fix "$(finding a.ts 11 major 'N+1 in the loop' code)")"
+own reviewers defect 2 mongodb agent:review:mongodb
+own reviewers defect 2 code agent:review:code "$(finding a.ts 11 major 'N+1 in the loop' code)"
+result reviewers clean 1 "$(review pass "$(finding c.ts 1 minor 'Could be shorter' code)")"
+own reviewers clean 1 mongodb agent:review:mongodb
+own reviewers clean 1 code agent:review:code "$(finding c.ts 1 minor 'Could be shorter' code)"
+result reviewers clean 2 "$(review pass)"
+own reviewers clean 2 code agent:review:code
+jq '.invalid = ["mongodb.json"]' "$R/reviewers/clean/2/run.json" >"$TMP/run.json"; cp "$TMP/run.json" "$R/reviewers/clean/2/run.json"
+close reviewers "defect:1 clean:1 defect:2 clean:2"
+score reviewers "each reviewer on its own review"
+expect_jq "a miss the merged review hides is the reviewer's miss" \
+  '.overall.recall.mean == 1 and (.reviewers["agent:review:mongodb"] | .own_expected == 2 and .own_found == 1 and .own_recall == {"mean": 0.5, "min": 0, "max": 1} and .own_severity_ok == 1)'
+expect_jq "its false alarms and its precision are its own" \
+  '(.reviewers["agent:review:code"] | .own_expected == 0 and .own_recall == null and .false_alarms == 1 and .clean_reviews == 2 and .reported == 2 and .ungraded == 1 and .precision == {"mean": 0.5, "min": 0, "max": 1}) and (.reviewers["agent:review:mongodb"] | .false_alarms == 0 and .precision.mean == 1)'
+expect_jq "a review review-merge rejected counts against the reviewer, and is not scored" \
+  '.reviewers["agent:review:mongodb"] | .reviews == 3 and .invalid_reviews == 1'
+out="$(cat "$R/perfect/score.json")"
+expect_jq "an old run without reviews/ has no reviewer to score" '.reviewers == {}'
+
 expect_exit 2 "score: unknown run" -- "$B/score" --label nope --results "$R" --cases "$SC"
 expect_exit 2 "score: a case the cases folder does not have" -- "$B/score" --label perfect --results "$R" --cases "$TMP/graded-true"
 expect_exit 2 "score: no label" -- "$B/score" --results "$R"
@@ -453,6 +494,19 @@ report "the other way round" --label perfect --against missed
 has "says what improved" '- **improved** `defect`: recall +100 pts'
 report "a comparison between runs that do not hold the same cases" --label extra --against perfect
 has "names the cases only one of them has" '- only in perfect: `clean`, `whole`'
+
+report "a run with reviews before the merge" --label reviewers
+has "has one line per reviewer, on its own review" '| `agent:review:mongodb` | 3 | 50% (worst 0%, best 100%) (1/2) | 100% | 1/1 | 0 on 1 | 1 | $0.50 | m-1 |'
+has "a reviewer the cases expect nothing from has no own recall" '| `agent:review:code` | 4 | – | 50% (worst 0%, best 100%) | – | 1 on 2 | 0 | – | – |'
+cp -R "$R/reviewers" "$R/reviewers-cheaper"
+jq '.agent_models = {"agent:review:mongodb": "m-2"}' "$R/reviewers/run.json" >"$R/reviewers-cheaper/run.json"
+rm -r "$R/reviewers-cheaper/defect/1/reviews"; own reviewers-cheaper defect 1 mongodb agent:review:mongodb
+for f in "$R"/reviewers-cheaper/*/*/meta/mongodb.json; do jq '.cost_usd = 0.25' "$f" >"$TMP/m.json"; cp "$TMP/m.json" "$f"; done
+report "a reviewer on another model" --label reviewers-cheaper --against reviewers
+has "names the agent and its model" "model: m-1, agent:review:mongodb on m-2, prompts"
+has "says per reviewer what it lost and what it saves" 'recall -50 pts, precision –, alarms +0, invalid +0, cost -50%'
+out="$(cat "$R/reviewers-cheaper/report.json")"
+expect_jq "the same in report.json" '.comparison.reviewers["agent:review:mongodb"] == {"own_recall": -50, "precision": null, "false_alarms": 0, "invalid_reviews": 0, "cost_pct": -50}'
 
 report "a run saved as a baseline" --label perfect --save-baseline reference
 out="$(cat "$BL/reference.json")"
