@@ -64,6 +64,7 @@ bad() {  # bad NAME YAML-APPENDED — the layer with YAML appended must fail che
 echo "validation"
 bad "unknown preset" $'  ghost/repo:\n    use: [nope]' "unknown preset 'nope'"
 bad "bad level" $'  ghost/repo:\n    max_level: L9' "max_level must be one of"
+bad "bad ponytail level" $'  ghost/repo:\n    ponytail: max' "ponytail must be one of"
 bad "a commit_skill that is not a name" $'  ghost/repo:\n    commit_skill: [a, b]' "commit_skill must be a skill or command name"
 bad "a pr_skill with a shell command" $'  ghost/repo:\n    pr_skill: "gh pr create"' "pr_skill must be a skill or command name"
 bad "unknown notion_spec step" $'  ghost/repo:\n    notion_spec: {merged: {Lifecycle: Done}}' "unknown step 'merged'"
