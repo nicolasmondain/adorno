@@ -62,10 +62,10 @@ command.
    - a repo skill: run it in the worktree, as it is written. It may push and run `gh pr create` itself: inside the
      run the guard lets `git push origin <branch>` and `gh pr create` through (never forced, never the base, at the
      run's level). Then `pr-status owner/repo` again: no PR for the branch → stop and report what the skill did;
-     its description has no `## Proof` or misses a source of the run's `refs.json` (`## Sources`, `workflow:pr:open`
-     step 3) → `agent:adorno` appends what is missing and publishes it with `pr-edit owner/repo#N "<its title>"
-     <file> [--refs <run>/refs.json [--withhold <url>]…] --attach …`; opened as draft while the verdict is clean and
-     the proof complete → `pr-ready owner/repo#N`.
+     its description has no `## Proof`, misses a source of the run's `refs.json` (`## Sources`, `workflow:pr:open`
+     step 3) or the ponytail notes of `status.md` (under Impact / Risks) → `agent:adorno` appends what is missing
+     and publishes it with `pr-edit owner/repo#N "<its title>" <file> [--refs <run>/refs.json [--withhold <url>]…]
+     --attach …`; opened as draft while the verdict is clean and the proof complete → `pr-ready owner/repo#N`.
 7. **PR already open** → push, update, ready:
    - push: `pr-push owner/repo#N` (or the repo skill pushes itself, as above);
    - default update: `agent:adorno` compares the title and description to `git diff origin/<base>...HEAD` and the
