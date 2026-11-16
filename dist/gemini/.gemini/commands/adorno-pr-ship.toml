@@ -63,8 +63,8 @@ command.
    - push: `pr-push owner/repo#N` (or the repo skill pushes itself, as above);
    - default update: `agent:adorno` compares the title and description to `git diff origin/<base>...HEAD` and the
      proof to `qa/`, and takes the new ponytail notes of `status.md` into account. The scope moved (a new What or
-     How, a new risk, a verification that no longer matches) or new proof → new title and description in English, in
-     the owner's voice (`adorno-voice`), keeping the current `## Sources`, published by
+     How, a new risk, a verification that no longer matches), new proof or a new ponytail note → new title and
+     description in English, in the owner's voice (`adorno-voice`), keeping the current `## Sources`, published by
      `pr-edit owner/repo#N "<title>" <file> [--refs <run>/refs.json [--withhold <url>]…] [--attach <new media>]…`
      (`--refs` whenever the run has one). Unchanged → nothing. A repo skill: run it in update mode (it receives
      `#N`); it may run `gh pr edit` itself, the new proof and the new ponytail notes of `status.md` (Impact / Risks)
