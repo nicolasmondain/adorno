@@ -610,6 +610,18 @@ expect_jq "line of the new file, across hunks, text trimmed" \
 expect_jq "legacy ponytail:, JSDoc, JSX, HTML and # prefixes" \
   '[.shortcuts[1:][] | .text[0:6]] == ["/* pon", "* shor", "{/* sh", "<!-- s", "# shor"]'
 expect_jq "a quoted non-ASCII path is decoded" '[.shortcuts[] | select(.file == "docs/café.vue") | .line] == [1, 2]'
+expect_jq "line of each marker in a new file" '[.shortcuts[] | select(.file == "client/A.tsx") | .line] == [2, 4]'
+printf '%s\n' 'diff --git a/my file.ts b/my file.ts' $'--- a/my file.ts\t' $'+++ b/my file.ts\t' '@@ -1 +1,2 @@' ' x' \
+  '+// shortcut: spaced, x' 'diff --git "a/my caf\303\251.ts" "b/my caf\303\251.ts"' $'--- "a/my caf\\303\\251.ts"\t' \
+  $'+++ "b/my caf\\303\\251.ts"\t' '@@ -0,0 +1 @@' '+const s = "// shortcut: in a string"' >"$TMP/spaced.diff"
+expect_exit 0 "names with a space (git ends their header with a TAB)" -- "$S/pr-shortcuts" "$TMP/spaced.diff"
+expect_jq "a TAB-terminated header, plain or quoted, keeps its marker" \
+  '[.shortcuts[] | [.file, .line]] == [["my file.ts", 2], ["my café.ts", 1]]'
+expect_jq "a marker inside a string is listed (the reader drops non-comments)" \
+  '.shortcuts[1].text == "const s = \"// shortcut: in a string\""'
+printf '%s\n' 'diff --git "a/a\tb\303\251.ts" "b/a\tb\303\251.ts"' '--- "a/a\tb\303\251.ts"' '+++ "b/a\tb\303\251.ts"' \
+  '@@ -0,0 +1 @@' '+// shortcut: x' >"$TMP/unparsable.diff"
+expect_exit 1 "a line it cannot parse fails loudly, never dropped" -- "$S/pr-shortcuts" "$TMP/unparsable.diff"
 printf 'diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n+const a = 1\n' >"$TMP/clean.diff"
 expect_exit 0 "a diff without markers" -- "$S/pr-shortcuts" "$TMP/clean.diff"
 expect_jq "empty ledger" '. == {shortcuts: [], count: 0}'
@@ -983,6 +995,7 @@ guard_at deny "$C" "" "gh pr merge 42"
 guard_at deny "$C" "sess-other" "gh pr create --title t --body b"
 guard_at deny "$C" "" "gh pr create -R acme/readonly --title t --body b"
 guard_at allow "$C" "" "$S/repo-conf acme/docs"
+guard_at allow "$C" "" "$S/pr-shortcuts .agent-run/x/branch.diff"
 guard_at pass "$C" "" "$TMP/fake/adorno-github/scripts/repo-conf"
 guard_at deny "$C" "" "git push" codex
 guard_at pass "$C" "" "git add ." codex

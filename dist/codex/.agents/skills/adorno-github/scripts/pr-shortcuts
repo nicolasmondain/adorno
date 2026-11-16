@@ -1,21 +1,23 @@
 #!/usr/bin/env bash
 # Usage: pr-shortcuts DIFF_FILE
-# The `shortcut:` comments (and older `ponytail:` ones, skill ponytail-debt) that a diff adds: the shortcuts ledger of a
-# branch or a PR. Only added lines count; the line is the one of the new file. Comment prefixes: `#`, `//`, `/*` (JSX
-# `{/* */}` too), `<!--` and a JSDoc ` * ` line. Whether a marker names its limit and its trigger is left to the reader.
+# The `shortcut:` comments (and older `ponytail:` ones, skill ponytail-debt) that a git diff adds (`diff --git` headers;
+# a plain `diff -u` is not supported): the shortcuts ledger of a branch or a PR. Only added lines count; the line is the
+# one of the new file. Comment prefixes: `#`, `//`, `/*` (JSX `{/* */}` too), `<!--` and a JSDoc ` * ` line. The match
+# is textual: a marker inside a string (`"// shortcut: …"`) is listed too, and the reader drops what is not a comment.
+# Whether a marker names its limit and its trigger is left to the reader as well.
 # Prints JSON {shortcuts: [{file, line, text}], count}.
 . "$(dirname "$0")/_lib.sh"
 
 diff="${1:-}"
-[ -f "$diff" ] || die "usage: pr-shortcuts DIFF_FILE" "$E_USAGE"
+[ -f "$diff" ] || die "usage: pr-shortcuts DIFF_FILE (a git diff)" "$E_USAGE"
 
-# `path<TAB>line<TAB>text` per added marker: the path from the `--- a/x` / `+++ b/y` headers (git quotes names with
-# special or non-ASCII characters), the line counted from the `@@ -a,b +c,d @@` hunk headers
+# `path<TAB>line<TAB>text` per added marker: the path from the `+++ b/y` header (git quotes names with special or
+# non-ASCII characters, and ends the header with a TAB when the name has a space), the line counted from the
+# `@@ -a,b +c,d @@` hunk headers
 awk '
-  function unq(p) { if (p ~ /^".*"$/) { p = substr(p, 2, length(p) - 2) } return p }
-  /^diff --git / { old = ""; f = ""; inhdr = 1; next }
-  inhdr && /^--- / { old = unq(substr($0, 5)); sub(/^a\//, "", old); next }
-  inhdr && /^\+\+\+ / { f = unq(substr($0, 5)); sub(/^b\//, "", f); if (f == "/dev/null") f = old; inhdr = 0; next }
+  function unq(p) { sub(/\t$/, "", p); if (p ~ /^".*"$/) { p = substr(p, 2, length(p) - 2) } return p }
+  /^diff --git / { f = ""; inhdr = 1; next }
+  inhdr && /^\+\+\+ / { f = unq(substr($0, 5)); sub(/^b\//, "", f); inhdr = 0; next }
   /^@@ / { h = $0; sub(/^@@ -[0-9,]+ \+/, "", h); sub(/[^0-9].*$/, "", h); n = h + 0; inhdr = 0; next }
   /^\+/ {
     t = substr($0, 2)
@@ -31,5 +33,6 @@ awk '
   case "$f" in *\\[0-7][0-7][0-7]*) f="$(printf '%b' "$(printf '%s' "$f" | sed 's/\\\([0-7][0-7][0-7]\)/\\0\1/g')")" ;; esac
   printf '%s\t%s\n' "$f" "${l#*$'\t'}"
 done | jq -R -s '
-  [split("\n")[] | select(length > 0) | capture("^(?<file>[^\t]*)\t(?<line>[0-9]+)\t(?<text>.*)$") | .line |= tonumber]
-  | {shortcuts: ., count: length}'
+  def parse: capture("^(?<file>[^\t]*)\t(?<line>[0-9]+)\t(?<text>.*)$") // error("cannot parse: \(.)");
+  [split("\n")[] | select(length > 0) | parse | .line |= tonumber]
+  | {shortcuts: ., count: length}' || die "cannot read the diff $diff"
