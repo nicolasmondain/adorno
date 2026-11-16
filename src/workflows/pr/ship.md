@@ -78,12 +78,13 @@ command.
      update mode (it receives `#N`); it may run `gh pr edit` itself, the new proof then goes out with `pr-edit`;
    - still a draft, the verdict on the whole branch clean and the proof complete → `pr-ready owner/repo#N`.
 8. **After the PR** — the repo's `after_pr` (repo skills to run once a PR exists, e.g. filling the Notion ticket of a
-   fixed bug): `adorno-github/scripts/after-pr plan <run folder> owner/repo --pr-url <PR URL>`. Not a PR of this run
-   (nothing was opened or updated and the PR was already open and unchanged): skip. `skip` in the answer → one line
-   in the report, nothing to do (nothing configured, another workflow, no Notion page: normal). Otherwise, per
-   `skills[]` in order, with `dry_run` false: run the skill (a value starting with `/` is a command of the repo,
-   otherwise a skill: load it and follow it) with its `args`, then `after-pr done <skill> <run folder>`. `dry_run`
-   true (a `report` or L0 run): show the call, do not run it. The skill is the repo's own: it may write where it
+   fixed bug): `adorno-github/scripts/after-pr plan <run folder> owner/repo --pr-url <PR URL> --workflow <the
+   workflow of the run you reuse, as given to run-begin>`. Not a PR of this run (nothing was opened or updated and
+   the PR was already open and unchanged): skip. `skip` in the answer → one line in the report, nothing to do
+   (nothing configured, another workflow, no Notion page: normal). Otherwise, per `skills[]` in order, with `dry_run`
+   false: run the skill (a value starting with `/` is a command of the repo, otherwise a skill: load it and follow
+   it) with its `args`, in order, then `after-pr done <skill> <run folder>`. `dry_run` true (a `report` or L0 run):
+   show the call, do not run it. The skill is the repo's own: it may write where it
    says (Notion included) at the run's level, and nothing else widens. It may need a human answer (`AskUserQuestion`):
    with `--unattended` it is a real stop point, so skip that skill, put the reason at the top of the report and go on
    (never answer for the owner). A failure goes in `status.md` and the report; the PR stays.
