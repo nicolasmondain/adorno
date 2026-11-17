@@ -13,7 +13,6 @@ Gemini CLI, Copilot, Cursor and any tool that reads Agent Skills (SKILL.md).
   kit conf [OWNER/REPO]         the settings a repo resolves to (no argument: the current repo, or the scopes)
   kit new skill|agent|workflow NAME
   kit import [NAME...] [--update|--check]  --check: commits behind and items changed upstream, writes nothing
-                                (exit 0 nothing to do, 1 something to import, 3 a check failed)
   kit build                     public build into dist/ (never includes local/)
   kit install PATH|--global|--workspace NAME [--targets a,b] [--link] [--public-only] [--force] [--dry-run]
   kit uninstall PATH|--global|--workspace NAME [--force]
@@ -39,6 +38,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import traceback
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1500,7 +1500,8 @@ def cmd_import(args) -> None:
     if args.names:
         unknown = set(args.names) - {i["name"] for i in imports}
         if unknown:
-            die(f"not in kit.yaml: {', '.join(sorted(unknown))}")
+            print(f"kit: not in kit.yaml: {', '.join(sorted(unknown))}", file=sys.stderr)
+            sys.exit(3 if args.check else 1)  # under --check, 1 means "something to import"
         imports = [i for i in imports if i["name"] in args.names]
     if not imports:
         print("nothing to import (add entries under `imports:` in kit.yaml)")
@@ -1513,7 +1514,9 @@ def cmd_import(args) -> None:
         for imp in imports:
             try:
                 moved |= check_import(cfg, imp, lock.get(imp["name"]) or {}, ours, texts)
-            except SystemExit:  # die() already said why on stderr; the other imports are still checked
+            except (SystemExit, Exception) as e:  # the other imports are still checked
+                if not isinstance(e, SystemExit):  # die() said why on stderr; a Python error (unreadable upstream) has not
+                    traceback.print_exc()
                 print(f"{imp['name']}: check failed")
                 failed = True
         sys.exit(3 if failed else 1 if moved else 0)
@@ -2384,8 +2387,8 @@ def main() -> None:
     g.add_argument("--check", action="store_true",
                    help="show how far each import is behind its ref and which items would change; writes nothing. "
                         "Exits 0 when nothing to import, 1 when an imported item changed, the pin left its ref or an "
-                        "import must be (re)imported, 3 when a check failed (git error; the other imports are still "
-                        "checked)")
+                        "import must be (re)imported, 3 when a check failed (git error, unreadable upstream content or an "
+                        "unknown NAME; the other imports are still checked)")
     p.set_defaults(fn=cmd_import)
 
     for name, fn in (("install", cmd_install), ("uninstall", cmd_uninstall)):

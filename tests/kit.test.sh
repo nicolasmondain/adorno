@@ -329,6 +329,8 @@ cp -r "$ROOT/bin" "$ROOT/adapters" "$IK/"
 printf '%s\n' 'name: t' 'version: 0.0.0' 'description: t' 'targets: [claude]' 'imports:' '  - name: up' \
   "    source: file://$UP" '    ref: main' '    include: [skills/foo, agents/bar.md]' >"$IK/kit.yaml"
 printf -- '---\nextends: up/bar\ndescription: Our bar reviewer.\n---\n\nMore.\n' >"$IK/src/agents/review/code.md"
+mkdir -p "$IK/src/skills/ourfoo"
+printf -- '---\nextends: up/foo\ndescription: Our foo.\n---\n\nMore foo.\n' >"$IK/src/skills/ourfoo/SKILL.md"
 printf 'Use `foo` here.\n' >"$IK/src/instructions/10-probe.md"
 IKKIT=("${KIT[@]}"); IKKIT[${#IKKIT[@]}-1]="$IK/bin/kit"
 snap() { (cd "$IK" && find vendor kit.lock -type f -exec shasum {} + | sort); }
@@ -354,7 +356,8 @@ check "it flags the frontmatter key that changed" 'grep -q "⚠ frontmatter chan
 check "a body-only change raises no ⚠" '! grep -A1 "~ agent/bar" <<<"$out" | grep -q "⚠"'
 check "it flags the new scripts, an extensionless executable included" \
   'grep -q "⚠ script added or changed: scripts/run, scripts/run.sh" <<<"$out"'
-check "it names what cites the skill" 'grep -q "cited by: src/instructions/10-probe.md" <<<"$out"'
+check "it names what cites the skill, without repeating its extender" 'grep -q "cited by: src/instructions/10-probe.md$" <<<"$out"'
+check "it names the local skill that extends the changed skill" 'grep -q "extended by: ourfoo" <<<"$out"'
 check "it names the local agent that extends the changed agent" 'grep -q "extended by: agent:review:code" <<<"$out"'
 check "check writes nothing" 'snap | cmp -s - "$TMP/snap-before"'
 sed -i.bak 's/^  fetched: .*/  fetched: KEEP/' "$IK/kit.lock"; rm -f "$IK/kit.lock.bak"
@@ -363,6 +366,7 @@ check "an import that keeps its commit keeps its fetched date" 'grep -q "fetched
 expect_exit 0 "update" -- "${IKKIT[@]}" import --update
 check "update prints the summary and where to read the diff" \
   'grep -q "~ agent/bar: bar.md +1 -1" <<<"$out" && grep -q "review: git diff -- vendor/up" <<<"$out"'
+check "the summary counts both scripts" 'grep -q "^up: .* — 2 script/asset file(s), review them" <<<"$out"'
 check "update moves the pin and the fetched date" \
   'grep -q "commit: $(git -C "$UP" rev-parse HEAD)" "$IK/kit.lock" && ! grep -q "fetched: KEEP" "$IK/kit.lock"'
 printf 'x\n' >>"$UP/README.md"; git -C "$UP" commit -q -a --amend -m rewrite
@@ -393,6 +397,17 @@ rm -rf "$TMP/gone"
 expect_exit 3 "an upstream that cannot be fetched: check exits 3, not 1" -- "${IKKIT[@]}" import --check
 check "it reports the failure and still checks the imports after it" \
   'grep -q "^gone: check failed" <<<"$out" && grep -q "^loc: local source, nothing pinned" <<<"$out" && grep -q "^up: up to date" <<<"$out"'
+mkdir -p "$UP/skills/foo"; printf -- '---\nname: foo\ndescription: Foo.\n---\n\nBack.\n' >"$UP/skills/foo/SKILL.md"
+upcommit back; git -C "$UP" tag -f -a v1 -m v1 >/dev/null
+expect_exit 3 "a failed check wins over a moved import" -- "${IKKIT[@]}" import --check
+check "it reports both the failure and the moved item" 'grep -q "^gone: check failed" <<<"$out" && grep -q "+ skill/foo" <<<"$out"'
+printf -- '---\nname: foo\ndescription: Foo.\n---\n\n\377\n' >"$UP/skills/foo/SKILL.md"
+upcommit broken; git -C "$UP" tag -f -a v1 -m v1 >/dev/null
+expect_exit 3 "upstream content Python cannot read: check exits 3, not 1" -- "${IKKIT[@]}" import --check
+check "it says why on stderr, reports the failure and still checks the imports after it" \
+  'grep -q UnicodeDecodeError "$TMP/err" && grep -q "^up: check failed" <<<"$out" && grep -q "^loc: local source, nothing pinned" <<<"$out"'
+expect_exit 3 "an unknown NAME under --check exits 3, not 1" -- "${IKKIT[@]}" import --check nosuch
+expect_exit 1 "an unknown NAME without --check still exits 1" -- "${IKKIT[@]}" import nosuch
 expect_exit 0 "check NAME on a local source" -- "${IKKIT[@]}" import --check loc
 check "it says nothing is pinned and checks only that import" \
   'grep -q "^loc: local source, nothing pinned" <<<"$out" && ! grep -q "^up:" <<<"$out"'
