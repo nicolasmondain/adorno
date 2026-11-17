@@ -128,7 +128,7 @@ echo "routing (public default rules from repos.yaml)"
 REAL="$ROOT/dist/claude-plugin/skills/adorno-github/repos.json"
 if [ -f "$REAL" ]; then
   # adorno/bare drops the `always` reviewers: docs-only then routes to no reviewer at all
-  jq '.repos = {"adorno/bench": {}, "adorno/bare": {"areas": {"always": {"review": ["-agent:review:code", "-agent:review:ponytail"]}}}}' \
+  jq '.repos = {"adorno/bench": {"use": ["node", "mongodb"]}, "adorno/bare": {"areas": {"always": {"review": ["-agent:review:code", "-agent:review:ponytail"]}}}}' \
     "$REAL" >"$KH/registry.json"
   expect_exit 0 "every case routes as its case.json says" -- "$B/route"
   expect_jq "one entry per case, all ok, each with the full pr-areas output" \
