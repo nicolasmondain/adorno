@@ -146,15 +146,17 @@ check "inside a run the installed hook records the tool call" '[ "$got" = 0 ] &&
 printf '%s' "$PAYLOAD" | PATH=/nonexistent /bin/sh -c "$JHOOK" 2>/dev/null; got=$?
 check "without python3 the journal hook lets the session go on (exit 0): it records, it does not guard" '[ "$got" = 0 ]'
 rm -rf "$ADORNO_HOME/runs"
-check "tiers become Claude models" 'grep -q "^model: opus" "$A/.claude/agents/adorno.md"'
+check "tiers become Claude models" 'grep -q "^model: opus" "$A/.claude/agents/adorno-agent-review-back.md"'
+# the public defaults: dist/claude is built without the personal layer, whose models.agents would mask a lowered tier
+fm_model() { awk 'NR == 1 && /^---$/ { f = 1; next } f && /^---$/ { exit } f && /^model:/ { print $2 }' "$1"; }
 # the agents that judge (verdict, block, publish in the owner's name) stay on deep or above: a lower tier
 # needs a bench measure first (docs/models.md), as review:api and review:tests got before moving to balanced
 for agent in adorno adorno-agent-review-code adorno-agent-review-security; do
   check "$agent judges: deep or above (opus, fable); a lower tier needs a bench measure first (docs/models.md)" \
-    'grep -Eq "^model: (opus|fable)$" "$A/.claude/agents/$agent.md"'
+    'case "$(fm_model "$ROOT/dist/claude/.claude/agents/$agent.md")" in opus | fable) ;; *) false ;; esac'
 done
 for agent in adorno-agent-review-api adorno-agent-review-tests; do
-  check "$agent runs on balanced (sonnet), the tier the bench measured" 'grep -q "^model: sonnet$" "$A/.claude/agents/$agent.md"'
+  check "$agent runs on balanced (sonnet), the tier the bench measured" '[ "$(fm_model "$ROOT/dist/claude/.claude/agents/$agent.md")" = sonnet ]'
 done
 check "frontier becomes fable" 'grep -q "^model: fable" "$A/.claude/agents/adorno-agent-core-planner.md"'
 check "an agent's effort reaches Claude" 'grep -q "^effort: low" "$A/.claude/agents/adorno-agent-core-triage.md"'
