@@ -22,33 +22,39 @@ skill_data:
 
 # Agents, skills and workflows imported from other repos.
 # `kit import` fetches them into vendor/<name>/ and pins the commit in kit.lock;
-# `kit import --update` moves them to the latest version of `ref`.
+# `kit import --update` moves them to the latest version of `ref` and prints what changed per item (and which of
+# our items extend or cite it); `kit import --check` shows the same without writing: exit 1 if an item changed, the
+# pinned commit left `ref`, or an import is not imported yet or its source changed; 3 if a check failed (git error,
+# unreadable upstream content or an unknown NAME; the other imports are still checked); 0 otherwise.
 #
 #   source   github:owner/repo | git URL | local path
 #   ref      branch, tag or commit (default: HEAD)
 #   include  glob patterns relative to the repo (default: every folder containing a SKILL.md)
 #   type     type of the .md files found outside skills: agent (default) or workflow
 #   prefix   prefix added to names to avoid collisions
-#   uncited  imported skills no item cites, kept on purpose (called by hand); `kit check` fails on any other
+#   uncited  imported skills no item cites, kept on purpose (called by hand, or pending a decision); `kit check`
+#            fails on any other
 #
 # A local item can extend an imported one without copying it:
 #   extends: addy/code-reviewer   (its body is appended to the original)
 imports:
-  # The 21 skills an adorno item cites (Define → Ship) and 3 reviewer agents (code, security, tests). MIT.
-  # Left out on purpose: using-agent-skills (routes like core:router, stops to ask), git-workflow-and-versioning
-  # (feature/ branches, tags, no squash), doubt-driven-development (asks at every cycle, needs the main session),
-  # shipping-and-launch (deploying is L4).
+  # 23 skills by phase (Define → Ship) and 3 reviewer agents (code, security, tests). MIT.
+  # Left out on purpose: using-agent-skills (routes like core:router, stops to ask) and git-workflow-and-versioning
+  # (feature/ branches, tags, no squash): they compete with core:router and adorno-commit.
   - name: addy
     source: github:addyosmani/agent-skills
     ref: main
     include: [skills/api-and-interface-design, skills/browser-testing-with-devtools, skills/ci-cd-and-automation,
               skills/code-review-and-quality, skills/code-simplification, skills/constraint-driven-development,
               skills/context-engineering, skills/debugging-and-error-recovery, skills/deprecation-and-migration,
-              skills/documentation-and-adrs, skills/frontend-ui-engineering, skills/idea-refine,
-              skills/incremental-implementation, skills/interview-me, skills/observability-and-instrumentation,
-              skills/performance-optimization, skills/planning-and-task-breakdown, skills/security-and-hardening,
+              skills/documentation-and-adrs, skills/doubt-driven-development, skills/frontend-ui-engineering,
+              skills/idea-refine, skills/incremental-implementation, skills/interview-me,
+              skills/observability-and-instrumentation, skills/performance-optimization,
+              skills/planning-and-task-breakdown, skills/security-and-hardening, skills/shipping-and-launch,
               skills/source-driven-development, skills/spec-driven-development, skills/test-driven-development,
               agents/code-reviewer.md, agents/security-auditor.md, agents/test-engineer.md]
+    # pending: shipping-and-launch until #21 cites it, doubt-driven-development until its bench decides
+    uncited: [doubt-driven-development, shipping-and-launch]
 
   # "The least code that works" discipline + review, audit, debt ledger. MIT.
   - name: ponytail

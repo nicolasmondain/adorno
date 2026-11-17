@@ -18,11 +18,16 @@ jobs:
         run: ./bin/kit check --dist
       - name: Lint the scripts
         run: shellcheck -x -s bash -P SCRIPTDIR $(find src/skills -path '*/scripts/*' -type f ! -name '*.jq' ! -name '*.py') bench/route tests/fake-gh tests/fake-curl tests/fake-claude tests/*.sh
-      - name: Test the scripts (fake gh, fake curl, fixtures)
+      - name: Get the browser the journal viewer is tested in (Chromium, pinned in tests/journal-viewer.smoke.py)
+        run: uv run --script tests/journal-viewer.smoke.py --install
+      - name: Test the scripts (fake gh, fake curl, fixtures) and the viewer (in the browser)
+        env:
+          ADORNO_REQUIRE_BROWSER: "1"  # here the viewer must be opened in a browser: a skipped smoke test fails
         run: for t in tests/*.test.sh; do "$t" || exit 1; done
 
   macos-bash-3-2:
-    # the scripts must run with the bash macOS ships (3.2): every suite, with /bin/bash first in PATH
+    # the scripts must run with the bash macOS ships (3.2): every suite, with /bin/bash first in PATH (no browser
+    # here: the viewer's smoke test is skipped, with a warning on the run)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1

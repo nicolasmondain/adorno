@@ -91,8 +91,8 @@ every workflow the run launches: nobody is there to answer, so the run never ask
 - `--unattended` never widens a mode or a level: they are the ones the scheduler passed.
 
 **Runs.** A workflow that writes to GitHub starts with `adorno-github/scripts/run-begin --workflow <id>
---mode <mode> --level <Lx> --repo owner/repo` and always ends with `run-end <id>`. The granted right lives in a
-file, not in an environment variable: without a run open on the repo, every write script refuses (L0). A run names
+--mode <mode> --level <Lx> --repo owner/repo` and always ends with `run-end <id> done | draft | stopped | failed` (how
+it ended). The granted right lives in a file, not in an environment variable: without a run open on the repo, every write script refuses (L0). A run names
 each repo it touches (`--repo`, at least one) and is valid only for them; two sessions on the same repo: the strictest
 applies, and the script says so. A run exists only in the session that opened it: after a `/clear`, reopen it; never
 set `CLAUDE_CODE_SESSION_ID` or `HOME` yourself (the guard hook refuses it). A command refused by the hook is not
@@ -204,6 +204,7 @@ Each one is a command of the same name (without native commands: the skill of th
 - `workflow:pr:status` (`/adorno-pr-status`) — Status of all your open PRs (or those of one repo)
 - `workflow:pr:watch` (`/adorno-pr-watch`) — Accompanies an open PR until it is ready to merge
 - `workflow:profile:learn` (`/adorno-profile-learn`) — Evolve your profile and your voice
+- `workflow:repo:audit` (`/adorno-repo-audit`) — Audits a whole repo, read-only
 - `workflow:repo:onboard` (`/adorno-repo-onboard`) — Prepare a repo for the agents
 - `workflow:review:received` (`/adorno-review-received`) — Goes over all your open PRs (or a single one)
 - `workflow:review:requested` (`/adorno-review-requested`) — Analyzes all the PRs where your review is requested

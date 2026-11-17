@@ -568,9 +568,9 @@ GH_VALUED = {"create": {"-t", "--title", "-F", "--body-file", "-b", "--body", "-
              "ready": set()}
 # adorno's scripts that may run without a prompt: read-only, or checking require_level themselves. Never run-begin
 # (opening a run, and its level, is the owner's call), nor the scripts that send data out or write local/.
-ALLOWED_SCRIPTS = {"repo-conf", "run-check", "run-end", "run-usage", "pr-status", "pr-areas", "pr-diff",
-                   "pr-feedback-fetch", "issue-fetch", "ci-wait", "ci-failed", "pr-workspace", "git-push", "pr-push",
-                   "pr-open", "pr-edit", "pr-ready"}
+ALLOWED_SCRIPTS = {"repo-conf", "run-check", "run-end", "run-mark", "run-usage", "pr-status", "pr-areas",
+                   "pr-shortcuts", "pr-diff", "pr-feedback-fetch", "issue-fetch", "ci-wait", "ci-failed",
+                   "pr-workspace", "git-push", "pr-push", "pr-open", "pr-edit", "pr-ready"}
 
 
 def quoted_at(command, k):
@@ -869,6 +869,7 @@ def granted(checks, session):
     """Runs each check with the session's identity (run-check, git-push --check): True when all of them pass."""
     env = dict(os.environ)
     env["CLAUDE_CODE_SESSION_ID"] = session
+    env["ADORNO_JOURNAL"] = "0"  # these probes are the guard's own, not something the run did
     run_check, git_push = os.path.join(HERE, "run-check"), os.path.join(HERE, "git-push")
 
     def ok(argv):
@@ -920,6 +921,20 @@ def answer(fmt, decision, reason):
                                    "permissionDecisionReason": reason}}
 
 
+def record(event, decision, reason, command):
+    """A refusal or a question in the journal of the session's open run (adorno-journal), when there is one. The
+    answer is already decided: a recording that fails changes nothing."""
+    try:
+        sys.dont_write_bytecode = True  # no __pycache__ left in the installed skill
+        sys.path.insert(0, os.path.join(SKILLS_ROOT, "adorno-journal", "scripts"))
+        import journal
+        session = str(event.get("session_id") or os.environ.get("CLAUDE_CODE_SESSION_ID") or "")
+        actor = f"agent:{event['agent_id']}" if event.get("agent_id") else "session"
+        journal.record("guard", {"decision": decision, "reason": reason, "command": command}, session, actor=actor)
+    except BaseException:  # a SystemExit from a broken writer too: the guard's exit code is its answer's
+        pass
+
+
 def main():
     argv = sys.argv[1:]
     mode = next((a for a in argv if a in ("deny", "ask")), "deny")
@@ -935,6 +950,7 @@ def main():
     if event.get("tool_name") == "AskUserQuestion":
         if unattended:
             print(json.dumps(answer(fmt, "deny", UNATTENDED_QUESTION)))
+            record(event, "deny", UNATTENDED_QUESTION, "AskUserQuestion")
         return 0
     if event.get("tool_name") not in ("Bash", "run_shell_command", "shell"):
         return 0
@@ -964,6 +980,8 @@ def main():
         decision = "deny"
     if decision:
         print(json.dumps(answer(fmt, decision, reason)))
+    if decision in ("deny", "ask"):
+        record(event, decision if fmt == "claude" else "deny", reason, command)  # only Claude Code can ask
     return 0
 
 

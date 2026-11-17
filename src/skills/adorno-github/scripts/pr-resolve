@@ -24,3 +24,4 @@ fi
 
 gh api graphql -f query='mutation($id:ID!){ resolveReviewThread(input:{threadId:$id}){ thread{ id isResolved } } }' \
   -F id="$thread" --jq '{resolved: .data.resolveReviewThread.thread.isResolved, thread: .data.resolveReviewThread.thread.id}'
+journal_github resolve "$REPO#$NUM thread $thread"
