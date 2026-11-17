@@ -65,8 +65,7 @@
         "fix": "agent:fix:patch",
         "perf": "agent:perf:front",
         "review": [
-          "agent:review:front",
-          "agent:review:perf"
+          "agent:review:front"
         ],
         "qa": "agent:test:e2e",
         "skills": [
@@ -86,8 +85,7 @@
         "fix": "agent:fix:patch",
         "review": [
           "agent:review:back",
-          "agent:review:tests",
-          "agent:review:perf-back"
+          "agent:review:tests"
         ],
         "sub": {
           "migration": {

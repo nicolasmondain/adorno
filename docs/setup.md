@@ -116,8 +116,8 @@ What depends on the stack comes from a [stack preset](#stack-presets) the repo c
 | Area | Detected by (excerpt) | `build` | `fix` | `perf` | `review` | `qa` | `skills` |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `always` | every change | | | | `review:code`, `review:ponytail` | | |
-| `front` | `*.tsx`, `*.css`, `*/components/*`… | `feat:front` | `fix:patch` | `perf:front` | `review:front`, `review:perf` | `test:e2e` | `frontend-ui-engineering` |
-| `back` | `server/*`, `*/services/*`, `*/jobs/*`… | `feat:back` | `fix:patch` | (a preset's, else fallback) | `review:back`, `review:tests`, `review:perf-back` | | |
+| `front` | `*.tsx`, `*.css`, `*/components/*`… | `feat:front` | `fix:patch` | `perf:front` | `review:front` | `test:e2e` | `frontend-ui-engineering` |
+| `back` | `server/*`, `*/services/*`, `*/jobs/*`… | `feat:back` | `fix:patch` | (a preset's, else fallback) | `review:back`, `review:tests` | | |
 | `back.migration` | `migrations/*`, `*/migrations/*`, `db/migrate/*`… | | | | (+ the database preset's) | | + `deprecation-and-migration` |
 | `api` | `*/api/*`, `*/routes/*`, `*openapi*`… | `feat:api` | | | `review:api` | | `api-and-interface-design` |
 | `security` | `*/auth/*`, `*.env*`, words like `token`, `role` | | `fix:security` | | `review:security` | | `security-and-hardening` |
@@ -142,7 +142,9 @@ agent outside its role's families (`build`: feat, test, docs, chore; `fix`: fix,
   order). An area without the role is skipped. `review` and `skills` are the union of every touched area plus
   `always`. `by_area` gives each area's roles, for a fixer chosen by the file a finding is on.
 - **`fallbacks`** cover work outside any area: `nit` → `refactor:simplify`, `test` → `test:unit`, and `perf` →
-  `fix:patch` with the skill `performance-optimization` when no touched area has a `perf`.
+  `fix:patch` with the skill `performance-optimization` when no touched area has a `perf` (neutral, like the areas;
+  a repo may name a perf agent of its stack, e.g. `perf:nodejs`). Each comes from the family of its role
+  (`bin/kit check`): a nit from a fixer family, a test from `test`, a perf point from `perf` or `fix`.
 
 #### Stack presets
 
@@ -188,7 +190,7 @@ repos:
   acme/app:
     areas:
       back:
-        review: ["-agent:review:perf-back"]   # this repo's server is a thin proxy
+        review: ["-agent:review:tests"]   # this repo's server is a thin proxy, tested end to end
         sub:
           migration: {review: [agent:review:security]}
       always:
@@ -204,6 +206,16 @@ points to the migration. `bin/kit migrate areas` (read-only, runs even when `che
 equivalent `areas.<area>.review` in the additive form, with a `-x` for each public reviewer the old list left out. The
 `adorno-setup` skill does it for you at its start: it shows the diff of `local/adorno.yaml` and writes only after your
 yes, then `bin/kit check` and `bin/kit install`.
+
+**Merged agents.** `agent:review:perf` is part of `agent:review:front` and `agent:review:perf-back` of
+`agent:review:back` ([decision 6](decisions/areas.md)). `bin/kit check` refuses a setting that still names an old id and
+points to `bin/kit migrate agents` (read-only, runs even when `check` fails): per scope, every `areas` role (removals and
+sub-areas included), `models.agents` key, Slack watch `action.agent` and Notion `assigned.agents` naming one, with what
+it becomes. A reviewer listed twice after renaming loses its duplicate. Three cases are flagged `decision` and never
+converted: a removal `-agent:review:perf` (`-agent:review:front` would drop the whole front review), `agent:review:perf`
+next to `-agent:review:front` in the same list (renamed, it would go with the rest of the front review), and a
+`models.agents` key (its tier would apply to the whole surviving review). The `adorno-setup` skill applies it at its
+start, like `migrate areas`.
 
 ## 4. Permissions
 

@@ -76,7 +76,7 @@ flowchart TD
   E -->|"no"| F{"Measurable criterion, weak first draft?"}
   F -->|"yes"| R["Evaluator-optimizer, capped rounds"]
   F -->|"no"| P
-  P --> G["Choose agents: family by commit type; review:code and review:ponytail always, security, tests, perf by diff"]
+  P --> G["Choose agents: family by commit type; reviewers from pr-areas on the real diff"]
   Q --> G
   R --> G
   G --> H["run-plan.yaml: pattern, steps, permissions, budget, gates"]
@@ -95,8 +95,6 @@ flowchart TD
   E --> F["Likely fixer: by_area fix or perf, fallbacks nit or test, or none"]
   F --> G["triage.json: id, kind, category, area, consult, fixer, summary"]
   G --> H["agent:adorno decides and replies"]
-  A --> I["CI and re-request tracking via adorno-github scripts only"]
-  I --> J{"Exit code 3, 4 or 5?"}
+  D --> J{"pr-areas exit code 3, 4 or 5?"}
   J -->|"yes"| K["Stop and report"]
-  J -->|"no"| G
 ```

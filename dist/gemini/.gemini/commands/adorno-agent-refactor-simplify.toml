@@ -1,6 +1,0 @@
-description = "agent:refactor:simplify — Simplify code without changing its behavior — dead code, duplication, needless abstractions, twisted conditions, and review nits. Use on a review comment classified nit or on code judged too complex."
-prompt = '''
-Delegate the request below to the `adorno-agent-refactor-simplify` sub-agent (agent:refactor:simplify) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-refactor-simplify`) to handle the request.
-
-Request: {{args}}
-'''

@@ -169,7 +169,7 @@ expect_exit 1 "invalid settings: refused" -- "${KIT[@]}" install "$B" --targets 
 check "... before writing anything" '[ ! -e "$B/.adorno" ] && [ ! -e "$B/.claude/agents" ]'
 rm "$B/.claude/settings.local.json"
 mkdir -p "$B/.claude/skills/adorno-commit"
-cp "$ROOT/dist/claude/.claude/skills/adorno-commit/SKILL.md" "$B/.claude/skills/adorno-commit/SKILL.md"
+cp "$ROOT/dist/claude-plugin/skills/adorno-commit/SKILL.md" "$B/.claude/skills/adorno-commit/SKILL.md"
 expect_exit 0 "install next to an identical file of yours" -- "${KIT[@]}" install "$B" --targets claude
 expect_exit 0 "uninstall" -- "${KIT[@]}" uninstall "$B"
 check "your identical file survives uninstall" '[ -f "$B/.claude/skills/adorno-commit/SKILL.md" ]'
@@ -220,6 +220,19 @@ check "the Codex hook file is gone" '[ ! -e "$A/.codex/hooks.json" ]'
 check "the hook is gone" '! jq -e ".hooks" "$A/.claude/settings.local.json" >/dev/null'
 check "your settings are back as they were" 'jq -e ".model == \"x\" and .permissions.allow == [\"Bash(make:*)\"] and (.permissions.deny == null)" "$A/.claude/settings.local.json" >/dev/null'
 
+echo "which skills stay in the model's list, from what the session reads"
+P="$TMP/code/acme/probe"; mkrepo "$P" acme/probe
+mkdir -p "$ADORNO_LOCAL/src/skills/lonely-own"
+printf -- '---\nname: lonely-own\ndescription: A private skill nothing cites.\n---\n\nNothing.\n' >"$ADORNO_LOCAL/src/skills/lonely-own/SKILL.md"
+printf 'Use `test-driven-development`.\n' >"$ADORNO_LOCAL/src/instructions/99-probe.md"
+expect_exit 0 "install with a private skill and a private instruction naming an imported skill" -- "${KIT[@]}" install "$P" --targets claude
+check "a private skill nothing cites stays listed" \
+  '[ -f "$P/.claude/skills/lonely-own/SKILL.md" ] && ! grep -q "disable-model-invocation" "$P/.claude/skills/lonely-own/SKILL.md"'
+check "an imported skill a private instruction names stays listed (hidden in the public build)" \
+  '[ -f "$P/.claude/skills/test-driven-development/SKILL.md" ] && ! grep -q "disable-model-invocation" "$P/.claude/skills/test-driven-development/SKILL.md"'
+"${KIT[@]}" uninstall "$P" --force >/dev/null
+rm -rf "$P" "$ADORNO_LOCAL/src/skills/lonely-own" "$ADORNO_LOCAL/src/instructions/99-probe.md"
+
 echo "global install"
 expect_exit 0 "install --global" -- "${KIT[@]}" install --global --targets claude,codex,gemini
 check "Codex asks before direct writes (its own rules)" 'grep -q "prefix_rule(pattern=\[\"git\", \"push\"\], decision=\"prompt\"" "$HOME/.codex/rules/adorno.rules"'
@@ -245,9 +258,6 @@ expect_exit 0 "install --workspace" -- "${KIT[@]}" install --workspace acme --ta
 check "every repo of the workspace" '[ -f "$TMP/code/acme/app/.claude/agents/adorno.md" ] && [ -f "$TMP/code/acme/web/.claude/agents/adorno.md" ]'
 expect_exit 0 "uninstall --workspace" -- "${KIT[@]}" uninstall --workspace acme --force
 
-echo "the public build never sees the personal layer"
-check "dist/ has no template identity" '! grep -rq "janedoe" "$ROOT/dist"'
-
 echo "areas, entry and orphans"
 bad "an area role naming an unknown agent" $'  ghost/repo:\n    areas: {back: {build: "agent:feat:nope"}}' "areas.back.build names unknown agent 'agent:feat:nope'"
 bad "a role outside its families" $'  ghost/repo:\n    areas: {back: {build: "agent:review:code"}}' "not a feat/test/docs/chore agent"
@@ -262,6 +272,9 @@ if ! AREA_RE='(?i)token' awk 'BEGIN { if ("" ~ ENVIRON["AREA_RE"]) {} }' 2>/dev/
   bad "a content regex awk cannot run" $'  ghost/repo:\n    areas: {back: {content: "(?i)token"}}' "areas.back.content is an invalid regex"
 fi
 bad "an unknown fallback" $'  ghost/repo:\n    fallbacks: {lint: "agent:fix:patch"}' "fallbacks.lint: unknown key"
+bad "a fallback from the wrong family" $'  ghost/repo:\n    fallbacks: {perf: {agent: "agent:test:unit"}}' "fallbacks.perf.agent: 'agent:test:unit' is not a perf/fix agent"
+bad "a test fallback from another family" $'  ghost/repo:\n    fallbacks: {test: "agent:fix:patch"}' "fallbacks.test: 'agent:fix:patch' is not a test agent"
+bad "a nit fallback from another family" $'  ghost/repo:\n    fallbacks: {nit: "agent:perf:nodejs"}' "fallbacks.nit: 'agent:perf:nodejs' is not a fix/test/refactor/ci/docs/chore agent"
 bad "area_reviewers is refused with the migration hint" $'  ghost/repo:\n    area_reviewers: {docs: ["agent:review:security"]}' "bin/kit migrate areas"
 OKL="$TMP/okl"; mkdir -p "$OKL"
 printf 'owner: {name: T, github: t, language: fr}\nrepos:\n  ghost/repo:\n    areas: {back: {review: ["-agent:review:tests"]}}\n' >"$OKL/adorno.yaml"
@@ -326,10 +339,39 @@ sed -i.bak 's/uncited: \[lonely\]/uncited: [lonely, ghost]/' "$SB/kit.yaml"; rm 
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
 if [ "$got" != 0 ] && grep -q "import fixture: uncited 'ghost' is not one of its skills" <<<"$out"; then ok "an uncited entry naming no imported skill fails"; else ko "an uncited entry naming no imported skill fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
 rm -rf "$SB/vendor/fixture"; cp "$ROOT/kit.yaml" "$SB/kit.yaml"
+cp "$ROOT/.gitignore" "$SB/"; git init -q "$SB"
+# the full build (every target), with the template layer present: CI never runs `kit build`, so $ROOT/dist only
+# holds the committed part there
+expect_exit 0 "build into the sandbox, the template layer present" -- "${SBKIT[@]}" build
+check "the sandbox build renders every target" '[ -d "$SB/dist/claude" ] && [ -d "$SB/dist/codex" ] && [ -d "$SB/dist/gemini" ]'
+check "entry never reaches a rendered agent, on any target" '! grep -rq "^entry:" "$SB/dist" --include=*.md --include=*.toml'
+check "the public build has no template identity, the layer present" '! grep -rq "janedoe" "$SB/dist"'
+check "hidden is a Claude setting: no other target gets it" \
+  '[ -d "$SB/dist/codex" ] && [ -f "$SB/dist/gemini/.gemini/commands/adorno-agent-review-code.toml" ] && ! grep -rq "disable-model-invocation" "$SB/dist/codex" "$SB/dist/gemini"'
+
+echo "check --dist on a fresh clone"
+# a fresh clone: only what .gitignore lets be committed
+find "$SB/dist" -mindepth 1 -maxdepth 1 ! -name claude-plugin ! -name AGENTS.md -exec rm -rf {} +
+expect_exit 0 "check --dist passes with no ignored target" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check --dist
+PLUGIN_FILE="$SB/dist/claude-plugin/agents/adorno-agent-review-code.md"
+cp "$PLUGIN_FILE" "$TMP/plugin-file.bak"
+echo stale >>"$PLUGIN_FILE"
+expect_exit 1 "a stale plugin file fails check --dist" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check --dist
+cp "$TMP/plugin-file.bak" "$PLUGIN_FILE"
+echo stray >"$SB/dist/claude-plugin/stray.md"
+out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check --dist 2>&1)"; got=$?
+if [ "$got" = 1 ] && grep -q "dist/ is out of date" <<<"$out"; then ok "a stray plugin file fails check --dist as out of date"; else ko "a stray plugin file fails check --dist as out of date" "exit $got: $(tail -c 300 <<<"$out")"; fi
+rm -f "$SB/dist/claude-plugin/stray.md"
+mkdir -p "$SB/dist/claude"; echo x >"$SB/dist/claude/é.md"
+expect_exit 0 "a file under an ignored target passes check --dist, even a non-ASCII name" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check --dist
+rm -rf "$SB/dist/claude"
+mv "$SB/dist/AGENTS.md" "$TMP/agents.bak"
+expect_exit 1 "a missing dist/AGENTS.md fails check --dist" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check --dist
+mv "$TMP/agents.bak" "$SB/dist/AGENTS.md"
+
 expect_exit 0 "the real registry passes with every dispatcher's roles covered" -- env ADORNO_LOCAL="$TMP/none" "${KIT[@]}" check
 check "no area_reviewers reader is left in src/" '! grep -rn "area_reviewers" "$ROOT/src" "$ROOT/bin/kit" | grep -v -e "src/skills/adorno-setup/" -e "bin/kit:.*AREA_REVIEWERS_MSG\|bin/kit:.*area_reviewers" -e SCHEMA.md | grep .'
 check "pr:ship leaves no family agent of its subject" '! grep -q "family agent of its subject" "$ROOT/src/workflows/pr/ship.md"'
-check "entry never reaches a rendered agent" '! grep -rq "^entry:" "$ROOT/dist" --include=*.md --include=*.toml'
 
 echo "migrate areas"
 MIG="$TMP/mig"; mkdir -p "$MIG"
@@ -350,18 +392,78 @@ check "the snippet calls the mongodb preset" 'grep -q -- "- mongodb" "$TMP/err"'
 expect_jq "always: a public reviewer missing from the old list becomes a removal" \
   '[.[] | select(.area_path == "areas.always.review")][0].new == ["-agent:review:ponytail"]'
 expect_jq "an area omitting a public reviewer gets its -x" \
-  '[.[] | select(.area_path == "areas.front.review")][0].new == ["agent:review:code", "-agent:review:front", "-agent:review:perf"]'
+  '[.[] | select(.area_path == "areas.front.review")][0].new == ["agent:review:code", "-agent:review:front"]'
 expect_jq "a scope that already calls a preset keeps it, mongodb is appended once" \
   '([.[] | select(.scope == "repos.acme/web")][0].use == ["node", "mongodb"]) and ([.[] | select(.scope == "repos.acme/mix")][0].use == ["mongodb"])'
 check "migrate prints a YAML snippet per scope" 'grep -q "repos:" "$TMP/err" && grep -q "areas:" "$TMP/err"'
 check "migrate writes nothing" 'cmp -s "$MIG/adorno.yaml" "$TMP/mig-before.yaml" && [ "$(ls "$MIG")" = "adorno.yaml" ]'
 
+echo "migrate agents"
+bad "a merged agent id points to the migration" $'  ghost/repo:\n    areas: {front: {review: ["agent:review:perf"]}}' "names unknown agent 'agent:review:perf' (merged into 'agent:review:front': \`bin/kit migrate agents\`"
+check "an unknown agent is not also reported as missing from the dispatchers" '! grep -q "uses.agents lacks" <<<"$out"'
+mkdir -p "$TMP/old"
+for layer in 'notion:|  assigned: {agents: {Perf: agent:review:perf}}' \
+  'defaults:|  models:|    agents: {agent:review:perf: fast}' \
+  'slack:|  watches:|    w: {channels: ["#c"], includes: [x], action: {agent: agent:review:perf-back}}'; do
+  printf 'owner: {name: T, github: t, language: fr}\n%s\n' "$(tr '|' '\n' <<<"$layer")" >"$TMP/old/adorno.yaml"
+  out="$(ADORNO_LOCAL="$TMP/old" "${KIT[@]}" check 2>&1)"; got=$?
+  check "a merged agent id in ${layer%%:*} points to the migration" '[ "$got" != 0 ] && grep -q "merged into '"'"'agent:review:" <<<"$out"'
+done
+rm -rf "$TMP/old"
+MA="$TMP/ma"; mkdir -p "$MA"
+printf '%s\n' 'owner: {name: T, github: t, language: fr}' \
+  'defaults:' '  models:' '    agents: {agent:review:perf-back: balanced, agent:review:perf: fast, agent:review:front: deep}' \
+  'presets:' '  web:' '    areas:' '      front: {review: [agent:review:perf, agent:review:front]}' \
+  '      back: {review: "-agent:review:perf-back"}' \
+  'workspaces:' '  acme:' '    repos: ["acme/*"]' '    areas:' '      front: {review: ["-agent:review:perf"]}' \
+  'repos:' '  acme/app:' '    areas:' '      back:' '        review: [agent:review:tests, agent:review:perf-back]' \
+  '        sub: {query: {review: ["-agent:review:perf-back", "-agent:review:back"]}}' \
+  '      front: {review: ["-agent:review:front", "agent:review:perf"]}' \
+  '      docs: {review: [agent:review:security]}' \
+  'slack:' '  watches:' '    w: {channels: ["#c"], includes: [x], action: {agent: agent:review:perf-back}}' \
+  'notion:' '  assigned: {agents: {"Perf v2.1": agent:review:perf, Bugs: workflow:issue:fix}}' >"$MA/adorno.yaml"
+cp "$MA/adorno.yaml" "$TMP/ma-before.yaml"
+out="$(ADORNO_LOCAL="$MA" "${KIT[@]}" migrate agents 2>"$TMP/err")"; got=$?
+check "migrate agents succeeds although check fails" '[ "$got" = 0 ] && ! ADORNO_LOCAL="$MA" "${KIT[@]}" check >/dev/null 2>&1'
+expect_jq "one row per setting naming a merged id, nothing else" \
+  '([.[] | .scope + " " + .path] | sort) == (["defaults models.agents.agent:review:perf-back", "defaults models.agents.agent:review:perf", "presets.web areas.front.review", "presets.web areas.back.review", "workspaces.acme areas.front.review", "repos.acme/app areas.back.review", "repos.acme/app areas.back.sub.query.review", "repos.acme/app areas.front.review", "slack watches.w.action.agent", "notion assigned.agents.Perf v2.1"] | sort)'
+expect_jq "a renamed reviewer is renamed in place" \
+  '(.[] | select(.path == "areas.back.review")) | .old == ["agent:review:tests", "agent:review:perf-back"] and .new == ["agent:review:tests", "agent:review:back"] and (has("decision") | not)'
+expect_jq "a renamed reviewer already present is dropped as a duplicate" \
+  '(.[] | select(.scope == "presets.web" and .path == "areas.front.review")) | .new == ["agent:review:front"]'
+expect_jq "a scalar removal that would remove the surviving reviewer asks a human" \
+  '(.[] | select(.scope == "presets.web" and .path == "areas.back.review")) | .new == null and (.decision | test("agent:review:back"))'
+expect_jq "a merged reviewer next to the removal of its survivor asks a human" \
+  '(.[] | select(.path == "areas.front.review" and .scope == "repos.acme/app")) | .new == ["-agent:review:front"] and (.decision | test("agent:review:front"))'
+expect_jq "a removal already made on the target only loses its duplicate" \
+  '(.[] | select(.path == "areas.back.sub.query.review")) | .new == ["-agent:review:back"] and (has("decision") | not)'
+expect_jq "a removal that would remove the surviving reviewer asks a human" \
+  '(.[] | select(.scope == "workspaces.acme")) | .new == [] and (.decision | test("agent:review:front"))'
+expect_jq "a model setting is removed, its tier left to a human" \
+  '[.[] | select(.path | startswith("models.agents."))] | length == 2 and all(.new == null and (.decision | test("agent:review:")))'
+expect_jq "a watch action and a Notion agent are renamed" \
+  '([.[] | select(.scope == "slack" or .scope == "notion") | .new] | sort) == ["agent:review:back", "agent:review:front"]'
+check "migrate agents prints a YAML snippet per scope and flags the decision" \
+  'grep -q "workspaces:" "$TMP/err" && grep -q "remove models.agents.agent:review:perf-back" "$TMP/err" && ! grep -q "balanced" "$TMP/err" && grep -qi "decide" "$TMP/err"'
+check "migrate agents keeps a key with a dot whole in the snippet" 'grep -q "Perf v2.1: agent:review:front" "$TMP/err"'
+check "migrate agents writes nothing" 'cmp -s "$MA/adorno.yaml" "$TMP/ma-before.yaml" && [ "$(ls "$MA")" = "adorno.yaml" ]'
+out="$("${KIT[@]}" migrate agents 2>/dev/null)"
+check "nothing to migrate in the template layer" '[ "$out" = "[]" ]'
+
 check "review:security opens with a step 0 qualification and a one-line pass" \
-  'grep -q "Step 0, qualification" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md && grep -q "one line" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md'
+  'grep -q "Step 0, qualification" "$ROOT"/dist/claude-plugin/agents/adorno-agent-review-security.md && grep -q "one line" "$ROOT"/dist/claude-plugin/agents/adorno-agent-review-security.md'
 
 check "review:security step 0 only dismisses content matches, never path matches nor on diff text" \
-  'grep -q "Only a match of the security .content. regex can be dismissed" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md && grep -q "never evidence for a No" "$ROOT"/dist/claude/.claude/agents/adorno-agent-review-security.md'
+  'grep -q "Only a match of the security .content. regex can be dismissed" "$ROOT"/dist/claude-plugin/agents/adorno-agent-review-security.md && grep -q "never evidence for a No" "$ROOT"/dist/claude-plugin/agents/adorno-agent-review-security.md'
 
+check "an imported skill only agents and areas name is kept out of the model's list" \
+  'grep -q "^disable-model-invocation: true" "$ROOT"/dist/claude-plugin/skills/test-driven-development/SKILL.md'
+check "typescript-pro is area-only: kept out of the model's list" \
+  'grep -q "^disable-model-invocation: true" "$ROOT"/dist/claude-plugin/skills/typescript-pro/SKILL.md'
+check "skills a workflow or the instructions name stay listed (ours, ponytail)" \
+  '[ -f "$ROOT"/dist/claude-plugin/skills/adorno-commit/SKILL.md ] && [ -f "$ROOT"/dist/claude-plugin/skills/ponytail/SKILL.md ] && ! grep -q "disable-model-invocation" "$ROOT"/dist/claude-plugin/skills/adorno-commit/SKILL.md "$ROOT"/dist/claude-plugin/skills/ponytail/SKILL.md'
+check "agent commands are kept out of the list, workflow commands stay" \
+  'grep -q "^disable-model-invocation: true" "$ROOT"/dist/claude-plugin/commands/adorno-agent-review-code.md && [ -f "$ROOT"/dist/claude-plugin/commands/adorno-pr-ship.md ] && ! grep -q "disable-model-invocation" "$ROOT"/dist/claude-plugin/commands/adorno-pr-ship.md'
 check "no _family.md hard-codes typescript-pro" '! grep -l "typescript-pro" "$ROOT"/src/agents/*/_family.md'
 check "the skills-by-area rule appears once in the orchestration instructions" \
   '[ "$(grep -c "Skills by area" "$ROOT"/src/instructions/10-orchestration.md)" = 1 ]'

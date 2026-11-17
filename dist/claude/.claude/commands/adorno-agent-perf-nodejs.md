@@ -1,8 +1,0 @@
----
-description: agent:perf:nodejs — Node.js performance — CPU, memory and leaks, blocked event loop, sequential I/O, costly serialization. Use on a slow or resource-hungry Node.js service or job.
-argument-hint: <request>
----
-
-Delegate the request below to the `adorno-agent-perf-nodejs` sub-agent (agent:perf:nodejs) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-perf-nodejs`) to handle the request.
-
-Request: $ARGUMENTS
