@@ -1,0 +1,56 @@
+diff --git a/server/services/orders.test.ts b/server/services/orders.test.ts
+index 217aeb1..9cc64f3 100644
+--- a/server/services/orders.test.ts
++++ b/server/services/orders.test.ts
+@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
+ import { test } from 'node:test';
+ import { ObjectId } from 'mongodb';
+ import { withDb } from '../testing/db.ts';
+-import { listOrders } from './orders.ts';
++import { listOrders, listOrdersWithCustomer } from './orders.ts';
+ 
+ const accountId = new ObjectId();
+ 
+@@ -19,3 +19,18 @@ test('listOrders returns the orders of the account, newest first', async () => {
+     assert.deepEqual(orders.map((order) => order.total), [30, 10]);
+   });
+ });
++
++test('listOrdersWithCustomer adds the customer name, null when the customer is gone', async () => {
++  await withDb(async (db) => {
++    const ada = new ObjectId();
++    await db.collection('customers').insertOne({ _id: ada, accountId, name: 'Ada' });
++    await db.collection('orders').insertMany([
++      { accountId, customerId: ada, total: 10, createdAt: new Date('2026-01-01') },
++      { accountId, customerId: new ObjectId(), total: 30, createdAt: new Date('2026-02-01') },
++    ]);
++
++    const orders = await listOrdersWithCustomer(db, accountId);
++
++    assert.deepEqual(orders.map((order) => order.customerName), [null, 'Ada']);
++  });
++});
+diff --git a/server/services/orders.ts b/server/services/orders.ts
+index 873e60b..d4d769a 100644
+--- a/server/services/orders.ts
++++ b/server/services/orders.ts
+@@ -24,3 +24,19 @@ export async function listOrders(db: Db, accountId: ObjectId): Promise<Order[]>
+     .limit(PAGE_SIZE)
+     .toArray();
+ }
++
++export interface OrderWithCustomer extends Order {
++  customerName: string | null;
++}
++
++export async function listOrdersWithCustomer(db: Db, accountId: ObjectId): Promise<OrderWithCustomer[]> {
++  const orders = await listOrders(db, accountId);
++  const result: OrderWithCustomer[] = [];
++  for (const order of orders) {
++    const customer = await db
++      .collection<Customer>('customers')
++      .findOne({ _id: order.customerId, accountId }, { projection: { name: 1 } });
++    result.push({ ...order, customerName: customer ? customer.name : null });
++  }
++  return result;
++}

@@ -1,0 +1,5 @@
+{"agent": "agent:review:back", "verdict": "fix", "findings": [
+  {"severity": "major", "file": "server/lib/duration.ts", "line": 12,
+   "title": "Behavior change: the seconds are dropped between one and sixty minutes",
+   "detail": "With the early returns, 3599 now formats as 59m instead of 59m 59s, which the activity feed relied on.",
+   "fix": "Restore the minutes and seconds branch."}]}

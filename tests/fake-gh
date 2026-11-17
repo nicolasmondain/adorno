@@ -67,7 +67,9 @@ case "$all" in
     printf '{"data":{"node":{"pullRequest":{"number":%s,"repository":{"nameWithOwner":"%s"}}}}}\n' \
       "${FAKE_THREAD_NUM:-42}" "${FAKE_THREAD_REPO:-acme/docs}" | respond ;;
   api\ graphql*resolveReviewThread*) echo '{"data":{"resolveReviewThread":{"thread":{"id":"T1","isResolved":true}}}}' | respond ;;
-  api\ graphql*addPullRequestReviewThreadReply*) echo '{"data":{"addPullRequestReviewThreadReply":{"comment":{"url":"https://github.com/x/y/pull/1#r1"}}}}' | respond ;;
+  api\ graphql*addPullRequestReviewThreadReply*)
+    [ "${FAKE_REPLY_FAIL:-0}" = 0 ] || { echo '{"errors":[{"message":"Thread is outdated"}]}'; exit 1; }
+    echo '{"data":{"addPullRequestReviewThreadReply":{"comment":{"url":"https://github.com/x/y/pull/1#r1"}}}}' | respond ;;
   api\ graphql*review-requested*) respond <"$FIX/review-requested.json" ;;
   api\ graphql*search\(*) respond <"$FIX/status.json" ;;
   api\ graphql*) respond <"$FIX/feedback.json" ;;
