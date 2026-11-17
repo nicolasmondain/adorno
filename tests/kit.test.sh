@@ -189,6 +189,19 @@ check "the Codex hook file is gone" '[ ! -e "$A/.codex/hooks.json" ]'
 check "the hook is gone" '! jq -e ".hooks" "$A/.claude/settings.local.json" >/dev/null'
 check "your settings are back as they were" 'jq -e ".model == \"x\" and .permissions.allow == [\"Bash(make:*)\"] and (.permissions.deny == null)" "$A/.claude/settings.local.json" >/dev/null'
 
+echo "which skills stay in the model's list, from what the session reads"
+P="$TMP/code/acme/probe"; mkrepo "$P" acme/probe
+mkdir -p "$ADORNO_LOCAL/src/skills/lonely-own"
+printf -- '---\nname: lonely-own\ndescription: A private skill nothing cites.\n---\n\nNothing.\n' >"$ADORNO_LOCAL/src/skills/lonely-own/SKILL.md"
+printf 'Use `test-driven-development`.\n' >"$ADORNO_LOCAL/src/instructions/99-probe.md"
+expect_exit 0 "install with a private skill and a private instruction naming an imported skill" -- "${KIT[@]}" install "$P" --targets claude
+check "a private skill nothing cites stays listed" \
+  '[ -f "$P/.claude/skills/lonely-own/SKILL.md" ] && ! grep -q "disable-model-invocation" "$P/.claude/skills/lonely-own/SKILL.md"'
+check "an imported skill a private instruction names stays listed (hidden in the public build)" \
+  '[ -f "$P/.claude/skills/test-driven-development/SKILL.md" ] && ! grep -q "disable-model-invocation" "$P/.claude/skills/test-driven-development/SKILL.md"'
+"${KIT[@]}" uninstall "$P" --force >/dev/null
+rm -rf "$P" "$ADORNO_LOCAL/src/skills/lonely-own" "$ADORNO_LOCAL/src/instructions/99-probe.md"
+
 echo "global install"
 expect_exit 0 "install --global" -- "${KIT[@]}" install --global --targets claude,codex,gemini
 check "Codex asks before direct writes (its own rules)" 'grep -q "prefix_rule(pattern=\[\"git\", \"push\"\], decision=\"prompt\"" "$HOME/.codex/rules/adorno.rules"'
@@ -284,6 +297,8 @@ expect_exit 0 "build into the sandbox, the template layer present" -- "${SBKIT[@
 check "the sandbox build renders every target" '[ -d "$SB/dist/claude" ] && [ -d "$SB/dist/codex" ] && [ -d "$SB/dist/gemini" ]'
 check "entry never reaches a rendered agent, on any target" '! grep -rq "^entry:" "$SB/dist" --include=*.md --include=*.toml'
 check "the public build has no template identity, the layer present" '! grep -rq "janedoe" "$SB/dist"'
+check "hidden is a Claude setting: no other target gets it" \
+  '[ -d "$SB/dist/codex" ] && [ -f "$SB/dist/gemini/.gemini/commands/adorno-agent-review-code.toml" ] && ! grep -rq "disable-model-invocation" "$SB/dist/codex" "$SB/dist/gemini"'
 
 echo "check --dist on a fresh clone"
 # a fresh clone: only what .gitignore lets be committed
@@ -337,11 +352,12 @@ check "review:security step 0 only dismisses content matches, never path matches
 
 check "an imported skill only agents and areas name is kept out of the model's list" \
   'grep -q "^disable-model-invocation: true" "$ROOT"/dist/claude-plugin/skills/test-driven-development/SKILL.md'
+check "typescript-pro is area-only: kept out of the model's list" \
+  'grep -q "^disable-model-invocation: true" "$ROOT"/dist/claude-plugin/skills/typescript-pro/SKILL.md'
 check "skills a workflow or the instructions name stay listed (ours, ponytail)" \
-  '! grep -q "disable-model-invocation" "$ROOT"/dist/claude-plugin/skills/adorno-commit/SKILL.md "$ROOT"/dist/claude-plugin/skills/ponytail/SKILL.md'
+  '[ -f "$ROOT"/dist/claude-plugin/skills/adorno-commit/SKILL.md ] && [ -f "$ROOT"/dist/claude-plugin/skills/ponytail/SKILL.md ] && ! grep -q "disable-model-invocation" "$ROOT"/dist/claude-plugin/skills/adorno-commit/SKILL.md "$ROOT"/dist/claude-plugin/skills/ponytail/SKILL.md'
 check "agent commands are kept out of the list, workflow commands stay" \
-  'grep -q "^disable-model-invocation: true" "$ROOT"/dist/claude-plugin/commands/adorno-agent-review-code.md && ! grep -q "disable-model-invocation" "$ROOT"/dist/claude-plugin/commands/adorno-pr-ship.md'
-check "hidden is a Claude setting: no other target gets it" '! grep -rq "disable-model-invocation" "$SB/dist/codex" "$SB/dist/gemini"'
+  'grep -q "^disable-model-invocation: true" "$ROOT"/dist/claude-plugin/commands/adorno-agent-review-code.md && [ -f "$ROOT"/dist/claude-plugin/commands/adorno-pr-ship.md ] && ! grep -q "disable-model-invocation" "$ROOT"/dist/claude-plugin/commands/adorno-pr-ship.md'
 check "no _family.md hard-codes typescript-pro" '! grep -l "typescript-pro" "$ROOT"/src/agents/*/_family.md'
 check "the skills-by-area rule appears once in the orchestration instructions" \
   '[ "$(grep -c "Skills by area" "$ROOT"/src/instructions/10-orchestration.md)" = 1 ]'

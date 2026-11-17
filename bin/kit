@@ -576,12 +576,12 @@ def cites(corpus: str, name: str) -> bool:
     return bool(re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", corpus))
 
 
-def session_skills(items: dict) -> set[str]:
+def session_skills(cfg: Config, items: dict) -> set[str]:
     """The skills a workflow or the instructions name: the main session may need them. Every other imported skill is
     only read by a sub-agent (agents, areas, fallbacks) or called by hand, so its description stays out of the model's
-    list (target `hidden`)."""
+    list (target `hidden`). The instructions are the ones shipped: private ones and the vision too when installing."""
     texts = [json.dumps(i.meta, default=str) + i.body for i in items["workflow"].values()]
-    texts += [p.read_text(encoding="utf-8") for p in sorted((SRC / "instructions").glob("*.md"))]
+    texts.append(render_instructions(cfg, items))
     corpus = "\n".join(texts)
     return {n for n in items["skill"] if cites(corpus, n)}
 
@@ -1136,7 +1136,7 @@ def build_target(cfg: Config, target: str, items) -> FileMap:
     files: FileMap = {}
     skills_dir = tcfg["skills"]
     hidden = tcfg.get("hidden") or {}
-    seen = session_skills(items)
+    seen = session_skills(cfg, items)
 
     def put_skill(name: str, tree: FileMap) -> None:
         for r, v in tree.items():
