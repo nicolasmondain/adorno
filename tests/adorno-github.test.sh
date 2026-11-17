@@ -604,19 +604,19 @@ expect_jq "my pending review is surfaced" '(.[] | select(.number==10) | .pending
 echo "pr-areas (public default rules from repos.yaml)"
 REAL="$ROOT/dist/claude/.claude/skills/adorno-github/repos.json"
 if [ -f "$REAL" ]; then
-  jq '.repos = {"acme/app": {}, "acme/leak": {"areas": {"back": {"sub": {"n": {"review": ["-agent:review:tests", "agent:review:code"], "skills": ["-typescript-pro"]}}}, "newa": {"review": ["-agent:review:api", "agent:review:code"]}}}, "acme/docs": {"ponytail": "ultra", "areas": {"back": {"review": ["-agent:review:tests", "agent:review:security"]}}}}' "$REAL" >"$TMP/areas-repos.json"
+  jq '.repos = {"acme/app": {"use": ["node", "mongodb"]}, "acme/bare": {}, "acme/leak": {"areas": {"back": {"sub": {"n": {"review": ["-agent:review:tests", "agent:review:code"], "skills": ["-typescript-pro"]}}}, "newa": {"review": ["-agent:review:api", "agent:review:code"]}}}, "acme/docs": {"ponytail": "ultra", "areas": {"back": {"review": ["-agent:review:tests", "agent:review:security"]}}}}' "$REAL" >"$TMP/areas-repos.json"
   reg "$TMP/areas-repos.json"
   expect_exit 0 "classifies a diff" -- "$S/pr-areas" acme/app "$ROOT/tests/fixtures/sample.diff"
   expect_jq "front by extension, with typescript" '.areas.front == ["client/app.tsx"] and .areas.typescript == ["client/app.tsx"] and (.skills | index("typescript-pro"))'
-  expect_jq "a query is the sub-area back.query, and its files also go to back" \
-    '.areas["back.query"] == ["server/users.js"] and .areas.back == ["server/users.js"]'
+  expect_jq "a query is the sub-area back.mongodb (preset), and its files also go to back" \
+    '.areas["back.mongodb"] == ["server/users.js"] and .areas.back == ["server/users.js"]'
   expect_jq "deps and docs" '.areas.deps == ["package.json"] and .areas.docs == ["README.md"]'
   expect_jq "unmatched files land in other" '.other == ["notes/weird.txt"]'
   expect_jq "a files tie goes to config order (front before back)" '.perf == "agent:perf:front" and .build == "agent:feat:front"'
   expect_jq "review: always + every area, deduplicated" \
     '(.review | sort) == (["agent:review:code","agent:review:ponytail","agent:review:front","agent:review:perf","agent:review:back","agent:review:tests","agent:review:perf-back","agent:review:mongodb","agent:review:security"] | sort) and (.review | length) == (.review | unique | length)'
   expect_jq "no reviewers key, always is not an area" '(has("reviewers") | not) and (.areas | has("always") | not)'
-  expect_jq "by_area carries the roles" '.by_area["back.query"].perf == "agent:perf:mongodb" and .by_area.front.perf == "agent:perf:front" and .by_area.docs.perf == null'
+  expect_jq "by_area carries the roles" '.by_area["back.mongodb"].perf == "agent:perf:mongodb" and .by_area.back.perf == "agent:perf:nodejs" and .by_area.front.perf == "agent:perf:front" and .by_area.docs.perf == null'
   expect_jq "no perf fallback when an area has one" '.skills | index("performance-optimization") | not'
   expect_jq "ponytail level: the default" '.ponytail == "full"'
   expect_exit 0 "per-repo override" -- "$S/pr-areas" acme/docs "$ROOT/tests/fixtures/sample.diff"
@@ -630,24 +630,29 @@ if [ -f "$REAL" ]; then
 
   printf 'diff --git a/x/migrations/1.js b/x/migrations/1.js\n--- a/x/migrations/1.js\n+++ b/x/migrations/1.js\n@@ -1 +1 @@\n+module.exports = 1\ndiff --git a/x/auth/login.js b/x/auth/login.js\n--- a/x/auth/login.js\n+++ b/x/auth/login.js\n@@ -1 +1 @@\n+const a = 1\ndiff --git a/docs/api-reference/x.mdx b/docs/api-reference/x.mdx\n--- a/docs/api-reference/x.mdx\n+++ b/docs/api-reference/x.mdx\n@@ -1 +1 @@\n+hello\n' >"$TMP/mixed.diff"
   expect_exit 0 "migration, auth and api reference" -- "$S/pr-areas" acme/app "$TMP/mixed.diff"
-  expect_jq "migration is back.mongodb, and back" '.areas["back.mongodb"] == ["x/migrations/1.js"] and .areas.back == ["x/migrations/1.js"]'
+  expect_jq "migration is the neutral back.migration, and back" '.areas["back.migration"] == ["x/migrations/1.js"] and .areas.back == ["x/migrations/1.js"]'
+  expect_jq "the mongodb preset adds its reviewer to the neutral migration" '.by_area["back.migration"].review | index("agent:review:mongodb")'
+  expect_exit 0 "the same migration without a preset" -- "$S/pr-areas" acme/bare "$TMP/mixed.diff"
+  expect_jq "neutral migration: its skill, no database reviewer" \
+    '(.by_area["back.migration"].skills | index("deprecation-and-migration")) and (.review | index("agent:review:mongodb") | not) and (.review | index("agent:review:sql") | not)'
+  expect_exit 0 "the mixed diff again, with the preset" -- "$S/pr-areas" acme/app "$TMP/mixed.diff"
   expect_jq "auth is security" '.areas.security == ["x/auth/login.js"] and .by_area.security.fix == "agent:fix:security" and .by_area.security.review == ["agent:review:security"]'
   expect_jq "api reference is api and docs, not back" \
     '.areas.api == ["docs/api-reference/x.mdx"] and .areas.docs == ["docs/api-reference/x.mdx"] and (.areas.back == ["x/migrations/1.js"]) and .by_area.api.build == "agent:feat:api"'
 
   printf 'diff --git a/client/List.tsx b/client/List.tsx\n--- a/client/List.tsx\n+++ b/client/List.tsx\n@@ -1 +1 @@\n+const a = items.find(x => x.id)\n' >"$TMP/front-find.diff"
   expect_exit 0 "a front file with a find call" -- "$S/pr-areas" acme/app "$TMP/front-find.diff"
-  expect_jq "the main family is front, not back.query" '.build == "agent:feat:front" and .perf == "agent:perf:front"'
+  expect_jq "the main family is front, not back.mongodb" '.build == "agent:feat:front" and .perf == "agent:perf:front"'
   printf 'diff --git a/server/services/x.js b/server/services/x.js\n--- a/server/services/x.js\n+++ b/server/services/x.js\n@@ -1 +1 @@\n+db.c.aggregate([])\n' >"$TMP/back-agg.diff"
   expect_exit 0 "a back file with an aggregate" -- "$S/pr-areas" acme/app "$TMP/back-agg.diff"
   expect_jq "inside the back family the sub-area wins perf, build stays back" '.perf == "agent:perf:mongodb" and .build == "agent:feat:back"'
-  expect_jq "a perf finding on that query routes to perf:mongodb through by_area" '.by_area["back.query"].perf == "agent:perf:mongodb" and .fallbacks.nit == "agent:refactor:simplify" and .fallbacks.test == "agent:test:unit"'
+  expect_jq "a perf finding on that query routes to perf:mongodb through by_area" '.by_area["back.mongodb"].perf == "agent:perf:mongodb" and .fallbacks.nit == "agent:refactor:simplify" and .fallbacks.test == "agent:test:unit"'
   printf 'diff --git a/server/services/a.js b/server/services/a.js\n--- a/server/services/a.js\n+++ b/server/services/a.js\n@@ -1 +1 @@\n+a\ndiff --git a/server/services/b.js b/server/services/b.js\n--- a/server/services/b.js\n+++ b/server/services/b.js\n@@ -1 +1 @@\n+b\ndiff --git a/client/c.css b/client/c.css\n--- a/client/c.css\n+++ b/client/c.css\n@@ -1 +1 @@\n+c\n' >"$TMP/two-back.diff"
   expect_exit 0 "two back files and one front file" -- "$S/pr-areas" acme/app "$TMP/two-back.diff"
   expect_jq "most files wins the family" '.build == "agent:feat:back"'
 
   expect_exit 0 "--files mode, no content rules" -- "$S/pr-areas" acme/app --files server/services/x.js client/a.tsx
-  expect_jq "--files detects by path" '.files == 2 and .areas.back == ["server/services/x.js"] and .areas.front == ["client/a.tsx"] and (.areas | has("back.query") | not)'
+  expect_jq "--files detects by path" '.files == 2 and .areas.back == ["server/services/x.js"] and .areas.front == ["client/a.tsx"] and (.areas | has("back.mongodb") | not)'
   expect_exit 0 "--files with an unmatched path and a path with a space" -- "$S/pr-areas" acme/app --files server/services/x.js "client/my a.tsx" notes/weird.txt
   expect_jq "--files: the unmatched path lands in other" '.other == ["notes/weird.txt"] and .areas.front == ["client/my a.tsx"]'
   args_out="$out"; printf 'server/services/x.js\nclient/my a.tsx\nnotes/weird.txt\n' >"$TMP/paths"
@@ -671,11 +676,11 @@ if [ -f "$REAL" ]; then
     | .repos = {"ovr/single": {"areas": {"back": {"build": "agent:feat:custom"}, "front": {"skills": ["-frontend-ui-engineering"]}}},
                 "ovr/layers": {"areas": {"back": {"review": ["-agent:review:extra", "-agent:review:tests"], "skills": ["-extra-skill"]}}},
                 "ovr/sub": {"areas": {"back": {"fix": "agent:fix:custom"}}},
-                "ovr/plain": {}}' "$REAL" >"$TMP/ovr-repos.json"
+                "ovr/plain": {}, "ovr/node": {"use": ["node", "mongodb"]}}' "$REAL" >"$TMP/ovr-repos.json"
   reg "$TMP/ovr-repos.json"
   expect_exit 0 "a repo replaces one role of an area" -- "$S/repo-conf" ovr/single
   expect_jq "the replaced role changes, its siblings keep the public value" \
-    '.areas.back.build == "agent:feat:custom" and .areas.back.fix == "agent:fix:patch" and .areas.back.perf == "agent:perf:nodejs" and (.areas.back.review | index("agent:review:back"))'
+    '.areas.back.build == "agent:feat:custom" and .areas.back.fix == "agent:fix:patch" and .areas.back.perf == null and (.areas.back.review | index("agent:review:back"))'
   expect_jq "a -<skill> removes that skill from the list" '.areas.front.skills == []'
   expect_exit 0 "a skill removed by the repo is not in pr-areas skills" -- "$S/pr-areas" ovr/single --files client/a.tsx
   expect_jq "... nor in the result" '(.skills | index("frontend-ui-engineering") | not) and .areas.front == ["client/a.tsx"]'
@@ -694,11 +699,81 @@ if [ -f "$REAL" ]; then
   expect_jq "qa comes from the area" '.qa == "agent:test:e2e"'
 
   expect_exit 0 "effective roles of the sub-areas" -- "$S/repo-conf" ovr/plain
-  expect_jq "back.sub.query inherits build and review from back, not paths" \
-    '.areas.back.sub.query.build == "agent:feat:back" and .areas.back.sub.query.fix == "agent:fix:patch" and (.areas.back.sub.query.review | index("agent:review:back")) and (.areas.back.sub.query.review | index("agent:review:mongodb")) and (.areas.back.sub.query | has("paths") | not) and .areas.back.sub.query.perf == "agent:perf:mongodb"'
+  expect_jq "back.sub.migration inherits build and review from back, not paths" \
+    '.areas.back.sub.migration.build == "agent:feat:back" and .areas.back.sub.migration.fix == "agent:fix:patch" and (.areas.back.sub.migration.review | index("agent:review:back")) and (.areas.back.sub.migration.paths | index("server/*") | not) and .areas.back.sub.migration.perf == null'
+  expect_exit 0 "presets add a sub-area and a reviewer" -- "$S/repo-conf" ovr/node
+  expect_jq "the preset sub-area keeps its own perf, the neutral one inherits the preset perf of back" \
+    '.areas.back.perf == "agent:perf:nodejs" and .areas.back.sub.mongodb.perf == "agent:perf:mongodb" and (.areas.back.sub.mongodb.review | index("agent:review:back")) and .areas.back.sub.migration.perf == "agent:perf:nodejs" and (.areas.back.sub.migration.review | index("agent:review:mongodb")) and (.areas.back.sub.migration.paths | index("db/migrate/*"))'
+  expect_jq "a preset never shows in the result" '(has("use") | not) and .scopes == ["defaults", "repos:ovr/node"]'
   expect_exit 0 "an override of a parent role" -- "$S/repo-conf" ovr/sub
   expect_jq "reaches the sub-areas, whose own roles still win" \
-    '.areas.back.sub.query.fix == "agent:fix:custom" and .areas.back.sub.mongodb.fix == "agent:fix:custom" and .areas.back.sub.query.perf == "agent:perf:mongodb"'
+    '.areas.back.sub.migration.fix == "agent:fix:custom" and (.areas.back.sub | has("mongodb") | not)'
+  reg "$TMP/areas-repos.json"
+
+  echo "pr-areas: stack presets (a sample diff per stack)"
+  jq '.repos = {"acme/node": {"use": ["node", "mongodb"]}, "acme/py": {"use": ["python", "sql"]},
+                "acme/go": {"use": ["go", "sql"]}, "acme/rb": {"use": ["rails", "sql"]},
+                "acme/poly": {"use": ["node", "mongodb", "sql"]}, "acme/bare": {}}' "$REAL" >"$TMP/stack-repos.json"
+  reg "$TMP/stack-repos.json"
+  A="$ROOT/tests/fixtures/areas"
+  has() { printf '((.areas["%s"] // []) as $x | %s | all(. as $f | $x | index($f)))' "$1" "$2"; }  # has AREA JSON_LIST
+  is() { printf '((.areas["%s"] // []) | sort) == (%s | sort)' "$1" "$2"; }  # is AREA JSON_LIST: exactly these files
+
+  expect_exit 0 "node + mongodb" -- "$S/pr-areas" acme/node "$A/node-mongodb.diff"
+  expect_jq "node: every file lands in an area" '.other == []'
+  expect_jq "node: queries, schema and index are back.mongodb, nothing else" \
+    "$(is back.mongodb '["server/services/orders.js","server/models/order.js","migrations/2026-11-16-orders.js"]')"
+  expect_jq "node: a root test/ folder is tests" '.areas.tests == ["test/orders.test.js"] and .areas["back.migration"] == ["migrations/2026-11-16-orders.js"]'
+  expect_jq "node: mongodb reviewer and perf, no sql reviewer" \
+    '(.review | index("agent:review:mongodb")) and (.review | index("agent:review:sql") | not) and .perf == "agent:perf:mongodb" and .by_area.back.perf == "agent:perf:nodejs"'
+
+  expect_exit 0 "python + sql" -- "$S/pr-areas" acme/py "$A/django.diff"
+  expect_jq "django: every file lands in an area" '.other == []'
+  expect_jq "django: ORM by path and by query only, views, tasks, manage.py, settings and commands are back" \
+    "$(is back.django-orm '["shop/models.py","shop/views.py"]') and $(has back.python '["shop/views.py","shop/tasks.py","manage.py","shop/settings.py","shop/management/commands/close_orders.py"]') and .areas[\"back.migration\"] == [\"shop/migrations/0004_order_total.py\"]"
+  expect_jq "django: urls, serializers and routers are api, templates and static front, pytest files tests, pyproject deps" \
+    "$(has api.python '["shop/urls.py","shop/serializers.py","api/routers/orders.py"]') and $(has front '["shop/templates/shop/orders.html"]') and $(is front.python '["shop/static/shop/orders.js"]') and (.areas.tests | sort) == ([\"conftest.py\",\"shop/tests/test_views.py\",\"tests/test_api.py\"] | sort) and .areas.deps == [\"pyproject.toml\"]"
+  expect_jq "django: SQL words in prose (a comment, a doc) are not back.sql" \
+    '(.areas | has("back.sql") | not) and .areas.docs == ["docs/orders.md"]'
+  expect_jq "django: sql reviewer, never the mongodb one (order.delete() is the ORM)" \
+    '(.review | index("agent:review:sql")) and (.review | index("agent:review:mongodb") | not) and .build == "agent:feat:back"'
+
+  expect_exit 0 "the same django diff without a preset" -- "$S/pr-areas" acme/bare "$A/django.diff"
+  expect_jq "neutral areas: no database reviewer, no Mongo false positive, the stack files stay in other" \
+    '(.review | index("agent:review:mongodb") | not) and (.review | index("agent:review:sql") | not) and (.other | index("shop/views.py")) and .areas["back.migration"] == ["shop/migrations/0004_order_total.py"] and (.areas | has("back.mongodb") | not)'
+  expect_jq "neutral areas: back has no perf agent, so a perf finding goes to the fallback" '.by_area.back.perf == null'
+
+  expect_exit 0 "go + sql" -- "$S/pr-areas" acme/go "$A/go.diff"
+  expect_jq "go: every file lands in an area" '.other == []'
+  expect_jq "go: .go files are back, database/sql calls are back.go-sql (a call whose arguments start on the next line too, not r.URL.Query(), not useQuery()), raw SQL is back.sql (a multi-line query too, not a TS enum member)" \
+    "$(has back.go '["cmd/api/main.go","internal/handler/orders.go","internal/store/orders.go","internal/service/orders.go","pkg/handlers/health.go"]') and $(is back.go-sql '["internal/handler/orders.go","internal/store/orders.go"]') and $(is back.sql '["internal/handler/orders.go","internal/store/orders.go","migrations/0002_orders.up.sql"]')"
+  expect_jq "go: handler/ and handlers/ are api, _test.go is tests, go.sum is deps, a React hook is front" \
+    "$(is api.go '["internal/handler/orders.go","internal/handler/orders_test.go","pkg/handlers/health.go"]') and .areas.tests == [\"internal/handler/orders_test.go\"] and (.areas.deps | sort) == [\"go.mod\",\"go.sum\"] and .areas.front == [\"web/src/useOrders.tsx\"]"
+  expect_jq "go: sql reviewer, no mongodb one; no perf agent for go, so the fallback" \
+    '(.review | index("agent:review:sql")) and (.review | index("agent:review:mongodb") | not) and .by_area.back.perf == null and .build == "agent:feat:back"'
+  expect_exit 0 "a test-only go change" -- "$S/pr-areas" acme/go --files pkg/x/foo_test.go
+  expect_jq "today back.go and tests tie and config order gives build and fix to back (pinned: a follow-up gives a test-only change to tests)" \
+    '.areas["back.go"] == ["pkg/x/foo_test.go"] and .areas.tests == ["pkg/x/foo_test.go"] and .build == "agent:feat:back" and .fix == "agent:fix:patch" and .perf == "agent:fix:patch" and (.skills | index("performance-optimization"))'
+
+  expect_exit 0 "rails + sql" -- "$S/pr-areas" acme/rb "$A/rails.diff"
+  expect_jq "rails: every file lands in an area" '.other == []'
+  expect_jq "rails: app/ and lib/ are back, ActiveRecord queries (symbol, hash, array and raw-join forms) and schema are back.activerecord, not the JavaScript .includes( / .pluck(" \
+    "$(has back.rails '["app/models/order.rb","app/controllers/orders_controller.rb","app/mailers/order_mailer.rb","lib/pricing.rb","lib/tasks/orders.rake"]') and $(is back.activerecord '["app/controllers/orders_controller.rb","app/controllers/api/v1/orders_controller.rb","app/mailers/order_mailer.rb","lib/pricing.rb","db/migrate/20261116000000_add_total_to_orders.rb","db/schema.rb","db/structure.sql"]') and .areas[\"back.migration\"] == [\"db/migrate/20261116000000_add_total_to_orders.rb\"]"
+  expect_jq "rails: routes and serializers are api, app/views (erb and slim), app/javascript and app/assets front, specs tests, Gemfile deps" \
+    "$(has api '["app/controllers/api/v1/orders_controller.rb"]') and $(is api.rails '["config/routes.rb","app/serializers/order_serializer.rb"]') and $(is front.rails '["app/views/orders/index.html.erb","app/views/orders/_row.html.slim","app/javascript/tags.js","app/assets/config/manifest.js"]') and .areas.tests == [\"spec/models/order_spec.rb\"] and (.areas.deps | sort) == [\"Gemfile\",\"Gemfile.lock\"]"
+  expect_jq "rails: sql reviewer, never the mongodb one (@order.update is ActiveRecord)" \
+    '(.review | index("agent:review:sql")) and (.review | index("agent:review:mongodb") | not)'
+
+  expect_exit 0 "test naming conventions at the root, without a preset" -- "$S/pr-areas" acme/bare --files test/x.js tests/x.py x_test.go spec/a_spec.rb
+  expect_jq "every one is tests" '(.areas.tests | length) == 4 and .other == []'
+  expect_exit 0 "presets combine" -- "$S/repo-conf" acme/poly
+  expect_jq "two database presets: both sub-areas, both reviewers on the migration" \
+    '(.areas.back.sub | has("mongodb") and has("sql")) and (.areas.back.sub.migration.review | index("agent:review:mongodb")) and (.areas.back.sub.migration.review | index("agent:review:sql")) and .areas.back.perf == "agent:perf:nodejs"'
+  jq '.defaults.use = ["node", "mongodb"] | .repos = {"acme/plain": {}}' "$REAL" >"$TMP/defaults-use-repos.json"
+  reg "$TMP/defaults-use-repos.json"
+  expect_exit 0 "presets called from defaults.use, a repo without use:" -- "$S/pr-areas" acme/plain "$A/node-mongodb.diff"
+  expect_jq "every repo gets the presets: back.mongodb and the node perf agent" \
+    '(.areas | has("back.mongodb")) and .by_area.back.perf == "agent:perf:nodejs" and (.review | index("agent:review:mongodb"))'
   reg "$TMP/areas-repos.json"
 
   jq -e '.repos == {}' "$REAL" >/dev/null && ok "public registry has no repos" || ko "public registry has no repos"

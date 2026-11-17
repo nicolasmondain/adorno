@@ -22,5 +22,12 @@ When this skill is invoked, take on the role below for the current task, then re
 3. **Write**: the repo's `AGENTS.md` (what an agent needs to know, completing what exists without overwriting it) and
    `CONSTRAINTS.md` (skill `constraint-driven-development`: thresholds measured today, not invented).
 4. **Propose** the `local/adorno.yaml` entry for this repo (or, if it belongs to an already declared workspace, what it
-   is missing): `base`, verified commands, `required_checks`, `reviewers`, `team`. The user copies it themselves; you
+   is missing): `base`, verified commands, `required_checks`, `reviewers`, `team`, and `use:` with the stack presets
+   of `repos.yaml` › `presets` (`bin/kit conf` lists them) the repo calls for, one per stack found, with the file that
+   shows it:
+   - `node`: a `package.json` with server code; `mongodb`: `mongodb` or `mongoose` among its dependencies;
+   - `python`: `pyproject.toml`, `requirements*.txt` or `Pipfile`; `go`: `go.mod`; `rails`: a `Gemfile` with `rails`;
+   - `sql`: a relational driver or ORM (`pg`, `mysql2`, `sqlite3`, `knex`, `prisma`, `psycopg`, `django`,
+     `sqlalchemy`, `database/sql`, `sqlx`, `gorm`, `pgx`, `activerecord`).
+   No stack matches → no `use:`, and say that only the neutral areas apply. The user copies the entry themselves; you
    never modify the adorno repo.

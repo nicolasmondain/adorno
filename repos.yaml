@@ -22,7 +22,7 @@
 #                    every workflow that touched code; a repo skill may push and run `gh pr create|edit` itself
 #   areas            code areas, each with detection and roles. Detection: `paths` (bash globs, `*` crosses folders)
 #                    and/or `content` (POSIX ERE run by awk on added lines: no `(?i)`, no `\d`). Roles: `build`, `fix`, `perf`, `qa` (one agent each) and
-#                    `review`, `skills` (lists). `sub` holds sub-areas, one level only (`back.query`, `back.mongodb`):
+#                    `review`, `skills` (lists). `sub` holds sub-areas, one level only (`back.migration`, `back.mongodb`):
 #                    detected on their own `paths`/`content`, they add their files to the parent and inherit its roles
 #                    (single role: own else parent's; list: parent's + own). `always` (`review`, `skills`) applies to
 #                    every change. pr-areas turns a diff into the agents and skills to use.
@@ -87,13 +87,16 @@ defaults:
     post_public: false    # on a public repo, never post production figures in a comment, unless true
     sources: []           # your per-repo hints, in local/adorno.yaml (see local.example/)
 
+  # Neutral areas: a pattern here means one thing whatever the stack (file extensions, naming conventions of tests and
+  # lockfiles, CI folders). What depends on the stack (`models/`, `handlers/`, query regexes, a language's perf agent)
+  # lives in `presets` below, called per repo or workspace with `use:` in local/adorno.yaml.
   areas:
     always:
       review: [agent:review:code, agent:review:ponytail]
 
     front:
-      paths: ["*.tsx", "*.jsx", "*.vue", "*.svelte", "*.css", "*.scss", "*.less", "*.html",
-              "client/*", "*/client/*", "*/ui/*", "*/components/*", "*/pages/*"]
+      paths: ["*.tsx", "*.jsx", "*.vue", "*.svelte", "*.css", "*.scss", "*.less", "*.html", "*.erb", "*.haml",
+              "*/ui/*", "*/components/*", "*/pages/*"]
       build: agent:feat:front
       fix: agent:fix:patch
       perf: agent:perf:front
@@ -105,28 +108,20 @@ defaults:
       paths: ["server/*", "*/server/*", "*/services/*", "*/jobs/*", "*/workers/*", "*/lib/*"]
       build: agent:feat:back
       fix: agent:fix:patch
-      perf: agent:perf:nodejs
       review: [agent:review:back, agent:review:tests, agent:review:perf-back]
       sub:
-        query:
-          content: '\.aggregate\(|\.find(One)?\(|\.(update|delete|insert)(One|Many)?\(|\.bulkWrite\(|rawCollection\(|\$lookup|\$match|\$group'
-          perf: agent:perf:mongodb
-          review: [agent:review:mongodb]
-        mongodb:
-          paths: ["*/migrations/*", "*migration*", "*/collections/*", "*/models/*"]
-          content: '\.createIndex\(|Mongo\.Collection|new Schema\('
-          perf: agent:perf:mongodb
-          review: [agent:review:mongodb]
+        migration:
+          paths: ["migrations/*", "*/migrations/*", "*migration*", "db/migrate/*"]
           skills: [deprecation-and-migration]
 
     api:
-      paths: ["*/api/*", "*/routes/*", "*/methods/*", "*openapi*", "*/api-reference/*"]
+      paths: ["*/api/*", "*/routes/*", "*openapi*", "*/api-reference/*"]
       build: agent:feat:api
       review: [agent:review:api]
       skills: [api-and-interface-design]
 
     security:
-      paths: ["*/auth/*", "*/permissions/*", "*.env*"]
+      paths: ["*/auth/*", "*/permissions/*", "*/policies/*", "*.env*"]
       content: '(password|secret|token|api[_-]?key|jwt|bcrypt|crypto\.|permission|isAdmin|role)'
       fix: agent:fix:security
       review: [agent:review:security]
@@ -137,7 +132,8 @@ defaults:
       skills: [typescript-pro]
 
     tests:
-      paths: ["*.test.*", "*.spec.*", "*/tests/*", "*/__tests__/*", "*/test/*"]
+      paths: ["*.test.*", "*.spec.*", "*_test.*", "*_spec.*", "test_*", "*/test_*", "conftest.py", "*/conftest.py",
+              "test/*", "tests/*", "spec/*", "*/tests/*", "*/__tests__/*", "*/test/*", "*/spec/*"]
       build: agent:test:unit
       fix: agent:test:unit
       review: [agent:review:tests]
@@ -151,7 +147,9 @@ defaults:
       skills: [webapp-testing, playwright-cli]
 
     deps:
-      paths: ["package.json", "*/package.json", "*lock.json", "*.lock", "yarn.lock", "requirements*.txt", "go.mod"]
+      paths: ["package.json", "*/package.json", "*lock.json", "*.lock", "yarn.lock", "requirements*.txt",
+              "*/requirements*.txt", "pyproject.toml", "*/pyproject.toml", "Pipfile*", "go.mod", "*/go.mod", "go.sum",
+              "*/go.sum", "Gemfile", "*/Gemfile", "*.gemspec"]
       build: agent:chore:deps
       fix: agent:chore:deps
       review: [agent:review:security, agent:review:ponytail]
@@ -173,6 +171,92 @@ defaults:
     nit: agent:refactor:simplify
     test: agent:test:unit
     perf: { agent: agent:fix:patch, skills: [performance-optimization] }
+
+# Stack presets: what the neutral areas cannot know. A repo or a workspace calls them in local/adorno.yaml, e.g.
+# `use: [node, mongodb]`, `use: [python, sql]`, `use: [rails, sql]`, `use: [go, sql]` (workflow:repo:onboard proposes
+# them from the detected stack). A preset only adds: sub-areas named after the stack, which bring their files to the
+# parent area and inherit its roles, and entries to the `review` / `skills` lists of the neutral sub-areas. It never
+# rewrites a neutral `paths`, so presets combine. A local preset may not reuse one of these names.
+presets:
+  node:
+    areas:
+      back:
+        perf: agent:perf:nodejs
+
+  mongodb:
+    areas:
+      back:
+        sub:
+          mongodb:
+            paths: ["*/models/*"]
+            content: '\.aggregate\(|\.find(One)?\(|\.(update|delete|insert)(One|Many)?\(|\.bulkWrite\(|\.createIndex\(|new Schema\(|\$lookup|\$match|\$group'
+            perf: agent:perf:mongodb
+            review: [agent:review:mongodb]
+          migration:
+            review: [agent:review:mongodb]
+
+  sql:
+    areas:
+      back:
+        sub:
+          sql:
+            paths: ["*.sql"]
+            content: '^[[:space:]]*(SELECT|UPDATE)( [^=:]|$)|[`"''(](SELECT|UPDATE) |INSERT INTO |DELETE FROM |ALTER TABLE |CREATE (UNIQUE )?INDEX '
+            review: [agent:review:sql]
+          migration:
+            review: [agent:review:sql]
+
+  python:
+    areas:
+      back:
+        sub:
+          python:
+            paths: ["manage.py", "*/views.py", "*/tasks.py", "*/management/*", "*settings*.py"]
+          django-orm:
+            paths: ["*/models.py"]
+            content: '\.objects\.|select_related\(|prefetch_related\(|cursor\.execute\('
+            review: [agent:review:sql]
+      api:
+        sub:
+          python:
+            paths: ["*/urls.py", "*/serializers.py", "*/routers/*"]
+      front:
+        sub:
+          python:
+            paths: ["*/static/*"]
+
+  go:
+    areas:
+      back:
+        sub:
+          go:
+            paths: ["*.go"]
+          go-sql:
+            content: '\.(Query|QueryRow|Exec)(Context)?\(([^)]|$)|sqlx\.|gorm\.|pgx\.'
+            review: [agent:review:sql]
+      api:
+        sub:
+          go:
+            paths: ["*/handler/*", "*/handlers/*"]
+
+  rails:
+    areas:
+      back:
+        sub:
+          rails:
+            paths: ["app/models/*", "app/controllers/*", "app/mailers/*", "lib/*"]
+          activerecord:
+            paths: ["db/schema.rb", "db/structure.sql"]
+            content: '\.where\(|\.(joins|includes|pluck)\((\[?:|[a-z_]+: )|\.joins\(["'']|find_by_sql|add_index|add_column'
+            review: [agent:review:sql]
+      api:
+        sub:
+          rails:
+            paths: ["config/routes.rb", "app/serializers/*"]
+      front:
+        sub:
+          rails:
+            paths: ["app/views/*", "app/javascript/*", "app/assets/*"]
 
 # What a run cost (run-end writes usage.json, run-usage computes it): $ per million tokens, per model id as the
 # transcripts name it; `<model>@fast` for fast mode. A model missing here is reported as unpriced, never as free.

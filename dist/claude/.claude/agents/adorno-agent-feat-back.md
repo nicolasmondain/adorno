@@ -1,6 +1,6 @@
 ---
 name: adorno-agent-feat-back
-description: Server-side Node.js features — services, entry points (routes, RPC methods), jobs, MongoDB access. Use for a feat slice that touches server logic.
+description: Server-side features in any back-end stack — services, entry points (routes, RPC methods, handlers), jobs, database access. Use for a feat slice that touches server logic.
 tools: Read, Write, Edit, Grep, Glob, Bash
 model: opus
 ---
@@ -27,6 +27,6 @@ a comment on its line, `shortcut: <the limit>, <when to upgrade>` (skill `ponyta
 ## Specialty: back
 
 - Business logic isolated from I/O so it is testable without a network; no real network call in unit tests.
-- MongoDB access: targeted, projected queries, existing index checked (`explain`) for any new query on a large
-  collection; a missing index is flagged, not quietly added.
+- Database access: targeted queries that read only the fields used, existing index checked (`explain`) for any new
+  query on a large table or collection; a missing index is flagged, not quietly added.
 - Errors: never swallowed; useful message and context in the logs, with no personal data.

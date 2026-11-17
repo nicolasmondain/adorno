@@ -4,7 +4,7 @@ args: "[owner/repo#N | owner/repo] [--mode report|draft|auto] [--all] [--unatten
 roles: [fix, perf, review]
 uses:
   skills: [adorno-github, adorno-watch, adorno-profile, adorno-voice]
-  agents: [agent:core:triage, agent:adorno, agent:review:code, agent:review:ponytail, agent:review:front, agent:review:perf, agent:review:back, agent:review:mongodb, agent:review:api, agent:review:security, agent:review:tests, agent:fix:patch, agent:refactor:simplify, agent:test:unit, agent:chore:deps, agent:ci:fix, agent:docs:write, agent:fix:security, agent:test:e2e, agent:perf:front, agent:perf:mongodb, agent:perf:nodejs, agent:review:perf-back]
+  agents: [agent:core:triage, agent:adorno, agent:review:code, agent:review:ponytail, agent:review:front, agent:review:perf, agent:review:back, agent:review:mongodb, agent:review:sql, agent:review:api, agent:review:security, agent:review:tests, agent:fix:patch, agent:refactor:simplify, agent:test:unit, agent:chore:deps, agent:ci:fix, agent:docs:write, agent:fix:security, agent:test:e2e, agent:perf:front, agent:perf:mongodb, agent:perf:nodejs, agent:review:perf-back]
   workflows: [workflow:ci:red, workflow:pr:ship]
 model: balanced
 ---
