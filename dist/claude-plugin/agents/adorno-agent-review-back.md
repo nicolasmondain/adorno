@@ -43,13 +43,14 @@ verdict line for a human.
   duplicates; lock or atomic operation where needed.
 - **Server entry points** (routes, RPC methods, handlers, subscriptions): arguments validated by a schema, user
   verified server-side, no data from another account returned.
-- **Unbounded work**: read without `limit` or pagination, whole collection loaded in memory, array that grows with
-  the data.
+- **Unbounded work**: read without `limit` or pagination, whole collection loaded in memory, whole records fetched
+  when a few fields are used (no projection), array that grows with the data.
 - **Per-item I/O**: query, HTTP call or write inside a loop (N+1) where one batched call suffices; sequential awaits
   on independent calls, or parallel ones with no bound on concurrency. The query-level detail (index coverage,
-  aggregation shape, projection) belongs to `agent:review:mongodb`.
+  aggregation shape) belongs to `agent:review:mongodb`.
 - **Event loop and memory**: heavy CPU or synchronous I/O in a request path, large JSON parsed or built at once instead
-  of streamed, repeated work that could be computed once, cache with no size or lifetime bound.
+  of streamed, repeated work that could be computed once, cache with no size or lifetime bound, listener or timer
+  never released.
 - **External dependencies**: timeout, bounded retry, third-party error surfaced cleanly.
 - **Observability**: log useful for diagnosis, with no personal data or secret (skill
   `observability-and-instrumentation`).
