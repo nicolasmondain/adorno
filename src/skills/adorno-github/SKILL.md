@@ -21,6 +21,7 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | `pr-workspace --clean` | deletes the workspaces of closed PRs | L0 * |
 | `pr-areas owner/repo DIFF_FILE` or `owner/repo --files PATH…` (`--files -`: paths on stdin) | code areas touched (front, back, back.query…) and the agents to use: `build`, `fix`, `perf`, `qa`, `review`, `skills`, and `ponytail` (the repo's level) | L0 |
 | `pr-diff owner/repo#N` | metadata + diff saved to a file | L0 |
+| `pr-shortcuts DIFF_FILE` | the `shortcut:` (and older `ponytail:`) comments the diff adds, with `file` and `line`: the PR's shortcuts ledger | L0 |
 | `issue-fetch owner/repo#N` | issue + comments | L0 |
 | `pr-merged owner/repo [--since 14d] [--author LOGIN] [--pr N]` | merged PRs (yours by default): merge commit, files, whether an impact report was already posted | L0 |
 | `pr-deploys owner/repo#N` | when the merge reached each environment (GitHub deployments); `source: none` without deployments | L0 |

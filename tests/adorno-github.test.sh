@@ -614,6 +614,40 @@ else
   ko "pr-areas tests need dist/ — run bin/kit build first"
 fi
 
+echo "pr-shortcuts"
+printf '%s\n' 'diff --git a/server/list.ts b/server/list.ts' '--- a/server/list.ts' '+++ b/server/list.ts' \
+  '@@ -10,3 +10,4 @@ export function list() {' ' const a = 1' '-// shortcut: removed, ignored' \
+  '+  // shortcut: not paged, page it past 500 items' ' // shortcut: context, ignored' \
+  '+const k = "press the keyboard shortcut: ctrl+k"' '@@ -40,2 +41,3 @@' ' x' '+/* ponytail: legacy prefix */' \
+  'diff --git a/client/A.tsx b/client/A.tsx' '--- /dev/null' '+++ b/client/A.tsx' '@@ -0,0 +1,4 @@' '+/**' \
+  '+ * shortcut: jsdoc, x' '+ */' '+{/* shortcut: jsx, x */}' \
+  'diff --git "a/docs/caf\303\251.vue" "b/docs/caf\303\251.vue"' '--- "a/docs/caf\303\251.vue"' \
+  '+++ "b/docs/caf\303\251.vue"' '@@ -1 +1,2 @@' '+<!-- shortcut: html, x -->' '+# shortcut: hash, x' \
+  'diff --git a/old.sh b/old.sh' '--- a/old.sh' '+++ /dev/null' '@@ -1 +0,0 @@' '-# shortcut: gone' >"$TMP/shortcuts.diff"
+expect_exit 0 "lists the markers a diff adds" -- "$S/pr-shortcuts" "$TMP/shortcuts.diff"
+expect_jq "only added lines: not the removed, context or deleted-file ones, nor prose" '.count == 6'
+expect_jq "line of the new file, across hunks, text trimmed" \
+  '.shortcuts[0] == {file: "server/list.ts", line: 11, text: "// shortcut: not paged, page it past 500 items"} and .shortcuts[1].line == 42'
+expect_jq "legacy ponytail:, JSDoc, JSX, HTML and # prefixes" \
+  '[.shortcuts[1:][] | .text[0:6]] == ["/* pon", "* shor", "{/* sh", "<!-- s", "# shor"]'
+expect_jq "a quoted non-ASCII path is decoded" '[.shortcuts[] | select(.file == "docs/café.vue") | .line] == [1, 2]'
+expect_jq "line of each marker in a new file" '[.shortcuts[] | select(.file == "client/A.tsx") | .line] == [2, 4]'
+printf '%s\n' 'diff --git a/my file.ts b/my file.ts' $'--- a/my file.ts\t' $'+++ b/my file.ts\t' '@@ -1 +1,2 @@' ' x' \
+  '+// shortcut: spaced, x' 'diff --git "a/my caf\303\251.ts" "b/my caf\303\251.ts"' $'--- "a/my caf\\303\\251.ts"\t' \
+  $'+++ "b/my caf\\303\\251.ts"\t' '@@ -0,0 +1 @@' '+const s = "// shortcut: in a string"' >"$TMP/spaced.diff"
+expect_exit 0 "names with a space (git ends their header with a TAB)" -- "$S/pr-shortcuts" "$TMP/spaced.diff"
+expect_jq "a TAB-terminated header, plain or quoted, keeps its marker" \
+  '[.shortcuts[] | [.file, .line]] == [["my file.ts", 2], ["my café.ts", 1]]'
+expect_jq "a marker inside a string is listed (the reader drops non-comments)" \
+  '.shortcuts[1].text == "const s = \"// shortcut: in a string\""'
+printf '%s\n' 'diff --git "a/a\tb\303\251.ts" "b/a\tb\303\251.ts"' '--- "a/a\tb\303\251.ts"' '+++ "b/a\tb\303\251.ts"' \
+  '@@ -0,0 +1 @@' '+// shortcut: x' >"$TMP/unparsable.diff"
+expect_exit 1 "a line it cannot parse fails loudly, never dropped" -- "$S/pr-shortcuts" "$TMP/unparsable.diff"
+printf 'diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n+const a = 1\n' >"$TMP/clean.diff"
+expect_exit 0 "a diff without markers" -- "$S/pr-shortcuts" "$TMP/clean.diff"
+expect_jq "empty ledger" '. == {shortcuts: [], count: 0}'
+expect_exit 2 "a missing diff file is a usage error" -- "$S/pr-shortcuts" "$TMP/none.diff"
+
 echo "pr-review-submit"
 printf '%s' '{"event":"COMMENT","body":"Looks good overall.","comments":[{"path":"a.ts","line":3,"body":"Null check?"}]}' >"$TMP/review.json"
 FAKE_PR_AUTHOR=alice ADORNO_DRY_RUN=1 expect_exit 0 "dry-run review" -- "$S/pr-review-submit" acme/docs#10 "$TMP/review.json"
@@ -996,6 +1030,7 @@ guard_at deny "$C" "" "gh pr merge 42"
 guard_at deny "$C" "sess-other" "gh pr create --title t --body b"
 guard_at deny "$C" "" "gh pr create -R acme/readonly --title t --body b"
 guard_at allow "$C" "" "$S/repo-conf acme/docs"
+guard_at allow "$C" "" "$S/pr-shortcuts .agent-run/x/branch.diff"
 guard_at pass "$C" "" "$TMP/fake/adorno-github/scripts/repo-conf"
 guard_at deny "$C" "" "git push" codex
 guard_at pass "$C" "" "git add ." codex
