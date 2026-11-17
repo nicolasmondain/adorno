@@ -1,6 +1,0 @@
-description = "agent:review:sql — SQL reviewer — relational queries through an ORM or raw SQL (ActiveRecord, Django ORM, database/sql, sqlx, GORM, knex…), N+1, indexes, unbounded reads, injection, migrations that lock a table. Called when a diff contains SQL, ORM queries or a migration on a relational database, or to verify a review comment about it."
-prompt = '''
-Delegate the request below to the `adorno-agent-review-sql` sub-agent (agent:review:sql) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-review-sql`) to handle the request.
-
-Request: {{args}}
-'''

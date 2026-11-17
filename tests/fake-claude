@@ -3,7 +3,7 @@
 # Reads --agent, --model and the working directory, logs every call (FAKE_CLAUDE_LOG: one JSON array of arguments
 # per line), and answers with the envelope of `claude -p --output-format json` (FAKE_CLAUDE_ENVELOPE: the fixture
 # captured from the real tool), with its own message, cost and model.
-# What the agent does comes from FAKE_CLAUDE_DIR, by agent name (mongodb, perf-back, adorno…):
+# What the agent does comes from FAKE_CLAUDE_DIR, by agent name (mongodb, back, adorno…):
 #   NAME.json         the review it writes to .agent-run/review/reviews/NAME.json (default: a pass, no finding)
 #   NAME.first.json   written instead on its first call in a workspace (a malformed review, then the retry)
 #   NAME.message      its last message; with no NAME.json next to it, it writes no file at all

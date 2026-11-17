@@ -12,6 +12,7 @@ metadata:
   scope: implementation
   output-format: code
   related-skills: fullstack-guardian, api-designer
+disable-model-invocation: true
 ---
 
 # TypeScript Pro

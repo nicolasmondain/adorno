@@ -2,4 +2,12 @@
   {"severity": "blocker", "file": "server/services/orders.ts", "line": 38,
    "title": "Cross-tenant read: the customer lookup is not scoped to the account",
    "detail": "The customer is looked up by _id only, so an order can expose the name of a customer that belongs to another account.",
-   "fix": "Add the tenant key to the filter of the lookup."}]}
+   "fix": "Add the tenant key to the filter of the lookup."},
+  {"severity": "major", "file": "server/services/orders.ts", "line": 38,
+   "title": "No projection: the whole customer document is fetched to read its name",
+   "detail": "Each lookup returns the full customer document while only the name is used.",
+   "fix": "Pass a projection that keeps the name only."},
+  {"severity": "blocker", "file": "server/services/orders.ts", "line": 35,
+   "title": "N+1: a customer query for each order of the page",
+   "detail": "The loop awaits one findOne per order, so a page of 200 orders costs 200 round trips to the database.",
+   "fix": "Fetch the customers of the page in one batch and join them in memory."}]}

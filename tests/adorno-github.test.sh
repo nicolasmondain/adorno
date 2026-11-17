@@ -602,7 +602,7 @@ expect_jq "unregistered repo flagged" '(.[] | select(.number==12) | .registered)
 expect_jq "my pending review is surfaced" '(.[] | select(.number==10) | .pendingReview) and ((.[] | select(.number==11) | .pendingReview) | not)'
 
 echo "pr-areas (public default rules from repos.yaml)"
-REAL="$ROOT/dist/claude/.claude/skills/adorno-github/repos.json"
+REAL="$ROOT/dist/claude-plugin/skills/adorno-github/repos.json"
 if [ -f "$REAL" ]; then
   jq '.repos = {"acme/app": {"use": ["node", "mongodb"]}, "acme/bare": {}, "acme/leak": {"areas": {"back": {"sub": {"n": {"review": ["-agent:review:tests", "agent:review:code"], "skills": ["-typescript-pro"]}}}, "newa": {"review": ["-agent:review:api", "agent:review:code"]}}}, "acme/docs": {"ponytail": "ultra", "areas": {"back": {"review": ["-agent:review:tests", "agent:review:security"]}}}}' "$REAL" >"$TMP/areas-repos.json"
   reg "$TMP/areas-repos.json"
@@ -614,7 +614,7 @@ if [ -f "$REAL" ]; then
   expect_jq "unmatched files land in other" '.other == ["notes/weird.txt"]'
   expect_jq "a files tie goes to config order (front before back)" '.perf == "agent:perf:front" and .build == "agent:feat:front"'
   expect_jq "review: always + every area, deduplicated" \
-    '(.review | sort) == (["agent:review:code","agent:review:ponytail","agent:review:front","agent:review:perf","agent:review:back","agent:review:tests","agent:review:perf-back","agent:review:mongodb","agent:review:security"] | sort) and (.review | length) == (.review | unique | length)'
+    '(.review | sort) == (["agent:review:code","agent:review:ponytail","agent:review:front","agent:review:back","agent:review:tests","agent:review:mongodb","agent:review:security"] | sort) and (.review | length) == (.review | unique | length)'
   expect_jq "no reviewers key, always is not an area" '(has("reviewers") | not) and (.areas | has("always") | not)'
   expect_jq "by_area carries the roles" '.by_area["back.mongodb"].perf == "agent:perf:mongodb" and .by_area.back.perf == "agent:perf:nodejs" and .by_area.front.perf == "agent:perf:front" and .by_area.docs.perf == null'
   expect_jq "no perf fallback when an area has one" '.skills | index("performance-optimization") | not'
@@ -688,7 +688,7 @@ if [ -f "$REAL" ]; then
   expect_jq "the workspace addition is removed by the repo, with no marker left" \
     '(.areas.back.review | index("agent:review:extra") | not) and (.areas.back.skills | index("extra-skill") | not) and ([.areas.back.review[] | select(startswith("-"))] == [])'
   expect_jq "the repo also removes a public reviewer, the others stay" \
-    '(.areas.back.review | index("agent:review:tests") | not) and (.areas.back.review | index("agent:review:back")) and (.areas.back.review | index("agent:review:perf-back"))'
+    '(.areas.back.review | index("agent:review:tests") | not) and (.areas.back.review | index("agent:review:back"))'
   expect_exit 0 "the workspace alone keeps its addition" -- "$S/repo-conf" ovr/plain
   expect_jq "no workspace match: public list unchanged" '(.areas.back.review | index("agent:review:extra") | not) and (.areas.back.review | index("agent:review:tests"))'
 

@@ -4,7 +4,7 @@ args: "<owner/repo> <branch> [worktree path] [.agent-run folder]"
 roles: [fix, perf, review]
 uses:
   skills: [adorno-github, adorno-commit, adorno-voice]
-  agents: [agent:adorno, agent:review:code, agent:review:ponytail, agent:review:front, agent:review:back, agent:review:mongodb, agent:review:sql, agent:review:api, agent:review:security, agent:review:tests, agent:review:perf, agent:fix:patch, agent:refactor:simplify, agent:test:unit, agent:feat:api, agent:feat:back, agent:feat:front, agent:perf:mongodb, agent:perf:nodejs, agent:chore:deps, agent:ci:fix, agent:docs:write, agent:fix:security, agent:test:e2e, agent:perf:front, agent:review:perf-back]
+  agents: [agent:adorno, agent:review:code, agent:review:ponytail, agent:review:front, agent:review:back, agent:review:mongodb, agent:review:sql, agent:review:api, agent:review:security, agent:review:tests, agent:fix:patch, agent:refactor:simplify, agent:test:unit, agent:perf:mongodb, agent:perf:nodejs, agent:chore:deps, agent:ci:fix, agent:docs:write, agent:fix:security, agent:test:e2e, agent:perf:front]
   workflows: [workflow:pr:open]
 model: balanced
 ---

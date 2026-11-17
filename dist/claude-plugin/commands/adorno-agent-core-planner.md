@@ -1,6 +1,7 @@
 ---
 description: agent:core:planner — Splits a validated spec into ordered vertical slices, each testable, and picks the family agent that will build each slice. Use after the router, before any implementation.
 argument-hint: <request>
+disable-model-invocation: true
 ---
 
 Delegate the request below to the `adorno-agent-core-planner` sub-agent (agent:core:planner) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-core-planner`) to handle the request.

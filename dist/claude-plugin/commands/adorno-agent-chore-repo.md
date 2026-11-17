@@ -1,6 +1,7 @@
 ---
 description: agent:chore:repo — Prepare a repo for agents — detect stack and commands, write AGENTS.md and CONSTRAINTS.md, propose the local/adorno.yaml entry. Use the first time a repo is used (workflow:repo:onboard).
 argument-hint: <request>
+disable-model-invocation: true
 ---
 
 Delegate the request below to the `adorno-agent-chore-repo` sub-agent (agent:chore:repo) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-chore-repo`) to handle the request.

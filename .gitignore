@@ -5,3 +5,8 @@ __pycache__/
 /repos.local.yaml
 # what your benchmark runs produced (bench/run): model output, tokens and costs
 /bench/results/
+# build output: only the Claude Code plugin (the public marketplace installs it from GitHub) and the instructions
+# (bench) are committed; every other target is built in place by `kit build` or by `kit install`
+/dist/*
+!/dist/claude-plugin/
+!/dist/AGENTS.md

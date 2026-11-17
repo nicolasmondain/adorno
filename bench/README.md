@@ -194,7 +194,7 @@ A case is a folder `cases/<id>/`:
   "rationale": "One line: the defect, and what a good review says.",
   "routing": {"areas": ["back", "back.mongodb", "tests", "typescript"],
               "review": ["agent:review:code", "agent:review:ponytail", "agent:review:back", "agent:review:tests",
-                         "agent:review:perf-back", "agent:review:mongodb"],
+                         "agent:review:mongodb"],
               "skills": ["typescript-pro"]},
   "verdict": ["fix"],
   "findings": [{"file": "server/services/orders.ts", "lines": [35, 39], "category": "n-plus-one",
