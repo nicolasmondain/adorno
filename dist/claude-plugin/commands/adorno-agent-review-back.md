@@ -1,5 +1,5 @@
 ---
-description: agent:review:back — Back-end reviewer — Node.js server logic, entry points (routes, RPC methods, handlers), jobs, errors, concurrency, server-side permissions, performance (unbounded reads, per-item I/O, event-loop blocking, memory growth). Called when a diff touches the server, or to verify a review comment about the back end.
+description: agent:review:back — Back-end reviewer — server logic in any stack, entry points (routes, RPC methods, handlers), jobs, errors, concurrency, server-side permissions, performance (unbounded reads, per-item I/O, blocking work in a request path, memory growth). Called when a diff touches the server, or to verify a review comment about the back end.
 argument-hint: <request>
 disable-model-invocation: true
 ---

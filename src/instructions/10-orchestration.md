@@ -54,7 +54,9 @@ goes out); `draft` lets the code go out (commit, push, PR) and keeps the convers
 re-request, review and submit refused), even if a command forgets it. A workflow called by another reuses the open
 run. Push with `git-push` (branch without a PR) or `pr-push` (branch of a PR), which check the level and the rights;
 a direct `git push` / `gh pr create|edit` only from the repo's own `commit_skill` / `pr_skill` in `workflow:pr:ship`,
-which the guard lets through at the run's level.
+which the guard lets through at the run's level. `run-end` also records what the run consumed: `usage.json` in its
+folder, a `Cost:` line in its `status.md` (`--status <file>` when that file is not in the run folder). The final
+report quotes the `usage` line it prints.
 
 **Every workflow that touched code ends with `workflow:pr:ship`**: the repo's `commit_skill` commits what is left;
 the area reviewers and `agent:adorno` check the change against the repo's rules and the request, and every 🔴 or 🟠
