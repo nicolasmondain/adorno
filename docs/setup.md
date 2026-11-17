@@ -171,6 +171,14 @@ equivalent `areas.<area>.review` in the additive form, with a `-x` for each publ
 `adorno-setup` skill does it for you at its start: it shows the diff of `local/adorno.yaml` and writes only after your
 yes, then `bin/kit check` and `bin/kit install`.
 
+**Merged agents.** `agent:review:perf` is part of `agent:review:front` and `agent:review:perf-back` of
+`agent:review:back` ([decision 6](decisions/areas.md)). `bin/kit check` refuses a setting that still names an old id and
+points to `bin/kit migrate agents` (read-only, runs even when `check` fails): per scope, every `areas` role (removals and
+sub-areas included), `fallbacks`, `models.agents` key, Slack watch `action.agent` and Notion `assigned.agents` naming
+one, with what it becomes. A reviewer listed twice after renaming loses its duplicate; a removal `-agent:review:perf`
+is flagged `decision`, since `-agent:review:front` would drop the whole front review. The `adorno-setup` skill applies
+it at its start, like `migrate areas`.
+
 ## 4. Permissions
 
 | Setting | Effect | Example |

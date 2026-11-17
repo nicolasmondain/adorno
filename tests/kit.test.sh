@@ -379,6 +379,42 @@ expect_jq "an area omitting a public reviewer gets its -x" \
 check "migrate prints a YAML snippet per scope" 'grep -q "repos:" "$TMP/err" && grep -q "areas:" "$TMP/err"'
 check "migrate writes nothing" 'cmp -s "$MIG/adorno.yaml" "$TMP/mig-before.yaml" && [ "$(ls "$MIG")" = "adorno.yaml" ]'
 
+echo "migrate agents"
+bad "a merged agent id points to the migration" $'  ghost/repo:\n    areas: {front: {review: ["agent:review:perf"]}}' "names unknown agent 'agent:review:perf' (merged into 'agent:review:front': \`bin/kit migrate agents\`"
+check "an unknown agent is not also reported as missing from the dispatchers" '! grep -q "uses.agents lacks" <<<"$out"'
+MA="$TMP/ma"; mkdir -p "$MA"
+printf '%s\n' 'owner: {name: T, github: t, language: fr}' \
+  'defaults:' '  models:' '    agents: {agent:review:perf-back: balanced, agent:review:perf: fast, agent:review:front: deep}' \
+  'presets:' '  web:' '    areas:' '      front: {review: [agent:review:perf, agent:review:front]}' \
+  'workspaces:' '  acme:' '    repos: ["acme/*"]' '    areas:' '      front: {review: ["-agent:review:perf"]}' \
+  'repos:' '  acme/app:' '    areas:' '      back:' '        review: [agent:review:tests, agent:review:perf-back]' \
+  '        sub: {query: {review: ["-agent:review:perf-back", "-agent:review:back"]}}' \
+  '      docs: {review: [agent:review:security]}' \
+  'slack:' '  watches:' '    w: {channels: ["#c"], includes: [x], action: {agent: agent:review:perf-back}}' \
+  'notion:' '  assigned: {agents: {Perf: agent:review:perf, Bugs: workflow:issue:fix}}' >"$MA/adorno.yaml"
+cp "$MA/adorno.yaml" "$TMP/ma-before.yaml"
+out="$(ADORNO_LOCAL="$MA" "${KIT[@]}" migrate agents 2>"$TMP/err")"; got=$?
+check "migrate agents succeeds although check fails" '[ "$got" = 0 ] && ! ADORNO_LOCAL="$MA" "${KIT[@]}" check >/dev/null 2>&1'
+expect_jq "one row per setting naming a merged id, nothing else" \
+  '([.[] | .scope + " " + .path] | sort) == (["defaults models.agents.agent:review:perf-back", "defaults models.agents.agent:review:perf", "presets.web areas.front.review", "workspaces.acme areas.front.review", "repos.acme/app areas.back.review", "repos.acme/app areas.back.sub.query.review", "slack watches.w.action.agent", "notion assigned.agents.Perf"] | sort)'
+expect_jq "a renamed reviewer is renamed in place" \
+  '(.[] | select(.path == "areas.back.review")) | .old == ["agent:review:tests", "agent:review:perf-back"] and .new == ["agent:review:tests", "agent:review:back"] and (has("decision") | not)'
+expect_jq "a renamed reviewer already present is dropped as a duplicate" \
+  '(.[] | select(.scope == "presets.web")) | .new == ["agent:review:front"]'
+expect_jq "a removal already made on the target only loses its duplicate" \
+  '(.[] | select(.path == "areas.back.sub.query.review")) | .new == ["-agent:review:back"] and (has("decision") | not)'
+expect_jq "a removal that would remove the surviving reviewer asks a human" \
+  '(.[] | select(.scope == "workspaces.acme")) | .new == [] and (.decision | test("agent:review:front"))'
+expect_jq "a model setting moves to the new id, unless the new id has its own" \
+  '([.[] | select(.path | startswith("models.agents."))] | map({(.old): .new}) | add) == {"agent:review:perf-back": "agent:review:back", "agent:review:perf": null}'
+expect_jq "a watch action and a Notion agent are renamed" \
+  '([.[] | select(.scope == "slack" or .scope == "notion") | .new] | sort) == ["agent:review:back", "agent:review:front"]'
+check "migrate agents prints a YAML snippet per scope and flags the decision" \
+  'grep -q "workspaces:" "$TMP/err" && grep -q "agent:review:back: balanced" "$TMP/err" && grep -qi "decide" "$TMP/err"'
+check "migrate agents writes nothing" 'cmp -s "$MA/adorno.yaml" "$TMP/ma-before.yaml" && [ "$(ls "$MA")" = "adorno.yaml" ]'
+out="$("${KIT[@]}" migrate agents 2>/dev/null)"
+check "nothing to migrate in the template layer" '[ "$out" = "[]" ]'
+
 check "review:security opens with a step 0 qualification and a one-line pass" \
   'grep -q "Step 0, qualification" "$ROOT"/dist/claude-plugin/agents/adorno-agent-review-security.md && grep -q "one line" "$ROOT"/dist/claude-plugin/agents/adorno-agent-review-security.md'
 

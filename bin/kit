@@ -519,6 +519,15 @@ AREA_KEYS = {"paths", "content", *ROLE_FAMILIES, "skills", "sub"}
 FALLBACK_FAMILIES = {"nit": ROLE_FAMILIES["fix"], "test": ("test",), "perf": ROLE_FAMILIES["perf"]}
 AREA_REVIEWERS_MSG = ("`area_reviewers` is replaced by `areas.<area>.review`: run the adorno-setup skill (mode repo) "
                       "to migrate; `bin/kit migrate areas` prints the conversion")
+# agents merged into another one: old id -> the id that took over its checks (`bin/kit migrate agents`)
+AGENT_RENAMES = {"agent:review:perf": "agent:review:front", "agent:review:perf-back": "agent:review:back"}
+
+
+def unknown_agent(name: str) -> str:
+    if name in AGENT_RENAMES:
+        return (f"names unknown agent '{name}' (merged into '{AGENT_RENAMES[name]}': "
+                f"`bin/kit migrate agents` prints the conversion)")
+    return f"names unknown agent '{name}'"
 
 
 def area_refs(conf: dict) -> list[tuple[str, str]]:
@@ -550,7 +559,8 @@ def validate_roles(reg: dict, items: dict) -> list[str]:
     errors: list[str] = []
     scopes = [reg.get("defaults") or {}, *(c or {} for c in (reg.get("presets") or {}).values()),
               *(c or {} for c in (reg.get("workspaces") or {}).values()), *(c or {} for c in (reg.get("repos") or {}).values())]
-    refs = [(path, ref) for conf in scopes if isinstance(conf, dict) for path, ref in area_refs(conf)]
+    known = {i.id for i in items["agent"].values()}   # an unknown agent is validate_areas' error, with its migration hint
+    refs = [(path, ref) for conf in scopes if isinstance(conf, dict) for path, ref in area_refs(conf) if ref in known]
     for it in sorted(items["workflow"].values(), key=lambda w: w.id):
         roles = it.meta.get("roles")
         if roles is None:
@@ -642,7 +652,7 @@ def validate_areas(conf: dict, where: str, scope: str, agent_ids: set, skill_nam
             return
         name = ref[1:] if ref.startswith("-") else ref
         if name not in agent_ids:
-            errors.append(f"{where}: {path} names unknown agent '{name}'")
+            errors.append(f"{where}: {path} {unknown_agent(name)}")
         elif families and name.split(":")[1:2] and name.split(":")[1] not in families:
             errors.append(f"{where}: {path}: '{name}' is not a {'/'.join(families)} agent")
 
@@ -785,7 +795,7 @@ def validate_watches(reg: dict, where: str, agent_ids: set) -> list[str]:
                         errors.append(f"{where}: {scope}.regex is invalid: {e}")
             action = w.get("action") or {}
             if action.get("agent") and action["agent"] not in agent_ids:
-                errors.append(f"{where}: {scope}.action.agent names unknown agent '{action['agent']}'")
+                errors.append(f"{where}: {scope}.action.agent {unknown_agent(action['agent'])}")
             if action and not (action.get("agent") or action.get("workflow") or action.get("prompt")):
                 errors.append(f"{where}: {scope}.action needs `agent`, `workflow` or `prompt`")
         if slack.get("mentions") is not None:
@@ -826,7 +836,7 @@ def validate_models(m, where: str, agent_ids: set, delegable: set) -> list[str]:
     for key in ("agents", "workflows"):
         for ref, spec in (m.get(key) or {}).items():
             if key == "agents" and ref not in agent_ids:
-                errors.append(f"{where}.agents names unknown agent '{ref}'")
+                errors.append(f"{where}.agents {unknown_agent(ref)}")
             if isinstance(spec, dict):
                 if spec.get("route") and key == "workflows":
                     errors.append(f"{where}.workflows.{ref}: only agents can be sent to a route")
@@ -1409,6 +1419,72 @@ def migrate_areas(public: dict, loc: dict) -> list[dict]:
     return out
 
 
+def rename_refs(old) -> tuple:
+    """A role value (one ref or a list) with every merged id renamed, duplicates dropped: (new, decision or None).
+    A removal `-old` would become `-new` and drop the surviving agent entirely: left out, for a human to decide."""
+    vals = old if isinstance(old, list) else [old]
+    new: list = []
+    notes: list[str] = []
+    for v in vals:
+        neg = isinstance(v, str) and v.startswith("-")
+        name = v[1:] if neg else v
+        if name in AGENT_RENAMES:
+            target = AGENT_RENAMES[name]
+            if neg and "-" + target not in vals:
+                notes.append(f"`{v}` removed only {name}, whose checks are now in {target}; `-{target}` would remove "
+                             f"{target} entirely: keep {target} (proposed: the entry is dropped) or add `-{target}`")
+                continue
+            v = ("-" if neg else "") + target
+        if v not in new:
+            new.append(v)
+    return (new if isinstance(old, list) else (new or [None])[0]), (" ".join(notes) or None)
+
+
+def migrate_agents(loc: dict) -> list[dict]:
+    """Every setting of the personal layer that names a merged agent id (AGENT_RENAMES), and what it becomes."""
+    out: list[dict] = []
+
+    def ref(scope: str, path: str, old) -> None:
+        vals = old if isinstance(old, list) else [old]
+        if any(isinstance(v, str) and v.lstrip("-") in AGENT_RENAMES for v in vals):
+            new, decision = rename_refs(old)
+            out.append({"scope": scope, "path": path, "old": old, "new": new, **({"decision": decision} if decision else {})})
+
+    def area(scope: str, path: str, a: dict) -> None:
+        for role in ROLE_FAMILIES:
+            ref(scope, f"{path}.{role}", a.get(role))
+        for name, sub in (a.get("sub") or {}).items():
+            if isinstance(sub, dict):
+                area(scope, f"{path}.sub.{name}", sub)
+
+    scopes = [("defaults", loc.get("defaults"))]
+    for group in ("presets", "workspaces", "repos"):
+        scopes += [(f"{group}.{n}", c) for n, c in (loc.get(group) or {}).items()]
+    for scope, conf in scopes:
+        if not isinstance(conf, dict):
+            continue
+        for name, a in (conf.get("areas") or {}).items():
+            if isinstance(a, dict):
+                area(scope, f"areas.{name}", a)
+        for key, v in (conf.get("fallbacks") or {}).items():
+            ref(scope, f"fallbacks.{key}" + (".agent" if isinstance(v, dict) else ""), v.get("agent") if isinstance(v, dict) else v)
+        agents = (conf.get("models") or {}).get("agents") or {}
+        for old, spec in agents.items():
+            if old in AGENT_RENAMES:
+                new = AGENT_RENAMES[old]
+                row = {"scope": scope, "path": f"models.agents.{old}", "old": old, "new": new, "value": spec}
+                if new in agents:   # the surviving agent has its own setting: it stays, the old one goes
+                    row["new"] = None
+                    if agents[new] != spec:
+                        row["decision"] = f"{new} keeps its own setting {agents[new]!r}; {old} had {spec!r}"
+                out.append(row)
+    for name, w in ((loc.get("slack") or {}).get("watches") or {}).items():
+        ref("slack", f"watches.{name}.action.agent", ((w or {}).get("action") or {}).get("agent"))
+    for db, target in (((loc.get("notion") or {}).get("assigned") or {}).get("agents") or {}).items():
+        ref("notion", f"assigned.agents.{db}", target)
+    return out
+
+
 def nest(path: str, value) -> dict:
     for key in reversed(path.split(".")):
         value = {key: value}
@@ -1418,15 +1494,29 @@ def nest(path: str, value) -> dict:
 def cmd_migrate(args) -> None:
     """Read-only, and works when `check` fails: it reads the two files directly."""
     loc = load_yaml(LOCAL_CONF) if LOCAL_CONF.exists() else {}
-    rows = migrate_areas(load_yaml(ROOT / "repos.yaml"), loc)
+    agents = args.what == "agents"
+    rows = migrate_agents(loc) if agents else migrate_areas(load_yaml(ROOT / "repos.yaml"), loc)
     print(json.dumps(rows, indent=2, ensure_ascii=False))
     for scope in dict.fromkeys(r["scope"] for r in rows):
         snippet: dict = {}
+        notes: list[str] = []
         for r in (r for r in rows if r["scope"] == scope):
-            snippet = deep_merge(snippet, nest(r["area_path"], r["new"]))
+            if not agents:
+                snippet = deep_merge(snippet, nest(r["area_path"], r["new"]))
+                continue
+            if r["path"].startswith("models.agents."):
+                notes.append(f"remove {r['path']}")
+                if r["new"]:
+                    snippet = deep_merge(snippet, {"models": {"agents": {r["new"]: r["value"]}}})
+            else:
+                snippet = deep_merge(snippet, nest(r["path"], r["new"]))
+            if r.get("decision"):
+                notes.append(f"decide ({r['path']}): {r['decision']}")
         group, _, name = scope.partition(".")
         head = {group: {name: snippet}} if name else {group: snippet}
-        print(f"# {scope}: replaces area_reviewers\n" + yaml.safe_dump(head, sort_keys=False), file=sys.stderr)
+        title = "renamed agents" if agents else "replaces area_reviewers"
+        print(f"# {scope}: {title}\n" + "".join(f"# {n}\n" for n in notes)
+              + yaml.safe_dump(head, sort_keys=False), file=sys.stderr)
 
 
 def cmd_build(args) -> None:
@@ -2461,7 +2551,7 @@ def main() -> None:
     p.add_argument("--orphans", action="store_true", help="only the agents no area role, fallback or entry names")
     p.set_defaults(fn=cmd_list)
     p = sub.add_parser("migrate", help="print the conversion of a legacy setting (read-only)")
-    p.add_argument("what", choices=["areas"])
+    p.add_argument("what", choices=["areas", "agents"])
     p.set_defaults(fn=cmd_migrate)
     p = sub.add_parser("conf", help="the settings a repo resolves to, with the scopes that matched")
     p.add_argument("repo", nargs="?", help="owner/repo (default: the current directory's repo)")

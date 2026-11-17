@@ -26,6 +26,13 @@ Otherwise `local/adorno.yaml` still has `area_reviewers`, now replaced by `areas
    and order stay.
 4. Apply: `<source>/bin/kit check`, then `<source>/bin/kit install`.
 
+## Merged agent ids (any mode, at the start)
+
+Run `<source>/bin/kit migrate agents` (read-only, works even when `check` fails). An empty list → nothing to do.
+Otherwise each row (`scope`, `path`: `old` → `new`) is a setting naming an agent merged into another: show the diff and
+apply it as in steps 1, 3 and 4 above. A row with `decision` is a question for the owner, never converted silently: a
+removal of the merged agent would become the removal of the one that took over its checks.
+
 ## Mode `profile`
 
 Goal: `agent:adorno` decides and writes like the owner. The templates of `local.example/` show the expected shape;
