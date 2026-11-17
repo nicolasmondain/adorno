@@ -27,7 +27,8 @@ Per case and overall, on the merged review (`review.json`):
 | verdict | the merged verdict (`pass`, `fix`, `block`) is one the case accepts |
 | clean cases | on a case without defect: findings reported (false alarms), and the verdict must be `pass` |
 | reviews | reviews that `review-merge` rejected or that never came, after one retry |
-| after `agent:adorno` | the same recall and precision on what it kept (`review-final.json`, inline comments and their badges), over the runs where that file is readable; the runs where it is absent or invalid are counted apart |
+| after `agent:adorno` | the same recall and precision on what it kept (`review-final.json`, inline comments and their badges), over the runs where that file is readable, or where it wrote only its notes (nothing worth posting: no comment, verdict `pass`) when its pass ended without error; the runs where it wrote nothing, an invalid file, or notes from a pass cut by the budget or the turns are counted apart |
+| `agent:adorno` on a fixed review | on the cases of kind `adorno` (below), apart from the reviewers' measures: true findings kept, planted false findings dropped, precision, severity and verdict of what it would post |
 | cost | tokens in and out, the cost the tool reports, agent time, the model that really ran, per agent and in total |
 | stability | over several repeats: mean, worst and best run of recall and precision |
 
@@ -53,7 +54,7 @@ that repo's settings, and the run records any difference with `case.json` (`rout
 
 ```sh
 bench/run --case mongo-n-plus-one --budget-usd 5      # one case, each agent on its own tier
-bench/run --label tiers --budget-usd 30               # the 13 cases
+bench/run --label tiers --budget-usd 30               # every case
 bench/report --label tiers                            # the report again, after grading extras for instance
 ```
 
@@ -121,11 +122,40 @@ than its fix.
 
 Measured on 2026-11-14 with Claude Code 2.1.325, each agent on its default tier, on `mongo-n-plus-one` (6 reviewers
 and `agent:adorno`): **1.53 USD** and 4 minutes. A reviewer cost 0.15 to 0.22 USD, `agent:adorno` 0.44 USD; 653k
-tokens in (mostly read from cache) and 16k out. The 13 cases start 69 reviewers and 13 `agent:adorno` passes: count
+tokens in (mostly read from cache) and 16k out. The 13 review cases start 69 reviewers and 13 `agent:adorno` passes, the 2
+cases of kind `adorno` one pass each (about 0.45 USD): count
 about 18 USD and 50 minutes per repeat, to be measured on your side with one case first. Always pass `--budget-usd`:
 no case starts once the spent amount plus the dearest case so far would exceed it, what is left is split over the
 calls (over the reviewers of a round, then all of it to `agent:adorno`), and the report says at the top what was
 skipped. The budget relies on the cost the tool reports.
+
+## A case for agent:adorno alone
+
+`agent:adorno` is the last filter: it re-verifies each specialist's point and drops what the code contradicts. On a
+review case it only meets the false positives the reviewers happen to make. A case of kind `adorno` gives it a fixed
+merged review instead, with true findings and **planted** false ones, and measures what it keeps and what it drops,
+for the price of one pass. Its folder holds, on top of `base/` and `change.diff`:
+
+- `reviews/<name>.json`: one review per reviewer of `routing.review`, as the specialists write them; the runner merges
+  them with `review-merge` and starts `agent:adorno` alone;
+- in `case.json`: `"kind": "adorno"`, `findings` (the true findings it must keep), and `planted` (the false findings
+  it must drop, same `file`, `lines`, `keywords`, plus `why`: what in the code contradicts it).
+
+```json
+"planted": [{"file": "server/services/orders.ts", "lines": [38, 38],
+             "keywords": ["(is|are) not scoped", "cross[- ]tenant (read|leak|access)"],
+             "why": "the findOne filter is { _id: order.customerId, accountId }: it is scoped to the account"}]
+```
+
+A comment of `agent:adorno` matching a planted finding counts against precision and `dropped` (against `dropped` even
+when it also matches a true finding); one matching nothing is to grade, like a reviewer's. `adorno-false-positives`
+keeps the N+1 of `mongo-n-plus-one`, reported a second time at an inflated `blocker`, among four false findings (one on
+a line the diff does not touch); `adorno-clean` gives two false findings on the refactor of `clean-refactor`, where
+nothing is worth posting. Plant false findings that a careful reader refutes from the code alone: a filter or projection
+that is there, a test that exists, a behavior the diff does not change. Give a planted finding the keywords of its false
+claim only, so a true comment on the same lines does not match it. `tests/bench.test.sh` checks that every expected and
+planted finding is in the given reviews, and that posting them all verbatim scores each true one found and each planted
+one kept.
 
 ## Add a case
 

@@ -18,7 +18,12 @@ No checkpoint: the PR opens without waiting for a "yes" (running the workflow is
    - the title in Conventional Commit format for the main change;
    - the description following `process.md` § Pull requests: What / How / mermaid / Verification, `How to test` opened
      by the commands actually run and their result, link to the issue (`Fixes #n`, `Fixes owner/repo#n` from another
-     repo), what the review loop fixed, the 🟡 and ❓ left (`Impact / Risks`). No real data;
+     repo), what the review loop fixed, the 🟡 and ❓ left and the ponytail notes of the run's `status.md` (lite:
+     the smaller option, ultra: the pushback) (`Impact / Risks`). No real data;
+   - in `Impact / Risks`: what the deploy needs (a new environment variable or setting, a migration and when to run
+     it) and why a plain revert would not be safe (data the change writes, a migration that does not roll back), only
+     when present: a safe revert goes unsaid; the signals to watch once deployed (what `workflow:pr:impact` will
+     measure) whenever the change touches a runtime path (route, job, query, UI). Otherwise nothing written;
    - a `## Shortcuts` section, after `Impact / Risks`: the shortcuts this branch leaves in the code, from
      `adorno-github/scripts/pr-shortcuts <run>/branch.diff` (only the lines the diff adds), one line per marker,
      `` - `file:line` — <the limit> · upgrade: <the trigger> ``, taken from the comment; a marker that names no

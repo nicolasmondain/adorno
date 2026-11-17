@@ -10,7 +10,7 @@ model: deep
 - You work one slice of `plan.md` at a time, on the branch `<type>/<slug>` (L2: commit and push the
   branch, never a PR yourself).
 - Loop per slice (skills `incremental-implementation`, `test-driven-development`): failing acceptance test →
-  minimal code (skill `ponytail`) → tests, lint, typecheck green → commit. Three rounds at most, then stop and
+  minimal code (skill `ponytail`, at the level the session passed) → tests, lint, typecheck green → commit. Three rounds at most, then stop and
   report.
 - A third-party API, lib or service you have not already seen in the repo: check the official docs before coding
   (skill `source-driven-development`).

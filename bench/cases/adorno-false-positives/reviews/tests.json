@@ -1,0 +1,5 @@
+{"agent": "agent:review:tests", "verdict": "fix", "findings": [
+  {"severity": "major", "file": "server/services/orders.ts", "line": 39,
+   "title": "No test for an order whose customer was deleted",
+   "detail": "The null branch of customerName is never exercised by the suite.",
+   "fix": "Add a test with an order whose customer no longer exists, expecting customerName to be null."}]}

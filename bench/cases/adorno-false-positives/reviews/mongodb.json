@@ -1,0 +1,5 @@
+{"agent": "agent:review:mongodb", "verdict": "fix", "findings": [
+  {"severity": "major", "file": "server/services/orders.ts", "line": 36,
+   "title": "N+1: one findOne on customers per order",
+   "detail": "listOrdersWithCustomer awaits a findOne inside the loop: up to PAGE_SIZE (200) sequential round trips for one page of orders.",
+   "fix": "Collect the customerIds, run one find({ _id: { $in: ids }, accountId }) with the same projection, and join in memory."}]}

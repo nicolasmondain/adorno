@@ -4,7 +4,7 @@ Input: {{args}}
 
 **Run** — reuse the caller's run: it needs L3 to open or update the PR (L2: commit and push, then stop and say the
 PR is beyond the run's level). Called alone: `adorno-github/scripts/run-begin --workflow workflow:pr:ship --mode auto
---level L3 --repo owner/repo`, then always `run-end <id>`, even after a failure.
+--level L3 --repo owner/repo`, then always `run-end <id> done | draft | stopped | failed`, even after a failure.
 
 Nothing here waits for a "yes": running the workflow that touched the code is the explicit request. What stops it is
 a refusal (exit 4 or 5 from a script, `deny` from the guard): report it, never work around it, never reword a refused
@@ -28,7 +28,8 @@ command.
      half done is a 🟠 anchored on its line there. `review-merge` → the verdict.
    - A 🔴 or a 🟠 → fixed in the flow: each by `by_area.<a>.fix` (or `.perf` for a performance point; null: `fallbacks.perf`, agent and its `skills`) of its file's
      area (`pr-areas --files <file>`; nit: `fallbacks.nit`, missing test: `fallbacks.test`), with that area's `skills`, tests and lint green, committed with `commit_skill`;
-     then the reviewers again on the new commits and on the points still open. Two fix rounds at most.
+     then the reviewers again on the new commits and on the points still open. Two fix rounds at most, each opened
+     with `run-mark round <n> 2 "<what is left>"` (the run's journal frames it).
    - Clean (no 🔴 nor 🟠, the request met) → **ready for review**. The cap reached with a 🔴 or 🟠 still open:
      no PR yet → it is opened as **draft**, those points at the top of its description with `file:line`; a PR already
      open → those commits are not pushed (reviewers would see known 🔴 or 🟠 land on it). Either way `status.md` says
@@ -55,23 +56,25 @@ command.
    - a repo skill: run it in the worktree, as it is written. It may push and run `gh pr create` itself: inside the
      run the guard lets `git push origin <branch>` and `gh pr create` through (never forced, never the base, at the
      run's level). Then `pr-status owner/repo` again: no PR for the branch → stop and report what the skill did;
-     its description has no `## Proof`, misses a source of the run's `refs.json` (`## Sources`) or a marker of
-     `pr-shortcuts` (`## Shortcuts`, both in `workflow:pr:open` step 3; `workflow:pr:open` step 1 does not run here,
-     so write the whole branch's diff first: `git diff origin/<base>...HEAD > <run>/branch.diff`, then
-     `pr-shortcuts <run>/branch.diff`) → `agent:adorno` appends
-     what is missing and publishes it with `pr-edit owner/repo#N "<its title>"
-     <file> [--refs <run>/refs.json [--withhold <url>]…] --attach …`; opened as draft while the verdict is clean and
-     the proof complete → `pr-ready owner/repo#N`.
+     its description has no `## Proof`, misses a source of the run's `refs.json` (`## Sources`), the ponytail notes
+     of `status.md` (under Impact / Risks) or a marker of `pr-shortcuts` (`## Shortcuts`, all in `workflow:pr:open`
+     step 3; `workflow:pr:open` step 1 does not run here, so write the whole branch's diff first:
+     `git diff origin/<base>...HEAD > <run>/branch.diff`, then `pr-shortcuts <run>/branch.diff`) → `agent:adorno`
+     appends what is missing and publishes it with `pr-edit owner/repo#N "<its title>" <file> [--refs
+     <run>/refs.json [--withhold <url>]…] --attach …`; opened as draft while the verdict is clean and the proof
+     complete → `pr-ready owner/repo#N`.
 7. **PR already open** → push, update, ready:
    - push: `pr-push owner/repo#N` (or the repo skill pushes itself, as above);
    - default update: `agent:adorno` compares the title and description to `git diff origin/<base>...HEAD` and the
-     proof to `qa/`. The scope moved (a new What or How, a new risk, a verification that no longer matches, a marker
-     of `pr-shortcuts` added or gone) or new proof → new title and description in English, in the owner's voice
-     (`adorno-voice`), keeping the current `## Sources`, `## Shortcuts` redone from the whole branch (rewrite
-     `<run>/branch.diff` with `git diff origin/<base>...HEAD`, run `pr-shortcuts <run>/branch.diff`, never only the new
-     commits), published by `pr-edit owner/repo#N "<title>" <file> [--refs <run>/refs.json [--withhold <url>]…]
-     [--attach <new media>]…` (`--refs` whenever the run has one). Unchanged → nothing. A repo skill: run it in
-     update mode (it receives `#N`); it may run `gh pr edit` itself, the new proof then goes out with `pr-edit`;
+     proof to `qa/`, and takes the new ponytail notes of `status.md` into account. The scope moved (a new What or
+     How, a new risk, a verification that no longer matches, a marker of `pr-shortcuts` added or gone), new proof or
+     a new ponytail note → new title and description in English, in the owner's voice (`adorno-voice`), keeping the
+     current `## Sources`, `## Shortcuts` redone from the whole branch (rewrite `<run>/branch.diff` with
+     `git diff origin/<base>...HEAD`, run `pr-shortcuts <run>/branch.diff`, never only the new commits), published
+     by `pr-edit owner/repo#N "<title>" <file> [--refs <run>/refs.json [--withhold <url>]…] [--attach <new media>]…`
+     (`--refs` whenever the run has one). Unchanged → nothing. A repo skill: run it in update mode (it receives
+     `#N`); it may run `gh pr edit` itself, the new proof and the new ponytail notes of `status.md` (Impact / Risks)
+     then go out with `pr-edit`;
    - still a draft, the verdict on the whole branch clean and the proof complete → `pr-ready owner/repo#N`.
 8. **After the PR** — with an `.agent-run` folder (none → skip, one line in the report): the repo's `after_pr` (repo
    skills to run once a PR exists, e.g. filling the Notion ticket of a fixed bug):
