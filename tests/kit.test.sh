@@ -147,6 +147,15 @@ printf '%s' "$PAYLOAD" | PATH=/nonexistent /bin/sh -c "$JHOOK" 2>/dev/null; got=
 check "without python3 the journal hook lets the session go on (exit 0): it records, it does not guard" '[ "$got" = 0 ]'
 rm -rf "$ADORNO_HOME/runs"
 check "tiers become Claude models" 'grep -q "^model: opus" "$A/.claude/agents/adorno.md"'
+# the agents that judge (verdict, block, publish in the owner's name) stay on deep or above: a lower tier
+# needs a bench measure first (docs/models.md), as review:api and review:tests got before moving to balanced
+for agent in adorno adorno-agent-review-code adorno-agent-review-security; do
+  check "$agent judges: deep or above (opus, fable); a lower tier needs a bench measure first (docs/models.md)" \
+    'grep -Eq "^model: (opus|fable)$" "$A/.claude/agents/$agent.md"'
+done
+for agent in adorno-agent-review-api adorno-agent-review-tests; do
+  check "$agent runs on balanced (sonnet), the tier the bench measured" 'grep -q "^model: sonnet$" "$A/.claude/agents/$agent.md"'
+done
 check "frontier becomes fable" 'grep -q "^model: fable" "$A/.claude/agents/adorno-agent-core-planner.md"'
 check "an agent's effort reaches Claude" 'grep -q "^effort: low" "$A/.claude/agents/adorno-agent-core-triage.md"'
 check "a workflow's tier and effort reach its command" 'grep -q "^model: haiku" "$A/.claude/commands/adorno-pr-status.md" && grep -q "^effort: low" "$A/.claude/commands/adorno-pr-status.md"'
