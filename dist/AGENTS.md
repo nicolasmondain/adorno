@@ -91,8 +91,8 @@ every workflow the run launches: nobody is there to answer, so the run never ask
 - `--unattended` never widens a mode or a level: they are the ones the scheduler passed.
 
 **Runs.** A workflow that writes to GitHub starts with `adorno-github/scripts/run-begin --workflow <id>
---mode <mode> --level <Lx> --repo owner/repo` and always ends with `run-end <id>`. The granted right lives in a
-file, not in an environment variable: without a run open on the repo, every write script refuses (L0). A run names
+--mode <mode> --level <Lx> --repo owner/repo` and always ends with `run-end <id> done | draft | stopped | failed` (how
+it ended). The granted right lives in a file, not in an environment variable: without a run open on the repo, every write script refuses (L0). A run names
 each repo it touches (`--repo`, at least one) and is valid only for them; two sessions on the same repo: the strictest
 applies, and the script says so. A run exists only in the session that opened it: after a `/clear`, reopen it; never
 set `CLAUDE_CODE_SESSION_ID` or `HOME` yourself (the guard hook refuses it). A command refused by the hook is not

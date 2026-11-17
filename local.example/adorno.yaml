@@ -144,3 +144,8 @@ notion:                                # workflow:notion:assigned (Notion connec
       "Bugs": workflow:issue:fix
     mode: report                       # report: analysis and plan · run: launches the agent or the workflow
     level: L0                          # permission level in run mode
+
+journal:                               # the journal of every run (skill adorno-journal), private, under ~/.adorno/runs
+  reasoning: false                     # true: also copy the models' reasoning when the tool's transcripts hold it
+  retention_days: 30                   # journals older than this are removed when a run opens…
+  max_mb: 2048                         # …then the oldest ones while all journals weigh more than this

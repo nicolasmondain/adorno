@@ -1,0 +1,2 @@
+{"agent": "agent:review:security", "verdict": "fix",
+ "findings": [{"severity": "major", "file": "src/teams/list.ts", "line": 42, "title": "The cursor is not validated"}]}
