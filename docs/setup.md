@@ -407,7 +407,7 @@ each tool:
 | Codex | the session's model: Codex has no subagents, the agents are skills there | the session's model (`.codex/config.toml`) |
 
 The repo's defaults: `triage`, `router` and `workflow:pr:status` on `fast`; the sessions that orchestrate the other
-workflows on `balanced`; every other agent on `deep`; `intake`, `planner` and `fix:investigate` on `frontier`. A capped
+workflows on `balanced`; `review:api` and `review:tests` on `balanced` (measured, [models.md](models.md#measuring)); every other agent on `deep`; `intake`, `planner` and `fix:investigate` on `frontier`. A capped
 loop's last round climbs one tier (`adorno-run-plan` › Loops).
 
 **Setting it**, at any level of `local/adorno.yaml` (defaults, preset, workspace, repo):
