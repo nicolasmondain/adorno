@@ -546,6 +546,111 @@ expect_exit 0 "check NAME on a local source" -- "${IKKIT[@]}" import --check loc
 check "it says nothing is pinned and checks only that import" \
   'grep -q "^loc: local source, nothing pinned" <<<"$out" && ! grep -q "^up:" <<<"$out"'
 
+in_dir() { (cd "$1" && shift && "$@"); }
+# shellcheck disable=SC2034  # SBR is read by check's eval; bin/kit resolves its root (/var is /private/var on macOS)
+SBR="$(cd "$SB" && pwd -P)"
+
+echo "build"
+sed -i.bak 's/^version: .*/version: 9.8.7/' "$SB/kit.yaml"; rm -f "$SB/kit.yaml.bak"
+# shellcheck disable=SC2034  # NAME is read by check's eval on the next lines
+NAME="$(sed -n 's/^name: //p' "$SB/kit.yaml")"
+echo stray >"$SB/dist/stray.md"
+expect_exit 0 "build the sandbox" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" build
+check "the plugin manifest carries kit.yaml's name and version" \
+  'jq -e --arg n "$NAME" ".name == \$n and .version == \"9.8.7\"" "$SB/dist/claude-plugin/.claude-plugin/plugin.json" >/dev/null'
+check "the marketplace lists that plugin from ./dist/claude-plugin" \
+  'jq -e --arg n "$NAME" ".name == \$n and (.plugins | length) == 1 and .plugins[0].name == \$n and .plugins[0].version == \"9.8.7\" and .plugins[0].source == \"./dist/claude-plugin\"" "$SB/.claude-plugin/marketplace.json" >/dev/null'
+check "a file left in dist/ by an earlier build is gone" '[ ! -e "$SB/dist/stray.md" ]'
+digest() { (cd "$SB" && find dist .claude-plugin -type f -exec shasum {} + | sort); }
+digest >"$TMP/build-1"
+ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" build >/dev/null 2>&1
+check "a second build is byte-identical" 'digest | cmp -s - "$TMP/build-1"'
+cp "$ROOT/kit.yaml" "$SB/kit.yaml"
+
+echo "new"
+NEW=(env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" new)
+expect_exit 0 "new agent family:specialty" -- "${NEW[@]}" agent feat:probe
+check "... writes src/agents/<family>/<specialty>.md, its name left to the path" \
+  'grep -q "^description:" "$SB/src/agents/feat/probe.md" && ! grep -q "^name:" "$SB/src/agents/feat/probe.md"'
+out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
+if [ "$got" != 0 ] && grep -q "orphan agent 'agent:feat:probe': no area role, fallback or entry names it" <<<"$out"; then ok "a new agent no role names fails the public check as an orphan"; else ko "a new agent no role names fails the public check as an orphan" "exit $got: $(tail -c 300 <<<"$out")"; fi
+echo mine >>"$SB/src/agents/feat/probe.md"
+expect_exit 1 "new on an existing agent is refused" -- "${NEW[@]}" agent feat:probe
+check "... and leaves the file as it was" 'grep -q "already exists" "$TMP/err" && tail -n 1 "$SB/src/agents/feat/probe.md" | grep -qx mine'
+rm -rf "$SB/src/agents/feat/probe.md"
+expect_exit 0 "new workflow domain:action" -- "${NEW[@]}" workflow dom:act
+check "... writes src/workflows/<domain>/<action>.md with the {{args}} input" \
+  'grep -qx "Input: {{args}}" "$SB/src/workflows/dom/act.md" && ! grep -q "^name:" "$SB/src/workflows/dom/act.md"'
+expect_exit 0 "a starter workflow passes the public check" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check
+rm -rf "$SB/src/workflows/dom"
+expect_exit 0 "new skill" -- "${NEW[@]}" skill probe-skill
+check "... writes src/skills/<name>/SKILL.md named after it" 'grep -qx "name: probe-skill" "$SB/src/skills/probe-skill/SKILL.md"'
+expect_exit 0 "a starter skill passes the public check" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check
+rm -rf "$SB/src/skills/probe-skill"
+find "$SB/src" | sort >"$TMP/src-before"
+expect_exit 1 "new with a name that is not lowercase-with-hyphens is refused" -- "${NEW[@]}" skill Bad_Name
+expect_exit 1 "new skill with a group is refused" -- "${NEW[@]}" skill grp:name
+expect_exit 1 "new agent with three parts is refused" -- "${NEW[@]}" agent a:b:c
+check "... none of them writes a file" 'find "$SB/src" | sort | cmp -s - "$TMP/src-before"'
+
+echo "import from a local path"
+mkdir -p "$SB/probe-src/skills/probe-skill" "$SB/probe-src/agents"
+printf -- '---\nname: probe-skill\ndescription: A probe skill.\n---\n\nProbe.\n' >"$SB/probe-src/skills/probe-skill/SKILL.md"
+printf -- '---\nname: probe-agent\ndescription: A probe agent.\ntools: [Read, Grep, Glob]\nmodel: opus\n---\n\nProbe.\n' \
+  >"$SB/probe-src/agents/probe-agent.md"
+printf -- '---\nname: nodesc\n---\n\nNo description.\n' >"$SB/probe-src/agents/nodesc.md"
+printf '%s\n' '  - name: probe' '    source: ./probe-src' '    include: [skills/probe-skill, agents/*.md]' >>"$SB/kit.yaml"
+expect_exit 0 "import a relative local source, run from outside the kit" -- in_dir "$TMP" env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" import probe
+check "... resolves it against the kit root and writes the skill and the agent under vendor/<name>/" \
+  '[ -f "$SB/vendor/probe/skills/probe-skill/SKILL.md" ] && [ -f "$SB/vendor/probe/agents/probe-agent.md" ]'
+check "an imported agent's native tools and model become neutral" \
+  'grep -qx -- "- read" "$SB/vendor/probe/agents/probe-agent.md" && grep -qx -- "- search" "$SB/vendor/probe/agents/probe-agent.md" && grep -qx "model: deep" "$SB/vendor/probe/agents/probe-agent.md" && ! grep -q "Grep\|opus" "$SB/vendor/probe/agents/probe-agent.md"'
+check "an .md without a description is skipped, with a warning" \
+  '[ ! -e "$SB/vendor/probe/agents/nodesc.md" ] && grep -q "probe: skipped agents/nodesc.md (no description in frontmatter)" "$TMP/err"'
+lock_entry() { awk -v n="$1:" '$0 == n { f = 1; next } /^[^ ]/ { f = 0 } f' "$SB/kit.lock"; }
+check "kit.lock pins it as local, with its source and items" \
+  'lock_entry probe | grep -qx "  commit: local" && lock_entry probe | grep -qx "  source: ./probe-src" && [ "$(lock_entry probe | grep "^  - ")" = "$(printf "  - agent/probe-agent\n  - skill/probe-skill")" ]'
+check "the other imports' entries are kept as they were" \
+  'awk "/^probe:/ { f = 1; next } /^[^ ]/ { f = 0 } !f" "$SB/kit.lock" | cmp -s - "$ROOT/kit.lock"'
+rm -rf "$SB/vendor/probe" "$SB/probe-src"; cp "$ROOT/kit.yaml" "$SB/kit.yaml"; cp "$ROOT/kit.lock" "$SB/kit.lock"
+
+echo "install --link"
+L="$TMP/linked"; mkrepo "$L" acme/linked
+expect_exit 1 "--link with the personal layer on is refused" -- "${SBKIT[@]}" install "$L" --link --targets claude
+check "... saying why, before writing anything" \
+  'grep -q -- "--link points to the public dist/" "$TMP/err" && [ ! -e "$L/.claude" ] && [ ! -e "$L/.adorno" ]'
+rm -rf "$SB/dist/claude"
+expect_exit 0 "--link --public-only" -- "${SBKIT[@]}" install "$L" --link --public-only --targets claude
+link_targets() {
+  jq -r '.files | keys[]' "$L/.adorno/installed.json" | while IFS= read -r f; do
+    if [ -L "$L/$f" ]; then readlink "$L/$f"; else echo "not a link: $f"; fi
+  done
+}
+check "every installed file is a symlink into the kit's dist/claude/" \
+  '[ -n "$(link_targets)" ] && ! link_targets | grep -v "^$SBR/dist/claude/"'
+check "... and resolves: --link rebuilt dist/ first" '[ -f "$L/.claude/agents/adorno.md" ] && [ -z "$(find -L "$L/.claude" -type l)" ]'
+expect_exit 0 "uninstall a linked install" -- "${SBKIT[@]}" uninstall "$L"
+check "... removes every link and leaves the kit's dist/ in place" \
+  '[ -z "$(find "$L" -path "$L/.git" -prune -o -type l -print)" ] && [ ! -e "$L/.claude/agents" ] && [ ! -e "$L/.adorno" ] && [ -f "$SB/dist/claude/.claude/agents/adorno.md" ]'
+
+echo "install --dry-run"
+R="$TMP/dry"; mkrepo "$R" acme/dry
+tree_of() { (cd "$R" && find . -path ./.git -prune -o -print | sort && cat .git/info/exclude 2>/dev/null); }
+tree_of >"$TMP/dry-before"
+expect_exit 0 "install --dry-run" -- "${KIT[@]}" install "$R" --targets claude --dry-run
+check "it lists the files it would write, the managed block and the guard hook" \
+  'grep -q "^would install [1-9][0-9]* file(s) into .*/dry for claude$" <<<"$out" && grep -qx "  + .claude/agents/adorno.md" <<<"$out" && grep -qx "  ~ CLAUDE.md (managed block)" <<<"$out" && grep -q "hooks.PreToolUse.*: adorno guard$" <<<"$out"'
+check "... and writes nothing: the repo and its .git/info/exclude are unchanged" 'tree_of | cmp -s - "$TMP/dry-before"'
+
+echo "conf without a repo"
+expect_exit 0 "conf outside any repo" -- in_dir "$TMP" "${KIT[@]}" conf
+check "it lists the scopes, weakest first, then the presets" \
+  '[ "$(sed -n "s/^  \([a-z]*\).*/\1/p" <<<"$out" | uniq | tr "\n" " ")" = "defaults workspaces repos presets " ]'
+check "... each one by name" \
+  'grep -q "^scopes (weakest first" <<<"$out" && grep -q "^  workspaces.acme: " <<<"$out" && grep -qx "  repos.acme/app" <<<"$out" && grep -qx "  presets.platform-team (used with \`use:\`)" <<<"$out"'
+expect_exit 0 "conf with no argument inside a declared repo" -- in_dir "$TMP/code/acme/app" "${KIT[@]}" conf
+expect_jq "... resolves that repo" '(.scopes | index("repos:acme/app")) != null'
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
