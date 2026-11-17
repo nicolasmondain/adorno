@@ -18,5 +18,7 @@ model: opus
 
 - Use the framework and helpers already in the repo; no new test tooling.
 - Cover the risky branches first: empty or null inputs, bounds, errors, money and dates.
+- Mocks at the system's boundaries (database, network) only, no shared mutable state between tests; a test written
+  for a bug fails on the current code.
 - Check that each new test would fail if the behavior broke (invert a condition, the test must go red), then restore
   the code.

@@ -3,9 +3,6 @@ addy:
   commit: 301b02b12bff98e4688e6984af6556802322bbde
   fetched: '2026-11-16T23:23:00Z'
   items:
-  - agent/code-reviewer
-  - agent/security-auditor
-  - agent/test-engineer
   - skill/api-and-interface-design
   - skill/browser-testing-with-devtools
   - skill/ci-cd-and-automation

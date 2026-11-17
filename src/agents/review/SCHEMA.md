@@ -34,7 +34,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A["Input: diff or branch (before any PR, fix diffs)"] --> B["Extends addy/code-reviewer, skill code-review-and-quality"]
+  A["Input: diff or branch (before any PR, fix diffs)"] --> B["Five axes, skill code-review-and-quality"]
   B --> C{"Diff over ~400 lines?"}
   C -->|"yes"| D["Flag major: split it"]
   C -->|"no"| E["Review five axes"]
@@ -137,7 +137,7 @@ flowchart TD
 flowchart TD
   A["Input: diff matched by a security keyword"] --> Q{"Step 0: real sensitive surface? input, authn, authz, secret, personal data, dependency"}
   Q -->|"no"| P["pass, no finding, one-line reason in the reply"]
-  Q -->|"yes"| B["Extends addy/security-auditor, skill security-and-hardening, concerned files only"]
+  Q -->|"yes"| B["Audit, skill security-and-hardening, concerned files only"]
   B --> C["OWASP Top 10, authentication and authorization, sensitive data"]
   C --> D{"Real secret, token or personal data in diff, fixture or docs?"}
   D -->|"yes"| E["blocker"]
@@ -152,7 +152,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A["Input: diff where logic changes"] --> B["Extends addy/test-engineer"]
+  A["Input: diff where logic changes"] --> B["Scenarios and level per changed function"]
   B --> C["Coverage of risky paths, edge cases, errors, readability"]
   C --> D["List missing tests: behavior, case, file"]
   D --> E{"Risky logic without a test?"}

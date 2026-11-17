@@ -37,9 +37,10 @@ skill_data:
 #            fails on any other
 #
 # A local item can extend an imported one without copying it:
-#   extends: addy/code-reviewer   (its body is appended to the original)
+#   extends: addy/<agent>   (its body is appended to the original)
 imports:
-  # 23 skills by phase (Define → Ship) and 3 reviewer agents (code, security, tests). MIT.
+  # 23 skills by phase (Define → Ship). MIT. Its reviewer agents are left out: their Markdown reports, severities and
+  # /ship composition contradict our review format; the few checks we keep are written in review:code, :security, :tests.
   # Left out on purpose: using-agent-skills (routes like core:router, stops to ask) and git-workflow-and-versioning
   # (feature/ branches, tags, no squash): they compete with core:router and adorno-commit.
   - name: addy
@@ -52,8 +53,7 @@ imports:
               skills/idea-refine, skills/incremental-implementation, skills/interview-me,
               skills/observability-and-instrumentation, skills/performance-optimization,
               skills/planning-and-task-breakdown, skills/security-and-hardening, skills/shipping-and-launch,
-              skills/source-driven-development, skills/spec-driven-development, skills/test-driven-development,
-              agents/code-reviewer.md, agents/security-auditor.md, agents/test-engineer.md]
+              skills/source-driven-development, skills/spec-driven-development, skills/test-driven-development]
     # pending: shipping-and-launch until #21 cites it, doubt-driven-development until its bench decides
     uncited: [doubt-driven-development, shipping-and-launch]
 
