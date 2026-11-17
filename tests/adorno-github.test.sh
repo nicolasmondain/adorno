@@ -555,6 +555,20 @@ if [ -f "$REAL" ]; then
 
   expect_exit 0 "--files mode, no content rules" -- "$S/pr-areas" acme/app --files server/services/x.js client/a.tsx
   expect_jq "--files detects by path" '.files == 2 and .areas.back == ["server/services/x.js"] and .areas.front == ["client/a.tsx"] and (.areas | has("back.query") | not)'
+  expect_exit 0 "--files with an unmatched path and a path with a space" -- "$S/pr-areas" acme/app --files server/services/x.js "client/my a.tsx" notes/weird.txt
+  expect_jq "--files: the unmatched path lands in other" '.other == ["notes/weird.txt"] and .areas.front == ["client/my a.tsx"]'
+  args_out="$out"; printf 'server/services/x.js\nclient/my a.tsx\nnotes/weird.txt\n' >"$TMP/paths"
+  expect_exit 0 "--files - reads the paths from stdin" -- "$S/pr-areas" acme/app --files - <"$TMP/paths"
+  if [ "$out" = "$args_out" ]; then ok "--files - gives the same output as the paths as arguments"
+  else ko "--files - gives the same output as the paths as arguments" "$out"; fi
+  printf 'server/services/x.js\r\nclient/my a.tsx\r\nnotes/weird.txt\r\n' >"$TMP/paths-crlf"
+  expect_exit 0 "--files - with CRLF line ends" -- "$S/pr-areas" acme/app --files - <"$TMP/paths-crlf"
+  if [ "$out" = "$args_out" ]; then ok "--files - with CRLF gives the same output as with LF"
+  else ko "--files - with CRLF gives the same output as with LF" "$out"; fi
+  printf 'notes/weird.txt\nclient/a.tsx' >"$TMP/paths-nonl"
+  expect_exit 0 "--files - without a final newline" -- "$S/pr-areas" acme/app --files - <"$TMP/paths-nonl"
+  expect_jq "--files -: the last path without a newline lands in its area" '.files == 2 and .areas.front == ["client/a.tsx"] and .other == ["notes/weird.txt"]'
+  expect_exit 2 "--files - needs paths on stdin" -- "$S/pr-areas" acme/app --files - </dev/null
   expect_exit 2 "--files needs paths" -- "$S/pr-areas" acme/app --files
   expect_exit 0 "docs only" -- "$S/pr-areas" acme/app --files docs/guide.md
   expect_jq "perf falls back to the fallback agent and its skills" \

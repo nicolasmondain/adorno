@@ -202,6 +202,7 @@ Each one is a command of the same name (without native commands: the skill of th
 - `workflow:pr:status` (`/adorno-pr-status`) — Status of all your open PRs (or those of one repo)
 - `workflow:pr:watch` (`/adorno-pr-watch`) — Accompanies an open PR until it is ready to merge
 - `workflow:profile:learn` (`/adorno-profile-learn`) — Evolve your profile and your voice
+- `workflow:repo:audit` (`/adorno-repo-audit`) — Audits a whole repo, read-only
 - `workflow:repo:onboard` (`/adorno-repo-onboard`) — Prepare a repo for the agents
 - `workflow:review:received` (`/adorno-review-received`) — Goes over all your open PRs (or a single one)
 - `workflow:review:requested` (`/adorno-review-requested`) — Analyzes all the PRs where your review is requested

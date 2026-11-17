@@ -78,7 +78,8 @@ reviewing (the guide's price table). To go back to the guide on a repo, set `mod
 | `pr:status` | fast, effort low | `pr-status` (script) |
 | `pr:watch` | balanced | `ci:red`, `review:received` (nested) |
 | `profile:learn` | deep | none: the session proposes, you validate each point |
-| `repo:onboard` | balanced | `chore:repo` → deep; `pr:ship` |
+| `repo:audit` | balanced | `review:ponytail` (mode Audit) → deep |
+| `repo:onboard` | balanced | `chore:repo` → deep; `pr:ship`; `repo:audit` with `--audit` |
 | `review:received` | balanced | `triage` → fast, effort low; specialists (consult) → deep; `adorno` → deep; fixers → deep (3 rounds, the 3rd on frontier); `pr:ship` |
 | `review:requested` | balanced | the steps of `pr:review` per PR |
 | `slack:mentions` | balanced | `core:analyst` → deep; `adorno` → deep (draft reply) |
