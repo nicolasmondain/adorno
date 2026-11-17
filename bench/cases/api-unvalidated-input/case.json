@@ -6,7 +6,7 @@
     "areas": [
       "api",
       "back",
-      "back.query",
+      "back.mongodb",
       "docs",
       "tests",
       "typescript"
