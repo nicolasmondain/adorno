@@ -41,7 +41,7 @@ JOURNAL_FILES = ("events.jsonl", "enriched.jsonl", "enrich.log")   # what a run 
 # retention_days, then the oldest ones while all journals weigh more than max_mb.
 DEFAULTS = {"reasoning": False, "retention_days": 30, "max_mb": 2048}
 # A value is a secret when its key, variable or flag name says so: the names `bin/kit` refuses in `claude_env`
-# (SECRET_ENV_RE), which tests keep equal to this one.
+# (SECRET_ENV_RE in `bin/kitlib/paths.py`), which tests keep equal to this one.
 SECRET_NAME = r"(KEY|TOKEN|SECRET|PASSWORD)"
 SECRET_NAME_RE = re.compile(SECRET_NAME, re.I)
 SECRET_FLAG_RE = re.compile(r"^--?[\w-]*" + SECRET_NAME + r"[\w-]*$", re.I)
