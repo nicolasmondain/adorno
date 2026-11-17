@@ -1,5 +1,7 @@
 # Install and configure adorno
 
+New to adorno? Start with the one-page [overview](overview.md).
+
 This guide goes from installation to an Adorno that reviews, replies and opens PRs like you, on the repos and with
 the permissions you choose. Everything about you lives in `local/`, ignored by git: the public repo stays generic.
 

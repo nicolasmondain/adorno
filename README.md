@@ -70,6 +70,8 @@ that you set.
 
 ## Getting started
 
+New to adorno? Read the one-page [overview](docs/overview.md) first.
+
 Prerequisites: [uv](https://docs.astral.sh/uv/) (`brew install uv`), authenticated `gh`, `jq`.
 
 ```sh
