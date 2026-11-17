@@ -18,4 +18,5 @@ if dry_run; then
   exit 0
 fi
 gh run rerun "$run" -R "$REPO" --failed
+journal_github ci_rerun "$REPO run $run"
 jq -n --argjson run "$run" '{rerun: true, run: $run}'

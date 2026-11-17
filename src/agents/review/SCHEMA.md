@@ -77,9 +77,9 @@ flowchart TD
   D -->|"no"| T["Verdict too_early"]
   D -->|"yes"| E["Windows: impact.window before and after, same weekdays"]
   E --> F["Query sources: impact.sources then every connector, note queried, no data, unavailable"]
-  F --> G["Measure before/after: usage, reliability, performance, resources"]
+  F --> G["Measure before/after: usage, reliability, performance, resources, client (front end)"]
   G --> H["Confounders: pr-merged, incidents, traffic"]
-  H --> I["Verdict: positive, neutral, regression, inconclusive + confidence"]
+  H --> I["Verdict: grade each signal green/yellow/red, worst decides: positive, neutral, regression, inconclusive + confidence"]
   I --> J["impact/N.json and impact/N.md, aggregates only, every number sourced"]
   T --> J
 ```
@@ -142,9 +142,15 @@ flowchart TD
   D -->|"bug or flaw"| E["blocker"]
   D -->|"excess code or dependency, missing test on risky logic"| F["major"]
   D -->|"possible simplification"| G["minor"]
+  A --> S["pr-shortcuts on the diff: shortcut: markers added"]
+  S -->|"limit or trigger missing, or a known limit left unmarked"| G
+  S -->|"limit and trigger named"| N["a decision, not a finding"]
   E --> H["reviews/agent.json"]
   F --> H
   G --> H
+  M["Audit mode: clone and optional scope"] --> N["Apply skill ponytail-audit"]
+  N --> O["audit.md: Must fix / Should fix / Nice to have, Verdict, Lean, Not checked"]
+  O --> P["Written in the run folder only, never published"]
 ```
 
 ## `agent:review:security`

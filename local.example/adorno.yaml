@@ -110,6 +110,9 @@ repos:                                 # a specific repo, or a glob (`acme/docs-
       always:
         review: ["-agent:review:ponytail"]   # prose only: no ponytail pass on this repo
 
+prices:                                # $ per million tokens, merged over repos.yaml › prices (run-end's cost line)
+  claude-sonnet-5: { input: 2, cache_write_5m: 2.5, cache_write_1h: 4, cache_read: 0.2, output: 10 }  # an older model you still run
+
 slack:                                 # workflow:slack:watch and workflow:slack:mentions (Slack connector, read-only)
   user_id: U0123ABCD                   # your Slack ID: recipient of reports, target of mentions
   notify: dm                           # dm (message to yourself) | draft (draft, not sent) | none
@@ -144,3 +147,8 @@ notion:                                # workflow:notion:assigned (Notion connec
       "Bugs": workflow:issue:fix
     mode: report                       # report: analysis and plan · run: launches the agent or the workflow
     level: L0                          # permission level in run mode
+
+journal:                               # the journal of every run (skill adorno-journal), private, under ~/.adorno/runs
+  reasoning: false                     # true: also copy the models' reasoning when the tool's transcripts hold it
+  retention_days: 30                   # journals older than this are removed when a run opens…
+  max_mb: 2048                         # …then the oldest ones while all journals weigh more than this

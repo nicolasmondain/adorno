@@ -1,5 +1,5 @@
 ---
-description: agent:review:ponytail — Ponytail review of a diff — excess code, avoidable dependencies, missing tests on risky logic, what was skipped. Use alongside review:code on every diff.
+description: agent:review:ponytail — Ponytail review of a diff — excess code, avoidable dependencies, missing tests on risky logic, what was skipped. Use alongside review:code on every diff; also audits a whole repo or a scope of it, read-only (workflow:repo:audit).
 argument-hint: <request>
 ---
 

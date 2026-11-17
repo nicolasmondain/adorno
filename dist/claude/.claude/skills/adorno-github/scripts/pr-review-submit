@@ -54,11 +54,13 @@ if dry_run; then
 fi
 
 post() { gh api -X POST "repos/$REPO/pulls/$NUM/reviews" --input "$1" --jq '{url: .html_url, state}' 2>"$(work_dir)/review-err"; }
+posted() { journal_github "$([ "$event" = "PENDING" ] && echo review || echo submit)" "$REPO#$NUM" "$(jq -r '.url // empty' <<<"$out")"; }
 folded_count="$(jq --argjson max "$max_inline" '[(.comments // [])[]] | length - $max | if . < 0 then 0 else . end' "$file")"
 
 if out="$(post "$payload")"; then
   jq --argjson n "$(jq '.comments | length' "$payload")" --argjson f "$folded_count" --arg e "$event" \
     '{submitted: ($e != "PENDING"), pending: ($e == "PENDING"), inline: $n, inBody: $f, folded: false} + .' <<<"$out"
+  posted
   exit 0
 fi
 grep -q "HTTP 422" "$(work_dir)/review-err" || die "review rejected: $(cat "$(work_dir)/review-err")"
@@ -69,3 +71,4 @@ jq '.body += "\n\n" + ([.comments[] | "- `\(.path):\(.line)`: \(.body)"] | join(
   "$payload" >"$folded"
 out="$(post "$folded")" || die "review rejected: $(cat "$(work_dir)/review-err")"
 jq --arg e "$event" '{submitted: ($e != "PENDING"), pending: ($e == "PENDING"), inline: 0, folded: true} + .' <<<"$out"
+posted

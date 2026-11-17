@@ -9,7 +9,7 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/bin"; ln -s "$ROOT/tests/fake-gh" "$TMP/bin/gh"
 # a throwaway home: the scripts read the registry and the runs from ~/.adorno only
 export HOME="$TMP/home" PATH="$TMP/bin:$PATH"
-unset CLAUDE_CODE_SESSION_ID  # runs opened outside any session, unless a test sets one
+unset CLAUDE_CODE_SESSION_ID CLAUDE_CONFIG_DIR  # runs opened outside any session, unless a test sets one
 KH="$HOME/.adorno"; mkdir -p "$KH"
 reg() { rm -f "$KH/registry.json"; cp "$1" "$KH/registry.json"; chmod 400 "$KH/registry.json"; }  # reg FILE: use FILE as the registry
 reg "$ROOT/tests/fixtures/repos.json"
@@ -78,6 +78,99 @@ printf '{ half' >"$KH/runs/active/20990101T000000-1-1.json"
 expect_exit 5 "a half-written run file is ignored..." -- "$S/pr-comment" acme/docs#42 "$TMP/norun.md"
 [ -f "$KH/runs/active/20990101T000000-1-1.json" ] && ok "... and not deleted while it may be in progress" || ko "... and not deleted"
 rm -f "$KH/runs/active/20990101T000000-1-1.json"
+
+echo "runs: usage"
+mkdir -p "$HOME/.claude"; cp -R "$ROOT/tests/fixtures/claude-projects" "$HOME/.claude/projects"
+U() { "$S/run-usage" collect --session sess-usage --since 2026-11-10T10:00:00Z --until "$1"; }
+expect_exit 0 "usage of a session window" -- U 2026-11-10T10:30:00Z
+expect_jq "... duplicate lines of one message counted once, out-of-window messages and agents left out" \
+  '.source == "claude-code" and .session_usage.messages == 1 and .totals.messages == 3 and .totals.agents == 1
+   and .totals.tokens == {input: 20, cache_write: 4000, cache_read: 210000, output: 3500, total: 217520}'
+expect_jq "... the agent: its type, real model, duration, tokens and cost" \
+  '.agents == [.agents[0]] and .agents[0].type == "adorno-agent-review-code" and .agents[0].model == "claude-sonnet-5-5"
+   and .agents[0].duration_s == 120 and .agents[0].messages == 2 and (.agents[0].usd * 1e6 | round) == 46020'
+expect_jq "... cost per model and in total (5m and 1h cache writes at their own rate)" \
+  '(.session_usage.models["claude-opus-5-5"].usd * 1e6 | round) == 65040 and (.totals.usd * 1e6 | round) == 111060
+   and .unpriced == [] and .skipped_lines == 1 and .duration_s == 1800'
+expect_jq "... a <synthetic> record (an API error, all-zero usage) left out, the run still priced" \
+  '(.totals.models | has("<synthetic>") | not) and .totals.messages == 3 and .unpriced == [] and (.totals.usd * 1e6 | round) == 111060'
+expect_jq "... and a one-line summary" '.summary == "30m · 1 agent · $0.11 (opus $0.07, sonnet $0.05) · 218k tokens (210k cache read)"'
+expect_exit 0 "a model with no price" -- U 2026-11-10T11:00:00Z
+expect_jq "... is unpriced, never free: the total is unknown" \
+  '.unpriced == ["claude-mystery-1"] and .totals.usd == null and (.agents | map(.type)) == ["adorno-agent-review-code", "unknown"]
+   and (.summary | test("unpriced: claude-mystery-1"))'
+jq '.prices["claude-sonnet-5-5"] = {input: 2}' "$ROOT/tests/fixtures/repos.json" >"$TMP/partial-prices.json"; reg "$TMP/partial-prices.json"
+expect_exit 0 "an incomplete price" -- U 2026-11-10T10:30:00Z
+expect_jq "... is unpriced too, never priced at 0" '.unpriced == ["claude-sonnet-5-5"] and .agents[0].usd == null and .totals.usd == null'
+reg "$ROOT/tests/fixtures/repos.json"
+expect_exit 0 "no session: usage unavailable, the duration only" -- \
+  "$S/run-usage" collect --since 2026-11-10T10:00:00Z --until 2026-11-10T10:00:42Z
+expect_jq "... said, not zero" '.source == "unavailable" and .duration_s == 42 and (.reason | test("CLAUDE_CODE_SESSION_ID")) and (.agents == null)'
+expect_exit 0 "a session with no transcript" -- \
+  "$S/run-usage" collect --session nope --since 2026-11-10T10:00:00Z --until 2026-11-10T10:00:42Z
+expect_jq "... unavailable too" '.source == "unavailable" and (.reason | test("no transcript for session nope"))'
+expect_exit 2 "a date that is not UTC ISO is a usage error" -- "$S/run-usage" collect --since yesterday --until 2026-11-10T10:00:00Z
+
+expect_exit 0 "a run in the fixture session" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
+UR="$(jq -r .id <<<"$out")"; UD="$(jq -r .dir <<<"$out")"
+jq '.started = "2026-11-10T10:00:00Z"' "$KH/runs/active/$UR.json" >"$TMP/ur.json" && mv "$TMP/ur.json" "$KH/runs/active/$UR.json"
+printf '# Status\n' >"$UD/status.md"
+expect_exit 0 "run-end records the usage" -- "$S/run-end" "$UR"
+expect_jq "... its cost line and the status.md it went to" \
+  "(.usage | startswith(\"Cost: \")) and (.usage | test(\"3 agents\")) and .status == \"$UD/status.md\""
+[ ! -f "$KH/runs/active/$UR.json" ] && ok "... the grant is withdrawn" || ko "... the grant is withdrawn"
+jq -e '.source == "claude-code" and .totals.agents == 3 and .unpriced == ["claude-mystery-1"]' "$UD/usage.json" >/dev/null \
+  && ok "... usage.json in the run folder" || ko "... usage.json in the run folder" "$(head -c 300 "$UD/usage.json")"
+tail -n 1 "$UD/status.md" | grep -q '^Cost: ' && ok "... a Cost: line at the end of status.md" || ko "... a Cost: line at the end of status.md"
+jq -e --arg id "$UR" 'select(.id == $id) | .workflow == "workflow:pr:review" and .repos == ["acme/docs"] and (.agents | length) == 3' \
+  "$KH/runs/usage.jsonl" >/dev/null && ok "... a summary line in runs/usage.jsonl" || ko "... a summary line in runs/usage.jsonl"
+jq -e '.overlap == false' "$UD/usage.json" >/dev/null \
+  && jq -e --arg id "$UR" 'select(.id == $id) | .overlap == false and .session == "sess-usage" and .started == "2026-11-10T10:00:00Z"' "$KH/runs/usage.jsonl" >/dev/null \
+  && ok "... alone in its session: no overlap" || ko "... alone in its session: no overlap"
+# Two runs of one session at once count the same messages: both say so. The first sees the second still active; the
+# second, ending alone, sees the first in runs/usage.jsonl (ended after it started).
+expect_exit 0 "two runs at once in one session" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
+OA="$(jq -r .id <<<"$out")"; OAD="$(jq -r .dir <<<"$out")"
+expect_exit 0 "... the second one" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:status --mode report --level L0 --repo acme/docs
+OB="$(jq -r .id <<<"$out")"; OBD="$(jq -r .dir <<<"$out")"
+jq '.started = "2026-11-10T10:00:00Z"' "$KH/runs/active/$OB.json" >"$TMP/ob.json" && mv "$TMP/ob.json" "$KH/runs/active/$OB.json"
+expect_exit 0 "... the first ends" -- "$S/run-end" "$OA"
+expect_exit 0 "... then the second" -- "$S/run-end" "$OB"
+for r in "$OA:$OAD" "$OB:$OBD"; do
+  jq -e '.overlap == true' "${r#*:}/usage.json" >/dev/null \
+    && jq -e --arg id "${r%%:*}" 'select(.id == $id) | .overlap == true' "$KH/runs/usage.jsonl" >/dev/null \
+    && ok "... run ${r%%:*} records the overlap" || ko "... run ${r%%:*} records the overlap" "$(jq -c .overlap "${r#*:}/usage.json")"
+done
+# Two runs of one session one after the other (the normal case) share no message: the earlier one, in
+# runs/usage.jsonl, ended no later than the second one started (same second counts as sequential).
+expect_exit 0 "two runs back to back in one session" -- env CLAUDE_CODE_SESSION_ID=sess-seq "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
+QA="$(jq -r .id <<<"$out")"; QAD="$(jq -r .dir <<<"$out")"
+expect_exit 0 "... the first ends" -- "$S/run-end" "$QA"
+expect_exit 0 "... then the second begins" -- env CLAUDE_CODE_SESSION_ID=sess-seq "$S/run-begin" --workflow workflow:pr:status --mode report --level L0 --repo acme/docs
+QB="$(jq -r .id <<<"$out")"; QBD="$(jq -r .dir <<<"$out")"
+expect_exit 0 "... and ends" -- "$S/run-end" "$QB"
+for r in "$QA:$QAD" "$QB:$QBD"; do
+  jq -e '.overlap == false' "${r#*:}/usage.json" >/dev/null \
+    && jq -e --arg id "${r%%:*}" 'select(.id == $id) | .overlap == false and .session == "sess-seq"' "$KH/runs/usage.jsonl" >/dev/null \
+    && ok "... run ${r%%:*}: sequential, no overlap" || ko "... run ${r%%:*}: sequential, no overlap" "$(jq -c .overlap "${r#*:}/usage.json")"
+done
+expect_exit 0 "a run outside any session" -- "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
+UR="$(jq -r .id <<<"$out")"; UD="$(jq -r .dir <<<"$out")"
+mkdir -p "$TMP/elsewhere"; printf '# Status\n' >"$TMP/elsewhere/status.md"
+expect_exit 2 "--status takes a status.md only" -- "$S/run-end" "$UR" --status "$TMP/elsewhere/notes.md"
+expect_exit 0 "... ends with its duration only, into the status.md given" -- "$S/run-end" "$UR" --status "$TMP/elsewhere/status.md"
+expect_jq "... usage unavailable, said in the cost line" '(.usage | test("usage unavailable")) and (.status | endswith("elsewhere/status.md"))'
+grep -q '^Cost: .*usage unavailable' "$TMP/elsewhere/status.md" && ok "... written there" || ko "... written there"
+jq -e '.overlap == false' "$UD/usage.json" >/dev/null && ok "... no session, no overlap" || ko "... no session, no overlap"
+expect_exit 0 "a run whose usage cannot be read" -- env CLAUDE_CODE_SESSION_ID='bad id!' "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
+UR="$(jq -r .id <<<"$out")"; UD="$(jq -r .dir <<<"$out")"
+expect_exit 0 "... still ends" -- "$S/run-end" "$UR"
+expect_jq "... no status.md in its folder: none reported" '.status == null'
+[ ! -e "$UD/status.md" ] && ok "... and none created" || ko "... and none created" "$(head -c 300 "$UD/status.md")"
+[ ! -f "$KH/runs/active/$UR.json" ] && ok "... grant withdrawn first" || ko "... grant withdrawn first"
+grep -q "usage of run $UR not recorded" "$TMP/err" && ok "... the failure said on stderr" || ko "... the failure said on stderr" "$(cat "$TMP/err")"
+jq -e '.source == "error" and (.error | length) > 0' "$UD/usage.json" >/dev/null && ok "... and recorded as an error" || ko "... and recorded as an error"
+
 # the rest of the suite runs inside one auto run at L3
 "$S/run-begin" --workflow workflow:test:suite --mode auto --level L3 \
   --repo acme/docs --repo acme/strict --repo acme/app --repo acme/docs-public --repo acme/readonly --repo other/thing >/dev/null
@@ -326,6 +419,8 @@ expect_jq "dry-run shows the body, posts nothing" '.dryRun and .body == "Fixed i
 grep -q addPullRequestReviewThreadReply "$FAKE_LOG" && ko "dry-run must not call the mutation" || ok "dry-run did not call the mutation"
 expect_exit 0 "real reply" -- "$S/pr-reply" acme/docs#42 T1 "$TMP/body.md"
 expect_jq "reply returns the comment url" '.posted and (.url | test("#r1$"))'
+FAKE_REPLY_FAIL=1 expect_exit 1 "a reply GitHub refuses keeps gh's exit code" -- "$S/pr-reply" acme/docs#42 T1 "$TMP/body.md"
+case "$out" in *"Thread is outdated"*) ok "... and what gh printed still reaches stdout" ;; *) ko "gh's output was swallowed" "$out" ;; esac
 printf '' >"$TMP/empty.md"
 expect_exit 2 "empty body refused" -- "$S/pr-reply" acme/docs#42 T1 "$TMP/empty.md"
 
@@ -558,6 +653,20 @@ if [ -f "$REAL" ]; then
 
   expect_exit 0 "--files mode, no content rules" -- "$S/pr-areas" acme/app --files server/services/x.js client/a.tsx
   expect_jq "--files detects by path" '.files == 2 and .areas.back == ["server/services/x.js"] and .areas.front == ["client/a.tsx"] and (.areas | has("back.mongodb") | not)'
+  expect_exit 0 "--files with an unmatched path and a path with a space" -- "$S/pr-areas" acme/app --files server/services/x.js "client/my a.tsx" notes/weird.txt
+  expect_jq "--files: the unmatched path lands in other" '.other == ["notes/weird.txt"] and .areas.front == ["client/my a.tsx"]'
+  args_out="$out"; printf 'server/services/x.js\nclient/my a.tsx\nnotes/weird.txt\n' >"$TMP/paths"
+  expect_exit 0 "--files - reads the paths from stdin" -- "$S/pr-areas" acme/app --files - <"$TMP/paths"
+  if [ "$out" = "$args_out" ]; then ok "--files - gives the same output as the paths as arguments"
+  else ko "--files - gives the same output as the paths as arguments" "$out"; fi
+  printf 'server/services/x.js\r\nclient/my a.tsx\r\nnotes/weird.txt\r\n' >"$TMP/paths-crlf"
+  expect_exit 0 "--files - with CRLF line ends" -- "$S/pr-areas" acme/app --files - <"$TMP/paths-crlf"
+  if [ "$out" = "$args_out" ]; then ok "--files - with CRLF gives the same output as with LF"
+  else ko "--files - with CRLF gives the same output as with LF" "$out"; fi
+  printf 'notes/weird.txt\nclient/a.tsx' >"$TMP/paths-nonl"
+  expect_exit 0 "--files - without a final newline" -- "$S/pr-areas" acme/app --files - <"$TMP/paths-nonl"
+  expect_jq "--files -: the last path without a newline lands in its area" '.files == 2 and .areas.front == ["client/a.tsx"] and .other == ["notes/weird.txt"]'
+  expect_exit 2 "--files - needs paths on stdin" -- "$S/pr-areas" acme/app --files - </dev/null
   expect_exit 2 "--files needs paths" -- "$S/pr-areas" acme/app --files
   expect_exit 0 "docs only" -- "$S/pr-areas" acme/app --files docs/guide.md
   expect_jq "perf falls back to the fallback agent and its skills" \
@@ -673,6 +782,40 @@ else
   ko "pr-areas tests need dist/ — run bin/kit build first"
 fi
 
+echo "pr-shortcuts"
+printf '%s\n' 'diff --git a/server/list.ts b/server/list.ts' '--- a/server/list.ts' '+++ b/server/list.ts' \
+  '@@ -10,3 +10,4 @@ export function list() {' ' const a = 1' '-// shortcut: removed, ignored' \
+  '+  // shortcut: not paged, page it past 500 items' ' // shortcut: context, ignored' \
+  '+const k = "press the keyboard shortcut: ctrl+k"' '@@ -40,2 +41,3 @@' ' x' '+/* ponytail: legacy prefix */' \
+  'diff --git a/client/A.tsx b/client/A.tsx' '--- /dev/null' '+++ b/client/A.tsx' '@@ -0,0 +1,4 @@' '+/**' \
+  '+ * shortcut: jsdoc, x' '+ */' '+{/* shortcut: jsx, x */}' \
+  'diff --git "a/docs/caf\303\251.vue" "b/docs/caf\303\251.vue"' '--- "a/docs/caf\303\251.vue"' \
+  '+++ "b/docs/caf\303\251.vue"' '@@ -1 +1,2 @@' '+<!-- shortcut: html, x -->' '+# shortcut: hash, x' \
+  'diff --git a/old.sh b/old.sh' '--- a/old.sh' '+++ /dev/null' '@@ -1 +0,0 @@' '-# shortcut: gone' >"$TMP/shortcuts.diff"
+expect_exit 0 "lists the markers a diff adds" -- "$S/pr-shortcuts" "$TMP/shortcuts.diff"
+expect_jq "only added lines: not the removed, context or deleted-file ones, nor prose" '.count == 6'
+expect_jq "line of the new file, across hunks, text trimmed" \
+  '.shortcuts[0] == {file: "server/list.ts", line: 11, text: "// shortcut: not paged, page it past 500 items"} and .shortcuts[1].line == 42'
+expect_jq "legacy ponytail:, JSDoc, JSX, HTML and # prefixes" \
+  '[.shortcuts[1:][] | .text[0:6]] == ["/* pon", "* shor", "{/* sh", "<!-- s", "# shor"]'
+expect_jq "a quoted non-ASCII path is decoded" '[.shortcuts[] | select(.file == "docs/café.vue") | .line] == [1, 2]'
+expect_jq "line of each marker in a new file" '[.shortcuts[] | select(.file == "client/A.tsx") | .line] == [2, 4]'
+printf '%s\n' 'diff --git a/my file.ts b/my file.ts' $'--- a/my file.ts\t' $'+++ b/my file.ts\t' '@@ -1 +1,2 @@' ' x' \
+  '+// shortcut: spaced, x' 'diff --git "a/my caf\303\251.ts" "b/my caf\303\251.ts"' $'--- "a/my caf\\303\\251.ts"\t' \
+  $'+++ "b/my caf\\303\\251.ts"\t' '@@ -0,0 +1 @@' '+const s = "// shortcut: in a string"' >"$TMP/spaced.diff"
+expect_exit 0 "names with a space (git ends their header with a TAB)" -- "$S/pr-shortcuts" "$TMP/spaced.diff"
+expect_jq "a TAB-terminated header, plain or quoted, keeps its marker" \
+  '[.shortcuts[] | [.file, .line]] == [["my file.ts", 2], ["my café.ts", 1]]'
+expect_jq "a marker inside a string is listed (the reader drops non-comments)" \
+  '.shortcuts[1].text == "const s = \"// shortcut: in a string\""'
+printf '%s\n' 'diff --git "a/a\tb\303\251.ts" "b/a\tb\303\251.ts"' '--- "a/a\tb\303\251.ts"' '+++ "b/a\tb\303\251.ts"' \
+  '@@ -0,0 +1 @@' '+// shortcut: x' >"$TMP/unparsable.diff"
+expect_exit 1 "a line it cannot parse fails loudly, never dropped" -- "$S/pr-shortcuts" "$TMP/unparsable.diff"
+printf 'diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n+const a = 1\n' >"$TMP/clean.diff"
+expect_exit 0 "a diff without markers" -- "$S/pr-shortcuts" "$TMP/clean.diff"
+expect_jq "empty ledger" '. == {shortcuts: [], count: 0}'
+expect_exit 2 "a missing diff file is a usage error" -- "$S/pr-shortcuts" "$TMP/none.diff"
+
 echo "pr-review-submit"
 printf '%s' '{"event":"COMMENT","body":"Looks good overall.","comments":[{"path":"a.ts","line":3,"body":"Null check?"}]}' >"$TMP/review.json"
 FAKE_PR_AUTHOR=alice ADORNO_DRY_RUN=1 expect_exit 0 "dry-run review" -- "$S/pr-review-submit" acme/docs#10 "$TMP/review.json"
@@ -765,6 +908,17 @@ printf '{"agent":"agent:review:tests","findings":[]}' >"$TMP/reviews2/c.json"
 expect_exit 0 "review-merge, inconsistent reviews" -- "$S/review-merge" "$TMP/reviews2"
 expect_jq "a blocker forces block; unknown or missing verdicts are invalid, not pass" \
   '.verdict == "block" and .invalid == ["b.json", "c.json"]'
+mkdir -p "$TMP/spy" "$TMP/norun-home"; printf '#!/bin/sh\ntouch "%s"\n' "$TMP/spy.called" >"$TMP/spy/python3"; chmod +x "$TMP/spy/python3"
+expect_exit 0 "review-merge without an open run" -- env HOME="$TMP/norun-home" PATH="$TMP/spy:$PATH" "$S/review-merge" "$TMP/reviews"
+expect_jq "... merges as usual" '.verdict == "block"'
+[ ! -e "$TMP/spy.called" ] && ok "... and starts no interpreter to record it" || ko "review-merge started python3 with no run open"
+merged="$out"; real_jq="$(command -v jq)"
+printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s"\nexec "%s" "$@"\n' "$TMP/jq.calls" "$real_jq" >"$TMP/spy/jq"; chmod +x "$TMP/spy/jq"
+expect_exit 0 "review-merge without an open run, HOME unset" -- env -u HOME PATH="$TMP/spy:$PATH" "$S/review-merge" "$TMP/reviews"
+[ "$out" = "$merged" ] && [ ! -s "$TMP/err" ] && ok "... the same output, nothing on stderr" || ko "review-merge's output changed with HOME unset" "$out / $(cat "$TMP/err")"
+[ ! -e "$TMP/spy.called" ] && ok "... and starts no interpreter" || ko "review-merge started python3 with no run open, HOME unset"
+grep -q 'stage: "produced"\|kind: "verdict"' "$TMP/jq.calls" && ko "review-merge built the journal's messages with no run open" || ok "... nor builds the journal's messages"
+rm -f "$TMP/spy/jq"
 
 echo "pr-areas: tricky paths"
 printf 'diff --git "a/client/\\303\\251 x.tsx" "b/client/\\303\\251 x.tsx"\n--- "a/client/\\303\\251 x.tsx"\n+++ "b/client/\\303\\251 x.tsx"\n@@ -1 +1 @@\n+const a = 1\ndiff --git a/server/old.ts b/server/old.ts\ndeleted file mode 100644\n--- a/server/old.ts\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\n' >"$TMP/tricky.diff"
@@ -890,6 +1044,9 @@ guard deny "x=\$(jq '.a | select(.b)' f.json; git push origin fix/x)"
 guard pass 'cd ~/.adorno/runs && for d in r-*/; do echo "$d"; done | sort'
 guard deny "cd ~/.adorno/runs/active && echo '{}' > x.json"
 guard deny "cd ~/.adorno && cp x runs/active/y.json"
+# the journal's writer is called by the scripts and the hooks, never through the Bash tool: not exempt
+guard deny "$ROOT/src/skills/adorno-journal/scripts/journal.py prune ~/.adorno/runs/"
+guard deny "cd ~/.adorno/runs && $ROOT/src/skills/adorno-journal/scripts/journal.py prune"
 guard pass "cd ~/.adorno/worktrees/acme__docs/fix/x && git status && npm test"
 guard pass 'cd ~/.adorno/runs && for d in r-*/; do for p in "$d"pr-*/; do echo "$p"; done; done'
 guard ask 'C="node cdp.mjs 9222"; $C open http://localhost:8000'
@@ -1041,6 +1198,8 @@ guard_at deny "$C" "" "gh pr merge 42"
 guard_at deny "$C" "sess-other" "gh pr create --title t --body b"
 guard_at deny "$C" "" "gh pr create -R acme/readonly --title t --body b"
 guard_at allow "$C" "" "$S/repo-conf acme/docs"
+guard_at allow "$C" "" "$S/run-usage collect --session s --since 2026-11-10T10:00:00Z --until 2026-11-10T11:00:00Z"
+guard_at allow "$C" "" "$S/pr-shortcuts .agent-run/x/branch.diff"
 guard_at pass "$C" "" "$TMP/fake/adorno-github/scripts/repo-conf"
 guard_at deny "$C" "" "git push" codex
 guard_at pass "$C" "" "git add ." codex
@@ -1326,6 +1485,150 @@ inL "$S/pr-workspace" acme/docs#42 >/dev/null 2>&1
 FAKE_PR_STATE=MERGED expect_exit 0 "clean removes the branch worktree adorno created" -- "$S/pr-workspace" --clean
 [ ! -d "$bw" ] && [ ! -f "$KH/workspaces/acme__docs/pr-42.link" ] && ok "... worktree and link gone" || ko "... worktree and link gone"
 git -C "$L" show-ref --verify --quiet refs/heads/nm/pagination && ok "... the branch stays" || ko "... the branch stays"
+
+echo "journal (adorno-journal): what the suite's own run recorded on the way"
+JPY="$ROOT/src/skills/adorno-journal/scripts/journal.py"
+SUITE="$(jq -r 'select(.workflow == "workflow:test:suite") | .id' "$KH"/runs/active/*.json)"
+JD="$(jq -r 'select(.workflow == "workflow:test:suite") | .journal' "$KH"/runs/active/*.json)"; JF="$JD/events.jsonl"
+jl() { out="$(jq -cs . "$JF")"; }                      # the whole journal, as one array, in $out
+count() { jq -cs "[.[] | select($1)] | length" "$JF"; }  # count FILTER
+expect_exit 0 "every event the scripts and the guard wrote is valid" -- python3 "$JPY" validate "$JF"
+jl
+expect_jq "run-begin opens the journal with the run's grant" \
+  '.[0].type == "run.begin" and .[0].workflow == "workflow:test:suite" and .[0].level == "L3" and (.[0].repos | length) == 6 and .[0].run == "'"$SUITE"'"'
+expect_jq "a script's call: its name, arguments, exit code, the level and action it asked for" \
+  'any(.[]; .type == "script.call" and .script == "pr-reply" and .exit == 0 and .level == "L3" and .action == "reply" and .args[0] == "acme/docs#42" and .dry_run == false)'
+expect_jq "a refusal is recorded with its exit code (4 policy, 5 level, 2 usage, 3 unregistered)" \
+  '[.[] | select(.type == "script.call") | .exit] | ([4, 5, 2, 3] - .) == []'
+expect_jq "a script called with flags is recorded with them (run-begin's own call)" \
+  'any(.[]; .type == "script.call" and .script == "run-begin" and .exit == 0
+       and .args[0:4] == ["--workflow", "workflow:test:suite", "--mode", "auto"] and (.args | index("--repo")) != null)'
+expect_jq "a dry run is recorded as one" 'any(.[]; .type == "script.call" and .dry_run == true)'
+expect_jq "a write that reached GitHub: action, target, url" \
+  'any(.[]; .type == "github" and .action == "reply" and (.target | test("^acme/docs#42 thread ")) and (.url | test("^https://")))'
+expect_jq "... for each kind of write" \
+  '[.[] | select(.type == "github") | .action] | (["push", "open_pr", "comment", "resolve", "rerequest"] - .) == []'
+expect_jq "review-merge: each finding as produced, then as merged" \
+  'any(.[]; .type == "finding" and .stage == "produced" and .reviewer == "agent:review:code" and .severity == "minor" and .file == "a.ts" and .line == 3)
+   and any(.[]; .type == "finding" and .stage == "merged" and .severity == "blocker" and .reviewer == "agent:review:back, agent:review:code")
+   and any(.[]; .type == "script.call" and .script == "review-merge" and .exit == 0)'
+expect_jq "review-merge: the merged verdict and its counts, from the scripts to the session" \
+  'any(.[]; .type == "message" and .kind == "verdict" and .from == "scripts" and .to == "session" and .excerpt == "block (2 reviews): 1 blocker")
+   and any(.[]; .type == "message" and .kind == "verdict" and .excerpt == "block (1 review): 1 blocker")'
+expect_jq "the guard's refusals, with the command and the reason" \
+  'any(.[]; .type == "guard" and .decision == "deny" and .command == "git push origin fix/x" and (.reason | length) > 0)'
+expect_jq "what the guard lets through is not an event" \
+  'all(.[] | select(.type == "guard"); .command != "git commit -m '"'"'push the fix'"'"'")'
+expect_jq "scripts that set their own exit trap are recorded too (pr-areas, with_lock in pr-workspace)" \
+  'any(.[]; .type == "script.call" and .script == "pr-areas" and .exit == 0) and any(.[]; .type == "script.call" and .script == "pr-workspace" and .exit == 0)'
+n="$(count '.type == "github"')"
+"$S/pr-reply" acme/docs#42 T1 "$TMP/body.md" >/dev/null
+[ "$(count '.type == "github"')" = "$((n + 1))" ] && ok "the same reply, posted: one github event" || ko "no github event for a posted reply"
+n="$(count '.type == "github"')"
+ADORNO_DRY_RUN=1 "$S/pr-reply" acme/docs#42 T1 "$TMP/body.md" >/dev/null
+[ "$(count '.type == "github"')" = "$n" ] && ok "a dry run reaches nothing: no github event" || ko "github event in a dry run"
+n="$(count '.script == "run-check"')"
+guard_at allow "$C" "" "git push origin fix/lem-8-x"
+[ "$(count '.script == "run-check"')" = "$n" ] && ok "the guard's own probes are not the run's doing" || ko "guard probes recorded"
+n="$(wc -l <"$JF")"
+"$S/repo-conf" acme/docs >/dev/null
+[ "$(( $(wc -l <"$JF") ))" = "$((n + 1))" ] && ok "repo-conf, as usual: one script.call" || ko "repo-conf not recorded"
+(cd "$C" && "$S/repo-conf" >/dev/null); out="$(tail -n 1 "$JF")"
+expect_jq "a script called without arguments records an empty list" '.type == "script.call" and .script == "repo-conf" and .args == []'
+n="$(wc -l <"$JF")"
+ADORNO_JOURNAL=0 "$S/repo-conf" acme/docs >/dev/null
+[ "$(wc -l <"$JF")" = "$n" ] && ok "ADORNO_JOURNAL=0 records nothing" || ko "ADORNO_JOURNAL=0"
+n="$(count '.script == "pr-comment"')"
+"$S/pr-comment" acme/docs#42 "$TMP/norun.md" --attach "$TMP/ghp_0123456789abcdefghijABCDEFGHIJ012345.png" >/dev/null 2>&1
+jl
+expect_jq "a call with --attach is recorded, its token redacted" \
+  '[.[] | select(.type == "script.call" and .script == "pr-comment")] | length == '"$((n + 1))"'
+   and (.[-1].args | index("--attach")) != null and (.[-1].args | any(test("redacted:github")))'
+grep -q "ghp_0123456789" "$JF" && ko "a token in an argument reached the journal" || ok "a token in an argument never reaches the journal"
+expect_exit 0 "run-mark: a step starts" -- "$S/run-mark" step-begin 2 build
+expect_exit 0 "run-mark: a round starts" -- "$S/run-mark" round 1 2 "1 major"
+expect_exit 2 "run-mark: usage" -- "$S/run-mark" round one 2
+jl
+expect_jq "marks are events of their own, without a script.call" \
+  '.[-2].type == "step.begin" and .[-2].index == 2 and .[-2].name == "build" and .[-1] .type == "loop" and .[-1].round == 1 and .[-1].cap == 2 and .[-1].reason == "1 major"
+   and all(.[]; .script != "run-mark")'
+guard_at allow "$TMP" "" "$S/run-mark step-end 2 build"
+
+echo "journal: recording never breaks a script"
+chmod 500 "$JD"; chmod 400 "$JF"
+expect_exit 0 "a journal that cannot be written: the script ends as usual" -- "$S/repo-conf" acme/docs
+expect_jq "... with its output" '.repo == "acme/docs"'
+expect_exit 3 "... and a refusal keeps its exit code" -- "$S/pr-reply" foo/bar#1 T1 "$TMP/body.md"
+grep -q "not recorded" "$TMP/err" && ok "... and the journal says on stderr what it could not write" || ko "silent journal failure"
+# guard_says GUARD — what GUARD answers to a refused command, and its exit code (a hook's JSON counts only on exit 0)
+guard_says() {
+  out="$(jq -n '{tool_name: "Bash", tool_input: {command: "git push origin fix/x"}}' | python3 "$1" deny 2>"$TMP/err")"; rc=$?
+  jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null 2>&1 <<<"$out" && [ "$rc" = 0 ]
+}
+guard_says "$S/guard_bash.py" && grep -q "not recorded" "$TMP/err" && ok "a journal that cannot be written (and said so): the guard still denies, and exits 0" || ko "guard with a read-only journal" "exit $rc: $out: $(cat "$TMP/err")"
+chmod 700 "$JD"; chmod 600 "$JF"
+mkdir -p "$TMP/broken/adorno-github" "$TMP/broken/adorno-journal/scripts" "$TMP/alone/adorno-github"
+cp -R "$S" "$TMP/broken/adorno-github/scripts"; cp -R "$S" "$TMP/alone/adorno-github/scripts"
+cp "$ROOT/src/skills/adorno-github/repos.json" "$TMP/broken/adorno-github/" 2>/dev/null; cp "$ROOT/src/skills/adorno-github/repos.json" "$TMP/alone/adorno-github/" 2>/dev/null
+printf 'import sys\nsys.exit(3)\n' >"$TMP/broken/adorno-journal/scripts/journal.py"
+expect_exit 0 "a writer that fails: the script ends as usual" -- "$TMP/broken/adorno-github/scripts/repo-conf" acme/docs
+expect_exit 4 "... and a refusal keeps its exit code" -- "$TMP/broken/adorno-github/scripts/pr-resolve" acme/strict#7 T1
+guard_says "$TMP/broken/adorno-github/scripts/guard_bash.py" && ok "a writer that exits at import: the guard still denies, and exits 0" || ko "guard with a broken writer" "exit $rc: $out"
+n="$(wc -l <"$JF")"
+"$S/repo-conf" acme/docs >/dev/null
+[ "$(( $(wc -l <"$JF") ))" = "$((n + 1))" ] && ok "with the skill, the same call is recorded" || ko "repo-conf not recorded"
+n="$(wc -l <"$JF")"
+expect_exit 0 "without the adorno-journal skill: the script ends as usual" -- "$TMP/alone/adorno-github/scripts/repo-conf" acme/docs
+[ "$(wc -l <"$JF")" = "$n" ] && ok "... and records nothing" || ko "recorded without the skill"
+
+echo "journal: always under ~/.adorno/runs, whatever --dir says"
+expect_exit 0 "a run whose folder is in a workspace" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-begin" --workflow workflow:pr:review \
+  --mode report --level L0 --repo acme/docs --dir "$TMP/ws/.agent-run/review-1"
+WSRUN="$(jq -r .id <<<"$out")"
+expect_jq "the journal is not in --dir" '.dir == "'"$TMP"'/ws/.agent-run/review-1" and .journal == "'"$KH"'/runs/pr-review-'"$WSRUN"'"'
+[ -z "$(find "$TMP/ws" -name '*.jsonl')" ] && [ -f "$KH/runs/pr-review-$WSRUN/events.jsonl" ] && ok "nothing recorded in the workspace" || ko "journal in the workspace"
+mode_of() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
+[ "$(mode_of "$KH/runs/pr-review-$WSRUN")" = 700 ] && ok "... its journal folder, made by the writer, readable by its owner only" || ko "--dir journal folder mode" "$(mode_of "$KH/runs/pr-review-$WSRUN")"
+expect_exit 0 "a run whose folder is in a workspace, recording off" -- env ADORNO_JOURNAL=0 CLAUDE_CODE_SESSION_ID=sess-k "$S/run-begin" \
+  --workflow workflow:pr:review --mode report --level L0 --repo acme/docs --dir "$TMP/ws/.agent-run/review-2"
+OFFRUN="$(jq -r .id <<<"$out")"
+[ -n "$OFFRUN" ] && [ -d "$TMP/ws/.agent-run/review-2" ] && [ -z "$(find "$KH/runs" -maxdepth 1 -name "*$OFFRUN*")" ] \
+  && ok "... leaves no empty journal folder under the runs folder" || ko "an empty journal folder was left" "$(find "$KH/runs" -maxdepth 1 -name "*$OFFRUN*")"
+env ADORNO_JOURNAL=0 CLAUDE_CODE_SESSION_ID=sess-k "$S/run-end" "$OFFRUN" >/dev/null
+expect_exit 0 "a second run in that session, without --dir" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-begin" --workflow workflow:pr:ship \
+  --mode draft --level L2 --repo acme/docs
+RUN2="$(jq -r .id <<<"$out")"; J2="$(jq -r .journal <<<"$out")"
+[ "$(jq -r .dir <<<"$out")" = "$J2" ] && [ "$(mode_of "$J2")" = 700 ] && ok "... its folder is the journal's, readable by its owner only" || ko "journal folder mode" "$(mode_of "$J2")"
+expect_exit 0 "run-end closes the journal" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-end" "$WSRUN"
+grep -q '"script":"run-end"' "$J2/events.jsonl" && ko "run-end's own call landed in the session's other run" || ok "run-end's own call lands in no other run: run.end is its event"
+expect_exit 0 "run-end with an outcome" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-end" "$RUN2" draft
+out="$(tail -n 1 "$J2/events.jsonl")"; expect_jq "... recorded in run.end" '.type == "run.end" and .outcome == "draft" and .workflow == "workflow:pr:ship"'
+# run_and_end OUTCOME — opens a run in that session and ends it with OUTCOME; its journal in $JE
+run_and_end() {
+  out="$(env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-begin" --workflow workflow:pr:ship --mode draft --level L2 --repo acme/docs)"
+  RE="$(jq -r .id <<<"$out")"; JE="$(jq -r .journal <<<"$out")"
+  env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-end" "$RE" "$1" >/dev/null 2>"$TMP/err"
+}
+run_and_end ended; rc=$?
+out="$(tail -n 1 "$JE/events.jsonl")"
+[ "$rc" = 0 ] && [ ! -f "$KH/runs/active/$RE.json" ] && expect_jq "run-end ID ended: accepted, as the default" '.type == "run.end" and .outcome == "ended"' \
+  || ko "run-end ID ended was refused" "exit $rc: $(cat "$TMP/err")"
+run_and_end great; rc=$?
+if [ ! -f "$KH/runs/active/$RE.json" ]; then
+  out="$(tail -n 1 "$JE/events.jsonl")"
+  expect_jq "run-end with an outcome outside the list: the run is closed all the same, recorded as ended" '.type == "run.end" and .outcome == "ended"'
+else
+  ko "an outcome outside the list left the run open"
+fi
+[ "$rc" = 2 ] && grep -q "great" "$TMP/err" && ok "... said on stderr, and exit 2" || ko "an outcome outside the list was silent" "exit $rc: $(cat "$TMP/err")"
+out="$(jq -cs . "$KH/runs/pr-review-$WSRUN/events.jsonl")"
+expect_jq "from run.begin (with the run's folder) to run.end, for that session only" \
+  '.[0].type == "run.begin" and .[0].dir == "'"$TMP"'/ws/.agent-run/review-1" and .[0].dry_run == true and .[-1].type == "run.end" and .[-1].outcome == "ended" and all(.[]; .session == "sess-j")'
+expect_exit 0 "that journal is valid" -- python3 "$JPY" validate "$KH/runs/pr-review-$WSRUN/events.jsonl"
+tries=0; until [ -f "$KH/runs/pr-review-$WSRUN/enriched.jsonl" ] || [ "$tries" -ge 100 ]; do tries=$((tries + 1)); sleep 0.2; done
+[ -f "$KH/runs/pr-review-$WSRUN/enriched.jsonl" ] && [ -f "$KH/runs/pr-review-$WSRUN/enrich.log" ] \
+  && ok "run-end starts the reading of the transcripts, without waiting for it" || ko "no enrichment after run-end"
+[ "$(mode_of "$KH/runs/pr-review-$WSRUN/enrich.log")" = 600 ] && ok "... its log readable by its owner only" || ko "enrich.log mode" "$(mode_of "$KH/runs/pr-review-$WSRUN/enrich.log")"
 
 echo
 echo "$pass passed, $fail failed"

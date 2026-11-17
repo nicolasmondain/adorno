@@ -271,6 +271,12 @@ its words appearing (a binary, a `make` whose recipe pushes, a script in another
 another), a computed variable. It is a safeguard against mistakes and ordinary workarounds; the absolute barrier
 is on the GitHub side.
 
+**The journal's hooks.** For Claude Code, the same install adds the hooks that record what a session does inside a
+run (prompts and replies, tool calls, questions to you, subagents) into the run's journal, private under
+`~/.adorno/runs/`. They are the guard's opposite: they do nothing outside a run, never block, and let the session go
+on whatever fails. A project next to a global install leaves the recording to the global one. What is recorded, what
+is redacted and how to replay a run: [the run journal](journal.md).
+
 **On the GitHub side.** `adorno-github/scripts/repo-audit [owner/repo…]` (read-only; without arguments, every repo in
 your registry) tells what GitHub itself enforces: the type of token `gh` uses (a classic `repo` token
 can do everything, everywhere) and whether each repo's default branch requires a pull request and blocks force

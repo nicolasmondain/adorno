@@ -18,4 +18,5 @@ if dry_run; then
   exit 0
 fi
 gh pr ready "$NUM" -R "$REPO" >/dev/null
+journal_github ready_pr "$REPO#$NUM"
 jq -n --arg repo "$REPO" --argjson n "$NUM" '{ready: true, changed: true, repo: $repo, number: $n}'
