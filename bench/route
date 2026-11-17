@@ -2,7 +2,8 @@
 # Usage: route [--repo owner/repo] [--cases DIR] [--case ID]…
 # The free part of the benchmark: runs pr-areas on each case's change.diff and compares the areas and the reviewers
 # it picks with case.json › routing. The rules are those the registry gives to --repo (adorno/bench by default):
-# tests/bench.test.sh declares that repo with the public defaults only (repos.yaml › areas), which is what CI checks;
+# tests/bench.test.sh declares that repo with the public areas and presets only (repos.yaml › areas, `use: [node,
+# mongodb]`: the cases are a Node.js + MongoDB codebase), which is what CI checks;
 # on your machine, pass a repo your registry declares to see what your personal layer changes.
 # Prints a JSON array, one entry per case:
 #   {case, ok, areas: {want, got}, review: {want, got}, skills_missing, routed}
@@ -39,7 +40,7 @@ while IFS= read -r id; do
   [ -f "$dir/case.json" ] && [ -f "$dir/change.diff" ] || die "unknown case: $id" 2
   routed="$("$ROOT/src/skills/adorno-github/scripts/pr-areas" "$repo" "$dir/change.diff")" || {
     code=$?
-    [ "$code" != 3 ] || printf '%s: pass --repo with a repo your registry declares (tests/bench.test.sh checks the public defaults)\n' "$SELF" >&2
+    [ "$code" != 3 ] || printf '%s: pass --repo with a repo your registry declares (tests/bench.test.sh checks the public areas and presets)\n' "$SELF" >&2
     exit "$code"
   }
   entry="$(jq -n --arg case "$id" --argjson routed "$routed" --slurpfile c "$dir/case.json" '

@@ -55,8 +55,8 @@
           "*.scss",
           "*.less",
           "*.html",
-          "client/*",
-          "*/client/*",
+          "*.erb",
+          "*.haml",
           "*/ui/*",
           "*/components/*",
           "*/pages/*"
@@ -83,30 +83,17 @@
         ],
         "build": "agent:feat:back",
         "fix": "agent:fix:patch",
-        "perf": "agent:perf:nodejs",
         "review": [
           "agent:review:back",
           "agent:review:tests"
         ],
         "sub": {
-          "query": {
-            "content": "\\.aggregate\\(|\\.find(One)?\\(|\\.(update|delete|insert)(One|Many)?\\(|\\.bulkWrite\\(|rawCollection\\(|\\$lookup|\\$match|\\$group",
-            "perf": "agent:perf:mongodb",
-            "review": [
-              "agent:review:mongodb"
-            ]
-          },
-          "mongodb": {
+          "migration": {
             "paths": [
+              "migrations/*",
               "*/migrations/*",
               "*migration*",
-              "*/collections/*",
-              "*/models/*"
-            ],
-            "content": "\\.createIndex\\(|Mongo\\.Collection|new Schema\\(",
-            "perf": "agent:perf:mongodb",
-            "review": [
-              "agent:review:mongodb"
+              "db/migrate/*"
             ],
             "skills": [
               "deprecation-and-migration"
@@ -118,7 +105,6 @@
         "paths": [
           "*/api/*",
           "*/routes/*",
-          "*/methods/*",
           "*openapi*",
           "*/api-reference/*"
         ],
@@ -134,6 +120,7 @@
         "paths": [
           "*/auth/*",
           "*/permissions/*",
+          "*/policies/*",
           "*.env*"
         ],
         "content": "(password|secret|token|api[_-]?key|jwt|bcrypt|crypto\\.|permission|isAdmin|role)",
@@ -161,9 +148,19 @@
         "paths": [
           "*.test.*",
           "*.spec.*",
+          "*_test.*",
+          "*_spec.*",
+          "test_*",
+          "*/test_*",
+          "conftest.py",
+          "*/conftest.py",
+          "test/*",
+          "tests/*",
+          "spec/*",
           "*/tests/*",
           "*/__tests__/*",
-          "*/test/*"
+          "*/test/*",
+          "*/spec/*"
         ],
         "build": "agent:test:unit",
         "fix": "agent:test:unit",
@@ -198,7 +195,17 @@
           "*.lock",
           "yarn.lock",
           "requirements*.txt",
-          "go.mod"
+          "*/requirements*.txt",
+          "pyproject.toml",
+          "*/pyproject.toml",
+          "Pipfile*",
+          "go.mod",
+          "*/go.mod",
+          "go.sum",
+          "*/go.sum",
+          "Gemfile",
+          "*/Gemfile",
+          "*.gemspec"
         ],
         "build": "agent:chore:deps",
         "fix": "agent:chore:deps",
@@ -238,11 +245,224 @@
       "nit": "agent:refactor:simplify",
       "test": "agent:test:unit",
       "perf": {
-        "agent": "agent:perf:nodejs",
+        "agent": "agent:fix:patch",
         "skills": [
           "performance-optimization"
         ]
       }
+    }
+  },
+  "presets": {
+    "node": {
+      "areas": {
+        "back": {
+          "perf": "agent:perf:nodejs"
+        }
+      }
+    },
+    "mongodb": {
+      "areas": {
+        "back": {
+          "sub": {
+            "mongodb": {
+              "paths": [
+                "*/models/*"
+              ],
+              "content": "\\.aggregate\\(|\\.find(One)?\\(|\\.(update|delete|insert)(One|Many)?\\(|\\.bulkWrite\\(|\\.createIndex\\(|new Schema\\(|\\$lookup|\\$match|\\$group",
+              "perf": "agent:perf:mongodb",
+              "review": [
+                "agent:review:mongodb"
+              ]
+            },
+            "migration": {
+              "review": [
+                "agent:review:mongodb"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "sql": {
+      "areas": {
+        "back": {
+          "sub": {
+            "sql": {
+              "paths": [
+                "*.sql"
+              ],
+              "content": "^[[:space:]]*(SELECT|UPDATE)( [^=:]|$)|[`\"'(](SELECT|UPDATE) |INSERT INTO |DELETE FROM |ALTER TABLE |CREATE (UNIQUE )?INDEX ",
+              "review": [
+                "agent:review:sql"
+              ]
+            },
+            "migration": {
+              "review": [
+                "agent:review:sql"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "python": {
+      "areas": {
+        "back": {
+          "sub": {
+            "python": {
+              "paths": [
+                "manage.py",
+                "*/views.py",
+                "*/tasks.py",
+                "*/management/*",
+                "*settings*.py"
+              ]
+            },
+            "django-orm": {
+              "paths": [
+                "*/models.py"
+              ],
+              "content": "\\.objects\\.|select_related\\(|prefetch_related\\(|cursor\\.execute\\(",
+              "review": [
+                "agent:review:sql"
+              ]
+            }
+          }
+        },
+        "api": {
+          "sub": {
+            "python": {
+              "paths": [
+                "*/urls.py",
+                "*/serializers.py",
+                "*/routers/*"
+              ]
+            }
+          }
+        },
+        "front": {
+          "sub": {
+            "python": {
+              "paths": [
+                "*/static/*"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "go": {
+      "areas": {
+        "back": {
+          "sub": {
+            "go": {
+              "paths": [
+                "*.go"
+              ]
+            },
+            "go-sql": {
+              "content": "\\.(Query|QueryRow|Exec)(Context)?\\(([^)]|$)|sqlx\\.|gorm\\.|pgx\\.",
+              "review": [
+                "agent:review:sql"
+              ]
+            }
+          }
+        },
+        "api": {
+          "sub": {
+            "go": {
+              "paths": [
+                "*/handler/*",
+                "*/handlers/*"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "rails": {
+      "areas": {
+        "back": {
+          "sub": {
+            "rails": {
+              "paths": [
+                "app/models/*",
+                "app/controllers/*",
+                "app/mailers/*",
+                "lib/*"
+              ]
+            },
+            "activerecord": {
+              "paths": [
+                "db/schema.rb",
+                "db/structure.sql"
+              ],
+              "content": "\\.where\\(|\\.(joins|includes|pluck)\\((\\[?:|[a-z_]+: )|\\.joins\\([\"']|find_by_sql|add_index|add_column",
+              "review": [
+                "agent:review:sql"
+              ]
+            }
+          }
+        },
+        "api": {
+          "sub": {
+            "rails": {
+              "paths": [
+                "config/routes.rb",
+                "app/serializers/*"
+              ]
+            }
+          }
+        },
+        "front": {
+          "sub": {
+            "rails": {
+              "paths": [
+                "app/views/*",
+                "app/javascript/*",
+                "app/assets/*"
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "prices": {
+    "claude-fable-5-2": {
+      "input": 8,
+      "cache_write_5m": 10,
+      "cache_write_1h": 16,
+      "cache_read": 0.2,
+      "output": 40
+    },
+    "claude-fable-5-1": {
+      "input": 10,
+      "cache_write_5m": 12.5,
+      "cache_write_1h": 20,
+      "cache_read": 0.25,
+      "output": 50
+    },
+    "claude-opus-5-5": {
+      "input": 4,
+      "cache_write_5m": 5,
+      "cache_write_1h": 8,
+      "cache_read": 0.2,
+      "output": 20
+    },
+    "claude-sonnet-5-5": {
+      "input": 2,
+      "cache_write_5m": 2.5,
+      "cache_write_1h": 4,
+      "cache_read": 0.1,
+      "output": 10
+    },
+    "claude-haiku-5-5": {
+      "input": 0.1,
+      "cache_write_5m": 0.125,
+      "cache_write_1h": 0.2,
+      "cache_read": 0.01,
+      "output": 0.5
     }
   },
   "repos": {}

@@ -1,0 +1,30 @@
+diff --git a/server/services/orders.js b/server/services/orders.js
+--- a/server/services/orders.js
++++ b/server/services/orders.js
+@@ -1,0 +1,1 @@
++const orders = await Orders.find({ userId }).limit(50).toArray()
+diff --git a/server/models/order.js b/server/models/order.js
+--- a/server/models/order.js
++++ b/server/models/order.js
+@@ -1,0 +1,1 @@
++const OrderSchema = new Schema({ total: Number })
+diff --git a/migrations/2026-11-16-orders.js b/migrations/2026-11-16-orders.js
+--- a/migrations/2026-11-16-orders.js
++++ b/migrations/2026-11-16-orders.js
+@@ -1,0 +1,1 @@
++await db.collection('orders').createIndex({ userId: 1 })
+diff --git a/src/components/OrderList.tsx b/src/components/OrderList.tsx
+--- a/src/components/OrderList.tsx
++++ b/src/components/OrderList.tsx
+@@ -1,0 +1,1 @@
++export const OrderList = () => <ul />
+diff --git a/test/orders.test.js b/test/orders.test.js
+--- a/test/orders.test.js
++++ b/test/orders.test.js
+@@ -1,0 +1,1 @@
++it('lists orders', () => {})
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -1,0 +1,1 @@
++  "mongodb": "^6.10.0",
