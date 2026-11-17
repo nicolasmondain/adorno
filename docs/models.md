@@ -98,9 +98,8 @@ finished task.
 
 **A tier per reviewer, with `bench/`.** Move one reviewer alone with `bench/run --agent-model agent:review:<x>=sonnet`
 and compare each reviewer on its own review before the merge with `bench/report --label b --against a`
-([bench/README.md › Compare a tier per reviewer](../bench/README.md#compare-a-tier-per-reviewer)). The rule was fixed
-before the run: no own expected finding lost, precision down by 10 points at most, at most one more false alarm on the
-clean cases, no more rejected reviews, and a call at least 30 % cheaper.
+([bench/README.md › Compare a tier per reviewer](../bench/README.md#compare-a-tier-per-reviewer)). The pass rule was fixed
+before the run and lives in the same section of `bench/README.md`.
 
 Measured on 17 review cases, 2 repeats, prompts at `f91e364`, Claude Code 2.1.326, 2026-11-16/17. Run `rev-deep`
 (every agent on its tier): 43.25 USD. Run `rev-balanced` (`api`, `mongodb`, `perf`, `ponytail`, `tests` on sonnet):
@@ -109,13 +108,15 @@ results are local, not committed.
 
 | Reviewer | Own recall (opus → sonnet) | Precision | False alarms | Cost per call | Tier |
 | --- | --- | --- | --- | --- | --- |
-| `review:api` | 4/4 → 4/4 | 80 % → 75 % | 0 → 0 | -59 % (0.18 → 0.07 USD) | balanced |
-| `review:tests` | 4/4 → 4/4 (own severity 3/4 vs 4/4) | 50 % → 61 % | 0 → 0 | -61 % | balanced |
+| `review:api` | 4/4 → 4/4 | 80 % → 75 % | n/a (no clean case routes to it) | -59 % (0.18 → 0.07 USD) | balanced |
+| `review:tests` | 4/4 → 4/4 (own severity 4/4 → 3/4) | 50 % → 61 % | 0 → 0 | -61 % | balanced |
 | `review:mongodb` | 4/4 → 4/4 | 83 % → 68 % | n/a | -61 % | deep |
 
 `review:mongodb` fails the precision bound (-14 points: index questions outside the diff, plaintext tokens already in
-the base, a wrong Express 5 claim). `review:tests` raised one finding under its expected severity, worth a look if
-severity matters to you. Not decided by the measure: `review:ponytail` stays on `deep` (decided with its prompt rescope),
+the base, a wrong Express 5 claim). On `test-asserts-nothing` (run 1), `review:tests` on sonnet raised its own
+expected finding as a blocker where the case accepts major (over-rating, 1 occurrence in 4; deep rated it major both
+runs). It did not change that run's merged verdict, already `block` from `review:ponytail`, and `agent:adorno` (deep)
+re-rates every finding before anything is posted. The remaining risk is that a 🔴 can start a fix loop. Not decided by the measure: `review:ponytail` stays on `deep` (decided with its prompt rescope),
 and `review:perf` is to be merged into `review:front`. The controls (`code`, `back`, `front`, `security`, `perf-back`,
 unchanged) kept recall and cost within 3 %, but their ungraded precision moved by up to 10 points between runs: that
 is the noise of one run pair.
