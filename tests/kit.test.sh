@@ -170,6 +170,17 @@ expect_exit 0 "install next to an identical file of yours" -- "${KIT[@]}" instal
 expect_exit 0 "uninstall" -- "${KIT[@]}" uninstall "$B"
 check "your identical file survives uninstall" '[ -f "$B/.claude/skills/adorno-commit/SKILL.md" ]'
 
+echo "per-repo models"
+# a layer with no defaults: only the repo's own models.agents can move review:mongodb off its family tier (deep)
+ML="$TMP/models-layer"; mkdir -p "$ML"
+printf 'owner: {name: T, github: t, language: fr}\nrepos:\n  acme/models:\n    models: {agents: {agent:review:mongodb: balanced}}\n' >"$ML/adorno.yaml"
+M="$TMP/code/acme/models"; mkrepo "$M" acme/models
+expect_exit 0 "install with a repo-level models override" -- env ADORNO_LOCAL="$ML" "${KIT[@]}" install "$M" --targets claude
+check "a repo's models.agents tier reaches the installed agent" \
+  'grep -q "^model: sonnet" "$M/.claude/agents/adorno-agent-review-mongodb.md" && grep -q "^model: opus" "$M/.claude/agents/adorno-agent-review-back.md"'
+ADORNO_LOCAL="$ML" "${KIT[@]}" uninstall "$M" --force >/dev/null
+rm -rf "$ML" "$M"
+
 echo "tracked and untracked instruction files"
 D="$TMP/code/acme/both"
 printf '# team\n' >"$D/CLAUDE.md"; printf '# team agents\n' >"$D/AGENTS.md"
@@ -356,7 +367,7 @@ expect_exit 1 "a missing dist/AGENTS.md fails check --dist" -- env ADORNO_LOCAL=
 mv "$TMP/agents.bak" "$SB/dist/AGENTS.md"
 
 expect_exit 0 "the real registry passes with every dispatcher's roles covered" -- env ADORNO_LOCAL="$TMP/none" "${KIT[@]}" check
-check "no area_reviewers reader is left in src/" '! grep -rn --exclude-dir=__pycache__ "area_reviewers" "$ROOT/src" "$ROOT/bin/kit" "$ROOT/bin/kitlib" | grep -v -e "src/skills/adorno-setup/" -e "bin/kitlib/validate.py:.*area_reviewers\|bin/kitlib/commands.py:.*area_reviewers" -e SCHEMA.md | grep .'
+check "no area_reviewers reader is left in src/" '[ -d "$ROOT/src" ] && [ -f "$ROOT/bin/kit" ] && [ -f "$ROOT/bin/kitlib/validate.py" ] && [ -f "$ROOT/bin/kitlib/commands.py" ] && ! grep -rn --exclude-dir=__pycache__ "area_reviewers" "$ROOT/src" "$ROOT/bin/kit" "$ROOT/bin/kitlib" | grep -v -e "src/skills/adorno-setup/" -e "bin/kitlib/validate.py:.*area_reviewers\|bin/kitlib/commands.py:.*area_reviewers" -e SCHEMA.md | grep .'
 check "pr:ship leaves no family agent of its subject" '! grep -q "family agent of its subject" "$ROOT/src/workflows/pr/ship.md"'
 
 echo "migrate areas"
