@@ -13,6 +13,7 @@ Gemini CLI, Copilot, Cursor and any tool that reads Agent Skills (SKILL.md).
   kit conf [OWNER/REPO]         the settings a repo resolves to (no argument: the current repo, or the scopes)
   kit new skill|agent|workflow NAME
   kit import [NAME...] [--update|--check]  --check: commits behind and items changed upstream, writes nothing
+                                (exit 0 nothing to do, 1 something to import, 3 a check failed)
   kit build                     public build into dist/ (never includes local/)
   kit install PATH|--global|--workspace NAME [--targets a,b] [--link] [--public-only] [--force] [--dry-run]
   kit uninstall PATH|--global|--workspace NAME [--force]
@@ -577,13 +578,21 @@ def cites(name: str, text: str) -> bool:
     return bool(re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", text))
 
 
+def citing_texts(local: list[Item]) -> list[tuple[str, str]]:
+    """What can cite an imported skill, as (label, text): our items (frontmatter and body), the instructions and
+    repos.yaml."""
+    texts = [(i.id, json.dumps(i.meta, default=str) + i.body) for i in local]
+    texts += [(rel(p), p.read_text(encoding="utf-8")) for p in sorted((SRC / "instructions").glob("*.md"))]
+    if (ROOT / "repos.yaml").exists():
+        texts.append(("repos.yaml", (ROOT / "repos.yaml").read_text(encoding="utf-8")))
+    return texts
+
+
 def orphan_skills(cfg: Config, items: dict) -> list[str]:
     """An imported skill ships everywhere and its description can trigger it alone: one that no item of ours,
     instruction or repos.yaml names must be listed in its import's `uncited` (called by hand)."""
-    texts = [json.dumps(i.meta, default=str) + i.body for g in items.values() for i in g.values() if i.origin == "local"]
-    texts += [p.read_text(encoding="utf-8") for p in sorted((SRC / "instructions").glob("*.md"))]
-    texts.append((ROOT / "repos.yaml").read_text(encoding="utf-8"))
-    corpus = "\n".join(texts)
+    local = [i for g in items.values() for i in g.values() if i.origin == "local"]
+    corpus = "\n".join(text for _, text in citing_texts(local))
     errors: list[str] = []
     for imp in cfg.manifest.get("imports") or []:
         uncited = imp.get("uncited") or []
@@ -1497,9 +1506,17 @@ def cmd_import(args) -> None:
         print("nothing to import (add entries under `imports:` in kit.yaml)")
         return
     lock = load_yaml(LOCK)
+    ours = scan(SRC, "local")
+    texts = citing_texts(ours)
     if args.check:
-        moved = [check_import(cfg, imp, lock.get(imp["name"]) or {}) for imp in imports]
-        sys.exit(1 if any(moved) else 0)
+        moved = failed = False
+        for imp in imports:
+            try:
+                moved |= check_import(cfg, imp, lock.get(imp["name"]) or {}, ours, texts)
+            except SystemExit:  # die() already said why on stderr; the other imports are still checked
+                print(f"{imp['name']}: check failed")
+                failed = True
+        sys.exit(3 if failed else 1 if moved else 0)
     for imp in imports:
         name = imp["name"]
         if not NAME_RE.match(name):
@@ -1515,7 +1532,7 @@ def cmd_import(args) -> None:
             else:
                 commit = fetch(url, pinned or imp.get("ref"), repo)
             pulled = import_items(cfg, imp, repo)
-            report = item_changes(name, vendored_files(name), item_files(pulled))
+            report = item_changes(name, vendored_files(name), item_files(pulled), ours, texts)
             out = VENDOR / name
             if out.exists():
                 shutil.rmtree(out)
@@ -1535,8 +1552,8 @@ def cmd_import(args) -> None:
             "items": sorted(f"{k}/{n}" for k, e in pulled.items() for n in e),
         }
         total = sum(len(e) for e in pulled.values())
-        scripts = [p for p in (VENDOR / name).rglob("*")
-                   if p.is_file() and p.suffix not in (".md", ".txt", "") and "LICEN" not in p.name]
+        scripts = [p for p in (VENDOR / name).rglob("*") if p.is_file() and "LICEN" not in p.name
+                   and (os.access(p, os.X_OK) or p.suffix not in (".md", ".txt", ""))]
         print(f"{name}: {total} item(s) @ {commit[:12]}" + (f" — {len(scripts)} script/asset file(s), review them" if scripts else ""))
         if report:
             print("\n".join(report) + f"\n  review: git diff -- {rel(out)}")
@@ -1611,14 +1628,11 @@ def front(data: bytes) -> dict:
     return meta if isinstance(meta, dict) else {}
 
 
-def item_changes(imp_name: str, old: dict[str, FileMap], new: dict[str, FileMap]) -> list[str]:
+def item_changes(imp_name: str, old: dict[str, FileMap], new: dict[str, FileMap],
+                 ours: list[Item], texts: list[tuple[str, str]]) -> list[str]:
     """What moves between two versions of an import, item by item: files (+/- lines), frontmatter keys and scripts
-    (they decide when an item fires and what it may run), and the local items that extend or cite it."""
-    local = scan(SRC, "local")
-    texts = [(i.id, json.dumps(i.meta, default=str) + i.body) for i in local]
-    texts += [(rel(p), p.read_text(encoding="utf-8")) for p in sorted((SRC / "instructions").glob("*.md"))]
-    if (ROOT / "repos.yaml").exists():
-        texts.append(("repos.yaml", (ROOT / "repos.yaml").read_text(encoding="utf-8")))
+    (they decide when an item fires and what it may run), and the local items (`scan(SRC, "local")`, `extends`
+    still set) that extend or cite it (`citing_texts`)."""
     lines: list[str] = []
     for key in sorted(old.keys() | new.keys()):
         a, b = old.get(key) or {}, new.get(key) or {}
@@ -1646,18 +1660,19 @@ def item_changes(imp_name: str, old: dict[str, FileMap], new: dict[str, FileMap]
             keys = sorted(k for k in fa.keys() | fb.keys() if fa.get(k) != fb.get(k))
             if a and keys:
                 lines.append(f"      ⚠ frontmatter changed: {', '.join(keys)}")
-            scripts = [f for f in sorted(b) if Path(f).suffix not in (".md", ".txt", "") and a.get(f) != b[f]]
+            scripts = [f for f in sorted(b)
+                       if a.get(f) != b[f] and (b[f][1] or Path(f).suffix not in (".md", ".txt", ""))]
             if scripts:
                 lines.append(f"      ⚠ script added or changed: {', '.join(scripts)}")
-        extended = [i.id for i in local if i.kind == kind and i.meta.get("extends") == f"{imp_name}/{name}"]
-        cited = [label for label, text in texts if cites(name, text)] if kind == "skill" else []
-        for what, users in (("extended", extended), ("cited", cited)):
+        extended = [i.id for i in ours if i.kind == kind and i.meta.get("extends") == f"{imp_name}/{name}"]
+        cited = [label for label, text in texts if label not in extended and cites(name, text)] if kind == "skill" else []
+        for what, users in (("extended by" if b else "kit check will fail on", extended), ("cited by", cited)):
             if users:
-                lines.append(f"      {what} by: {', '.join(users)}")
+                lines.append(f"      {what}: {', '.join(users)}")
     return lines
 
 
-def check_import(cfg: Config, imp: dict, locked: dict) -> bool:
+def check_import(cfg: Config, imp: dict, locked: dict, ours: list[Item], texts: list[tuple[str, str]]) -> bool:
     """`kit import --check`: how far an import is behind its `ref`, and what that would change in vendor/,
     without writing anything. True when an imported item would change."""
     name = imp["name"]
@@ -1665,9 +1680,12 @@ def check_import(cfg: Config, imp: dict, locked: dict) -> bool:
     if local:
         print(f"{name}: local source, nothing pinned")
         return False
-    pinned = locked.get("commit") if locked.get("source") == imp["source"] else None
+    pinned = locked.get("commit")
     if not pinned:
         print(f"{name}: not imported yet (run `kit import {name}`)")
+        return True
+    if locked.get("source") != imp["source"]:
+        print(f"{name}: source changed in kit.yaml (run `kit import {name}`)")
         return True
     ref = imp.get("ref") or "HEAD"
     with tempfile.TemporaryDirectory() as tmp:
@@ -1675,7 +1693,7 @@ def check_import(cfg: Config, imp: dict, locked: dict) -> bool:
         git("init", "-q", str(repo))
         git("remote", "add", "origin", url, cwd=repo)
         git("fetch", "-q", "--filter=blob:none", "origin", ref, cwd=repo)  # history, blobs only when read
-        head = git("rev-parse", "FETCH_HEAD", cwd=repo)
+        head = git("rev-parse", "FETCH_HEAD^{commit}", cwd=repo)  # an annotated tag: its commit, as fetch() pins
         if head == pinned:
             print(f"{name}: up to date ({pinned[:8]})")
             return False
@@ -1684,7 +1702,7 @@ def check_import(cfg: Config, imp: dict, locked: dict) -> bool:
         behind = (f"{git('rev-list', '--count', f'{pinned}..{head}', cwd=repo)} commit(s) behind {ref}" if on_ref
                   else f"pinned commit is no longer on {ref}")
         git("checkout", "-q", head, cwd=repo)
-        report = item_changes(name, vendored_files(name), item_files(import_items(cfg, imp, repo)))
+        report = item_changes(name, vendored_files(name), item_files(import_items(cfg, imp, repo)), ours, texts)
     if on_ref and not report:
         print(f"{name}: {behind} ({pinned[:8]} → {head[:8]}), no imported item changed")
         return False
@@ -2364,8 +2382,10 @@ def main() -> None:
     g = p.add_mutually_exclusive_group()
     g.add_argument("--update", action="store_true", help="move past the commits pinned in kit.lock")
     g.add_argument("--check", action="store_true",
-                   help="show how far each import is behind its ref and which items would change; writes nothing, "
-                        "exits 1 when an imported item changed")
+                   help="show how far each import is behind its ref and which items would change; writes nothing. "
+                        "Exits 0 when nothing to import, 1 when an imported item changed, the pin left its ref or an "
+                        "import must be (re)imported, 3 when a check failed (git error; the other imports are still "
+                        "checked)")
     p.set_defaults(fn=cmd_import)
 
     for name, fn in (("install", cmd_install), ("uninstall", cmd_uninstall)):

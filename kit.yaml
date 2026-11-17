@@ -23,7 +23,9 @@ skill_data:
 # Agents, skills and workflows imported from other repos.
 # `kit import` fetches them into vendor/<name>/ and pins the commit in kit.lock;
 # `kit import --update` moves them to the latest version of `ref` and prints what changed per item (and which of
-# our items extend or cite it); `kit import --check` shows the same without writing (exits 1 if an item changed).
+# our items extend or cite it); `kit import --check` shows the same without writing: exit 1 if an item changed, the
+# pinned commit left `ref`, or an import is not imported yet or its source changed; 3 if a check failed (git error,
+# the other imports are still checked); 0 otherwise.
 #
 #   source   github:owner/repo | git URL | local path
 #   ref      branch, tag or commit (default: HEAD)
