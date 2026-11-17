@@ -20,7 +20,10 @@ if dry_run; then
   exit 0
 fi
 
-gh api graphql -f query='mutation($id:ID!,$body:String!){
+out="$(gh api graphql -f query='mutation($id:ID!,$body:String!){
   addPullRequestReviewThreadReply(input:{pullRequestReviewThreadId:$id, body:$body}){ comment{ url } } }' \
   -F id="$thread" -F body=@"$file" \
-  --jq '{posted: true, url: .data.addPullRequestReviewThreadReply.comment.url}'
+  --jq '{posted: true, url: .data.addPullRequestReviewThreadReply.comment.url}')" \
+  || { rc=$?; [ -z "$out" ] || printf '%s\n' "$out"; exit "$rc"; }  # what gh said reaches the caller, as before
+printf '%s\n' "$out"
+journal_github reply "$REPO#$NUM thread $thread" "$(jq -r '.url // empty' <<<"$out")"

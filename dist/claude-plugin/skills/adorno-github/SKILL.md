@@ -32,7 +32,8 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | `run-begin --workflow ID --mode report\|draft\|pending\|comment\|auto --level Lx --repo owner/repo… [--deny a,b] [--ttl 2h]` | opens a run for the named repos: what it may write, its folder; `report` forces a dry run, `draft` refuses the conversation (code still goes out) | — |
 | `guard_bash.py deny\|ask [--format=claude\|codex\|gemini]` | hook (Claude Code, Codex, Gemini) installed by `bin/kit install`: refuses or asks to confirm a push, a GitHub publication, a write to the registry or to runs, whatever the shape of the command; blocks everything without `python3`. Inside a run (Claude Code): `allow` for `git add` / `git commit` with listed flags, `git push origin BRANCH\|HEAD`, `gh pr create` of the current branch and `gh pr edit\|ready N` on your own PR, and a closed list of scripts (never `run-begin`), at the run's level, so a repo's `commit_skill` / `pr_skill` run without a prompt | — |
 | `repo-audit [owner/repo…]` | read-only: type and scope of the `gh` token, default branch protection (ruleset, branch protection), admin rights; advice | — |
-| `run-end ID` | closes the run (always do it, even after a failure) | — |
+| `run-end ID [OUTCOME]` | closes the run (always do it, even after a failure); `OUTCOME` is how it ended, recorded in the journal: `done`, `draft`, `stopped`, `failed` or `ended` (the default); any other word is said on stderr and recorded as `ended`, the run closed all the same, then exit 2 | — |
+| `run-mark step-begin\|step-end INDEX NAME` · `round N CAP [REASON]` | marks in the run's journal where a step of the run plan starts and ends, and where a fix and review round starts | — |
 | `run-check owner/repo\|--dir PATH LEVEL [action] [--pr N]` | read-only: would that write be allowed now (same rules as the write scripts, a dry run allows nothing; `--pr`: N is your own open PR)? Used by the guard | L0 |
 | `git-push owner/repo [BRANCH] [--dir PATH] [--check]` | pushes a branch without a PR: never forced, never the base, name matching `branch_pattern`; `--check`: the checks only | L2 |
 | `pr-push owner/repo#N` | pushes the workspace's commits to your PR's branch, never forced | L2 |
@@ -60,6 +61,10 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
   own `commit_skill` / `pr_skill`, inside the run (`workflow:pr:ship`): the guard lets it through at the run's level.
 - **Language**: texts published on GitHub (replies, PR descriptions) are in the repo's `reply_language` (`en` by
   default), whatever the language of the conversation.
+- **Journal**: inside a run, every script (but `run-end`, which records `run.end`) records what it did in the run's journal (skill `adorno-journal`): its
+  call and exit code, the level it asked for, each write that reached GitHub, each merged finding, each refusal of
+  the guard. Private (`~/.adorno/runs/<slug>-<run id>/events.jsonl`, whatever `--dir` says), secrets redacted, and
+  never a reason to fail: without `python3` or the skill, nothing is recorded and the script goes on.
 - **Working files**: each script has its own temporary folder, readable only by you (`~/.adorno/tmp/<pid>`, purged
   after a day); deliverables go in the run folder that `run-begin` returns.
 - **Workspaces**: your PR (not a fork), `pr-workspace` run from your clone of the repo → the worktree where its branch

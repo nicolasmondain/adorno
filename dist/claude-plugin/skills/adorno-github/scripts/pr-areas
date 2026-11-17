@@ -30,7 +30,7 @@ else
 fi
 conf="$(repo_conf "$REPO")"
 
-tmp="$(work_dir)/areas-$$"; mkdir -p "$tmp"; trap 'rm -rf "$tmp"' EXIT
+tmp="$(work_dir)/areas-$$"; mkdir -p "$tmp"; trap '_journal_exit $? "$tmp"' EXIT
 : >"$tmp/raw"; : >"$tmp/files"; : >"$tmp/added"; : >"$tmp/hits"
 
 if [ "$mode" = files ]; then
