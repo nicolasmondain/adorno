@@ -140,11 +140,14 @@ than its fix.
 
 ## Cost to expect
 
-Measured on 2026-11-14 with Claude Code 2.1.325, each agent on its default tier, on `mongo-n-plus-one` (6 reviewers
-and `agent:adorno`): **1.53 USD** and 4 minutes. A reviewer cost 0.15 to 0.22 USD, `agent:adorno` 0.44 USD; 653k
-tokens in (mostly read from cache) and 16k out. The 17 review cases start 91 reviewers and 17 `agent:adorno` passes, the 2
-cases of kind `adorno` one pass each (about 0.45 USD): count
-about 25 USD and 65 minutes per repeat, to be measured on your side with one case first. Always pass `--budget-usd`:
+Measured on 2026-11-14 with Claude Code 2.1.325, each agent on its default tier, on `mongo-n-plus-one` as it routed
+then (6 reviewers, and `agent:adorno`): **1.53 USD** and 4 minutes. A reviewer cost 0.15 to 0.22 USD, `agent:adorno`
+0.44 USD; 653k tokens in (mostly read from cache) and 16k out. Nothing in that has been re-measured: it predates #39,
+which merged `review:perf` into `review:front` and `review:perf-back` into `review:back`, so the counts below are
+today's while the cost per call is still the one of 2026-11-14. `mongo-n-plus-one` now starts 5 reviewers, and the 17
+review cases 75 reviewers and 17 `agent:adorno` passes, the 2 cases of kind `adorno` one pass each (about 0.45 USD):
+on that measurement and the routing of 2026-11-14, about 25 USD and 65 minutes per repeat; measure it on your side
+with one case first, and expect less now that the reviewers are fewer. Always pass `--budget-usd`:
 no case starts once the spent amount plus the dearest case so far would exceed it, what is left is split over the
 calls (over the reviewers of a round, then all of it to `agent:adorno`), and the report says at the top what was
 skipped. The budget relies on the cost the tool reports.
