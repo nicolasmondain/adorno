@@ -1,5 +1,5 @@
 ---
-description: agent:feat:back — Server-side Node.js features — services, entry points (routes, RPC methods), jobs, MongoDB access. Use for a feat slice that touches server logic.
+description: agent:feat:back — Server-side features in any back-end stack — services, entry points (routes, RPC methods, handlers), jobs, database access. Use for a feat slice that touches server logic.
 argument-hint: <request>
 disable-model-invocation: true
 ---

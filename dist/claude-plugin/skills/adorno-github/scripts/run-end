@@ -1,21 +1,36 @@
 #!/usr/bin/env bash
-# Usage: run-end ID [OUTCOME]
-# Ends a run started with run-begin: its grant is withdrawn; its run folder stays, with the deliverables. OUTCOME is
-# how it ended, recorded in the journal's run.end: done, draft (left as a draft at a cap), stopped (at a stop point),
-# failed or ended (the default). Any other word is said on stderr and recorded as ended; the run is closed all the
-# same (closing it is the job, the word only information), then the exit code is 2.
+# Usage: run-end ID [OUTCOME] [--status FILE]
+# Ends a run started with run-begin: its grant is withdrawn first; its run folder stays, with the deliverables.
+# OUTCOME is how it ended, recorded in the journal's run.end: done, draft (left as a draft at a cap), stopped (at a stop
+# point), failed or ended (the default). Any other word is said on stderr and recorded as ended; the run is closed all
+# the same (closing it is the job, the word only information), then the exit code is 2.
+# Then what it consumed (run-usage: duration, agents, model and tokens of each, cost) goes to <dir>/usage.json, a
+# summary line to ~/.adorno/runs/usage.jsonl, and a `Cost:` line to the run's status.md (FILE, else <dir>/status.md
+# when it exists). A usage that cannot be read is written as {source: "error"} and said on stderr, the run still ends.
+# `overlap: true` when another run of the same session counts the same messages: one still active, or one in
+# runs/usage.jsonl that ended after this one started. Both say it; the cost is not split. No session: false.
+# Prints {ended, workflow, dir, usage (the cost line), status (the status.md written, or null)}.
 . "$(dirname "$0")/_lib.sh"
 
-id="${1:-}" outcome="${2:-ended}" rc=0
-[[ "$id" =~ ^[0-9T]+-[0-9]+-[0-9]+$ ]] || die "usage: run-end ID [done|draft|stopped|failed|ended] (ID as printed by run-begin)" "$E_USAGE"
+id="${1:-}" outcome="" status="" rc=0
+usage_msg="usage: run-end ID [done|draft|stopped|failed|ended] [--status FILE] (ID as printed by run-begin)"
+[[ "$id" =~ ^[0-9T]+-[0-9]+-[0-9]+$ ]] || die "$usage_msg" "$E_USAGE"
+shift
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --status) status="${2:-}"; [ "$(basename "$status")" = status.md ] || die "--status: a status.md path" "$E_USAGE"; shift 2 ;;
+    -*) die "unknown option $1" "$E_USAGE" ;;
+    *) [ -z "$outcome" ] || die "$usage_msg" "$E_USAGE"; outcome="$1"; shift ;;
+  esac
+done
 f="$(runs_dir)/$id.json"
 [ -f "$f" ] || die "no active run $id (already ended or expired)" "$E_USAGE"
-case "$outcome" in
+case "${outcome:=ended}" in
   done|draft|stopped|failed|ended) ;;
   *) log "OUTCOME '$outcome' is not done, draft, stopped, failed or ended: recorded as ended, the run closed all the same"
      outcome=ended rc="$E_USAGE" ;;
 esac
-jq '{ended: .id, workflow, dir}' "$f"
+run="$(cat "$f")"
 trap - EXIT  # run.end is this script's event: on exit, its grant is gone and the call would land in another run
 journal_event run.end "$(jq --arg o "$outcome" '{workflow, outcome: $o}' "$f")" --run "$id"
 # what the hooks do not carry (models, tokens) is read from the session's transcripts, without making run-end wait;
@@ -25,4 +40,34 @@ if journal_on && [ -d "$journal" ]; then
   ( umask 077; python3 "$JOURNAL_PY" enrich "$id" >/dev/null 2>>"$journal/enrich.log" </dev/null & )
 fi
 rm -f "$f"
+
+dir="$(jq -r '.dir' <<<"$run")"
+ended="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+err="$(mktemp)"; trap 'rm -f "$err"' EXIT
+# ADORNO_JOURNAL=0: the grant is gone, so run-usage's own call would land in another run of the session
+if ! usage="$(ADORNO_JOURNAL=0 "$(dirname "$0")/run-usage" collect --session "$(jq -r '.session // ""' <<<"$run")" \
+       --since "$(jq -r '.started' <<<"$run")" --until "$ended" 2>"$err")"; then
+  log "usage of run $id not recorded: $(tr '\n' ' ' <"$err")"
+  usage="$(jq -n --arg e "$(cat "$err")" --arg s "$(jq -r '.started' <<<"$run")" --arg u "$ended" \
+    '{source: "error", error: $e, started: $s, ended: $u, summary: "usage not recorded (run-usage failed)"}')"
+fi
+index="$(kit_home)/runs/usage.jsonl"
+[ -f "$index" ] || : >"$index"
+# The index is read as a file, not piped: `any` stops at the first match (a bad index line is skipped).
+overlap="$(jq -nR --argjson run "$run" --argjson active "$(active_runs)" '
+  ($run.session // "") as $s
+  | $s != "" and (any($active[]; .id != $run.id and .session == $s)
+                  or any(inputs | fromjson? | select(type == "object");
+                         .id != $run.id and .session == $s and (.ended | type == "string" and . > $run.started)))' "$index")"
+usage="$(jq --argjson o "$overlap" '. + {overlap: $o}' <<<"$usage")"
+mkdir -p "$dir"
+printf '%s\n' "$usage" >"$dir/usage.json"
+jq -c --argjson run "$run" '{id: $run.id, workflow: $run.workflow, repos: $run.repos, dir: $run.dir,
+  session: ($run.session // ""), started: $run.started, ended, source, duration_s, overlap, usd: .totals.usd,
+  tokens: .totals.tokens, agents: [(.agents // [])[] | {type, model, usd}]}' <<<"$usage" >>"$index"
+line="Cost: $(jq -r '.summary' <<<"$usage")"
+[ -n "$status" ] || { [ -f "$dir/status.md" ] && status="$dir/status.md"; }
+[ -z "$status" ] || printf '\n%s\n' "$line" >>"$status"
+jq --arg line "$line" --arg status "$status" \
+  '{ended: .id, workflow, dir, usage: $line, status: (if $status == "" then null else $status end)}' <<<"$run"
 exit "$rc"

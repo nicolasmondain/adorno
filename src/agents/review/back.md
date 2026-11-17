@@ -1,11 +1,11 @@
 ---
-description: Back-end reviewer — Node.js server logic, entry points (routes, RPC methods, handlers), jobs, errors, concurrency, server-side permissions. Called when a diff touches the server, or to verify a review comment about the back end.
+description: Back-end reviewer — server logic in any stack, entry points (routes, RPC methods, handlers), jobs, errors, concurrency, server-side permissions. Called when a diff touches the server, or to verify a review comment about the back end.
 ---
 
 ## Area: back
 
 - **Correctness**: edge cases, null values, errors swallowed or returned without context, forgotten `await`, unhandled
-  promises, side effects in a loop.
+  promises or exceptions, side effects in a loop.
 - **Concurrency and idempotence**: double execution of a job or method, race between read and write, retry that
   duplicates; lock or atomic operation where needed.
 - **Server entry points** (routes, RPC methods, handlers, subscriptions): arguments validated by a schema, user

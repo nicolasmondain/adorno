@@ -6,7 +6,7 @@
   "routing": {
     "areas": [
       "back",
-      "back.query",
+      "back.mongodb",
       "tests",
       "typescript"
     ],

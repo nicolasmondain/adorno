@@ -91,6 +91,8 @@ bad "a commit_skill with a trailing newline" $'  ghost/repo:\n    commit_skill: 
 bad "an empty setup_skill" $'  ghost/repo:\n    setup_skill: ""' "setup_skill must be a skill or command name"
 bad "a pr_skill with a path" $'  ghost/repo:\n    pr_skill: "../x"' "pr_skill must be a skill or command name"
 bad "unknown denied action" $'  ghost/repo:\n    permissions: {deny: [merge]}' "unknown action 'merge'"
+bad "a negative price" $'  ghost/repo: {}\nprices:\n  claude-x: {input: -1}' "prices.claude-x: numbers >= 0"
+bad "an incomplete price" $'  ghost/repo: {}\nprices:\n  claude-x: {input: 1, output: 5}' "prices.claude-x: numbers >= 0"
 bad "an unknown tier" $'  ghost/repo:\n    models: {tiers: {claude: {huge: x}}}' "tiers are inherit, fast, balanced, deep, frontier"
 mkdir -p "$TMP/bad/src/agents/feat"
 printf -- '---\ndescription: x\neffort: extreme\n---\nx\n' >"$TMP/bad/src/agents/feat/odd.md"
@@ -112,6 +114,8 @@ check "nothing to commit: every installed file is excluded from git" '[ -z "$(gi
 check "the tracked CLAUDE.md is untouched" '[ "$(cat "$A/CLAUDE.md")" = "# team rules" ]'
 check "Claude gets the instructions as a rule file" '[ -f "$A/.claude/rules/adorno.md" ]'
 check "the registry lives in the kit home, read-only" '[ "$(ls -l "$ADORNO_HOME/registry.json" | cut -c1-10)" = "-r--------" ]'
+check "the registry carries the public prices" 'jq -e ".prices[\"claude-opus-5-5\"].input == 4" "$ADORNO_HOME/registry.json" >/dev/null'
+check "... with the layer's prices merged in alongside" 'jq -e ".prices[\"claude-sonnet-5\"].input == 2 and .prices[\"claude-opus-5-5\"].output == 20" "$ADORNO_HOME/registry.json" >/dev/null'
 check "no personal registry inside the repo" '! grep -rq "janedoe" "$A/.claude/skills/adorno-github/repos.json"'
 check "SCHEMA.md is neither an item nor shipped" '[ -f "$ROOT/src/agents/review/SCHEMA.md" ] && [ -z "$(find "$A/.claude" "$A/.codex" -iname "schema.md" 2>/dev/null)" ]'
 check "your own rules and keys are kept" 'jq -e ".model == \"x\" and (.permissions.allow | index(\"Bash(make:*)\")) != null" "$A/.claude/settings.local.json" >/dev/null'
@@ -272,6 +276,15 @@ bad "area_reviewers is refused with the migration hint" $'  ghost/repo:\n    are
 OKL="$TMP/okl"; mkdir -p "$OKL"
 printf 'owner: {name: T, github: t, language: fr}\nrepos:\n  ghost/repo:\n    areas: {back: {review: ["-agent:review:tests"]}}\n' >"$OKL/adorno.yaml"
 expect_exit 0 "a removal entry (-x) is accepted" -- env ADORNO_LOCAL="$OKL" "${KIT[@]}" check
+# public stack presets: a repo calls them, a local preset may build on one but not take its name
+printf 'owner: {name: T, github: t, language: fr}\npresets:\n  ours: {use: [rails], context: ["Postgres 16"]}\nrepos:\n  ghost/repo: {use: [ours, sql]}\n' >"$OKL/adorno.yaml"
+expect_exit 0 "a local preset using a public one is accepted" -- env ADORNO_LOCAL="$OKL" "${KIT[@]}" check
+expect_exit 0 "conf of a repo on public presets" -- env ADORNO_LOCAL="$OKL" "${KIT[@]}" conf ghost/repo
+expect_jq "the public presets reach the repo through the local one" \
+  '(.areas.back.sub | has("rails") and has("activerecord") and has("sql") and has("migration")) and (.areas.back.sub.migration.review | index("agent:review:sql")) and .context == ["Postgres 16"]'
+printf 'owner: {name: T, github: t, language: fr}\npresets:\n  sql: {context: ["mine"]}\n' >"$OKL/adorno.yaml"
+out="$(ADORNO_LOCAL="$OKL" "${KIT[@]}" check 2>&1)"; got=$?
+if [ "$got" != 0 ] && grep -q "presets.sql reuses the name of a public preset" <<<"$out"; then ok "a local preset named like a public one fails"; else ko "a local preset named like a public one fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
 
 # a throwaway copy of the kit to break the public sources
 SB="$TMP/sandbox"; mkdir -p "$SB"
@@ -289,6 +302,7 @@ sed -i.bak 's/workflow:spec:new/workflow:spec:ghost/' "$SB/src/agents/feat/lonel
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
 if [ "$got" != 0 ] && grep -q "entry names unknown workflow 'workflow:spec:ghost'" <<<"$out"; then ok "an entry naming no workflow fails"; else ko "an entry naming no workflow fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
 out="$(ADORNO_LOCAL="$TMP/none" "${KIT[@]}" list --orphans 2>&1)"; got=$?
+# perf:nodejs, perf:mongodb, review:mongodb and review:sql are named only by public presets
 check "list --orphans is empty on the real registry" '[ "$got" = 0 ] && [ -z "$out" ]'
 rm -f "$SB/src/agents/feat/lonely.md"
 sed -i.bak 's/agent:fix:security, //' "$SB/src/workflows/pr/ship.md"; rm -f "$SB/src/workflows/pr/ship.md.bak"
@@ -361,18 +375,23 @@ MIG="$TMP/mig"; mkdir -p "$MIG"
 printf '%s\n' 'owner: {name: T, github: t, language: fr}' 'repos:' '  acme/app:' '    area_reviewers:' \
   '      docs: [agent:review:security]' '      api: [agent:review:api, agent:review:security]' \
   '      mongodb: [agent:review:mongodb, agent:review:back]' '      always: [agent:review:code]' \
-  '      front: [agent:review:code]' >"$MIG/adorno.yaml"
+  '      front: [agent:review:code]' '  acme/web:' '    use: [node]' '    area_reviewers:' \
+  '      mongodb: [agent:review:mongodb]' '  acme/mix:' '    use: [mongodb]' '    area_reviewers:' \
+  '      mongodb: [agent:review:mongodb]' >"$MIG/adorno.yaml"
 cp "$MIG/adorno.yaml" "$TMP/mig-before.yaml"
 out="$(ADORNO_LOCAL="$MIG" "${KIT[@]}" migrate areas 2>"$TMP/err")"; got=$?
 check "migrate areas succeeds although check fails" '[ "$got" = 0 ] && ! ADORNO_LOCAL="$MIG" "${KIT[@]}" check >/dev/null 2>&1'
 expect_jq "docs: the old list is all additions" '[.[] | select(.area_path == "areas.docs.review")][0].new == ["agent:review:security"]'
 expect_jq "api: only the addition remains" '[.[] | select(.area_path == "areas.api.review")][0].new == ["agent:review:security"]'
-expect_jq "mongodb maps to both back sub-areas, nothing to add over the inherited reviewers" \
-  '([.[] | select(.area_path == "areas.back.sub.mongodb.review" or .area_path == "areas.back.sub.query.review")] | length == 2 and all(.new == [] and .scope == "repos.acme/app"))'
+expect_jq "mongodb maps to the mongodb preset's sub-area, nothing to add over the inherited reviewers" \
+  '([.[] | select(.area_path == "areas.back.sub.mongodb.review" and .scope == "repos.acme/app")] | length == 1 and all(.new == [] and .use == ["mongodb"]))'
+check "the snippet calls the mongodb preset" 'grep -q -- "- mongodb" "$TMP/err"'
 expect_jq "always: a public reviewer missing from the old list becomes a removal" \
   '[.[] | select(.area_path == "areas.always.review")][0].new == ["-agent:review:ponytail"]'
 expect_jq "an area omitting a public reviewer gets its -x" \
   '[.[] | select(.area_path == "areas.front.review")][0].new == ["agent:review:code", "-agent:review:front", "-agent:review:perf"]'
+expect_jq "a scope that already calls a preset keeps it, mongodb is appended once" \
+  '([.[] | select(.scope == "repos.acme/web")][0].use == ["node", "mongodb"]) and ([.[] | select(.scope == "repos.acme/mix")][0].use == ["mongodb"])'
 check "migrate prints a YAML snippet per scope" 'grep -q "repos:" "$TMP/err" && grep -q "areas:" "$TMP/err"'
 check "migrate writes nothing" 'cmp -s "$MIG/adorno.yaml" "$TMP/mig-before.yaml" && [ "$(ls "$MIG")" = "adorno.yaml" ]'
 
