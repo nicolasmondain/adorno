@@ -17,12 +17,12 @@ flowchart LR
   repo -->|install| T["per tool<br/>Claude Code, Codex, Gemini CLI"]
   LOC -->|install only| T
   T --> R["request"] --> W["workflow"]
-  W --> PUB["publish in your name<br/>review:requested, slack, notion"] --> PA["pr-areas, then<br/>the area specialists"] --> AD(("agent:adorno<br/>verifies, decides, writes")) --> OUT["pending review, draft reply,<br/>report to you"]
+  W --> PUB["publish in your name<br/>review:requested, slack:mentions"] --> PA["specialists<br/>area reviewers from pr-areas (PRs),<br/>core:analyst (Slack)"] --> AD(("agent:adorno<br/>verifies, decides, writes")) --> OUT["pending review, draft reply,<br/>report to you"]
   W --> COD["change code<br/>feature:build, issue:fix, ci:red,<br/>review:received"] --> BU["builders<br/>by commit type"] --> SH["workflow:pr:ship<br/>commit, review gate, PR"]
 ```
 
-`bin/kit` (`check`, `build`, `install`) turns the repo into the tool's files. `build` never reads `local/`; only
-`install` does. In `workflow:pr:ship` the review gate is itself `pr-areas`, the area reviewers, then `agent:adorno`.
+`bin/kit` (`check`, `build`, `install`) turns the repo into the tool's files. `build` never reads `local/`, so `dist/` stays public;
+`check` and `install` do. In `workflow:pr:ship` the review gate is itself `pr-areas`, the area reviewers, then `agent:adorno`.
 
 ## The four layers
 
@@ -33,7 +33,7 @@ Written in a neutral format that `bin/kit` translates for each tool. `bin/kit li
 | Instructions | `src/instructions/NN-topic.md`, concatenated in name order | The repo's own rules (`CLAUDE.md`, `.claude/rules/`) win over everything on its code. |
 | Agents | `src/agents/<type>/<specialty>.md`, plus `src/agents/adorno.md` | An agent of a commit-type family only produces commits of that type; `core` and `review` never commit. |
 | Workflows | `src/workflows/<domain>/<action>.md` | Every workflow that touched code ends with `workflow:pr:ship`. |
-| Skills | `src/skills/<name>/SKILL.md` (own) and `vendor/` (imported) | GitHub access goes through the `adorno-github` scripts, except the repo's own commit and PR skills inside a run, at its level. |
+| Skills | `src/skills/<name>/SKILL.md` (own) and `vendor/` (imported) | GitHub access goes through the `adorno-github` scripts, except the repo's own commit and PR skills inside `workflow:pr:ship`, at the run's level. |
 
 - **Agents** are `agent:<type>:<specialty>` with a Conventional Commit type, or `core` (frame, plan, route, triage) and
   `review` (judge). `agent:adorno` sits outside the families: it speaks and decides in the owner's name and is the
