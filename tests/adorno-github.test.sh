@@ -521,7 +521,7 @@ if [ -f "$REAL" ]; then
   expect_jq "unmatched files land in other" '.other == ["notes/weird.txt"]'
   expect_jq "a files tie goes to config order (front before back)" '.perf == "agent:perf:front" and .build == "agent:feat:front"'
   expect_jq "review: always + every area, deduplicated" \
-    '(.review | sort) == (["agent:review:code","agent:review:ponytail","agent:review:front","agent:review:perf","agent:review:back","agent:review:tests","agent:review:perf-back","agent:review:mongodb","agent:review:security"] | sort) and (.review | length) == (.review | unique | length)'
+    '(.review | sort) == (["agent:review:code","agent:review:ponytail","agent:review:front","agent:review:back","agent:review:tests","agent:review:mongodb","agent:review:security"] | sort) and (.review | length) == (.review | unique | length)'
   expect_jq "no reviewers key, always is not an area" '(has("reviewers") | not) and (.areas | has("always") | not)'
   expect_jq "by_area carries the roles" '.by_area["back.query"].perf == "agent:perf:mongodb" and .by_area.front.perf == "agent:perf:front" and .by_area.docs.perf == null'
   expect_jq "no perf fallback when an area has one" '.skills | index("performance-optimization") | not'
@@ -576,7 +576,7 @@ if [ -f "$REAL" ]; then
   expect_jq "the workspace addition is removed by the repo, with no marker left" \
     '(.areas.back.review | index("agent:review:extra") | not) and (.areas.back.skills | index("extra-skill") | not) and ([.areas.back.review[] | select(startswith("-"))] == [])'
   expect_jq "the repo also removes a public reviewer, the others stay" \
-    '(.areas.back.review | index("agent:review:tests") | not) and (.areas.back.review | index("agent:review:back")) and (.areas.back.review | index("agent:review:perf-back"))'
+    '(.areas.back.review | index("agent:review:tests") | not) and (.areas.back.review | index("agent:review:back"))'
   expect_exit 0 "the workspace alone keeps its addition" -- "$S/repo-conf" ovr/plain
   expect_jq "no workspace match: public list unchanged" '(.areas.back.review | index("agent:review:extra") | not) and (.areas.back.review | index("agent:review:tests"))'
 

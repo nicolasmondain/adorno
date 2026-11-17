@@ -375,7 +375,7 @@ expect_jq "mongodb maps to both back sub-areas, nothing to add over the inherite
 expect_jq "always: a public reviewer missing from the old list becomes a removal" \
   '[.[] | select(.area_path == "areas.always.review")][0].new == ["-agent:review:ponytail"]'
 expect_jq "an area omitting a public reviewer gets its -x" \
-  '[.[] | select(.area_path == "areas.front.review")][0].new == ["agent:review:code", "-agent:review:front", "-agent:review:perf"]'
+  '[.[] | select(.area_path == "areas.front.review")][0].new == ["agent:review:code", "-agent:review:front"]'
 check "migrate prints a YAML snippet per scope" 'grep -q "repos:" "$TMP/err" && grep -q "areas:" "$TMP/err"'
 check "migrate writes nothing" 'cmp -s "$MIG/adorno.yaml" "$TMP/mig-before.yaml" && [ "$(ls "$MIG")" = "adorno.yaml" ]'
 

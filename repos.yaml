@@ -97,7 +97,7 @@ defaults:
       build: agent:feat:front
       fix: agent:fix:patch
       perf: agent:perf:front
-      review: [agent:review:front, agent:review:perf]
+      review: [agent:review:front]
       qa: agent:test:e2e
       skills: [frontend-ui-engineering]
 
@@ -106,7 +106,7 @@ defaults:
       build: agent:feat:back
       fix: agent:fix:patch
       perf: agent:perf:nodejs
-      review: [agent:review:back, agent:review:tests, agent:review:perf-back]
+      review: [agent:review:back, agent:review:tests]
       sub:
         query:
           content: '\.aggregate\(|\.find(One)?\(|\.(update|delete|insert)(One|Many)?\(|\.bulkWrite\(|rawCollection\(|\$lookup|\$match|\$group'

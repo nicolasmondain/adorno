@@ -115,8 +115,8 @@ of the code, and which skills it loads. Every dispatcher (planner, triage, `ci:d
 | Area | Detected by (excerpt) | `build` | `fix` | `perf` | `review` | `qa` | `skills` |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `always` | every change | | | | `review:code`, `review:ponytail` | | |
-| `front` | `*.tsx`, `*.css`, `*/components/*`… | `feat:front` | `fix:patch` | `perf:front` | `review:front`, `review:perf` | `test:e2e` | `frontend-ui-engineering` |
-| `back` | `server/*`, `*/services/*`, `*/jobs/*`… | `feat:back` | `fix:patch` | `perf:nodejs` | `review:back`, `review:tests`, `review:perf-back` | | |
+| `front` | `*.tsx`, `*.css`, `*/components/*`… | `feat:front` | `fix:patch` | `perf:front` | `review:front` | `test:e2e` | `frontend-ui-engineering` |
+| `back` | `server/*`, `*/services/*`, `*/jobs/*`… | `feat:back` | `fix:patch` | `perf:nodejs` | `review:back`, `review:tests` | | |
 | `back.query` | added lines with `.find(`, `.aggregate(`, `$lookup`… | | | `perf:mongodb` | + `review:mongodb` | | |
 | `back.mongodb` | `*/migrations/*`, `*/models/*`, `.createIndex(`… | | | `perf:mongodb` | + `review:mongodb` | | + `deprecation-and-migration` |
 | `api` | `*/api/*`, `*/routes/*`, `*openapi*`… | `feat:api` | | | `review:api` | | `api-and-interface-design` |
@@ -154,7 +154,7 @@ repos:
   acme/app:
     areas:
       back:
-        review: ["-agent:review:perf-back"]   # this repo's server is a thin proxy
+        review: ["-agent:review:tests"]   # this repo's server is a thin proxy, tested end to end
         sub:
           query: {review: [agent:review:security]}
       always:
