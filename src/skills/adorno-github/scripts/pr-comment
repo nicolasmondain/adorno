@@ -27,4 +27,5 @@ if dry_run; then
   exit 0
 fi
 url="$(gh pr comment "$NUM" -R "$REPO" --body-file "$file" ${ATTACH_ARGS[@]+"${ATTACH_ARGS[@]}"})"
+journal_github comment "$REPO#$NUM" "$url"
 jq -n --arg url "$url" '{posted: true, url: $url}'

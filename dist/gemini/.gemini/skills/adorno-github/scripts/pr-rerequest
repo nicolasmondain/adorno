@@ -33,3 +33,4 @@ for l in "${logins[@]}"; do
 done
 gh api -X POST "repos/$REPO/pulls/$NUM/requested_reviewers" "${args[@]}" \
   --jq '{requested: [.requested_reviewers[].login], teams: [.requested_teams[]?.slug]}'
+journal_github rerequest "$REPO#$NUM"
