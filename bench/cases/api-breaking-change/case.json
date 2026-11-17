@@ -50,5 +50,71 @@
       ],
       "reviewer": "agent:review:api"
     }
+  ],
+  "extras": [
+    {
+      "file": "docs/api-reference/contacts.md",
+      "lines": [
+        16,
+        20
+      ],
+      "keywords": [
+        "deprecat"
+      ],
+      "valid": true,
+      "note": "the planned defect, anchored elsewhere: the breaking rename seen from the reference: no deprecation or migration note for clients reading `total`"
+    },
+    {
+      "file": "docs/api-reference/contacts.md",
+      "lines": [
+        16,
+        16
+      ],
+      "keywords": [
+        "consumers",
+        "outside this repo"
+      ],
+      "valid": true,
+      "note": "the planned defect, anchored elsewhere: the breaking rename raised as a question: external consumers of `total` cannot be checked from the repo"
+    },
+    {
+      "file": "server/routes/contacts.test.ts",
+      "lines": [
+        30,
+        30
+      ],
+      "keywords": [
+        "backward compat",
+        "the break"
+      ],
+      "valid": true,
+      "note": "the planned defect, anchored elsewhere: the breaking rename seen from the test: the only contract assertion was rewritten to accept the break"
+    },
+    {
+      "file": "server/routes/contacts.test.ts",
+      "lines": [
+        30,
+        30
+      ],
+      "keywords": [
+        "empty account",
+        "no contacts"
+      ],
+      "valid": false,
+      "note": "empty-account and limit tests prove nothing about a field rename; out of the change's scope"
+    },
+    {
+      "file": "server/routes/contacts.ts",
+      "lines": [
+        19,
+        21
+      ],
+      "keywords": [
+        "limit parsing",
+        "limit=-5"
+      ],
+      "valid": false,
+      "note": "untested limit parsing is existing code outside the diff; a follow-up, not a point on this rename"
+    }
   ]
 }

@@ -45,5 +45,45 @@
       ],
       "reviewer": "agent:review:tests"
     }
+  ],
+  "extras": [
+    {
+      "file": "server/services/pricing.test.ts",
+      "lines": [
+        13,
+        13
+      ],
+      "keywords": [
+        "refusal branch"
+      ],
+      "valid": true,
+      "note": "the planned defect, anchored elsewhere: the planned defect (refusal branch of refund untested) anchored on the test file instead of pricing.ts:12"
+    },
+    {
+      "file": "server/services/pricing.test.ts",
+      "lines": [
+        13,
+        15
+      ],
+      "keywords": [
+        "off-by-one",
+        "boundary"
+      ],
+      "valid": true,
+      "note": "refunding exactly what is left is untested: > vs >= would pass the current test"
+    },
+    {
+      "file": "server/services/pricing.test.ts",
+      "lines": [
+        13,
+        13
+      ],
+      "keywords": [
+        "multi-step",
+        "chains"
+      ],
+      "valid": false,
+      "note": "refund is pure and the test already passes a prior refund (refundedCents 1000); chaining calls adds no coverage"
+    }
   ]
 }

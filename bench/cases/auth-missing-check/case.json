@@ -46,5 +46,86 @@
       ],
       "reviewer": "agent:review:back"
     }
+  ],
+  "extras": [
+    {
+      "file": "server/routes/invoices.test.ts",
+      "lines": [
+        51,
+        65
+      ],
+      "keywords": [
+        "\\b403\\b"
+      ],
+      "valid": true,
+      "note": "the planned defect, anchored elsewhere: the missing permission check seen from the tests: no reader-gets-403 test on DELETE, unlike PATCH"
+    },
+    {
+      "file": "server/routes/invoices.test.ts",
+      "lines": [
+        51,
+        65
+      ],
+      "keywords": [
+        "another account",
+        "cross-account",
+        "across tenants",
+        "acc_other"
+      ],
+      "valid": true,
+      "note": "tenant isolation of the new delete rests on the accountId filter and no test covers it"
+    },
+    {
+      "file": "server/routes/invoices.test.ts",
+      "lines": [
+        55,
+        55
+      ],
+      "keywords": [
+        "only the targeted",
+        "inv_2"
+      ],
+      "valid": true,
+      "note": "a single-document fixture cannot tell deleteOne from a filter that deletes too much"
+    },
+    {
+      "file": "server/routes/invoices.test.ts",
+      "lines": [
+        51,
+        59
+      ],
+      "keywords": [
+        "does not exist",
+        "unknown id"
+      ],
+      "valid": true,
+      "note": "the 404 for a missing invoice, promised by the description, is not tested"
+    },
+    {
+      "file": "server/routes/invoices.test.ts",
+      "lines": [
+        59,
+        62
+      ],
+      "keywords": [
+        "only the 'paid' status",
+        "covers only 'paid'"
+      ],
+      "valid": false,
+      "note": "the guard is an equality on 'draft': one non-draft status proves it, a 'sent' case adds nothing"
+    },
+    {
+      "file": "server/routes/invoices.ts",
+      "lines": [
+        45,
+        45
+      ],
+      "keywords": [
+        "\\b409\\b",
+        "hides the real reason"
+      ],
+      "valid": false,
+      "note": "404 for a non-draft is what the description promises and what PATCH does; the finding admits it is consistent"
+    }
   ]
 }

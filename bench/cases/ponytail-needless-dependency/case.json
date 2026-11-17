@@ -44,5 +44,73 @@
       ],
       "reviewer": "agent:review:ponytail"
     }
+  ],
+  "extras": [
+    {
+      "file": "server/services/exports.test.ts",
+      "lines": [
+        9,
+        11
+      ],
+      "keywords": [
+        "empty (invoice|export|list)",
+        "exportBatch\\(\\[\\]\\)"
+      ],
+      "valid": false,
+      "note": "no branch on an empty list: map returns [] and the id is drawn the same way; the test would only guard a hypothetical later guard"
+    },
+    {
+      "file": "server/services/exports.ts",
+      "lines": [
+        15,
+        15
+      ],
+      "keywords": [
+        "credit note",
+        "negative",
+        "sub-euro"
+      ],
+      "valid": false,
+      "note": "invoiceLine formatting predates the PR (the finding says so): out of the diff's scope"
+    },
+    {
+      "file": "server/services/exports.test.ts",
+      "lines": [
+        14,
+        14
+      ],
+      "keywords": [
+        "credit note",
+        "negative total",
+        "sub-euro"
+      ],
+      "valid": false,
+      "note": "invoiceLine formatting predates the PR (the finding says so): out of the diff's scope"
+    },
+    {
+      "file": "server/services/exports.test.ts",
+      "lines": [
+        11,
+        17
+      ],
+      "keywords": [
+        "three concepts"
+      ],
+      "valid": false,
+      "note": "splitting one cohesive test is a style preference; node:test already reports the failing assertion"
+    },
+    {
+      "file": "server/services/exports.test.ts",
+      "lines": [
+        16,
+        16
+      ],
+      "keywords": [
+        "only two calls",
+        "uniqueness is checked"
+      ],
+      "valid": false,
+      "note": "the finding concedes two calls plus the v4 regex are enough; guarding a hypothetical weaker id is speculative"
+    }
   ]
 }
