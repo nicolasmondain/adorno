@@ -18,6 +18,7 @@ LEGACY_LOCAL = ROOT / "repos.local.yaml"
 RESOLVER = ROOT / "src" / "skills" / "adorno-github" / "scripts" / "resolve.jq"
 LEVELS = ("L0", "L1", "L2", "L3", "L4")
 PONYTAIL_LEVELS = ("lite", "full", "ultra")
+PRICE_KEYS = ("input", "cache_write_5m", "cache_write_1h", "cache_read", "output")  # repos.yaml › prices, read by run-usage
 ACTIONS = ("push", "reply", "comment", "resolve", "rerequest", "review", "submit", "open_pr", "ci_rerun")
 CLAUDE_RULES = ("allow", "ask", "deny")
 VISION_MAX_LINES = 60

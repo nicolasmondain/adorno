@@ -66,7 +66,8 @@ def registry() -> dict:
 
 def _registry() -> dict:
     """repos.yaml, with the personal layer (local/adorno.yaml) on top when it is active: `owner` and `defaults`
-    merged into the defaults, `presets`, `workspaces` (local `paths` turned into the repos found there), `repos`."""
+    merged into the defaults, `presets` (added to the public ones), `workspaces` (local `paths` turned into the repos
+    found there), `repos`."""
     data = load_yaml(ROOT / "repos.yaml")
     loc = local_conf()
     if loc:
@@ -74,7 +75,7 @@ def _registry() -> dict:
         if loc.get("owner"):
             defaults["owner"] = loc["owner"]
         data = deep_merge(data, {"defaults": defaults, "repos": loc.get("repos") or {}})
-        data["presets"] = loc.get("presets") or {}
+        data["presets"] = {**(data.get("presets") or {}), **(loc.get("presets") or {})}  # a clash: validate_registry
         workspaces = {}
         for name, ws in (loc.get("workspaces") or {}).items():
             ws = dict(ws or {})
@@ -85,6 +86,8 @@ def _registry() -> dict:
         for key in ("slack", "notion", "journal"):
             if loc.get(key):
                 data[key] = loc[key]
+        if loc.get("prices"):  # your own rates or models, over the public ones
+            data["prices"] = deep_merge(data.get("prices") or {}, loc["prices"])
     return data
 
 

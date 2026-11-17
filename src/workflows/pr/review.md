@@ -4,7 +4,7 @@ args: "<owner/repo#N> [--mode report|pending|auto]"
 roles: [review]
 uses:
   skills: [adorno-github, adorno-profile, adorno-voice]
-  agents: [agent:review:code, agent:review:ponytail, agent:review:front, agent:review:back, agent:review:mongodb, agent:review:api, agent:review:security, agent:review:tests, agent:adorno]
+  agents: [agent:review:code, agent:review:ponytail, agent:review:front, agent:review:back, agent:review:mongodb, agent:review:sql, agent:review:api, agent:review:security, agent:review:tests, agent:adorno]
 model: balanced
 ---
 

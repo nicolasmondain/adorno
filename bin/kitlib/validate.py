@@ -9,10 +9,10 @@ import shutil
 import subprocess
 
 from kitlib import ctx
-from kitlib.paths import (ACTIONS, CLAUDE_RULES, EFFORTS, LEGACY_LOCAL, LEVELS, NAME_RE, PONYTAIL_LEVELS, ROOT,
-                          SECRET_ENV_RE, SRC, TIERS)
-from kitlib.util import as_list, rel, warn
-from kitlib.registry import local_on, registry
+from kitlib.paths import (ACTIONS, CLAUDE_RULES, EFFORTS, LEGACY_LOCAL, LEVELS, NAME_RE, PONYTAIL_LEVELS,
+                          PRICE_KEYS, ROOT, SECRET_ENV_RE, SRC, TIERS)
+from kitlib.util import as_list, load_yaml, rel, warn
+from kitlib.registry import local_conf, local_on, registry
 from kitlib.model import Config, Item
 
 
@@ -88,8 +88,9 @@ def validate(cfg: Config, items: dict[str, dict[str, Item]]) -> list[str]:
 ROLE_FAMILIES = {"build": ("feat", "test", "docs", "chore"), "fix": ("fix", "test", "refactor", "ci", "docs", "chore"),
                  "perf": ("perf",), "review": ("review",), "qa": ("test",)}
 AREA_KEYS = {"paths", "content", *ROLE_FAMILIES, "skills", "sub"}
-# the families a fallback may come from: a nit is a fix, a missing test a test, a perf point a perf agent
-FALLBACK_FAMILIES = {"nit": ROLE_FAMILIES["fix"], "test": ("test",), "perf": ROLE_FAMILIES["perf"]}
+# the families a fallback may come from: a nit is a fix, a missing test a test, a perf point a perf agent, or a fixer
+# with the perf skill (the neutral default: perf agents are stack-specific)
+FALLBACK_FAMILIES = {"nit": ROLE_FAMILIES["fix"], "test": ("test",), "perf": ROLE_FAMILIES["perf"] + ("fix",)}
 AREA_REVIEWERS_MSG = ("`area_reviewers` is replaced by `areas.<area>.review`: run the adorno-setup skill (mode repo) "
                       "to migrate; `bin/kit migrate areas` prints the conversion")
 # agents merged into another one: old id -> the id that took over its checks (`bin/kit migrate agents`)
@@ -156,7 +157,10 @@ def validate_roles(reg: dict, items: dict, known: set) -> list[str]:
 
 
 def orphan_agents(reg: dict, items: dict) -> list[str]:
-    reached = {ref for _, ref in area_refs(reg.get("defaults") or {})}
+    """Agents no public area role, fallback or stack preset names, and without an `entry`."""
+    public = load_yaml(ROOT / "repos.yaml").get("presets") or {}
+    scopes = [reg.get("defaults") or {}, *(c or {} for c in public.values())]
+    reached = {ref for conf in scopes if isinstance(conf, dict) for _, ref in area_refs(conf)}
     return sorted(i.id for i in items["agent"].values() if i.id not in reached and not i.meta.get("entry"))
 
 
@@ -494,6 +498,11 @@ def validate_registry(reg: dict, agent_ids: set, delegable: set, skill_names: se
                       f"(`owner` goes top-level; see local.example/)")
     where = "local/adorno.yaml" if local_on() else "repos.yaml"
     presets = reg.get("presets") or {}
+    if local_on():
+        public = set(load_yaml(ROOT / "repos.yaml").get("presets") or {})
+        for name in sorted(public & set(local_conf().get("presets") or {})):
+            errors.append(f"{where}: presets.{name} reuses the name of a public preset (repos.yaml): give yours "
+                          f"another name and `use: [{name}]` in it, then add your keys")
     scopes = [("defaults", reg.get("defaults") or {})]
     scopes += [(f"presets.{n}", c or {}) for n, c in presets.items()]
     scopes += [(f"workspaces.{n}", c or {}) for n, c in (reg.get("workspaces") or {}).items()]
@@ -550,6 +559,13 @@ def validate_registry(reg: dict, agent_ids: set, delegable: set, skill_names: se
             errors.append(f"{where}: {scope} needs `repos` (GitHub globs) or `paths` (local folders)")
     errors += validate_watches(reg, where, agent_ids)
     errors += validate_journal(reg, where)
+    prices = reg.get("prices")
+    if prices is not None and not isinstance(prices, dict):
+        errors.append(f"{where}: prices must be a mapping of model id to rates")
+    for model, rates in (prices or {}).items() if isinstance(prices, dict) else ():
+        if not (isinstance(rates, dict) and set(rates) == set(PRICE_KEYS) and all(
+                isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0 for v in rates.values())):
+            errors.append(f"{where}: prices.{model}: numbers >= 0 ($ per million tokens) for all of {', '.join(PRICE_KEYS)}")
     # presets that use each other must not loop
     def walk(name: str, seen: tuple) -> None:
         if name in seen:
