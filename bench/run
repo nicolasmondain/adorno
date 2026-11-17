@@ -12,6 +12,8 @@ and costs money: it never runs in CI. For each case and each repeat:
      reviews/<name>.json;
   4. review-merge; a review that is missing or that it reports invalid is run once more;
   5. the agent:adorno pass on the merged review (review-final.json, review-notes.md).
+A case of kind `adorno` brings the specialists' reviews with it (reviews/*.json, true and planted false findings):
+no reviewer runs, review-merge merges them, and agent:adorno alone is measured.
 
 The prompts are those of this working tree (dist/, public layer only): the agents come from dist/claude-plugin and
 the instructions from dist/AGENTS.md, placed in the workspace as .claude/rules/adorno.md. Your user settings, your
@@ -260,8 +262,8 @@ def run_case(args, tool, case_id, entry, always, state, dest):
                                                       skills=", ".join(skills) or "none"))
             return agent, play(agent, prompt, budget)
 
-        summary = {"case": case_id, "diff_base": diff_base, "routing_ok": entry["ok"]}
-        try:
+        def reviewers():
+            """The routed reviewers, a missing or invalid review run once more -> the merged review."""
             pending, merged = list(routed["review"]), {}
             for attempt_number in (1, 2):
                 # what is left, split over every call of the round: their caps add up to it, whatever --parallel is
@@ -287,6 +289,16 @@ def run_case(args, tool, case_id, entry, always, state, dest):
                 for agent in pending:  # as step 7 of workflow:pr:review: run that specialist once more
                     (run_dir / "reviews" / f"{short(agent)}.json").unlink(missing_ok=True)
                     metas[agent]["delivered"] = "none"
+            return merged
+
+        summary = {"case": case_id, "diff_base": diff_base, "routing_ok": entry["ok"]}
+        try:
+            if case.get("kind") == "adorno":  # the specialists' reviews come with the case: agent:adorno alone runs
+                for path in sorted((case_dir / "reviews").glob("*.json")):
+                    shutil.copy(path, run_dir / "reviews" / path.name)
+                merged = json.loads(out([SCRIPTS / "review-merge", run_dir / "reviews"]))
+            else:
+                merged = reviewers()
             write_json(run_dir / "review.json", merged)
             missing = [a for a in routed["review"] if not (run_dir / "reviews" / f"{short(a)}.json").is_file()]
 

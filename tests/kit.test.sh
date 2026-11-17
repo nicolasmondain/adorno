@@ -113,7 +113,7 @@ check "the tracked CLAUDE.md is untouched" '[ "$(cat "$A/CLAUDE.md")" = "# team 
 check "Claude gets the instructions as a rule file" '[ -f "$A/.claude/rules/adorno.md" ]'
 check "the registry lives in the kit home, read-only" '[ "$(ls -l "$ADORNO_HOME/registry.json" | cut -c1-10)" = "-r--------" ]'
 check "no personal registry inside the repo" '! grep -rq "janedoe" "$A/.claude/skills/adorno-github/repos.json"'
-check "SCHEMA.md is neither an item nor shipped" '[ -f "$ROOT/src/agents/review/SCHEMA.md" ] && [ -z "$(find "$A/.claude" "$A/.codex" -iname "*schema*" 2>/dev/null)" ]'
+check "SCHEMA.md is neither an item nor shipped" '[ -f "$ROOT/src/agents/review/SCHEMA.md" ] && [ -z "$(find "$A/.claude" "$A/.codex" -iname "schema.md" 2>/dev/null)" ]'
 check "your own rules and keys are kept" 'jq -e ".model == \"x\" and (.permissions.allow | index(\"Bash(make:*)\")) != null" "$A/.claude/settings.local.json" >/dev/null'
 check "the repo's and the default rules are added" 'jq -e "(.permissions.allow | index(\"Bash(npm test:*)\")) != null and (.permissions.deny | index(\"Bash(gh pr merge:*)\")) != null" "$A/.claude/settings.local.json" >/dev/null'
 check "the guard hook refuses direct writes in this repo" 'jq -e "[.hooks.PreToolUse[].hooks[].command | select(contains(\"guard_bash.py\") and contains(\" deny --format=claude\"))] | length == 1" "$A/.claude/settings.local.json" >/dev/null'
@@ -129,6 +129,23 @@ check "without python3 the hook blocks (exit 2), it does not let commands throug
 # shellcheck disable=SC2034  # err is read by check's eval on the next line
 err="$(printf '%s' '{"tool_name":"AskUserQuestion","permission_mode":"default","tool_input":{}}' | PATH=/nonexistent /bin/sh -c "$HOOK" 2>&1 >/dev/null)"; got=$?
 check "without python3 the hook also blocks questions (exit 2), and says so" '[ "$got" = 2 ] && printf "%s" "$err" | grep -q "questions"'
+# shellcheck disable=SC2034  # JQ_J is read by check's eval on the next lines
+JQ_J='[.hooks | to_entries[] | .key as $e | .value[] | .hooks[] | select(.command | contains("adorno-journal/scripts/journal.py")) | {event: $e, async: (.async // false), timeout}]'
+check "the journal's hooks are next to the guard, one per event it records" 'jq -e "$JQ_J | map(.event) | sort == [\"PostCompact\", \"PostToolUse\", \"PostToolUseFailure\", \"SessionEnd\", \"SessionStart\", \"Stop\", \"SubagentStart\", \"SubagentStop\", \"UserPromptSubmit\"]" "$A/.claude/settings.local.json" >/dev/null'
+check "a tool call is never waited for; the end of a session is" 'jq -e "$JQ_J | (map(select(.async) | .event) | sort) == [\"PostToolUse\", \"PostToolUseFailure\"] and all(.[]; .timeout == 5)" "$A/.claude/settings.local.json" >/dev/null'
+check "Codex and Gemini get no journal hook" '! grep -q journal.py "$A/.codex/hooks.json"'
+JHOOK="$(jq -r '.hooks.PostToolUse[] | .hooks[] | select(.command | contains("journal.py")) | .command' "$A/.claude/settings.local.json")"
+PAYLOAD='{"hook_event_name":"PostToolUse","session_id":"sess-k","tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":{"stdout":"a.txt"},"duration_ms":12}'
+printf '%s' "$PAYLOAD" | sh -c "$JHOOK"; got=$?
+check "without an open run the journal hook does nothing and lets the session go on" '[ "$got" = 0 ] && [ -z "$(find "$ADORNO_HOME/runs" -name events.jsonl 2>/dev/null)" ]'
+mkdir -p "$ADORNO_HOME/runs/active"
+jq -n --arg j "$ADORNO_HOME/runs/test-20260101T000000-1-1" --argjson exp "$(( $(date +%s) + 600 ))" \
+  '{id: "20260101T000000-1-1", session: "sess-k", workflow: "workflow:test:run", expires: $exp, journal: $j}' >"$ADORNO_HOME/runs/active/20260101T000000-1-1.json"
+printf '%s' "$PAYLOAD" | sh -c "$JHOOK"; got=$?
+check "inside a run the installed hook records the tool call" '[ "$got" = 0 ] && jq -e ".type == \"tool.call\" and .tool == \"Bash\" and .input == \"ls\" and .dur == 12 and .session == \"sess-k\"" "$ADORNO_HOME/runs/test-20260101T000000-1-1/events.jsonl" >/dev/null'
+printf '%s' "$PAYLOAD" | PATH=/nonexistent /bin/sh -c "$JHOOK" 2>/dev/null; got=$?
+check "without python3 the journal hook lets the session go on (exit 0): it records, it does not guard" '[ "$got" = 0 ]'
+rm -rf "$ADORNO_HOME/runs"
 check "tiers become Claude models" 'grep -q "^model: opus" "$A/.claude/agents/adorno.md"'
 check "frontier becomes fable" 'grep -q "^model: fable" "$A/.claude/agents/adorno-agent-core-planner.md"'
 check "an agent's effort reaches Claude" 'grep -q "^effort: low" "$A/.claude/agents/adorno-agent-core-triage.md"'
@@ -178,8 +195,18 @@ awk '{ print } /^repos:/ { print "  newco/svc: {max_level: L1}" }' "$TMP/layer.b
 mkrepo "$TMP/newco/svc" newco/svc
 expect_exit 0 "install for a repo added to the layer" -- "${KIT[@]}" install "$TMP/newco/svc" --targets claude
 check "the registry knows it at once" 'jq -e "[.. | objects | has(\"newco/svc\")] | any" "$ADORNO_HOME/registry.json" >/dev/null'
+check "the run journal's settings are in it, where the writer reads them" 'jq -e ".journal == {reasoning: false, retention_days: 30, max_mb: 2048}" "$ADORNO_HOME/registry.json" >/dev/null'
 "${KIT[@]}" uninstall "$TMP/newco/svc" --force >/dev/null
+sed 's/^  retention_days: 30 .*/  retention_days: soon/; s/^  reasoning: false .*/  reasoning: sometimes/' "$TMP/layer.bak" >"$ADORNO_LOCAL/adorno.yaml"
+printf '  keep_forever: true\n' >>"$ADORNO_LOCAL/adorno.yaml"
+expect_exit 1 "invalid journal settings are refused" -- "${KIT[@]}" check
+check "... each one named" 'grep -q "journal.retention_days must be a positive integer" "$TMP/err" && grep -q "journal.reasoning must be true or false" "$TMP/err" && grep -q "journal.keep_forever: unknown setting" "$TMP/err"'
 cp "$TMP/layer.bak" "$ADORNO_LOCAL/adorno.yaml"
+
+# an install made before the journal recorded one hook per settings file: the next one takes it over
+jq '.hook |= with_entries(.value |= .[0])' "$A/.adorno/installed.json" >"$TMP/state.json" && mv "$TMP/state.json" "$A/.adorno/installed.json"
+expect_exit 0 "reinstall over an older install's state" -- "${KIT[@]}" install "$A" --targets claude,codex
+check "... the guard is still there once, the journal hooks once each" 'jq -e "([.hooks.PreToolUse[].hooks[] | select(.command | contains(\"guard_bash.py\"))] | length == 1) and ([.hooks.Stop[].hooks[] | select(.command | contains(\"journal.py\"))] | length == 1)" "$A/.claude/settings.local.json" >/dev/null'
 
 echo "uninstall"
 expect_exit 0 "uninstall the repo" -- "${KIT[@]}" uninstall "$A" --force
@@ -194,14 +221,17 @@ expect_exit 0 "install --global" -- "${KIT[@]}" install --global --targets claud
 check "Codex asks before direct writes (its own rules)" 'grep -q "prefix_rule(pattern=\[\"git\", \"push\"\], decision=\"prompt\"" "$HOME/.codex/rules/adorno.rules"'
 check "Gemini asks too (its policy engine)" 'grep -q "decision = \"ask_user\"" "$HOME/.gemini/policies/adorno.toml" && grep -q "\"gh pr comment\"" "$HOME/.gemini/policies/adorno.toml"'
 check "in your user settings, direct shell writes ask (they apply to every project)" 'jq -e "(.permissions.ask | index(\"Bash(gh pr comment:*)\")) != null and ((.permissions.deny // []) | index(\"Bash(gh pr comment:*)\")) == null" "$HOME/.claude/settings.json" >/dev/null'
+check "the global install records runs too" 'jq -e "[.hooks.Stop[].hooks[].command | select(contains(\"adorno-journal/scripts/journal.py\"))] | length == 1" "$HOME/.claude/settings.json" >/dev/null'
 check "the global guard hook asks" 'jq -e "[.hooks.PreToolUse[].hooks[].command | select(contains(\"guard_bash.py\") and contains(\" ask --format=claude\"))] | length == 1" "$HOME/.claude/settings.json" >/dev/null'
 check "... and edits of adorno's files stay denied" 'jq -e "(.permissions.deny | index(\"Edit(~/.adorno/registry.json)\")) != null" "$HOME/.claude/settings.json" >/dev/null'
 expect_exit 0 "dry run of --global" -- "${KIT[@]}" install --global --targets claude --dry-run
 check "... names your user settings" 'grep -q "~/.claude/settings.json" <<<"$out"'
 expect_exit 0 "a project next to a global install" -- "${KIT[@]}" install "$A" --targets claude
 check "takes its instructions from the global one" '[ ! -e "$A/.claude/rules/adorno.md" ] && [ ! -e "$A/AGENTS.md" ]'
+check "... and leaves the recording to it (no event written twice), keeping its own guard" '! grep -q journal.py "$A/.claude/settings.local.json" && grep -q guard_bash.py "$A/.claude/settings.local.json"'
 "${KIT[@]}" uninstall "$A" --force >/dev/null
 expect_exit 0 "uninstall --global" -- "${KIT[@]}" uninstall --global
+check "the hooks are removed from your user settings" '[ ! -e "$HOME/.claude/settings.json" ] || ! jq -e ".hooks" "$HOME/.claude/settings.json" >/dev/null'
 check "rules removed from your user settings" '[ ! -e "$HOME/.claude/settings.json" ] || ! jq -e ".permissions.deny // .permissions.ask" "$HOME/.claude/settings.json" >/dev/null'
 check "the Codex and Gemini rules are removed" '[ ! -e "$HOME/.codex/rules/adorno.rules" ] && [ ! -e "$HOME/.gemini/policies/adorno.toml" ]'
 check "the registry is removed" '[ ! -e "$ADORNO_HOME/registry.json" ]'
@@ -256,27 +286,29 @@ sed -i.bak 's/^roles: \[.*\]/roles: [fix, deploy]/' "$SB/src/workflows/pr/ship.m
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
 if [ "$got" != 0 ] && grep -q "roles: unknown role 'deploy'" <<<"$out"; then ok "an unknown role value fails"; else ko "an unknown role value fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
 cp "$ROOT/src/workflows/pr/ship.md" "$SB/src/workflows/pr/ship.md"
-mkdir -p "$SB/vendor/addy/skills/lonely"
-printf -- '---\nname: lonely\ndescription: An imported skill no item cites.\n---\n\nNothing.\n' >"$SB/vendor/addy/skills/lonely/SKILL.md"
+# a sandbox import of its own (the last one in kit.yaml), so the real `uncited` lists stay out of the way
+printf '  - name: fixture\n    source: ./fixture\n' >>"$SB/kit.yaml"
+mkdir -p "$SB/vendor/fixture/skills/lonely"
+printf -- '---\nname: lonely\ndescription: An imported skill no item cites.\n---\n\nNothing.\n' >"$SB/vendor/fixture/skills/lonely/SKILL.md"
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
-if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import addy): no item cites it" <<<"$out"; then ok "an imported skill no item cites fails the public check"; else ko "an imported skill no item cites fails the public check" "exit $got: $(tail -c 300 <<<"$out")"; fi
+if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import fixture): no item cites it" <<<"$out"; then ok "an imported skill no item cites fails the public check"; else ko "an imported skill no item cites fails the public check" "exit $got: $(tail -c 300 <<<"$out")"; fi
 printf 'Use `lonely-helper` for this.\n' >"$SB/src/instructions/99-probe.md"
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
-if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import addy)" <<<"$out"; then ok "a longer name containing the skill's is not a citation"; else ko "a longer name containing the skill's is not a citation" "exit $got: $(tail -c 300 <<<"$out")"; fi
-mkdir -p "$SB/vendor/addy/skills/other"
-printf -- '---\nname: other\ndescription: An imported skill that cites another.\n---\n\nSee `lonely`.\n' >"$SB/vendor/addy/skills/other/SKILL.md"
+if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import fixture)" <<<"$out"; then ok "a longer name containing the skill's is not a citation"; else ko "a longer name containing the skill's is not a citation" "exit $got: $(tail -c 300 <<<"$out")"; fi
+mkdir -p "$SB/vendor/fixture/skills/other"
+printf -- '---\nname: other\ndescription: An imported skill that cites another.\n---\n\nSee `lonely`.\n' >"$SB/vendor/fixture/skills/other/SKILL.md"
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
-if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import addy)" <<<"$out"; then ok "an imported skill citing it is not a citation"; else ko "an imported skill citing it is not a citation" "exit $got: $(tail -c 300 <<<"$out")"; fi
-rm -rf "$SB/vendor/addy/skills/other"
+if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import fixture)" <<<"$out"; then ok "an imported skill citing it is not a citation"; else ko "an imported skill citing it is not a citation" "exit $got: $(tail -c 300 <<<"$out")"; fi
+rm -rf "$SB/vendor/fixture/skills/other"
 printf 'Use `lonely` for this.\n' >"$SB/src/instructions/99-probe.md"
 expect_exit 0 "an instruction citing the exact name clears the orphan" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check
 rm -f "$SB/src/instructions/99-probe.md"
-sed -i.bak 's/^    source: github:addyosmani\/agent-skills$/&\n    uncited: [lonely]/' "$SB/kit.yaml"; rm -f "$SB/kit.yaml.bak"
+printf '    uncited: [lonely]\n' >>"$SB/kit.yaml"
 expect_exit 0 "listed in its import's uncited, it passes" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check
 sed -i.bak 's/uncited: \[lonely\]/uncited: [lonely, ghost]/' "$SB/kit.yaml"; rm -f "$SB/kit.yaml.bak"
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
-if [ "$got" != 0 ] && grep -q "import addy: uncited 'ghost' is not one of its skills" <<<"$out"; then ok "an uncited entry naming no imported skill fails"; else ko "an uncited entry naming no imported skill fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
-rm -rf "$SB/vendor/addy/skills/lonely"; cp "$ROOT/kit.yaml" "$SB/kit.yaml"
+if [ "$got" != 0 ] && grep -q "import fixture: uncited 'ghost' is not one of its skills" <<<"$out"; then ok "an uncited entry naming no imported skill fails"; else ko "an uncited entry naming no imported skill fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
+rm -rf "$SB/vendor/fixture"; cp "$ROOT/kit.yaml" "$SB/kit.yaml"
 cp "$ROOT/.gitignore" "$SB/"; git init -q "$SB"
 # the full build (every target), with the template layer present: CI never runs `kit build`, so $ROOT/dist only
 # holds the committed part there
@@ -338,6 +370,103 @@ check "review:security step 0 only dismisses content matches, never path matches
 check "no _family.md hard-codes typescript-pro" '! grep -l "typescript-pro" "$ROOT"/src/agents/*/_family.md'
 check "the skills-by-area rule appears once in the orchestration instructions" \
   '[ "$(grep -c "Skills by area" "$ROOT"/src/instructions/10-orchestration.md)" = 1 ]'
+
+echo "import --check and --update"
+# an upstream git repo and a minimal kit importing from it over file://
+UP="$TMP/up"; IK="$TMP/imp"
+git init -q -b main "$UP"; mkdir -p "$UP/skills/foo" "$UP/agents"
+printf -- '---\nname: foo\ndescription: Foo things.\n---\n\nDo foo.\n' >"$UP/skills/foo/SKILL.md"
+printf -- '---\nname: bar\ndescription: Bar reviewer.\n---\n\nReview bar.\n' >"$UP/agents/bar.md"
+printf 'readme\n' >"$UP/README.md"
+git -C "$UP" add -A; git -C "$UP" commit -q -m init
+upcommit() { git -C "$UP" add -A; git -C "$UP" commit -q -m "$1"; }
+mkdir -p "$IK/src/agents/review" "$IK/src/instructions"
+cp -r "$ROOT/bin" "$ROOT/adapters" "$IK/"
+printf '%s\n' 'name: t' 'version: 0.0.0' 'description: t' 'targets: [claude]' 'imports:' '  - name: up' \
+  "    source: file://$UP" '    ref: main' '    include: [skills/foo, agents/bar.md]' >"$IK/kit.yaml"
+printf -- '---\nextends: up/bar\ndescription: Our bar reviewer.\n---\n\nMore.\n' >"$IK/src/agents/review/code.md"
+mkdir -p "$IK/src/skills/ourfoo"
+printf -- '---\nextends: up/foo\ndescription: Our foo.\n---\n\nMore foo.\n' >"$IK/src/skills/ourfoo/SKILL.md"
+printf 'Use `foo` here.\n' >"$IK/src/instructions/10-probe.md"
+IKKIT=("${KIT[@]}"); IKKIT[${#IKKIT[@]}-1]="$IK/bin/kit"
+snap() { (cd "$IK" && find vendor kit.lock -type f -exec shasum {} + | sort); }
+expect_exit 1 "check before any import: exits 1" -- "${IKKIT[@]}" import --check
+check "it says not imported yet" 'grep -q "^up: not imported yet" <<<"$out"'
+expect_exit 0 "import from a file:// source" -- "${IKKIT[@]}" import
+check "it pins the upstream commit" 'grep -q "commit: $(git -C "$UP" rev-parse HEAD)" "$IK/kit.lock"'
+expect_exit 0 "check right after the import: up to date" -- "${IKKIT[@]}" import --check
+check "it says up to date" 'grep -q "^up: up to date" <<<"$out"'
+printf 'more\n' >>"$UP/README.md"; upcommit readme
+expect_exit 0 "commits outside the imported items: check passes" -- "${IKKIT[@]}" import --check
+check "it counts the commits and says no item changed" 'grep -q "1 commit(s) behind main .*no imported item changed" <<<"$out"'
+snap >"$TMP/snap-before"
+printf -- '---\nname: foo\ndescription: Foo things.\nallowed-tools: Bash(*)\n---\n\nDo foo.\nAnd more.\n' >"$UP/skills/foo/SKILL.md"
+mkdir -p "$UP/skills/foo/scripts"; printf '#!/bin/sh\n' >"$UP/skills/foo/scripts/run.sh"
+printf '#!/bin/sh\n' >"$UP/skills/foo/scripts/run"; chmod +x "$UP/skills/foo/scripts/run"
+printf -- '---\nname: bar\ndescription: Bar reviewer.\n---\n\nReview bar, differently.\n' >"$UP/agents/bar.md"
+upcommit change
+expect_exit 1 "an imported item changed upstream: check exits 1" -- "${IKKIT[@]}" import --check
+check "it shows the changed skill with its line counts" \
+  'grep -q "~ skill/foo: SKILL.md +2 -0, scripts/run (new) +1, scripts/run.sh (new) +1" <<<"$out"'
+check "it flags the frontmatter key that changed" 'grep -q "⚠ frontmatter changed: allowed-tools" <<<"$out"'
+check "a body-only change raises no ⚠" '! grep -A1 "~ agent/bar" <<<"$out" | grep -q "⚠"'
+check "it flags the new scripts, an extensionless executable included" \
+  'grep -q "⚠ script added or changed: scripts/run, scripts/run.sh" <<<"$out"'
+check "it names what cites the skill, without repeating its extender" 'grep -q "cited by: src/instructions/10-probe.md$" <<<"$out"'
+check "it names the local skill that extends the changed skill" 'grep -q "extended by: ourfoo" <<<"$out"'
+check "it names the local agent that extends the changed agent" 'grep -q "extended by: agent:review:code" <<<"$out"'
+check "check writes nothing" 'snap | cmp -s - "$TMP/snap-before"'
+sed -i.bak 's/^  fetched: .*/  fetched: KEEP/' "$IK/kit.lock"; rm -f "$IK/kit.lock.bak"
+expect_exit 0 "import without --update stays on the pin" -- "${IKKIT[@]}" import
+check "an import that keeps its commit keeps its fetched date" 'grep -q "fetched: KEEP" "$IK/kit.lock"'
+expect_exit 0 "update" -- "${IKKIT[@]}" import --update
+check "update prints the summary and where to read the diff" \
+  'grep -q "~ agent/bar: bar.md +1 -1" <<<"$out" && grep -q "review: git diff -- vendor/up" <<<"$out"'
+check "the summary counts both scripts" 'grep -q "^up: .* — 2 script/asset file(s), review them" <<<"$out"'
+check "update moves the pin and the fetched date" \
+  'grep -q "commit: $(git -C "$UP" rev-parse HEAD)" "$IK/kit.lock" && ! grep -q "fetched: KEEP" "$IK/kit.lock"'
+printf 'x\n' >>"$UP/README.md"; git -C "$UP" commit -q -a --amend -m rewrite
+expect_exit 1 "the pinned commit rewritten off its ref: check exits 1" -- "${IKKIT[@]}" import --check
+check "it says the pin left the ref, with no item changed" \
+  'grep -q "^up: pinned commit is no longer on main" <<<"$out" && ! grep -q "^  [-+~] " <<<"$out"'
+expect_exit 0 "update onto the rewritten ref" -- "${IKKIT[@]}" import --update
+git -C "$UP" rm -q -r skills/foo agents/bar.md; upcommit "drop foo and bar"
+expect_exit 1 "a skill removed upstream: check exits 1" -- "${IKKIT[@]}" import --check
+check "it says removed and who still cites it" \
+  'grep -q -- "- skill/foo (removed upstream)" <<<"$out" && grep -q "cited by: src/instructions/10-probe.md" <<<"$out"'
+check "a removed item extended locally: it says kit check will fail on the extender" \
+  'grep -q -- "- agent/bar (removed upstream)" <<<"$out" && grep -q "kit check will fail on: agent:review:code" <<<"$out" && ! grep -q "extended by" <<<"$out"'
+expect_exit 2 "--check and --update together are refused" -- "${IKKIT[@]}" import --check --update
+git -C "$UP" tag -a v1 -m v1
+sed -i.bak 's/^    ref: main$/    ref: v1/' "$IK/kit.yaml"; rm -f "$IK/kit.yaml.bak"
+expect_exit 0 "update onto an annotated tag" -- "${IKKIT[@]}" import --update
+expect_exit 0 "an annotated tag ref: check right after the update passes" -- "${IKKIT[@]}" import --check
+check "it says up to date on the tag" 'grep -q "^up: up to date" <<<"$out"'
+sed -i.bak "s#^    source: file://$UP\$#    source: file://$UP/.git#" "$IK/kit.yaml"
+expect_exit 1 "a source changed in kit.yaml: check exits 1" -- "${IKKIT[@]}" import --check
+check "it says the source changed, not that it was never imported" 'grep -q "^up: source changed in kit.yaml" <<<"$out"'
+mv "$IK/kit.yaml.bak" "$IK/kit.yaml"
+git clone -q "$UP" "$TMP/gone"; mkdir -p "$TMP/locsrc"
+printf '%s\n' '  - name: gone' "    source: file://$TMP/gone" '  - name: loc' "    source: $TMP/locsrc" >>"$IK/kit.yaml"
+expect_exit 0 "import a second upstream" -- "${IKKIT[@]}" import gone
+rm -rf "$TMP/gone"
+expect_exit 3 "an upstream that cannot be fetched: check exits 3, not 1" -- "${IKKIT[@]}" import --check
+check "it reports the failure and still checks the imports after it" \
+  'grep -q "^gone: check failed" <<<"$out" && grep -q "^loc: local source, nothing pinned" <<<"$out" && grep -q "^up: up to date" <<<"$out"'
+mkdir -p "$UP/skills/foo"; printf -- '---\nname: foo\ndescription: Foo.\n---\n\nBack.\n' >"$UP/skills/foo/SKILL.md"
+upcommit back; git -C "$UP" tag -f -a v1 -m v1 >/dev/null
+expect_exit 3 "a failed check wins over a moved import" -- "${IKKIT[@]}" import --check
+check "it reports both the failure and the moved item" 'grep -q "^gone: check failed" <<<"$out" && grep -q "+ skill/foo" <<<"$out"'
+printf -- '---\nname: foo\ndescription: Foo.\n---\n\n\377\n' >"$UP/skills/foo/SKILL.md"
+upcommit broken; git -C "$UP" tag -f -a v1 -m v1 >/dev/null
+expect_exit 3 "upstream content Python cannot read: check exits 3, not 1" -- "${IKKIT[@]}" import --check
+check "it says why on stderr, reports the failure and still checks the imports after it" \
+  'grep -q UnicodeDecodeError "$TMP/err" && grep -q "^up: check failed" <<<"$out" && grep -q "^loc: local source, nothing pinned" <<<"$out"'
+expect_exit 3 "an unknown NAME under --check exits 3, not 1" -- "${IKKIT[@]}" import --check nosuch
+expect_exit 1 "an unknown NAME without --check still exits 1" -- "${IKKIT[@]}" import nosuch
+expect_exit 0 "check NAME on a local source" -- "${IKKIT[@]}" import --check loc
+check "it says nothing is pinned and checks only that import" \
+  'grep -q "^loc: local source, nothing pinned" <<<"$out" && ! grep -q "^up:" <<<"$out"'
 
 echo
 echo "$pass passed, $fail failed"

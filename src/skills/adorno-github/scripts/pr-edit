@@ -36,5 +36,6 @@ if dry_run; then
   exit 0
 fi
 gh pr edit "$NUM" -R "$REPO" --title "$title" --body-file "$body" ${ATTACH_ARGS[@]+"${ATTACH_ARGS[@]}"} >/dev/null
+journal_github edit_pr "$REPO#$NUM"
 jq -n --arg repo "$REPO" --argjson n "$NUM" --arg title "$title" --argjson wh "$withheld" \
   '{edited: true, repo: $repo, number: $n, title: $title, withheld: $wh}'

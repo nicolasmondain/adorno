@@ -1,0 +1,56 @@
+diff --git a/server/lib/duration.test.ts b/server/lib/duration.test.ts
+index ced7c4a..ca7d2b1 100644
+--- a/server/lib/duration.test.ts
++++ b/server/lib/duration.test.ts
+@@ -16,3 +16,9 @@ test('formatDuration shows hours, with minutes when there are some', () => {
+   assert.equal(formatDuration(3600), '1h');
+   assert.equal(formatDuration(3725), '1h 2m');
+ });
++
++test('formatDuration switches unit exactly at the minute and at the hour', () => {
++  assert.equal(formatDuration(59), '59s');
++  assert.equal(formatDuration(3599), '59m 59s');
++  assert.equal(formatDuration(7199), '1h 59m');
++});
+diff --git a/server/lib/duration.ts b/server/lib/duration.ts
+index 59b07f3..294a392 100644
+--- a/server/lib/duration.ts
++++ b/server/lib/duration.ts
+@@ -1,24 +1,17 @@
++const MINUTE = 60;
++const HOUR = 60 * MINUTE;
++
+ // Formats a whole, non-negative number of seconds for the activity feed: 45s, 2m 5s, 1h 2m.
+ export function formatDuration(totalSeconds: number): string {
+-  if (totalSeconds < 60) {
+-    return totalSeconds + 's';
+-  } else {
+-    if (totalSeconds < 3600) {
+-      const minutes = Math.floor(totalSeconds / 60);
+-      const seconds = totalSeconds % 60;
+-      if (seconds === 0) {
+-        return minutes + 'm';
+-      } else {
+-        return minutes + 'm ' + seconds + 's';
+-      }
+-    } else {
+-      const hours = Math.floor(totalSeconds / 3600);
+-      const minutes = Math.floor((totalSeconds % 3600) / 60);
+-      if (minutes === 0) {
+-        return hours + 'h';
+-      } else {
+-        return hours + 'h ' + minutes + 'm';
+-      }
+-    }
++  if (totalSeconds < MINUTE) {
++    return `${totalSeconds}s`;
+   }
++  if (totalSeconds < HOUR) {
++    const minutes = Math.floor(totalSeconds / MINUTE);
++    const seconds = totalSeconds % MINUTE;
++    return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
++  }
++  const hours = Math.floor(totalSeconds / HOUR);
++  const minutes = Math.floor((totalSeconds % HOUR) / MINUTE);
++  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+ }
