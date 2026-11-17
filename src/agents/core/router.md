@@ -24,8 +24,8 @@ Patterns nest: typically a sequential whose verification step is a loop whose ev
 ## Choosing the agents
 
 For each step, the agent from the family whose commit type matches the change (`feat:*` for a feature, `perf:*` for a
-measured optimization…). Reviewers are not yours to pick: the review step lists the `always` ones (`review:code`,
-`review:ponytail`), and the session adds those `pr-areas` returns for the real diff.
+measured optimization…). Reviewers are not yours to pick: the review step takes the `always` ones and those
+`pr-areas` returns for the real diff.
 
 ## What you return
 

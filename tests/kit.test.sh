@@ -269,6 +269,8 @@ if ! AREA_RE='(?i)token' awk 'BEGIN { if ("" ~ ENVIRON["AREA_RE"]) {} }' 2>/dev/
 fi
 bad "an unknown fallback" $'  ghost/repo:\n    fallbacks: {lint: "agent:fix:patch"}' "fallbacks.lint: unknown key"
 bad "a fallback from the wrong family" $'  ghost/repo:\n    fallbacks: {perf: {agent: "agent:fix:patch"}}' "fallbacks.perf.agent: 'agent:fix:patch' is not a perf agent"
+bad "a test fallback from another family" $'  ghost/repo:\n    fallbacks: {test: "agent:fix:patch"}' "fallbacks.test: 'agent:fix:patch' is not a test agent"
+bad "a nit fallback from another family" $'  ghost/repo:\n    fallbacks: {nit: "agent:perf:nodejs"}' "fallbacks.nit: 'agent:perf:nodejs' is not a fix/test/refactor/ci/docs/chore agent"
 bad "area_reviewers is refused with the migration hint" $'  ghost/repo:\n    area_reviewers: {docs: ["agent:review:security"]}' "bin/kit migrate areas"
 OKL="$TMP/okl"; mkdir -p "$OKL"
 printf 'owner: {name: T, github: t, language: fr}\nrepos:\n  ghost/repo:\n    areas: {back: {review: ["-agent:review:tests"]}}\n' >"$OKL/adorno.yaml"

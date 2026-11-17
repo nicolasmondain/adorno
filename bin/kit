@@ -517,7 +517,6 @@ ROLE_FAMILIES = {"build": ("feat", "test", "docs", "chore"), "fix": ("fix", "tes
 AREA_KEYS = {"paths", "content", *ROLE_FAMILIES, "skills", "sub"}
 # the families a fallback may come from: a nit is a fix, a missing test a test, a perf point a perf agent
 FALLBACK_FAMILIES = {"nit": ROLE_FAMILIES["fix"], "test": ("test",), "perf": ROLE_FAMILIES["perf"]}
-FALLBACK_KEYS = tuple(FALLBACK_FAMILIES)
 AREA_REVIEWERS_MSG = ("`area_reviewers` is replaced by `areas.<area>.review`: run the adorno-setup skill (mode repo) "
                       "to migrate; `bin/kit migrate areas` prints the conversion")
 
@@ -708,8 +707,8 @@ def validate_areas(conf: dict, where: str, scope: str, agent_ids: set, skill_nam
         fb = {}
     for key, v in (fb or {}).items():
         p = f"{scope}.fallbacks.{key}"
-        if key not in FALLBACK_KEYS:
-            errors.append(f"{where}: {p}: unknown key (known: {', '.join(FALLBACK_KEYS)})")
+        if key not in FALLBACK_FAMILIES:
+            errors.append(f"{where}: {p}: unknown key (known: {', '.join(FALLBACK_FAMILIES)})")
         elif key == "perf" and isinstance(v, dict):
             for k in v:
                 if k not in ("agent", "skills"):

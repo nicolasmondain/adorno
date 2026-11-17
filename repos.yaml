@@ -168,7 +168,8 @@ defaults:
       fix: agent:docs:write
       skills: [documentation-and-adrs]
 
-  # Agents for work that belongs to no single area: a nit, a missing test, and `perf` when no touched area has one.
+  # Agents for work that belongs to no single area: a nit, a missing test, and `perf` when no touched area has one
+  # (the back end's perf:nodejs: set it per repo on another stack).
   fallbacks:
     nit: agent:refactor:simplify
     test: agent:test:unit
