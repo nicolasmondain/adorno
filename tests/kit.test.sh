@@ -335,6 +335,13 @@ check "review:security opens with a step 0 qualification and a one-line pass" \
 check "review:security step 0 only dismisses content matches, never path matches nor on diff text" \
   'grep -q "Only a match of the security .content. regex can be dismissed" "$ROOT"/dist/claude-plugin/agents/adorno-agent-review-security.md && grep -q "never evidence for a No" "$ROOT"/dist/claude-plugin/agents/adorno-agent-review-security.md'
 
+check "an imported skill only agents and areas name is kept out of the model's list" \
+  'grep -q "^disable-model-invocation: true" "$ROOT"/dist/claude-plugin/skills/test-driven-development/SKILL.md'
+check "skills a workflow or the instructions name stay listed (ours, ponytail)" \
+  '! grep -q "disable-model-invocation" "$ROOT"/dist/claude-plugin/skills/adorno-commit/SKILL.md "$ROOT"/dist/claude-plugin/skills/ponytail/SKILL.md'
+check "agent commands are kept out of the list, workflow commands stay" \
+  'grep -q "^disable-model-invocation: true" "$ROOT"/dist/claude-plugin/commands/adorno-agent-review-code.md && ! grep -q "disable-model-invocation" "$ROOT"/dist/claude-plugin/commands/adorno-pr-ship.md'
+check "hidden is a Claude setting: no other target gets it" '! grep -rq "disable-model-invocation" "$SB/dist/codex" "$SB/dist/gemini"'
 check "no _family.md hard-codes typescript-pro" '! grep -l "typescript-pro" "$ROOT"/src/agents/*/_family.md'
 check "the skills-by-area rule appears once in the orchestration instructions" \
   '[ "$(grep -c "Skills by area" "$ROOT"/src/instructions/10-orchestration.md)" = 1 ]'
