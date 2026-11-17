@@ -298,8 +298,8 @@ echo stray >"$SB/dist/claude-plugin/stray.md"
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check --dist 2>&1)"; got=$?
 if [ "$got" = 1 ] && grep -q "dist/ is out of date" <<<"$out"; then ok "a stray plugin file fails check --dist as out of date"; else ko "a stray plugin file fails check --dist as out of date" "exit $got: $(tail -c 300 <<<"$out")"; fi
 rm -f "$SB/dist/claude-plugin/stray.md"
-mkdir -p "$SB/dist/claude"; echo x >"$SB/dist/claude/x"
-expect_exit 0 "a file under an ignored target passes check --dist" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check --dist
+mkdir -p "$SB/dist/claude"; echo x >"$SB/dist/claude/é.md"
+expect_exit 0 "a file under an ignored target passes check --dist, even a non-ASCII name" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check --dist
 rm -rf "$SB/dist/claude"
 mv "$SB/dist/AGENTS.md" "$TMP/agents.bak"
 expect_exit 1 "a missing dist/AGENTS.md fails check --dist" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check --dist
