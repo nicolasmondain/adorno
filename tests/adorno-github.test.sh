@@ -874,6 +874,140 @@ expect_jq "a question in dontAsk: deny" '.hookSpecificOutput.permissionDecision 
 out="$(jq -n '{tool_name: "AskUserQuestion", permission_mode: "default", tool_input: {}}' | python3 "$S/guard_bash.py" deny)"
 [ -z "$out" ] && ok "a question in an interactive session passes untouched" || ko "a question in an interactive session passes untouched" "$out"
 
+echo "guard_bash: the Slack and Notion connectors"
+jq '. + {slack: {user_id: "U0SELF"}}' "$ROOT/tests/fixtures/repos.json" >"$TMP/reg-slack.json"
+reg "$TMP/reg-slack.json"
+hook() {  # hook EVENT_JSON — the hook's decision (pass = none, crash = the guard failed: the installed hook denies)
+  local raw
+  raw="$(printf '%s' "$1" | python3 "$S/guard_bash.py" deny)" || { echo crash; return; }
+  [ -n "$raw" ] || { echo pass; return; }
+  jq -r '.hookSpecificOutput.permissionDecision' <<<"$raw" 2>/dev/null || echo crash
+}
+mcp() {  # mcp WANT SESSION TOOL INPUT [MODE] — the decision for a connector call
+  local got
+  got="$(hook "$(jq -n --arg t "$3" --argjson i "$4" --arg s "$2" --arg m "${5:-default}" \
+    '{tool_name: $t, tool_input: $i, session_id: $s, permission_mode: $m}')")"
+  if [ "$got" = "$1" ]; then ok "mcp: $1 · $3 $4${5:+ ($5)}"; else ko "mcp: $1 · $3 $4" "got $got"; fi
+}
+endrun() {  # endrun WANT SESSION COMMAND [MODE] — the decision for a shell command that may end a watch run
+  local got
+  got="$(hook "$(jq -n --arg c "$3" --arg s "$2" --arg m "${4:-default}" \
+    '{tool_name: "Bash", tool_input: {command: $c}, session_id: $s, permission_mode: $m}')")"
+  if [ "$got" = "$1" ]; then ok "end: $1 · $3${4:+ ($4)}"; else ko "end: $1 · $3" "got $got"; fi
+}
+SEND=mcp__claude_ai_Slack__slack_send_message DRAFT=mcp__claude_ai_Slack__slack_send_message_draft
+expect_exit 2 "a watch run names no repo" -- "$S/run-begin" --workflow workflow:slack:watch --watch --repo acme/docs
+expect_exit 2 "a watch run has no level of its own" -- "$S/run-begin" --workflow workflow:slack:watch --watch --level L3
+expect_exit 2 "a watch run needs a session (the guard enforces it per session)" -- "$S/run-begin" --workflow workflow:slack:watch --watch
+expect_exit 0 "a watch run" -- env CLAUDE_CODE_SESSION_ID=sess-w "$S/run-begin" --workflow workflow:slack:mentions --watch
+expect_jq "report, L0, no repo, marked watch" '.watch == true and .mode == "report" and .level == "L0" and .dry_run and .repos == []'
+expect_jq "a watch run lasts 24h by default (unattended, it only ends on its TTL)" '(.expires - now) > 86000'
+WATCH="$(jq -r .id <<<"$out")"
+expect_exit 5 "a watch run grants no GitHub write" -- env CLAUDE_CODE_SESSION_ID=sess-w "$S/pr-reply" acme/docs#42 T1 "$TMP/norun.md"
+mcp pass sess-w "$SEND" '{"channel_id": "U0SELF", "message": "report"}'
+mcp pass sess-w "$DRAFT" '{"channel_id": "U0SELF", "message": "report"}'
+mcp pass sess-w mcp__plugin_slack_slack__slack_send_message '{"channel_id": "U0SELF", "message": "report"}'
+mcp deny sess-w "$SEND" '{"channel_id": "C0123", "message": "hi"}'
+mcp deny sess-w "$SEND" '{"channel_id": "C0123", "thread_ts": "1730800000.000100", "message": "hi"}'
+mcp deny sess-w "$DRAFT" '{"channel_id": "U0456", "message": "draft for alice"}'
+mcp deny sess-w "$SEND" '{"channel_id": "U0SELF", "message": "report", "draft_id": "Dr0123"}'
+mcp deny sess-w mcp__claude_ai_Slack__slack_get_file_upload_url '{"filename": "x"}'
+mcp deny sess-w mcp__claude_ai_Slack__slack_schedule_message '{"channel_id": "C0123", "message": "later"}'
+mcp deny sess-w mcp__claude_ai_Slack__slack_add_reaction '{"channel_id": "C0123", "timestamp": "1.2", "name": "eyes"}'
+mcp deny sess-w mcp__claude_ai_Slack__slack_create_canvas '{"title": "x"}'
+mcp deny sess-w mcp__notion__notion-update-page '{"page_id": "p1"}'
+mcp deny sess-w mcp__notion__notion-create-comment '{"page_id": "p1"}'
+mcp pass sess-w mcp__claude_ai_Slack__slack_read_thread '{"channel_id": "C0123", "message_ts": "1.2"}'
+mcp pass sess-w mcp__claude_ai_Slack__slack_search_public_and_private '{"query": "<@U0SELF>"}'
+mcp pass sess-w mcp__notion__notion-fetch '{"id": "p1"}'
+mcp pass sess-w mcp__notion__notion-query-data-sources '{}'
+mcp pass sess-w mcp__notion__notion-get-comments '{"page_id": "p1"}'
+mcp pass sess-w mcp__notion__notion-search '{"query": "assigned"}'
+mcp pass sess-w mcp__claude_ai_Slack__slack_get_reactions '{"channel_id": "C0123", "timestamp": "1.2"}'
+printf 'not json' >"$KH/runs/active/zz-unreadable.json"
+mcp pass sess-other mcp__notion__notion-update-page '{"page_id": "p1"}'
+mcp deny sess-w mcp__notion__notion-update-page '{"page_id": "p1"}'
+rm -f "$KH/runs/active/zz-unreadable.json"
+# ending a watch run asks, nobody to answer: deny; a deliberate shell evasion (a glob, deleting the file) is a
+# documented limit, not tested here
+endrun ask sess-w "$S/run-end $WATCH"
+endrun deny sess-w "$S/run-end $WATCH" bypassPermissions
+endrun ask sess-other "$S/run-end $WATCH"
+endrun ask sess-other "$S/run-end \"${WATCH:0:4}\"${WATCH:4}"
+endrun ask sess-w "$S/run-end \"\$ID\""
+endrun ask sess-w "$S/run-end \"\$ID\"  # 20260101T000000-1-1"
+endrun ask sess-w "$S/run-end 20260101T000000-1-1; $S/run-end \"\$ID\""
+endrun ask sess-w "$S/run-end \"${WATCH:0:4}\"${WATCH:4} 20260101T000000-1-1"
+endrun ask sess-w "$S/run-e\"\"nd 20260101T000000-1-1"
+endrun ask sess-w "$S/run-e\\nd 20260101T000000-1-1"
+endrun deny sess-w "cd ~/.adorno/runs && rm -f active/*"  # the state rule already refuses it
+endrun pass sess-w "printf x > ~/.adorno/runs/slack-mentions-1-2/report.md"
+endrun pass sess-w "rm -rf .agent-run/old"
+endrun pass sess-w "git rm -q old.txt"
+endrun pass sess-w "grep -n 'rm -rf' notes.md"
+endrun pass sess-other "$S/run-end \"\$ID\""
+for who in sess-w sess-other; do  # a launched workflow closes its own run: an ordinary run, alone, by its literal id
+  got="$(hook "$(jq -n --arg c "$S/run-end 20260101T000000-1-1" --arg s "$who" '{tool_name: "Bash", tool_input: {command: $c}, session_id: $s}')")"
+  case "$got" in ask|crash) ko "$who: ending an ordinary run by its id: the usual decision" "got $got" ;;
+    *) ok "$who: ending an ordinary run by its id: the usual decision ($got)" ;; esac
+done
+got="$(printf '%s' '{"tool_name": "Bash", "tool_input": {"command": "run-end $ID"}, "session_id": "sess-w"}' | python3 -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+import guard_bash as g
+def boom(*a):
+    raise RuntimeError("boom")
+g.watch_runs = boom
+sys.argv = sys.argv[:1]
+g.main()' "$S" | jq -r '.hookSpecificOutput.permissionDecision')"
+[ "$got" = ask ] && ok "the watch-end check fails: run-end asks" || ko "the watch-end check fails: run-end asks" "got $got"
+for t in "$SEND" mcp__notion__notion-update-page mcp__notion__notion-fetch; do
+  raw="$(printf '%s' "{\"tool_name\": \"$t\", \"tool_input\": {}, \"session_id\": \"sess-w\"}" | python3 -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+import guard_bash as g
+def boom(*a):
+    raise RuntimeError("boom")
+g.check_mcp = boom
+sys.argv = sys.argv[:1]
+g.main()' "$S")" || raw=CRASH
+  if [ "$raw" = CRASH ]; then got=crash; elif [ -z "$raw" ]; then got=pass
+  else got="$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$raw")"; fi
+  want=deny; [ "$t" = mcp__notion__notion-fetch ] && want=pass
+  [ "$got" = "$want" ] && ok "the guard fails: $want · $t" || ko "the guard fails: $want · $t" "got $got"
+done
+PR="$(env CLAUDE_CODE_SESSION_ID=sess-p "$S/run-begin" --workflow workflow:pr:ship --mode auto --level L3 --repo acme/docs | jq -r .id)"
+mcp pass sess-p mcp__notion__notion-update-page '{"page_id": "p1"}'
+mcp pass sess-p "$DRAFT" '{"channel_id": "C0123", "message": "draft"}'
+"$S/run-end" "$PR" >/dev/null
+# the owner's call: a run a watch launches (same session) does not lift the watch
+PR="$(env CLAUDE_CODE_SESSION_ID=sess-w "$S/run-begin" --workflow workflow:issue:fix --mode auto --level L3 --repo acme/docs | jq -r .id)"
+mcp deny sess-w mcp__notion__notion-update-page '{"page_id": "p1"}'
+mcp deny sess-w "$DRAFT" '{"channel_id": "C0123", "message": "draft"}'
+"$S/run-end" "$PR" >/dev/null
+mcp pass sess-w mcp__figma__get_screenshot '{}'
+mcp ask sess-other "$SEND" '{"channel_id": "C0123", "message": "hi"}'
+mcp pass sess-other "$DRAFT" '{"channel_id": "C0123", "message": "draft"}'
+mcp pass sess-other mcp__notion__notion-update-page '{"page_id": "p1"}'
+mcp pass sess-other "$SEND" '{"channel_id": "U0SELF", "message": "note to self"}'
+mcp deny sess-other "$SEND" '{"channel_id": "C0123", "message": "hi"}' bypassPermissions
+mcp ask sess-other mcp__claude_ai_Slack__slack_schedule_message '{"channel_id": "C0123", "message": "later"}'
+expect_exit 0 "the watch run ends" -- "$S/run-end" "$WATCH"
+mcp ask sess-w "$SEND" '{"channel_id": "C0123", "message": "hi"}'
+mcp pass sess-w mcp__notion__notion-update-page '{"page_id": "p1"}'
+OLD="$(env CLAUDE_CODE_SESSION_ID=sess-e "$S/run-begin" --workflow workflow:slack:watch --watch | jq -r .id)"
+mcp deny sess-e mcp__notion__notion-update-page '{"page_id": "p1"}'
+jq '.expires = 1' "$KH/runs/active/$OLD.json" >"$TMP/expired.json" && cp "$TMP/expired.json" "$KH/runs/active/$OLD.json"
+mcp pass sess-e mcp__notion__notion-update-page '{"page_id": "p1"}'
+rm -f "$KH/runs/active/$OLD.json"
+out="$(jq -n --arg t "$SEND" '{tool_name: $t, tool_input: {channel_id: "U0SELF", message: "x"}}' | python3 "$S/guard_bash.py" ask --format=codex)"
+[ -z "$out" ] && ok "Codex and Gemini: connector calls are not read" || ko "Codex and Gemini: connector calls are not read" "$out"
+NOUSER="$(env CLAUDE_CODE_SESSION_ID=sess-n "$S/run-begin" --workflow workflow:slack:watch --watch | jq -r .id)"
+reg "$ROOT/tests/fixtures/repos.json"
+mcp deny sess-n "$SEND" '{"channel_id": "U0SELF", "message": "report"}'
+mcp ask sess-x "$SEND" '{"channel_id": "U0SELF", "message": "hi"}'
+"$S/run-end" "$NOUSER" >/dev/null
+
 echo "a registry older than the personal layer"
 printf 'repos: {}\n' >"$TMP/layer.yaml"
 jq --arg f "$TMP/layer.yaml" '. + {_layer: {file: $f}}' "$ROOT/tests/fixtures/repos.json" >"$TMP/reg-layer.json"

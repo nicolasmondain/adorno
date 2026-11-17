@@ -20,7 +20,10 @@ slack:
     notify: dm                            # dm | draft | none
 ```
 
-Run folder: `~/.adorno/runs/slack-mentions-<date>/`.
+Run: `adorno-github/scripts/run-begin --workflow workflow:slack:mentions --watch` opens it and prints its folder
+(`dir`); `run-end <id>` closes it at the end, failure included (the guard asks you to confirm it; where nobody
+answers, the run ends on its TTL, 24h). While it is open, the guard hook lets Slack read only,
+and sends or drafts only to `slack.user_id` (pass it as `channel_id`).
 
 1. **Settings** — `adorno-watch/scripts/watch-conf slack-mentions` (exit code 3 → skill `adorno-setup`).
    `user_id` missing: find it with the connector (your profile) and offer to add it.

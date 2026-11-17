@@ -26,7 +26,10 @@ slack:
       notify: dm                           # dm | draft | none
 ```
 
-Run folder: `~/.adorno/runs/slack-watch-<name>-<date>/`.
+Run: `adorno-github/scripts/run-begin --workflow workflow:slack:watch --watch` opens it and prints its folder
+(`dir`); `run-end <id>` closes it at the end, failure included (the guard asks you to confirm it; where nobody
+answers, the run ends on its TTL, 24h). While it is open, the guard hook lets Slack read only,
+and sends or drafts only to `slack.user_id` (pass it as `channel_id`).
 
 1. **Settings** — `adorno-watch/scripts/watch-conf slack-watch <name>`; `--since`, `--max` override them for this
    run. Rule missing (exit code 3) → offer the skill `adorno-setup`.
@@ -42,7 +45,8 @@ Run folder: `~/.adorno/runs/slack-watch-<name>-<date>/`.
    - `agent:` → the agent, read-only unless `level` allows more;
    - `workflow:` → the workflow, which opens its run at the `action_level` that `watch-match` returns (`L0` if the
      message author is not in `trusted_authors`); a workflow that publishes to GitHub remains bounded by the
-     repo's permissions;
+     repo's permissions. It runs inside the watch run: the guard refuses its Slack and Notion writes; list each
+     refused Notion update (`adorno-notion-sync`, an `after_pr` skill: page, what it would set) in the report, for you;
    - only `prompt:` → `agent:core:analyst` with that instruction.
    Messages are independent: process them in parallel in batches of 3. A failure does not stop the others.
 6. **Remember** — `watch-seen mark slack-watch-<name> <id>…` for each message whose action succeeded (not those that
