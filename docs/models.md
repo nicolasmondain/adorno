@@ -88,9 +88,15 @@ reviewing (the guide's price table). To go back to the guide on a repo, set `mod
 
 ## Measuring
 
+Every run measures itself: `run-end` writes `usage.json` in the run folder (duration, each agent with the model it
+really ran on, its tokens by kind and its cost from `repos.yaml` › `prices`) and a line to
+`~/.adorno/runs/usage.jsonl`. For a past session: `adorno-github/scripts/run-usage collect --session <id> --since
+<ISO> --until <ISO>`. The source is the Claude Code transcripts; Codex and Gemini expose no session id to the shell,
+so their runs record the duration only (`source: unavailable`).
+
 Before changing a tier for good, take a real task with a check (a test that passes, a review that holds), run it on
-both models (`/model`), and compare `/usage`. Keep a mix of models only if it beats the best single model on cost per
-finished task.
+both models, and compare their `usage.json`. Keep a mix of models only if it beats the best single model on cost per
+finished task. Compare costs, not token totals: cache reads are most of the tokens and a small share of the bill.
 
 ## Known limits
 
