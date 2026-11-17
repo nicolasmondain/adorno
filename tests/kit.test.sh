@@ -356,7 +356,7 @@ expect_exit 1 "a missing dist/AGENTS.md fails check --dist" -- env ADORNO_LOCAL=
 mv "$TMP/agents.bak" "$SB/dist/AGENTS.md"
 
 expect_exit 0 "the real registry passes with every dispatcher's roles covered" -- env ADORNO_LOCAL="$TMP/none" "${KIT[@]}" check
-check "no area_reviewers reader is left in src/" '! grep -rn "area_reviewers" "$ROOT/src" "$ROOT/bin/kit" | grep -v -e "src/skills/adorno-setup/" -e "bin/kit:.*AREA_REVIEWERS_MSG\|bin/kit:.*area_reviewers" -e SCHEMA.md | grep .'
+check "no area_reviewers reader is left in src/" '! grep -rn --exclude-dir=__pycache__ "area_reviewers" "$ROOT/src" "$ROOT/bin/kit" "$ROOT/bin/kitlib" | grep -v -e "src/skills/adorno-setup/" -e "bin/kitlib/validate.py:.*area_reviewers\|bin/kitlib/commands.py:.*area_reviewers" -e SCHEMA.md | grep .'
 check "pr:ship leaves no family agent of its subject" '! grep -q "family agent of its subject" "$ROOT/src/workflows/pr/ship.md"'
 
 echo "migrate areas"
