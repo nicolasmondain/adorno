@@ -55,4 +55,5 @@ if dry_run; then
   exit 0
 fi
 url="$(gh "${args[@]}")"
+journal_github open_pr "$REPO@$head" "$url"
 jq -n --arg url "$url" --argjson wh "$withheld" '{opened: true, url: $url, withheld: $wh}'

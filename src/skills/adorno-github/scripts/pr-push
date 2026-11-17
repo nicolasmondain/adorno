@@ -43,4 +43,5 @@ fi
 git -C "$dir" push --quiet origin "HEAD:refs/heads/$head" >&2 \
   || die "push rejected (the branch moved on GitHub?): run pr-workspace again, then redo the commits" 1
 git -C "$dir" update-ref "$upstream" "$local_sha"
+journal_github push "$REPO@$head" "https://github.com/$REPO/pull/$NUM"
 jq -n --arg head "$head" --arg sha "$local_sha" --argjson n "$ahead" '{pushed: true, branch: $head, sha: $sha, commits: $n}'
