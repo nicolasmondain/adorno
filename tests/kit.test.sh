@@ -347,6 +347,103 @@ check "no _family.md hard-codes typescript-pro" '! grep -l "typescript-pro" "$RO
 check "the skills-by-area rule appears once in the orchestration instructions" \
   '[ "$(grep -c "Skills by area" "$ROOT"/src/instructions/10-orchestration.md)" = 1 ]'
 
+echo "import --check and --update"
+# an upstream git repo and a minimal kit importing from it over file://
+UP="$TMP/up"; IK="$TMP/imp"
+git init -q -b main "$UP"; mkdir -p "$UP/skills/foo" "$UP/agents"
+printf -- '---\nname: foo\ndescription: Foo things.\n---\n\nDo foo.\n' >"$UP/skills/foo/SKILL.md"
+printf -- '---\nname: bar\ndescription: Bar reviewer.\n---\n\nReview bar.\n' >"$UP/agents/bar.md"
+printf 'readme\n' >"$UP/README.md"
+git -C "$UP" add -A; git -C "$UP" commit -q -m init
+upcommit() { git -C "$UP" add -A; git -C "$UP" commit -q -m "$1"; }
+mkdir -p "$IK/src/agents/review" "$IK/src/instructions"
+cp -r "$ROOT/bin" "$ROOT/adapters" "$IK/"
+printf '%s\n' 'name: t' 'version: 0.0.0' 'description: t' 'targets: [claude]' 'imports:' '  - name: up' \
+  "    source: file://$UP" '    ref: main' '    include: [skills/foo, agents/bar.md]' >"$IK/kit.yaml"
+printf -- '---\nextends: up/bar\ndescription: Our bar reviewer.\n---\n\nMore.\n' >"$IK/src/agents/review/code.md"
+mkdir -p "$IK/src/skills/ourfoo"
+printf -- '---\nextends: up/foo\ndescription: Our foo.\n---\n\nMore foo.\n' >"$IK/src/skills/ourfoo/SKILL.md"
+printf 'Use `foo` here.\n' >"$IK/src/instructions/10-probe.md"
+IKKIT=("${KIT[@]}"); IKKIT[${#IKKIT[@]}-1]="$IK/bin/kit"
+snap() { (cd "$IK" && find vendor kit.lock -type f -exec shasum {} + | sort); }
+expect_exit 1 "check before any import: exits 1" -- "${IKKIT[@]}" import --check
+check "it says not imported yet" 'grep -q "^up: not imported yet" <<<"$out"'
+expect_exit 0 "import from a file:// source" -- "${IKKIT[@]}" import
+check "it pins the upstream commit" 'grep -q "commit: $(git -C "$UP" rev-parse HEAD)" "$IK/kit.lock"'
+expect_exit 0 "check right after the import: up to date" -- "${IKKIT[@]}" import --check
+check "it says up to date" 'grep -q "^up: up to date" <<<"$out"'
+printf 'more\n' >>"$UP/README.md"; upcommit readme
+expect_exit 0 "commits outside the imported items: check passes" -- "${IKKIT[@]}" import --check
+check "it counts the commits and says no item changed" 'grep -q "1 commit(s) behind main .*no imported item changed" <<<"$out"'
+snap >"$TMP/snap-before"
+printf -- '---\nname: foo\ndescription: Foo things.\nallowed-tools: Bash(*)\n---\n\nDo foo.\nAnd more.\n' >"$UP/skills/foo/SKILL.md"
+mkdir -p "$UP/skills/foo/scripts"; printf '#!/bin/sh\n' >"$UP/skills/foo/scripts/run.sh"
+printf '#!/bin/sh\n' >"$UP/skills/foo/scripts/run"; chmod +x "$UP/skills/foo/scripts/run"
+printf -- '---\nname: bar\ndescription: Bar reviewer.\n---\n\nReview bar, differently.\n' >"$UP/agents/bar.md"
+upcommit change
+expect_exit 1 "an imported item changed upstream: check exits 1" -- "${IKKIT[@]}" import --check
+check "it shows the changed skill with its line counts" \
+  'grep -q "~ skill/foo: SKILL.md +2 -0, scripts/run (new) +1, scripts/run.sh (new) +1" <<<"$out"'
+check "it flags the frontmatter key that changed" 'grep -q "⚠ frontmatter changed: allowed-tools" <<<"$out"'
+check "a body-only change raises no ⚠" '! grep -A1 "~ agent/bar" <<<"$out" | grep -q "⚠"'
+check "it flags the new scripts, an extensionless executable included" \
+  'grep -q "⚠ script added or changed: scripts/run, scripts/run.sh" <<<"$out"'
+check "it names what cites the skill, without repeating its extender" 'grep -q "cited by: src/instructions/10-probe.md$" <<<"$out"'
+check "it names the local skill that extends the changed skill" 'grep -q "extended by: ourfoo" <<<"$out"'
+check "it names the local agent that extends the changed agent" 'grep -q "extended by: agent:review:code" <<<"$out"'
+check "check writes nothing" 'snap | cmp -s - "$TMP/snap-before"'
+sed -i.bak 's/^  fetched: .*/  fetched: KEEP/' "$IK/kit.lock"; rm -f "$IK/kit.lock.bak"
+expect_exit 0 "import without --update stays on the pin" -- "${IKKIT[@]}" import
+check "an import that keeps its commit keeps its fetched date" 'grep -q "fetched: KEEP" "$IK/kit.lock"'
+expect_exit 0 "update" -- "${IKKIT[@]}" import --update
+check "update prints the summary and where to read the diff" \
+  'grep -q "~ agent/bar: bar.md +1 -1" <<<"$out" && grep -q "review: git diff -- vendor/up" <<<"$out"'
+check "the summary counts both scripts" 'grep -q "^up: .* — 2 script/asset file(s), review them" <<<"$out"'
+check "update moves the pin and the fetched date" \
+  'grep -q "commit: $(git -C "$UP" rev-parse HEAD)" "$IK/kit.lock" && ! grep -q "fetched: KEEP" "$IK/kit.lock"'
+printf 'x\n' >>"$UP/README.md"; git -C "$UP" commit -q -a --amend -m rewrite
+expect_exit 1 "the pinned commit rewritten off its ref: check exits 1" -- "${IKKIT[@]}" import --check
+check "it says the pin left the ref, with no item changed" \
+  'grep -q "^up: pinned commit is no longer on main" <<<"$out" && ! grep -q "^  [-+~] " <<<"$out"'
+expect_exit 0 "update onto the rewritten ref" -- "${IKKIT[@]}" import --update
+git -C "$UP" rm -q -r skills/foo agents/bar.md; upcommit "drop foo and bar"
+expect_exit 1 "a skill removed upstream: check exits 1" -- "${IKKIT[@]}" import --check
+check "it says removed and who still cites it" \
+  'grep -q -- "- skill/foo (removed upstream)" <<<"$out" && grep -q "cited by: src/instructions/10-probe.md" <<<"$out"'
+check "a removed item extended locally: it says kit check will fail on the extender" \
+  'grep -q -- "- agent/bar (removed upstream)" <<<"$out" && grep -q "kit check will fail on: agent:review:code" <<<"$out" && ! grep -q "extended by" <<<"$out"'
+expect_exit 2 "--check and --update together are refused" -- "${IKKIT[@]}" import --check --update
+git -C "$UP" tag -a v1 -m v1
+sed -i.bak 's/^    ref: main$/    ref: v1/' "$IK/kit.yaml"; rm -f "$IK/kit.yaml.bak"
+expect_exit 0 "update onto an annotated tag" -- "${IKKIT[@]}" import --update
+expect_exit 0 "an annotated tag ref: check right after the update passes" -- "${IKKIT[@]}" import --check
+check "it says up to date on the tag" 'grep -q "^up: up to date" <<<"$out"'
+sed -i.bak "s#^    source: file://$UP\$#    source: file://$UP/.git#" "$IK/kit.yaml"
+expect_exit 1 "a source changed in kit.yaml: check exits 1" -- "${IKKIT[@]}" import --check
+check "it says the source changed, not that it was never imported" 'grep -q "^up: source changed in kit.yaml" <<<"$out"'
+mv "$IK/kit.yaml.bak" "$IK/kit.yaml"
+git clone -q "$UP" "$TMP/gone"; mkdir -p "$TMP/locsrc"
+printf '%s\n' '  - name: gone' "    source: file://$TMP/gone" '  - name: loc' "    source: $TMP/locsrc" >>"$IK/kit.yaml"
+expect_exit 0 "import a second upstream" -- "${IKKIT[@]}" import gone
+rm -rf "$TMP/gone"
+expect_exit 3 "an upstream that cannot be fetched: check exits 3, not 1" -- "${IKKIT[@]}" import --check
+check "it reports the failure and still checks the imports after it" \
+  'grep -q "^gone: check failed" <<<"$out" && grep -q "^loc: local source, nothing pinned" <<<"$out" && grep -q "^up: up to date" <<<"$out"'
+mkdir -p "$UP/skills/foo"; printf -- '---\nname: foo\ndescription: Foo.\n---\n\nBack.\n' >"$UP/skills/foo/SKILL.md"
+upcommit back; git -C "$UP" tag -f -a v1 -m v1 >/dev/null
+expect_exit 3 "a failed check wins over a moved import" -- "${IKKIT[@]}" import --check
+check "it reports both the failure and the moved item" 'grep -q "^gone: check failed" <<<"$out" && grep -q "+ skill/foo" <<<"$out"'
+printf -- '---\nname: foo\ndescription: Foo.\n---\n\n\377\n' >"$UP/skills/foo/SKILL.md"
+upcommit broken; git -C "$UP" tag -f -a v1 -m v1 >/dev/null
+expect_exit 3 "upstream content Python cannot read: check exits 3, not 1" -- "${IKKIT[@]}" import --check
+check "it says why on stderr, reports the failure and still checks the imports after it" \
+  'grep -q UnicodeDecodeError "$TMP/err" && grep -q "^up: check failed" <<<"$out" && grep -q "^loc: local source, nothing pinned" <<<"$out"'
+expect_exit 3 "an unknown NAME under --check exits 3, not 1" -- "${IKKIT[@]}" import --check nosuch
+expect_exit 1 "an unknown NAME without --check still exits 1" -- "${IKKIT[@]}" import nosuch
+expect_exit 0 "check NAME on a local source" -- "${IKKIT[@]}" import --check loc
+check "it says nothing is pinned and checks only that import" \
+  'grep -q "^loc: local source, nothing pinned" <<<"$out" && ! grep -q "^up:" <<<"$out"'
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
