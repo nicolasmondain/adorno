@@ -698,7 +698,5 @@ def cmd_journal(args) -> None:
 
 def cmd_serve(args) -> None:
     """`kit serve`: the local server of the run journals and their viewer (bin/kit_serve.py, standard library)."""
-    sys.dont_write_bytecode = True  # no bin/__pycache__ left behind
-    sys.path.insert(0, str(ROOT / "bin"))
     import kit_serve
     sys.exit(kit_serve.serve(args.port, args.runs or str(kit_home() / "runs"), str(ROOT / "viewer")))

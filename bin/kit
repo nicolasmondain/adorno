@@ -35,7 +35,7 @@ except ImportError:  # pragma: no cover
     sys.exit("kit: PyYAML is missing. Install uv (`brew install uv`) or run `pip install pyyaml`.")
 
 sys.dont_write_bytecode = True  # no bin/kitlib/__pycache__ left behind
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # kitlib sits next to this file, even through a symlink
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # kitlib and kit_serve sit next to this file; needed when Python runs with -P / PYTHONSAFEPATH
 
 from kitlib import cli  # noqa: E402
 
