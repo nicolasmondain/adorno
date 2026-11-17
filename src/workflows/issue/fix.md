@@ -4,7 +4,7 @@ args: "<owner/repo#N | Slack / Notion links | bug description with owner/repo | 
 roles: [fix, perf, review]
 uses:
   skills: [adorno-github, adorno-inputs, adorno-notion-sync]
-  agents: [agent:fix:investigate, agent:fix:patch, agent:chore:deps, agent:ci:fix, agent:docs:write, agent:fix:security, agent:refactor:simplify, agent:test:e2e, agent:test:unit, agent:perf:front, agent:perf:mongodb, agent:perf:nodejs, agent:review:api, agent:review:back, agent:review:code, agent:review:front, agent:review:mongodb, agent:review:perf, agent:review:perf-back, agent:review:ponytail, agent:review:security, agent:review:tests]
+  agents: [agent:fix:investigate, agent:fix:patch, agent:chore:deps, agent:ci:fix, agent:docs:write, agent:fix:security, agent:refactor:simplify, agent:test:e2e, agent:test:unit, agent:perf:front, agent:perf:mongodb, agent:perf:nodejs, agent:review:api, agent:review:back, agent:review:code, agent:review:front, agent:review:mongodb, agent:review:sql, agent:review:perf, agent:review:perf-back, agent:review:ponytail, agent:review:security, agent:review:tests]
   workflows: [workflow:pr:ship, workflow:pr:watch]
 model: balanced
 ---

@@ -140,7 +140,8 @@ The public repo contains no profile: only templates, in `local.example/`.
 | `docs` | `write` | `docs` |
 
 Which agent builds, fixes, optimizes, reviews and checks a change, and which skills it loads, is decided per code area
-by `repos.yaml` › `areas`, overridable per repo ([setup](docs/setup.md#areas-and-roles)).
+by `repos.yaml` › `areas`, neutral by default, with stack presets (`node`, `mongodb`, `sql`, `python`, `go`, `rails`)
+called per repo with `use:`, and overridable per repo ([setup](docs/setup.md#areas-and-roles)).
 
 | Workflow | Does |
 | --- | --- |
@@ -155,7 +156,8 @@ by `repos.yaml` › `areas`, overridable per repo ([setup](docs/setup.md#areas-a
 | `workflow:pr:status` | the state of all your PRs |
 | `workflow:pr:impact` | the production impact of the PRs you merged, as a comment on each; `report`, `comment` |
 | `workflow:ci:red` | diagnosis of a red CI, one rerun if flaky, otherwise a fix |
-| `workflow:repo:onboard` | prepares a repo for the agents, then declares it with `adorno-setup` |
+| `workflow:repo:onboard` | prepares a repo for the agents, then declares it with `adorno-setup`; `--audit` adds `repo:audit` |
+| `workflow:repo:audit` | a read-only audit of a whole repo (or `--area`, `--path`): bugs, security, load, untested risky code, code to delete; the report stays on your machine |
 | `workflow:profile:learn` | the profile adjustments noticed during work (tech, product, code, method, voice), one by one, with their evidence; writes only what you validate |
 | `workflow:slack:mentions` | your Slack mentions: analysis and draft reply, sent to you alone |
 | `workflow:slack:watch` | a watch rule for a Slack channel, and its action on each matching message |

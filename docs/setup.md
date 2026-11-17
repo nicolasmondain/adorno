@@ -109,22 +109,22 @@ same thing with `adorno-github/scripts/repo-conf`.
 ### Areas and roles
 
 One table, `repos.yaml` › `defaults.areas`, decides which agent builds, fixes, optimizes, reviews and checks each part
-of the code, and which skills it loads. Every dispatcher (planner, triage, `ci:debug`, `pr:ship`, `pr:review`,
+of the code, and which skills it loads. Its areas are neutral: a pattern there means one thing whatever the stack.
+What depends on the stack comes from a [stack preset](#stack-presets) the repo calls with `use:`. Every dispatcher (planner, triage, `ci:debug`, `pr:ship`, `pr:review`,
 `review:received`, `issue:fix`) reads it through `adorno-github/scripts/pr-areas`, never a list of its own.
 
 | Area | Detected by (excerpt) | `build` | `fix` | `perf` | `review` | `qa` | `skills` |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `always` | every change | | | | `review:code`, `review:ponytail` | | |
 | `front` | `*.tsx`, `*.css`, `*/components/*`… | `feat:front` | `fix:patch` | `perf:front` | `review:front`, `review:perf` | `test:e2e` | `frontend-ui-engineering` |
-| `back` | `server/*`, `*/services/*`, `*/jobs/*`… | `feat:back` | `fix:patch` | `perf:nodejs` | `review:back`, `review:tests`, `review:perf-back` | | |
-| `back.query` | added lines with `.find(`, `.aggregate(`, `$lookup`… | | | `perf:mongodb` | + `review:mongodb` | | |
-| `back.mongodb` | `*/migrations/*`, `*/models/*`, `.createIndex(`… | | | `perf:mongodb` | + `review:mongodb` | | + `deprecation-and-migration` |
+| `back` | `server/*`, `*/services/*`, `*/jobs/*`… | `feat:back` | `fix:patch` | (a preset's, else fallback) | `review:back`, `review:tests`, `review:perf-back` | | |
+| `back.migration` | `migrations/*`, `*/migrations/*`, `db/migrate/*`… | | | | (+ the database preset's) | | + `deprecation-and-migration` |
 | `api` | `*/api/*`, `*/routes/*`, `*openapi*`… | `feat:api` | | | `review:api` | | `api-and-interface-design` |
 | `security` | `*/auth/*`, `*.env*`, words like `token`, `role` | | `fix:security` | | `review:security` | | `security-and-hardening` |
 | `typescript` | `*.ts`, `*.tsx`, `tsconfig*.json` | | | | | | `typescript-pro` |
-| `tests` | `*.test.*`, `*/tests/*`… | `test:unit` | `test:unit` | | `review:tests` | | `test-driven-development` |
+| `tests` | `*.test.*`, `*_test.*`, `test_*`, `tests/*`, `spec/*`… | `test:unit` | `test:unit` | | `review:tests` | | `test-driven-development` |
 | `e2e` | `*.e2e.*`, `*/e2e/*`, `*playwright*` | `test:e2e` | `test:e2e` | | `review:tests` | | `webapp-testing`, `playwright-cli` |
-| `deps` | `package.json`, lockfiles, `go.mod`… | `chore:deps` | `chore:deps` | | `review:security`, `review:ponytail` | | |
+| `deps` | `package.json`, lockfiles, `pyproject.toml`, `go.mod`, `Gemfile`… | `chore:deps` | `chore:deps` | | `review:security`, `review:ponytail` | | |
 | `ci` | `.github/*`, `*Dockerfile*`… | | `ci:fix` | | `review:security` | | `ci-cd-and-automation` |
 | `docs` | `*.md`, `*.mdx`, `docs/*` | `docs:write` | `docs:write` | | | | `documentation-and-adrs` |
 
@@ -134,9 +134,9 @@ folders), `content` a regex on the diff's added lines (`pr-areas --files`, used 
 agent outside its role's families (`build`: feat, test, docs, chore; `fix`: fix, test, refactor, ci, docs, chore;
 `perf`: perf; `review`: review; `qa`: test), an unknown agent, skill or key, and an invalid regex.
 
-- **Sub-areas** (`sub`, one level only: `back.query`, `back.mongodb`) are detected on their own patterns, anywhere,
-  and a hit also activates the parent. They inherit its roles: a single role of their own replaces the parent's
-  (`back.query` gives `perf:mongodb`, not `perf:nodejs`), a list adds to it. Detection is not inherited.
+- **Sub-areas** (`sub`, one level only: `back.migration`, `back.mongodb`) are detected on their own patterns,
+  anywhere, and a hit also activates the parent. They inherit its roles: a single role of their own replaces the
+  parent's (`back.mongodb` gives `perf:mongodb`, not `perf:nodejs`), a list adds to it. Detection is not inherited.
 - **The main area** gives the top-level `build`, `fix`, `perf` and `qa`: the top-level area with the most files (its
   sub-areas' files included), then config order; inside it, a sub-area beats its parent (most files, then config
   order). An area without the role is skipped. `review` and `skills` are the union of every touched area plus
@@ -145,6 +145,42 @@ agent outside its role's families (`build`: feat, test, docs, chore; `fix`: fix,
   `perf:nodejs` (the back end's, a Node.js default: set `fallbacks.perf` per repo on another stack) with the skill
   `performance-optimization` when no touched area has a `perf`. Each comes from the
   family of its role (`bin/kit check`): a nit from a fixer family, a test from `test`, a perf point from `perf`.
+
+#### Stack presets
+
+`repos.yaml` › `presets` holds what the neutral areas cannot know: folder conventions (`models/`, `handlers/`,
+`app/controllers/`), query regexes, a language's `perf` agent. A repo or a workspace calls them in
+`local/adorno.yaml`; `workflow:repo:onboard` proposes them from the files it finds (`agent:chore:repo`).
+
+| Preset | Adds | Agents |
+| --- | --- | --- |
+| `node` | `back.perf` | `perf:nodejs` |
+| `mongodb` | `back.mongodb`: `*/models/*`, `.find(`, `.aggregate(`, `.createIndex(`, `new Schema(`, `$lookup`… | `perf:mongodb`, + `review:mongodb` (also on `back.migration`) |
+| `sql` | `back.sql`: `*.sql`, raw `SELECT` / `UPDATE` at a statement start (line start, after a quote), `INSERT INTO`, `ALTER TABLE`, `CREATE INDEX`… | + `review:sql` (also on `back.migration`) |
+| `python` | `back.python` (`manage.py`, `views.py`, `tasks.py`, `management/`, `*settings*.py`), `back.django-orm` (`models.py`, `.objects.`, `select_related(`…), `api.python` (`urls.py`, `serializers.py`, `routers/`), `front.python` (`static/`) | + `review:sql` on `back.django-orm` |
+| `go` | `back.go` (`*.go`), `back.go-sql` (`.QueryContext(…`, `.Exec(…`, `sqlx.`, `gorm.`, `pgx.`), `api.go` (`handler/`, `handlers/`) | + `review:sql` on `back.go-sql` |
+| `rails` | `back.rails` (`app/models/`, `app/controllers/`, `app/mailers/`, `lib/`), `back.activerecord` (`.where(`, `.includes(:x)` / `.includes(x: :y)`, `.joins("…")`, `add_column`, `db/schema.rb`…), `api.rails` (`config/routes.rb`, `app/serializers/`), `front.rails` (`app/views/`, `app/javascript/`, `app/assets/`) | + `review:sql` on `back.activerecord` |
+
+```yaml
+workspaces:
+  acme:
+    repos: ["acme/*"]           # Node.js and Django repos: no `use:` here
+repos:
+  acme/api:
+    use: [node, mongodb]        # a Node.js + MongoDB stack
+  acme/billing:
+    use: [python, sql]          # Django on Postgres
+```
+
+`use:` adds up across layers (defaults, workspace, repo), and a more specific layer cannot remove a preset a broader
+one calls: put `use:` on a workspace only when all its repos share the stack, otherwise on each repo.
+
+A preset only adds: sub-areas named after its stack, which bring their files to the parent area and inherit its roles,
+and entries to the `review` and `skills` lists of a neutral sub-area. It never rewrites a neutral `paths`, so presets
+combine (`use: [node, mongodb, sql]`). Without a preset, `perf` falls back to `fix:patch` with
+`performance-optimization`, and no database reviewer is called. A local preset may not reuse a public preset's name:
+`bin/kit check` refuses it; give yours another name and `use:` the public one inside it. No `perf:` agent exists yet
+for Python, Go, Ruby or SQL: the fallback covers them.
 
 **Overriding an area for a repo**, at any level of `local/adorno.yaml`: `paths`, `content` and the single roles
 replace; `review` and `skills` add to the public list, and an entry `-x` removes `x`.
@@ -156,7 +192,7 @@ repos:
       back:
         review: ["-agent:review:perf-back"]   # this repo's server is a thin proxy
         sub:
-          query: {review: [agent:review:security]}
+          migration: {review: [agent:review:security]}
       always:
         skills: [observability-and-instrumentation]
 ```

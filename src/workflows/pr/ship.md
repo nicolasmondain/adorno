@@ -4,7 +4,7 @@ args: "<owner/repo> <branch> [worktree path] [.agent-run folder]"
 roles: [fix, perf, review]
 uses:
   skills: [adorno-github, adorno-commit, adorno-voice]
-  agents: [agent:adorno, agent:review:code, agent:review:ponytail, agent:review:front, agent:review:back, agent:review:mongodb, agent:review:api, agent:review:security, agent:review:tests, agent:review:perf, agent:fix:patch, agent:refactor:simplify, agent:test:unit, agent:perf:mongodb, agent:perf:nodejs, agent:chore:deps, agent:ci:fix, agent:docs:write, agent:fix:security, agent:test:e2e, agent:perf:front, agent:review:perf-back]
+  agents: [agent:adorno, agent:review:code, agent:review:ponytail, agent:review:front, agent:review:back, agent:review:mongodb, agent:review:sql, agent:review:api, agent:review:security, agent:review:tests, agent:review:perf, agent:fix:patch, agent:refactor:simplify, agent:test:unit, agent:perf:mongodb, agent:perf:nodejs, agent:chore:deps, agent:ci:fix, agent:docs:write, agent:fix:security, agent:test:e2e, agent:perf:front, agent:review:perf-back]
   workflows: [workflow:pr:open]
 model: balanced
 ---
@@ -65,17 +65,22 @@ command.
    - a repo skill: run it in the worktree, as it is written. It may push and run `gh pr create` itself: inside the
      run the guard lets `git push origin <branch>` and `gh pr create` through (never forced, never the base, at the
      run's level). Then `pr-status owner/repo` again: no PR for the branch → stop and report what the skill did;
-     its description has no `## Proof`, misses a source of the run's `refs.json` (`## Sources`, `workflow:pr:open`
-     step 3) or the ponytail notes of `status.md` (under Impact / Risks) → `agent:adorno` appends what is missing
-     and publishes it with `pr-edit owner/repo#N "<its title>" <file> [--refs <run>/refs.json [--withhold <url>]…]
-     --attach …`; opened as draft while the verdict is clean and the proof complete → `pr-ready owner/repo#N`.
+     its description has no `## Proof`, misses a source of the run's `refs.json` (`## Sources`), the ponytail notes
+     of `status.md` (under Impact / Risks) or a marker of `pr-shortcuts` (`## Shortcuts`, all in `workflow:pr:open`
+     step 3; `workflow:pr:open` step 1 does not run here, so write the whole branch's diff first:
+     `git diff origin/<base>...HEAD > <run>/branch.diff`, then `pr-shortcuts <run>/branch.diff`) → `agent:adorno`
+     appends what is missing and publishes it with `pr-edit owner/repo#N "<its title>" <file> [--refs
+     <run>/refs.json [--withhold <url>]…] --attach …`; opened as draft while the verdict is clean and the proof
+     complete → `pr-ready owner/repo#N`.
 7. **PR already open** → push, update, ready:
    - push: `pr-push owner/repo#N` (or the repo skill pushes itself, as above);
    - default update: `agent:adorno` compares the title and description to `git diff origin/<base>...HEAD` and the
      proof to `qa/`, and takes the new ponytail notes of `status.md` into account. The scope moved (a new What or
-     How, a new risk, a verification that no longer matches), new proof or a new ponytail note → new title and
-     description in English, in the owner's voice (`adorno-voice`), keeping the current `## Sources`, published by
-     `pr-edit owner/repo#N "<title>" <file> [--refs <run>/refs.json [--withhold <url>]…] [--attach <new media>]…`
+     How, a new risk, a verification that no longer matches, a marker of `pr-shortcuts` added or gone), new proof or
+     a new ponytail note → new title and description in English, in the owner's voice (`adorno-voice`), keeping the
+     current `## Sources`, `## Shortcuts` redone from the whole branch (rewrite `<run>/branch.diff` with
+     `git diff origin/<base>...HEAD`, run `pr-shortcuts <run>/branch.diff`, never only the new commits), published
+     by `pr-edit owner/repo#N "<title>" <file> [--refs <run>/refs.json [--withhold <url>]…] [--attach <new media>]…`
      (`--refs` whenever the run has one). Unchanged → nothing. A repo skill: run it in update mode (it receives
      `#N`); it may run `gh pr edit` itself, the new proof and the new ponytail notes of `status.md` (Impact / Risks)
      then go out with `pr-edit`;

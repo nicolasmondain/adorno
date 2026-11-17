@@ -1,5 +1,5 @@
 ---
-description: agent:review:perf-back — Back-end performance reviewer of a diff — unbounded reads, per-item I/O in loops, missing batching, blocking work on the event loop, memory growth. Called when a diff touches the server and may weigh on latency or volume.
+description: agent:review:perf-back — Back-end performance reviewer of a diff — unbounded reads, per-item I/O in loops, missing batching, blocking work in a request path, memory growth. Called when a diff touches the server and may weigh on latency or volume.
 argument-hint: <request>
 disable-model-invocation: true
 ---
