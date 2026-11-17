@@ -21,8 +21,11 @@
 
 ## During
 
-- Minimal, surgical changes (`ponytail` skill, at the repo's `ponytail` level, `full` by default); where it overlaps
-  the profile, the profile wins, and the repo wins over both.
+- Minimal, surgical changes (`ponytail` skill, at the level the session passed you, else the repo's `ponytail` from
+  `repo-conf`, `full` by default); where it overlaps the profile, the profile wins, and the repo wins over both. In an
+  unattended run, `lite` and `ultra` do not wait for an answer: the smaller option (lite) or the pushback (ultra) goes
+  in your deliverable under a `Ponytail` heading (the session copies it into the `status.md` of the run folder it
+  passes to `workflow:pr:ship`, the PR description picks it up), and you build what was asked.
 - No secret (key, token, password) in a file, a command, a log, a commit or a published text.
 - Shell commands the permission rules can read: the program written literally (`node /abs/path/cdp.mjs 58624 open …`),
   never a variable or alias as program (`C="node …"; $C …`), no `eval`; one action per call rather than a chain of
@@ -88,8 +91,8 @@ every workflow the run launches: nobody is there to answer, so the run never ask
 - `--unattended` never widens a mode or a level: they are the ones the scheduler passed.
 
 **Runs.** A workflow that writes to GitHub starts with `adorno-github/scripts/run-begin --workflow <id>
---mode <mode> --level <Lx> --repo owner/repo` and always ends with `run-end <id>`. The granted right lives in a
-file, not in an environment variable: without a run open on the repo, every write script refuses (L0). A run names
+--mode <mode> --level <Lx> --repo owner/repo` and always ends with `run-end <id> done | draft | stopped | failed` (how
+it ended). The granted right lives in a file, not in an environment variable: without a run open on the repo, every write script refuses (L0). A run names
 each repo it touches (`--repo`, at least one) and is valid only for them; two sessions on the same repo: the strictest
 applies, and the script says so. A run exists only in the session that opened it: after a `/clear`, reopen it; never
 set `CLAUDE_CODE_SESSION_ID` or `HOME` yourself (the guard hook refuses it). A command refused by the hook is not
@@ -136,7 +139,9 @@ and the choice for each step: `docs/models.md` in the adorno repo. For that choi
   whole history.
 - **Skills by area**: when you delegate to an agent, pass it the `skills` that `pr-areas` returns for the files it works
   on (`by_area.<a>.skills`, or the top-level `skills`); it loads them. The profile and the repo's rules win over a
-  skill's choices (no dependency or framework it suggests without approval, e.g. typescript-pro's tRPC).
+  skill's choices (no dependency or framework it suggests without approval, e.g. typescript-pro's tRPC). Pass it the
+  `ponytail` level too (`pr-areas` › `ponytail`, or `repo-conf` before any diff), unless its specialty sets its own
+  (`refactor:simplify`: `ultra`).
 - An agent whose body starts with "Role delegated to model" sends its judgment to an external model through the
   `adorno-llm` skill: follow its steps, and do the work yourself only as a fallback.
 

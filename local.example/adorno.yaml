@@ -86,6 +86,10 @@ repos:                                 # a specific repo, or a glob (`acme/docs-
     notion_spec:                       # a request whose spec is a Notion page: its properties at each step
       start: {Lifecycle: Ongoing, "Working date": "{{today}}"}   # spec or diagnosis validated, work starts
       pr_opened: {Lifecycle: "In Code Review"}                     # PR opened ({{pr_url}} available)
+    after_pr:                          # repo skills run once the PR exists (workflow:pr:ship), per workflow
+      - skill: /acme-notion-fields     # e.g. fill the Notion ticket of a fixed bug
+        workflows: [workflow:issue:fix]
+        needs: notion                  # only when the request came with a Notion page; gets the PR URL and that URL
     commit_skill: /acme-commit         # the repo's skill that commits (default: adorno-commit)
     pr_skill: /acme-pr                 # the repo's skill that opens or updates the PR (default: adorno-pr-open)
     setup_skill: null                  # skill that sets up a fresh worktree
@@ -140,3 +144,8 @@ notion:                                # workflow:notion:assigned (Notion connec
       "Bugs": workflow:issue:fix
     mode: report                       # report: analysis and plan · run: launches the agent or the workflow
     level: L0                          # permission level in run mode
+
+journal:                               # the journal of every run (skill adorno-journal), private, under ~/.adorno/runs
+  reasoning: false                     # true: also copy the models' reasoning when the tool's transcripts hold it
+  retention_days: 30                   # journals older than this are removed when a run opens…
+  max_mb: 2048                         # …then the oldest ones while all journals weigh more than this

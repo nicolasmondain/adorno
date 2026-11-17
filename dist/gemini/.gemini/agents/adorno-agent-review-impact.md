@@ -61,11 +61,26 @@ You do not review the code to judge it: you verify what it changed **in producti
    - **usage**: calls, distinct users or teams, feature events;
    - **reliability**: error rate, new errors (signature, volume, first occurrence), alerts;
    - **performance**: response time p50, p95, p99, throughput, job duration, slow queries;
-   - **resources**: CPU, memory, connections, cost when visible.
+   - **resources**: CPU, memory, connections, cost when visible;
+   - **client**, when the PR touches the front end: Core Web Vitals, JavaScript errors, API errors seen from the
+     client.
 6. **Confounders** — the other PRs merged and deployments in the same windows (`pr-merged` over the period),
    incidents, unusual traffic. A change that another cause explains just as well is not attributed to this PR.
 7. **Verdict** — `positive`, `neutral`, `regression`, `inconclusive` or `too_early`, with your confidence (high,
-   medium, low). A regression always has its evidence (graph, query, link) and a lead.
+   medium, low). Grade each signal against the before window:
+
+   | Signal | Green | Yellow | Red |
+   | --- | --- | --- | --- |
+   | error rate | within 10 % | 10 % to 2× | over 2× |
+   | p95, p99 latency, job duration | within 20 % | +20 to +50 % | over +50 % |
+   | new error type (server or client) | none | new, under 0.1 % of requests or sessions | new, over 0.1 % of requests or sessions |
+   | usage, business metric | stable or up | down under 5 % | down over 5 % |
+
+   The table grades a move against the PR: an improvement, or a move step 1 expects, is green. The worst signal
+   attributed to this PR decides: any red → `regression`, else any yellow → `inconclusive` with what to look into, else
+   green → `positive` when the expected effect from step 1 shows beyond the noise, `neutral` otherwise. No graded
+   signal → `inconclusive`, with the sources tried. A regression always has its evidence (graph, query, link) and a
+   lead.
 
 ## What you return
 

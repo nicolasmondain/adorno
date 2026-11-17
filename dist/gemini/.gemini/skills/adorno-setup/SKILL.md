@@ -106,7 +106,8 @@ Goal: the workflows know this repo — or a whole set of repos — and act withi
      the repo's `CLAUDE.md`, `.claude/rules/` and the owner's answers — never copy a whole rule file;
    - `commit_skill` / `pr_skill` / `setup_skill` if the repo has its own skills (default: `adorno-commit`,
      `adorno-pr-open`; `workflow:pr:ship` runs the first two, without asking, at the end of every workflow that
-     touched code).
+     touched code); `after_pr` to run a repo skill once the PR exists, per workflow (e.g. fill a Notion ticket after
+     `workflow:issue:fix`), in `local/adorno.yaml` only.
 4. **Rights** — ask, with the safe default first:
    - `max_level` (L0 read … L3 open PRs, reply, resolve; L4 is never automatic) — default `L3`, `L2` on a sensitive repo;
    - `permissions.deny`: GitHub actions to refuse there (`push`, `reply`, `comment`, `resolve`, `rerequest`, `review`,

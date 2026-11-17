@@ -88,6 +88,9 @@ expect_exit 2 "missing PR number is a usage error" -- "$S/pr-feedback-fetch" acm
 expect_exit 0 "repo-conf merges defaults" -- "$S/repo-conf" acme/strict
 expect_jq "repo-conf: repo value wins, base filled from GitHub" \
   '.resolve_threads == "reviewer" and .reply_language == "en" and .base == "main"'
+expect_jq "repo-conf: the repo's ponytail level wins" '.ponytail == "ultra"'
+expect_exit 0 "repo-conf without a ponytail override" -- "$S/repo-conf" acme/docs
+expect_jq "repo-conf: ponytail from defaults" '.ponytail == "full"'
 
 for url in git@github.com:acme/strict.git https://github.com/acme/strict ssh://git@github.com/acme/strict.git \
     https://someone@github.com/acme/strict.git ssh://git@github.com:22/acme/strict.git; do
@@ -174,6 +177,95 @@ expect_exit 0 "under an auto run at L0 (untrusted inputs)" -- "$S/notion-step" p
 expect_jq "... dry run too" '.dry_run == true'
 "$S/run-end" "$NL0" >/dev/null
 
+echo "after-pr (repo skills run once the PR exists, per workflow)"
+AD="$TMP/run-after"; mkdir -p "$AD"
+"$ROOT/src/skills/adorno-inputs/scripts/input-refs" \
+  "bug https://www.notion.so/acme/Ticket-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" >"$AD/refs.json"
+PR9=https://github.com/acme/docs/pull/9
+FIX=workflow:issue:fix SUITE=workflow:test:suite
+ARGS_B='["https://github.com/acme/docs/pull/9", "https://www.notion.so/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"]'
+expect_exit 2 "--workflow is required" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9"
+expect_exit 5 "--workflow that is no active run's workflow" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
+grep -q "workflow:issue:fix" "$TMP/err" && ok "... and the refusal names it" || ko "... and the refusal names it" "$(cat "$TMP/err")"
+expect_exit 0 "a run of a workflow no entry lists" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$SUITE"
+expect_jq "... is skipped" '.skip | test("no after_pr entry applies to workflow:test:suite")'
+expect_exit 0 "a repo without after_pr" -- "$S/after-pr" plan "$AD" other/thing --pr-url "$PR9" --workflow "$SUITE"
+expect_jq "... is skipped" '.skip | test("sets no after_pr")'
+expect_exit 5 "outside any run, even on a repo without after_pr" -- \
+  env CLAUDE_CODE_SESSION_ID=sess-none "$S/after-pr" plan "$AD" other/thing --pr-url "$PR9" --workflow "$SUITE"
+grep -q "no active run" "$TMP/err" && ok "... and says no active run" || ko "... and says no active run" "$(cat "$TMP/err")"
+expect_exit 2 "--workflow that is not a workflow id" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow 'x;y'
+expect_exit 2 "--pr-url is required" -- "$S/after-pr" plan "$AD" acme/docs --workflow "$SUITE"
+expect_exit 2 "--pr-url that is not a PR URL" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "https://evil.example/x" --workflow "$SUITE"
+expect_exit 2 "unknown command" -- "$S/after-pr" run "$AD"
+expect_exit 2 "missing run folder" -- "$S/after-pr" plan "$TMP/nope" acme/docs --pr-url "$PR9" --workflow "$SUITE"
+AOTHER="$(env CLAUDE_CODE_SESSION_ID=sess-other "$S/run-begin" --workflow "$FIX" --mode auto --level L3 --repo acme/docs | jq -r .id)"
+[ -n "$AOTHER" ] && ok "a $FIX run opened by another session" || ko "a $FIX run opened by another session"
+expect_exit 5 "... does not count for this session" -- \
+  "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
+"$S/run-end" "$AOTHER" >/dev/null
+AAPP="$("$S/run-begin" --workflow "$FIX" --mode auto --level L3 --repo acme/app | jq -r .id)"
+[ -n "$AAPP" ] && ok "a $FIX run of this session on another repo" || ko "a $FIX run of this session on another repo"
+expect_exit 5 "... does not count for acme/docs" -- \
+  "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
+"$S/run-end" "$AAPP" >/dev/null
+AFIX="$("$S/run-begin" --workflow "$FIX" --mode auto --level L3 --repo acme/docs --repo nobody/repo | jq -r .id)"
+expect_exit 3 "undeclared repo" -- "$S/after-pr" plan "$AD" nobody/repo --pr-url "$PR9" --workflow "$FIX"
+expect_exit 0 "under workflow:issue:fix with a Notion page" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
+expect_jq "... both entries, args = [PR URL, Notion page URL]" \
+  ".dry_run == false and (.skills | map(.skill)) == [\"/acme-notion-fields\", \"acme-changelog\"]
+   and .skills[0].args == $ARGS_B and .skills[1].args == $ARGS_B"
+expect_exit 5 "outside any run: refused" -- \
+  env CLAUDE_CODE_SESSION_ID=sess-none "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
+[ ! -e "$AD/.after-pr.json" ] && ok "... and no previous plan is left for done" || ko "... and no previous plan is left for done"
+"$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX" >/dev/null
+expect_exit 0 "done records one skill" -- "$S/after-pr" "done" /acme-notion-fields "$AD"
+expect_jq "... with its args" ".skill == \"/acme-notion-fields\" and .args == $ARGS_B"
+expect_exit 2 "done twice: no longer planned" -- "$S/after-pr" "done" /acme-notion-fields "$AD"
+expect_exit 2 "done for a skill not in the plan" -- "$S/after-pr" "done" /acme-other "$AD"
+expect_exit 0 "a resumed run" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
+expect_jq "... does not redo what is done" '(.skills | map(.skill)) == ["acme-changelog"]'
+expect_exit 0 "done records the other skill" -- "$S/after-pr" "done" acme-changelog "$AD"
+jq -e 'map(.skill) == ["/acme-notion-fields", "acme-changelog"]' "$AD/after-pr.json" >/dev/null \
+  && ok "... after-pr.json holds both" || ko "... after-pr.json holds both" "$(cat "$AD/after-pr.json")"
+expect_exit 0 "a new plan once both ran" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX"
+expect_jq "... skips: already done" '.skip | test("already done")'
+expect_exit 2 "done after a skipped plan: nothing to record" -- "$S/after-pr" "done" acme-changelog "$AD"
+expect_exit 0 "--force" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX" --force
+expect_jq "... plans both again" '(.skills | length) == 2'
+expect_exit 2 "a plan that fails on a bad --pr-url" -- \
+  "$S/after-pr" plan "$AD" acme/docs --pr-url "https://evil.example/x" --workflow "$FIX" --force
+expect_exit 2 "... leaves nothing for done to record" -- "$S/after-pr" "done" acme-changelog "$AD"
+AI="$TMP/run-after-inject"; mkdir -p "$AI"
+"$ROOT/src/skills/adorno-inputs/scripts/input-refs" \
+  'see https://github.com/acme/docs/issues/3 then https://www.notion.so/acme/Ticket-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb?x=$(touch${IFS}/tmp/pwn);`id` and https://www.notion.so/acme/Other-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' >"$AI/refs.json"
+expect_exit 0 "a GitHub ref, then a Notion URL carrying shell syntax" -- "$S/after-pr" plan "$AI" acme/docs --pr-url "$PR9" --workflow "$FIX"
+expect_jq "... the first Notion page, rebuilt from its id: no shell syntax in the args" \
+  ".skills[0].args == $ARGS_B and (.skills | map(.args[]) | join(\" \") | test(\"[\$;\`()]\") | not)"
+mkdir -p "$TMP/run-after-plain"; "$ROOT/src/skills/adorno-inputs/scripts/input-refs" "fix acme/docs" >"$TMP/run-after-plain/refs.json"
+expect_exit 0 "a request without Notion page" -- "$S/after-pr" plan "$TMP/run-after-plain" acme/docs --pr-url "$PR9" --workflow "$FIX"
+expect_jq "... drops the entry that needs Notion, keeps the other, no Notion arg" \
+  '(.skills | map(.skill)) == ["acme-changelog"] and .skills[0].args == ["https://github.com/acme/docs/pull/9"]'
+expect_exit 0 "no refs.json at all" -- "$S/after-pr" plan "$TMP" acme/docs --pr-url "$PR9" --workflow "$FIX"
+expect_jq "... same" '(.skills | map(.skill)) == ["acme-changelog"]'
+printf '{ half' >"$TMP/run-after-plain/refs.json"
+expect_exit 1 "a corrupt refs.json fails, not skipped" -- "$S/after-pr" plan "$TMP/run-after-plain" acme/docs --pr-url "$PR9" --workflow "$FIX"
+ABUILD="$("$S/run-begin" --workflow workflow:feature:build --mode auto --level L3 --repo acme/docs | jq -r .id)"
+expect_exit 0 "workflow:feature:build alongside a $FIX run" -- \
+  "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow workflow:feature:build --force
+expect_jq "... only the entry listing feature:build, not the union of the runs" '(.skills | map(.skill)) == ["acme-changelog"]'
+"$S/run-end" "$ABUILD" >/dev/null; "$S/run-end" "$AFIX" >/dev/null
+AREP="$("$S/run-begin" --workflow "$FIX" --mode report --level L3 --repo acme/docs | jq -r .id)"
+expect_exit 0 "under a report run" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX" --force
+expect_jq "... dry run: shown, not run" '.dry_run == true'
+expect_exit 2 "done after a dry-run plan is refused" -- "$S/after-pr" "done" acme-changelog "$AD"
+"$S/run-end" "$AREP" >/dev/null
+AL0="$("$S/run-begin" --workflow "$FIX" --mode auto --level L0 --repo acme/docs | jq -r .id)"
+expect_exit 0 "under an auto run at L0 (untrusted inputs)" -- "$S/after-pr" plan "$AD" acme/docs --pr-url "$PR9" --workflow "$FIX" --force
+expect_jq "... dry run too" '.dry_run == true'
+expect_exit 2 "... and done is refused" -- "$S/after-pr" "done" acme-changelog "$AD"
+"$S/run-end" "$AL0" >/dev/null
+
 echo "pr-feedback-fetch"
 expect_exit 0 "fetches" -- "$S/pr-feedback-fetch" acme/docs#42
 expect_jq "only unresolved threads" '[.threads[].id] == ["T1","T2"]'
@@ -234,6 +326,8 @@ expect_jq "dry-run shows the body, posts nothing" '.dryRun and .body == "Fixed i
 grep -q addPullRequestReviewThreadReply "$FAKE_LOG" && ko "dry-run must not call the mutation" || ok "dry-run did not call the mutation"
 expect_exit 0 "real reply" -- "$S/pr-reply" acme/docs#42 T1 "$TMP/body.md"
 expect_jq "reply returns the comment url" '.posted and (.url | test("#r1$"))'
+FAKE_REPLY_FAIL=1 expect_exit 1 "a reply GitHub refuses keeps gh's exit code" -- "$S/pr-reply" acme/docs#42 T1 "$TMP/body.md"
+case "$out" in *"Thread is outdated"*) ok "... and what gh printed still reaches stdout" ;; *) ko "gh's output was swallowed" "$out" ;; esac
 printf '' >"$TMP/empty.md"
 expect_exit 2 "empty body refused" -- "$S/pr-reply" acme/docs#42 T1 "$TMP/empty.md"
 
@@ -417,7 +511,7 @@ expect_jq "my pending review is surfaced" '(.[] | select(.number==10) | .pending
 echo "pr-areas (public default rules from repos.yaml)"
 REAL="$ROOT/dist/claude/.claude/skills/adorno-github/repos.json"
 if [ -f "$REAL" ]; then
-  jq '.repos = {"acme/app": {}, "acme/leak": {"areas": {"back": {"sub": {"n": {"review": ["-agent:review:tests", "agent:review:code"], "skills": ["-typescript-pro"]}}}, "newa": {"review": ["-agent:review:api", "agent:review:code"]}}}, "acme/docs": {"areas": {"back": {"review": ["-agent:review:tests", "agent:review:security"]}}}}' "$REAL" >"$TMP/areas-repos.json"
+  jq '.repos = {"acme/app": {}, "acme/leak": {"areas": {"back": {"sub": {"n": {"review": ["-agent:review:tests", "agent:review:code"], "skills": ["-typescript-pro"]}}}, "newa": {"review": ["-agent:review:api", "agent:review:code"]}}}, "acme/docs": {"ponytail": "ultra", "areas": {"back": {"review": ["-agent:review:tests", "agent:review:security"]}}}}' "$REAL" >"$TMP/areas-repos.json"
   reg "$TMP/areas-repos.json"
   expect_exit 0 "classifies a diff" -- "$S/pr-areas" acme/app "$ROOT/tests/fixtures/sample.diff"
   expect_jq "front by extension, with typescript" '.areas.front == ["client/app.tsx"] and .areas.typescript == ["client/app.tsx"] and (.skills | index("typescript-pro"))'
@@ -431,9 +525,11 @@ if [ -f "$REAL" ]; then
   expect_jq "no reviewers key, always is not an area" '(has("reviewers") | not) and (.areas | has("always") | not)'
   expect_jq "by_area carries the roles" '.by_area["back.query"].perf == "agent:perf:mongodb" and .by_area.front.perf == "agent:perf:front" and .by_area.docs.perf == null'
   expect_jq "no perf fallback when an area has one" '.skills | index("performance-optimization") | not'
+  expect_jq "ponytail level: the default" '.ponytail == "full"'
   expect_exit 0 "per-repo override" -- "$S/pr-areas" acme/docs "$ROOT/tests/fixtures/sample.diff"
   expect_jq "override adds a reviewer and removes one" \
     '.areas.front == ["client/app.tsx"] and (.review | index("agent:review:security")) and (.review | index("agent:review:tests") | not) and (.review | index("agent:review:back"))'
+  expect_jq "ponytail level: the repo's override" '.ponytail == "ultra"'
   expect_jq "no removal marker leaks" '[.review[] | select(startswith("-"))] == []'
   expect_exit 0 "removals in a new area and a new sub-area" -- "$S/repo-conf" acme/leak
   expect_jq "no -x marker leaks from an area without a lower layer" \
@@ -596,6 +692,17 @@ printf '{"agent":"agent:review:tests","findings":[]}' >"$TMP/reviews2/c.json"
 expect_exit 0 "review-merge, inconsistent reviews" -- "$S/review-merge" "$TMP/reviews2"
 expect_jq "a blocker forces block; unknown or missing verdicts are invalid, not pass" \
   '.verdict == "block" and .invalid == ["b.json", "c.json"]'
+mkdir -p "$TMP/spy" "$TMP/norun-home"; printf '#!/bin/sh\ntouch "%s"\n' "$TMP/spy.called" >"$TMP/spy/python3"; chmod +x "$TMP/spy/python3"
+expect_exit 0 "review-merge without an open run" -- env HOME="$TMP/norun-home" PATH="$TMP/spy:$PATH" "$S/review-merge" "$TMP/reviews"
+expect_jq "... merges as usual" '.verdict == "block"'
+[ ! -e "$TMP/spy.called" ] && ok "... and starts no interpreter to record it" || ko "review-merge started python3 with no run open"
+merged="$out"; real_jq="$(command -v jq)"
+printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s"\nexec "%s" "$@"\n' "$TMP/jq.calls" "$real_jq" >"$TMP/spy/jq"; chmod +x "$TMP/spy/jq"
+expect_exit 0 "review-merge without an open run, HOME unset" -- env -u HOME PATH="$TMP/spy:$PATH" "$S/review-merge" "$TMP/reviews"
+[ "$out" = "$merged" ] && [ ! -s "$TMP/err" ] && ok "... the same output, nothing on stderr" || ko "review-merge's output changed with HOME unset" "$out / $(cat "$TMP/err")"
+[ ! -e "$TMP/spy.called" ] && ok "... and starts no interpreter" || ko "review-merge started python3 with no run open, HOME unset"
+grep -q 'stage: "produced"\|kind: "verdict"' "$TMP/jq.calls" && ko "review-merge built the journal's messages with no run open" || ok "... nor builds the journal's messages"
+rm -f "$TMP/spy/jq"
 
 echo "pr-areas: tricky paths"
 printf 'diff --git "a/client/\\303\\251 x.tsx" "b/client/\\303\\251 x.tsx"\n--- "a/client/\\303\\251 x.tsx"\n+++ "b/client/\\303\\251 x.tsx"\n@@ -1 +1 @@\n+const a = 1\ndiff --git a/server/old.ts b/server/old.ts\ndeleted file mode 100644\n--- a/server/old.ts\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\n' >"$TMP/tricky.diff"
@@ -721,6 +828,9 @@ guard deny "x=\$(jq '.a | select(.b)' f.json; git push origin fix/x)"
 guard pass 'cd ~/.adorno/runs && for d in r-*/; do echo "$d"; done | sort'
 guard deny "cd ~/.adorno/runs/active && echo '{}' > x.json"
 guard deny "cd ~/.adorno && cp x runs/active/y.json"
+# the journal's writer is called by the scripts and the hooks, never through the Bash tool: not exempt
+guard deny "$ROOT/src/skills/adorno-journal/scripts/journal.py prune ~/.adorno/runs/"
+guard deny "cd ~/.adorno/runs && $ROOT/src/skills/adorno-journal/scripts/journal.py prune"
 guard pass "cd ~/.adorno/worktrees/acme__docs/fix/x && git status && npm test"
 guard pass 'cd ~/.adorno/runs && for d in r-*/; do for p in "$d"pr-*/; do echo "$p"; done; done'
 guard ask 'C="node cdp.mjs 9222"; $C open http://localhost:8000'
@@ -1157,6 +1267,150 @@ inL "$S/pr-workspace" acme/docs#42 >/dev/null 2>&1
 FAKE_PR_STATE=MERGED expect_exit 0 "clean removes the branch worktree adorno created" -- "$S/pr-workspace" --clean
 [ ! -d "$bw" ] && [ ! -f "$KH/workspaces/acme__docs/pr-42.link" ] && ok "... worktree and link gone" || ko "... worktree and link gone"
 git -C "$L" show-ref --verify --quiet refs/heads/nm/pagination && ok "... the branch stays" || ko "... the branch stays"
+
+echo "journal (adorno-journal): what the suite's own run recorded on the way"
+JPY="$ROOT/src/skills/adorno-journal/scripts/journal.py"
+SUITE="$(jq -r 'select(.workflow == "workflow:test:suite") | .id' "$KH"/runs/active/*.json)"
+JD="$(jq -r 'select(.workflow == "workflow:test:suite") | .journal' "$KH"/runs/active/*.json)"; JF="$JD/events.jsonl"
+jl() { out="$(jq -cs . "$JF")"; }                      # the whole journal, as one array, in $out
+count() { jq -cs "[.[] | select($1)] | length" "$JF"; }  # count FILTER
+expect_exit 0 "every event the scripts and the guard wrote is valid" -- python3 "$JPY" validate "$JF"
+jl
+expect_jq "run-begin opens the journal with the run's grant" \
+  '.[0].type == "run.begin" and .[0].workflow == "workflow:test:suite" and .[0].level == "L3" and (.[0].repos | length) == 6 and .[0].run == "'"$SUITE"'"'
+expect_jq "a script's call: its name, arguments, exit code, the level and action it asked for" \
+  'any(.[]; .type == "script.call" and .script == "pr-reply" and .exit == 0 and .level == "L3" and .action == "reply" and .args[0] == "acme/docs#42" and .dry_run == false)'
+expect_jq "a refusal is recorded with its exit code (4 policy, 5 level, 2 usage, 3 unregistered)" \
+  '[.[] | select(.type == "script.call") | .exit] | ([4, 5, 2, 3] - .) == []'
+expect_jq "a script called with flags is recorded with them (run-begin's own call)" \
+  'any(.[]; .type == "script.call" and .script == "run-begin" and .exit == 0
+       and .args[0:4] == ["--workflow", "workflow:test:suite", "--mode", "auto"] and (.args | index("--repo")) != null)'
+expect_jq "a dry run is recorded as one" 'any(.[]; .type == "script.call" and .dry_run == true)'
+expect_jq "a write that reached GitHub: action, target, url" \
+  'any(.[]; .type == "github" and .action == "reply" and (.target | test("^acme/docs#42 thread ")) and (.url | test("^https://")))'
+expect_jq "... for each kind of write" \
+  '[.[] | select(.type == "github") | .action] | (["push", "open_pr", "comment", "resolve", "rerequest"] - .) == []'
+expect_jq "review-merge: each finding as produced, then as merged" \
+  'any(.[]; .type == "finding" and .stage == "produced" and .reviewer == "agent:review:code" and .severity == "minor" and .file == "a.ts" and .line == 3)
+   and any(.[]; .type == "finding" and .stage == "merged" and .severity == "blocker" and .reviewer == "agent:review:back, agent:review:code")
+   and any(.[]; .type == "script.call" and .script == "review-merge" and .exit == 0)'
+expect_jq "review-merge: the merged verdict and its counts, from the scripts to the session" \
+  'any(.[]; .type == "message" and .kind == "verdict" and .from == "scripts" and .to == "session" and .excerpt == "block (2 reviews): 1 blocker")
+   and any(.[]; .type == "message" and .kind == "verdict" and .excerpt == "block (1 review): 1 blocker")'
+expect_jq "the guard's refusals, with the command and the reason" \
+  'any(.[]; .type == "guard" and .decision == "deny" and .command == "git push origin fix/x" and (.reason | length) > 0)'
+expect_jq "what the guard lets through is not an event" \
+  'all(.[] | select(.type == "guard"); .command != "git commit -m '"'"'push the fix'"'"'")'
+expect_jq "scripts that set their own exit trap are recorded too (pr-areas, with_lock in pr-workspace)" \
+  'any(.[]; .type == "script.call" and .script == "pr-areas" and .exit == 0) and any(.[]; .type == "script.call" and .script == "pr-workspace" and .exit == 0)'
+n="$(count '.type == "github"')"
+"$S/pr-reply" acme/docs#42 T1 "$TMP/body.md" >/dev/null
+[ "$(count '.type == "github"')" = "$((n + 1))" ] && ok "the same reply, posted: one github event" || ko "no github event for a posted reply"
+n="$(count '.type == "github"')"
+ADORNO_DRY_RUN=1 "$S/pr-reply" acme/docs#42 T1 "$TMP/body.md" >/dev/null
+[ "$(count '.type == "github"')" = "$n" ] && ok "a dry run reaches nothing: no github event" || ko "github event in a dry run"
+n="$(count '.script == "run-check"')"
+guard_at allow "$C" "" "git push origin fix/lem-8-x"
+[ "$(count '.script == "run-check"')" = "$n" ] && ok "the guard's own probes are not the run's doing" || ko "guard probes recorded"
+n="$(wc -l <"$JF")"
+"$S/repo-conf" acme/docs >/dev/null
+[ "$(( $(wc -l <"$JF") ))" = "$((n + 1))" ] && ok "repo-conf, as usual: one script.call" || ko "repo-conf not recorded"
+(cd "$C" && "$S/repo-conf" >/dev/null); out="$(tail -n 1 "$JF")"
+expect_jq "a script called without arguments records an empty list" '.type == "script.call" and .script == "repo-conf" and .args == []'
+n="$(wc -l <"$JF")"
+ADORNO_JOURNAL=0 "$S/repo-conf" acme/docs >/dev/null
+[ "$(wc -l <"$JF")" = "$n" ] && ok "ADORNO_JOURNAL=0 records nothing" || ko "ADORNO_JOURNAL=0"
+n="$(count '.script == "pr-comment"')"
+"$S/pr-comment" acme/docs#42 "$TMP/norun.md" --attach "$TMP/ghp_0123456789abcdefghijABCDEFGHIJ012345.png" >/dev/null 2>&1
+jl
+expect_jq "a call with --attach is recorded, its token redacted" \
+  '[.[] | select(.type == "script.call" and .script == "pr-comment")] | length == '"$((n + 1))"'
+   and (.[-1].args | index("--attach")) != null and (.[-1].args | any(test("redacted:github")))'
+grep -q "ghp_0123456789" "$JF" && ko "a token in an argument reached the journal" || ok "a token in an argument never reaches the journal"
+expect_exit 0 "run-mark: a step starts" -- "$S/run-mark" step-begin 2 build
+expect_exit 0 "run-mark: a round starts" -- "$S/run-mark" round 1 2 "1 major"
+expect_exit 2 "run-mark: usage" -- "$S/run-mark" round one 2
+jl
+expect_jq "marks are events of their own, without a script.call" \
+  '.[-2].type == "step.begin" and .[-2].index == 2 and .[-2].name == "build" and .[-1] .type == "loop" and .[-1].round == 1 and .[-1].cap == 2 and .[-1].reason == "1 major"
+   and all(.[]; .script != "run-mark")'
+guard_at allow "$TMP" "" "$S/run-mark step-end 2 build"
+
+echo "journal: recording never breaks a script"
+chmod 500 "$JD"; chmod 400 "$JF"
+expect_exit 0 "a journal that cannot be written: the script ends as usual" -- "$S/repo-conf" acme/docs
+expect_jq "... with its output" '.repo == "acme/docs"'
+expect_exit 3 "... and a refusal keeps its exit code" -- "$S/pr-reply" foo/bar#1 T1 "$TMP/body.md"
+grep -q "not recorded" "$TMP/err" && ok "... and the journal says on stderr what it could not write" || ko "silent journal failure"
+# guard_says GUARD — what GUARD answers to a refused command, and its exit code (a hook's JSON counts only on exit 0)
+guard_says() {
+  out="$(jq -n '{tool_name: "Bash", tool_input: {command: "git push origin fix/x"}}' | python3 "$1" deny 2>"$TMP/err")"; rc=$?
+  jq -e '.hookSpecificOutput.permissionDecision == "deny"' >/dev/null 2>&1 <<<"$out" && [ "$rc" = 0 ]
+}
+guard_says "$S/guard_bash.py" && grep -q "not recorded" "$TMP/err" && ok "a journal that cannot be written (and said so): the guard still denies, and exits 0" || ko "guard with a read-only journal" "exit $rc: $out: $(cat "$TMP/err")"
+chmod 700 "$JD"; chmod 600 "$JF"
+mkdir -p "$TMP/broken/adorno-github" "$TMP/broken/adorno-journal/scripts" "$TMP/alone/adorno-github"
+cp -R "$S" "$TMP/broken/adorno-github/scripts"; cp -R "$S" "$TMP/alone/adorno-github/scripts"
+cp "$ROOT/src/skills/adorno-github/repos.json" "$TMP/broken/adorno-github/" 2>/dev/null; cp "$ROOT/src/skills/adorno-github/repos.json" "$TMP/alone/adorno-github/" 2>/dev/null
+printf 'import sys\nsys.exit(3)\n' >"$TMP/broken/adorno-journal/scripts/journal.py"
+expect_exit 0 "a writer that fails: the script ends as usual" -- "$TMP/broken/adorno-github/scripts/repo-conf" acme/docs
+expect_exit 4 "... and a refusal keeps its exit code" -- "$TMP/broken/adorno-github/scripts/pr-resolve" acme/strict#7 T1
+guard_says "$TMP/broken/adorno-github/scripts/guard_bash.py" && ok "a writer that exits at import: the guard still denies, and exits 0" || ko "guard with a broken writer" "exit $rc: $out"
+n="$(wc -l <"$JF")"
+"$S/repo-conf" acme/docs >/dev/null
+[ "$(( $(wc -l <"$JF") ))" = "$((n + 1))" ] && ok "with the skill, the same call is recorded" || ko "repo-conf not recorded"
+n="$(wc -l <"$JF")"
+expect_exit 0 "without the adorno-journal skill: the script ends as usual" -- "$TMP/alone/adorno-github/scripts/repo-conf" acme/docs
+[ "$(wc -l <"$JF")" = "$n" ] && ok "... and records nothing" || ko "recorded without the skill"
+
+echo "journal: always under ~/.adorno/runs, whatever --dir says"
+expect_exit 0 "a run whose folder is in a workspace" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-begin" --workflow workflow:pr:review \
+  --mode report --level L0 --repo acme/docs --dir "$TMP/ws/.agent-run/review-1"
+WSRUN="$(jq -r .id <<<"$out")"
+expect_jq "the journal is not in --dir" '.dir == "'"$TMP"'/ws/.agent-run/review-1" and .journal == "'"$KH"'/runs/pr-review-'"$WSRUN"'"'
+[ -z "$(find "$TMP/ws" -name '*.jsonl')" ] && [ -f "$KH/runs/pr-review-$WSRUN/events.jsonl" ] && ok "nothing recorded in the workspace" || ko "journal in the workspace"
+mode_of() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
+[ "$(mode_of "$KH/runs/pr-review-$WSRUN")" = 700 ] && ok "... its journal folder, made by the writer, readable by its owner only" || ko "--dir journal folder mode" "$(mode_of "$KH/runs/pr-review-$WSRUN")"
+expect_exit 0 "a run whose folder is in a workspace, recording off" -- env ADORNO_JOURNAL=0 CLAUDE_CODE_SESSION_ID=sess-k "$S/run-begin" \
+  --workflow workflow:pr:review --mode report --level L0 --repo acme/docs --dir "$TMP/ws/.agent-run/review-2"
+OFFRUN="$(jq -r .id <<<"$out")"
+[ -n "$OFFRUN" ] && [ -d "$TMP/ws/.agent-run/review-2" ] && [ -z "$(find "$KH/runs" -maxdepth 1 -name "*$OFFRUN*")" ] \
+  && ok "... leaves no empty journal folder under the runs folder" || ko "an empty journal folder was left" "$(find "$KH/runs" -maxdepth 1 -name "*$OFFRUN*")"
+env ADORNO_JOURNAL=0 CLAUDE_CODE_SESSION_ID=sess-k "$S/run-end" "$OFFRUN" >/dev/null
+expect_exit 0 "a second run in that session, without --dir" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-begin" --workflow workflow:pr:ship \
+  --mode draft --level L2 --repo acme/docs
+RUN2="$(jq -r .id <<<"$out")"; J2="$(jq -r .journal <<<"$out")"
+[ "$(jq -r .dir <<<"$out")" = "$J2" ] && [ "$(mode_of "$J2")" = 700 ] && ok "... its folder is the journal's, readable by its owner only" || ko "journal folder mode" "$(mode_of "$J2")"
+expect_exit 0 "run-end closes the journal" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-end" "$WSRUN"
+grep -q '"script":"run-end"' "$J2/events.jsonl" && ko "run-end's own call landed in the session's other run" || ok "run-end's own call lands in no other run: run.end is its event"
+expect_exit 0 "run-end with an outcome" -- env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-end" "$RUN2" draft
+out="$(tail -n 1 "$J2/events.jsonl")"; expect_jq "... recorded in run.end" '.type == "run.end" and .outcome == "draft" and .workflow == "workflow:pr:ship"'
+# run_and_end OUTCOME — opens a run in that session and ends it with OUTCOME; its journal in $JE
+run_and_end() {
+  out="$(env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-begin" --workflow workflow:pr:ship --mode draft --level L2 --repo acme/docs)"
+  RE="$(jq -r .id <<<"$out")"; JE="$(jq -r .journal <<<"$out")"
+  env CLAUDE_CODE_SESSION_ID=sess-j "$S/run-end" "$RE" "$1" >/dev/null 2>"$TMP/err"
+}
+run_and_end ended; rc=$?
+out="$(tail -n 1 "$JE/events.jsonl")"
+[ "$rc" = 0 ] && [ ! -f "$KH/runs/active/$RE.json" ] && expect_jq "run-end ID ended: accepted, as the default" '.type == "run.end" and .outcome == "ended"' \
+  || ko "run-end ID ended was refused" "exit $rc: $(cat "$TMP/err")"
+run_and_end great; rc=$?
+if [ ! -f "$KH/runs/active/$RE.json" ]; then
+  out="$(tail -n 1 "$JE/events.jsonl")"
+  expect_jq "run-end with an outcome outside the list: the run is closed all the same, recorded as ended" '.type == "run.end" and .outcome == "ended"'
+else
+  ko "an outcome outside the list left the run open"
+fi
+[ "$rc" = 2 ] && grep -q "great" "$TMP/err" && ok "... said on stderr, and exit 2" || ko "an outcome outside the list was silent" "exit $rc: $(cat "$TMP/err")"
+out="$(jq -cs . "$KH/runs/pr-review-$WSRUN/events.jsonl")"
+expect_jq "from run.begin (with the run's folder) to run.end, for that session only" \
+  '.[0].type == "run.begin" and .[0].dir == "'"$TMP"'/ws/.agent-run/review-1" and .[0].dry_run == true and .[-1].type == "run.end" and .[-1].outcome == "ended" and all(.[]; .session == "sess-j")'
+expect_exit 0 "that journal is valid" -- python3 "$JPY" validate "$KH/runs/pr-review-$WSRUN/events.jsonl"
+tries=0; until [ -f "$KH/runs/pr-review-$WSRUN/enriched.jsonl" ] || [ "$tries" -ge 100 ]; do tries=$((tries + 1)); sleep 0.2; done
+[ -f "$KH/runs/pr-review-$WSRUN/enriched.jsonl" ] && [ -f "$KH/runs/pr-review-$WSRUN/enrich.log" ] \
+  && ok "run-end starts the reading of the transcripts, without waiting for it" || ko "no enrichment after run-end"
+[ "$(mode_of "$KH/runs/pr-review-$WSRUN/enrich.log")" = 600 ] && ok "... its log readable by its owner only" || ko "enrich.log mode" "$(mode_of "$KH/runs/pr-review-$WSRUN/enrich.log")"
 
 echo
 echo "$pass passed, $fail failed"

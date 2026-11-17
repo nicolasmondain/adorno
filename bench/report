@@ -89,7 +89,8 @@ def deltas(new, old):
     return {"recall": delta(mean(new["recall"]), mean(old["recall"])),
             "precision": delta(mean(new["precision"]), mean(old["precision"])),
             "verdict": delta(rate(new["verdict_ok"], new["runs"]), rate(old["verdict_ok"], old["runs"])),
-            "severity": delta(rate(new["severity_ok"], new["found"]), rate(old["severity_ok"], old["found"]))}
+            "severity": delta(rate(new["severity_ok"], new["found"]), rate(old["severity_ok"], old["found"])),
+            "dropped": delta(mean(new.get("dropped")), mean(old.get("dropped")))}  # cases of kind adorno only
 
 
 def status(change):
@@ -111,7 +112,9 @@ def per_call(score, agent):
 
 
 def case_runs(score):
-    return {(case_id, r["n"]) for case_id, case in score["cases"].items() for r in case["runs"]}
+    """The runs of the review cases: a case of kind adorno runs no reviewer."""
+    return {(case_id, r["n"]) for case_id, case in score["cases"].items() if case.get("kind") != "adorno"
+            for r in case["runs"]}
 
 
 def compare_reviewers(new, old, shared):
@@ -145,11 +148,45 @@ def compare(new, old):
         cases.append(dict(change, case=case_id, status=status(change), cost_usd=cost))
     overall = deltas(new["overall"], old["overall"])
     a, b = per_run(new["overall"]), per_run(old["overall"])
+    adorno = deltas(new["adorno"], old["adorno"]) if new.get("adorno") and old.get("adorno") else None
     return {"against": old["label"], "overall": dict(overall, status=status(overall),
                                                      cost_usd=None if a is None or b is None else round(a - b, 4)),
+            "adorno": adorno and dict(adorno, status=status(adorno)),
             "cases": cases, "reviewers": compare_reviewers(new, old, runs), "shared_runs": len(runs),
             "only_here": sorted(set(new["cases"]) - set(old["cases"])),
             "only_there": sorted(set(old["cases"]) - set(new["cases"]))}
+
+
+def adorno_section(score, comparison):
+    """Cases of kind adorno: agent:adorno alone, on the fixed review the case brings."""
+    a = score["adorno"]
+    rows = [["kept", spread(a["recall"]), f"{a['found']}/{a['expected']} true findings kept"],
+            ["dropped", spread(a["dropped"]),
+             f"{a['planted'] - a['planted_kept']}/{a['planted']} planted false findings left out"],
+            ["precision", spread(a["precision"]), f"{a['comments']} inline comments, {a['ungraded']} to grade"],
+            ["severity", f"{a['severity_ok']}/{a['found']}", "kept findings at an accepted severity"],
+            ["verdict", f"{a['verdict_ok']}/{a['runs']}",
+             f"{a['none']} with nothing to post, {a['absent']} absent, {a['invalid']} invalid"],
+            ["cost", money(a["cost_usd"]), f"{tokens(a['tokens_in'])} tokens in, {tokens(a['tokens_out'])} out"]]
+    change = comparison and comparison.get("adorno")
+    if change:
+        versus = {"kept": points(change["recall"]), "dropped": points(change["dropped"]),
+                  "precision": points(change["precision"]), "severity": points(change["severity"]),
+                  "verdict": points(change["verdict"])}
+        rows = [row + [versus.get(row[0], "")] for row in rows]
+    header = ["Measure", "Value", "Detail"] + ([f"vs {comparison['against']}"] if change else [])
+    lines = ["## agent:adorno on a fixed review", "",
+             "The case brings the specialists' reviews, true and planted false findings: agent:adorno alone runs.", ""]
+    lines += table(header, rows) + [""]
+    rows = []
+    for case_id, case in sorted(score["cases"].items()):
+        if case.get("kind") != "adorno":
+            continue
+        s = case["summary"]
+        verdicts = ", ".join(sorted({r["final"]["verdict"] or "–" for r in case["runs"]}))
+        rows.append([f"`{case_id}`", spread(s["recall"]), spread(s["dropped"]), spread(s["precision"]),
+                     f"{s['verdict_ok']}/{s['runs']} ({verdicts})", s["ungraded"], money(s["cost_usd"])])
+    return lines + table(["Case", "Kept", "Dropped", "Precision", "Verdict", "To grade", "Cost"], rows) + [""]
 
 
 # ── the report ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -185,7 +222,7 @@ def render(score, comparison):
         ["reviews", f"{overall['invalid_reviews']} invalid or missing", ""],
         ["after agent:adorno", f"recall {spread(final['recall'])}, precision {spread(final['precision'])}",
          f"{final['comments']} inline comments, verdict {final['verdict_ok']}/{final['runs']}, "
-         f"{final['absent']} absent, {final['invalid']} invalid"],
+         f"{final['none']} with nothing to post, {final['absent']} absent, {final['invalid']} invalid"],
         ["cost", money(overall["cost_usd"]),
          f"{tokens(overall['tokens_in'])} tokens in, {tokens(overall['tokens_out'])} out, "
          f"{minutes(overall['duration_ms'])} of agent time"]]
@@ -199,7 +236,8 @@ def render(score, comparison):
     lines += ["## Overall", ""] + table(header, rows) + [""]
 
     rows = []
-    for case_id, case in sorted(score["cases"].items()):
+    reviews = {case_id: case for case_id, case in score["cases"].items() if case.get("kind") != "adorno"}
+    for case_id, case in sorted(reviews.items()):
         s = case["summary"]
         verdicts = ", ".join(sorted({r["verdict"] for r in case["runs"]}))
         rows.append([f"`{case_id}`", spread(s["recall"]), spread(s["precision"]), f"{s['severity_ok']}/{s['found']}",
@@ -236,6 +274,9 @@ def render(score, comparison):
             lines += [f"Against {comparison['against']}: on the {comparison['shared_runs']} case runs both have.", ""]
         lines += table(header, rows) + [""]
 
+    if score.get("adorno"):
+        lines += adorno_section(score, comparison)
+
     rows = [[f"`{agent}`", a["runs"], a["calls"], ", ".join(a["models"]) or "–", tokens(a["tokens_in"]),
              tokens(a["tokens_out"]), money(a["cost_usd"]), minutes(a["duration_ms"]),
              f"{a['delivered']['salvaged']} salvaged, {a['delivered']['none']} missing"]
@@ -247,9 +288,10 @@ def render(score, comparison):
         lines += [f"## Against {comparison['against']}", ""]
         for kind in ("regressed", "mixed", "improved"):
             for c in (c for c in comparison["cases"] if c["status"] == kind):
+                dropped = "" if c["dropped"] is None else f", dropped {points(c['dropped'])}"
                 lines.append(f"- **{kind}** `{c['case']}`: recall {points(c['recall'])}, precision "
                              f"{points(c['precision'])}, severity {points(c['severity'])}, verdict "
-                             f"{points(c['verdict'])}")
+                             f"{points(c['verdict'])}{dropped}")
         same = [c["case"] for c in comparison["cases"] if c["status"] == "same"]
         if same:
             lines.append(f"- same: {', '.join(f'`{c}`' for c in same)}")
