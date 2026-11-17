@@ -32,5 +32,5 @@ weight and re-renders repeated perf's bundle and rendering, and a query diff got
 times. The reviewer bench baseline graded 56 duplicates out of 85 findings (precision 44%): fewer reviewers per diff
 means fewer duplicates and less context. Decision 6 avoided a rename to spare local configs; a merge removes an id
 anyway, so the cost is paid once, with a migration: `bin/kit check` names `bin/kit migrate agents`, which lists every
-local setting naming an old id and what it becomes (single table `AGENT_RENAMES` in `bin/kit`). A removal of a merged
+local setting naming an old id and what it becomes (single table `AGENT_RENAMES` in `bin/kitlib/validate.py`). A removal of a merged
 reviewer is left to the owner, since it would become the removal of the whole area review.
