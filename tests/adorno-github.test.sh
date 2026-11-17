@@ -9,7 +9,7 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/bin"; ln -s "$ROOT/tests/fake-gh" "$TMP/bin/gh"
 # a throwaway home: the scripts read the registry and the runs from ~/.adorno only
 export HOME="$TMP/home" PATH="$TMP/bin:$PATH"
-unset CLAUDE_CODE_SESSION_ID  # runs opened outside any session, unless a test sets one
+unset CLAUDE_CODE_SESSION_ID CLAUDE_CONFIG_DIR  # runs opened outside any session, unless a test sets one
 KH="$HOME/.adorno"; mkdir -p "$KH"
 reg() { rm -f "$KH/registry.json"; cp "$1" "$KH/registry.json"; chmod 400 "$KH/registry.json"; }  # reg FILE: use FILE as the registry
 reg "$ROOT/tests/fixtures/repos.json"
@@ -78,6 +78,99 @@ printf '{ half' >"$KH/runs/active/20990101T000000-1-1.json"
 expect_exit 5 "a half-written run file is ignored..." -- "$S/pr-comment" acme/docs#42 "$TMP/norun.md"
 [ -f "$KH/runs/active/20990101T000000-1-1.json" ] && ok "... and not deleted while it may be in progress" || ko "... and not deleted"
 rm -f "$KH/runs/active/20990101T000000-1-1.json"
+
+echo "runs: usage"
+mkdir -p "$HOME/.claude"; cp -R "$ROOT/tests/fixtures/claude-projects" "$HOME/.claude/projects"
+U() { "$S/run-usage" collect --session sess-usage --since 2026-11-10T10:00:00Z --until "$1"; }
+expect_exit 0 "usage of a session window" -- U 2026-11-10T10:30:00Z
+expect_jq "... duplicate lines of one message counted once, out-of-window messages and agents left out" \
+  '.source == "claude-code" and .session_usage.messages == 1 and .totals.messages == 3 and .totals.agents == 1
+   and .totals.tokens == {input: 20, cache_write: 4000, cache_read: 210000, output: 3500, total: 217520}'
+expect_jq "... the agent: its type, real model, duration, tokens and cost" \
+  '.agents == [.agents[0]] and .agents[0].type == "adorno-agent-review-code" and .agents[0].model == "claude-sonnet-5-5"
+   and .agents[0].duration_s == 120 and .agents[0].messages == 2 and (.agents[0].usd * 1e6 | round) == 46020'
+expect_jq "... cost per model and in total (5m and 1h cache writes at their own rate)" \
+  '(.session_usage.models["claude-opus-5-5"].usd * 1e6 | round) == 65040 and (.totals.usd * 1e6 | round) == 111060
+   and .unpriced == [] and .skipped_lines == 1 and .duration_s == 1800'
+expect_jq "... a <synthetic> record (an API error, all-zero usage) left out, the run still priced" \
+  '(.totals.models | has("<synthetic>") | not) and .totals.messages == 3 and .unpriced == [] and (.totals.usd * 1e6 | round) == 111060'
+expect_jq "... and a one-line summary" '.summary == "30m · 1 agent · $0.11 (opus $0.07, sonnet $0.05) · 218k tokens (210k cache read)"'
+expect_exit 0 "a model with no price" -- U 2026-11-10T11:00:00Z
+expect_jq "... is unpriced, never free: the total is unknown" \
+  '.unpriced == ["claude-mystery-1"] and .totals.usd == null and (.agents | map(.type)) == ["adorno-agent-review-code", "unknown"]
+   and (.summary | test("unpriced: claude-mystery-1"))'
+jq '.prices["claude-sonnet-5-5"] = {input: 2}' "$ROOT/tests/fixtures/repos.json" >"$TMP/partial-prices.json"; reg "$TMP/partial-prices.json"
+expect_exit 0 "an incomplete price" -- U 2026-11-10T10:30:00Z
+expect_jq "... is unpriced too, never priced at 0" '.unpriced == ["claude-sonnet-5-5"] and .agents[0].usd == null and .totals.usd == null'
+reg "$ROOT/tests/fixtures/repos.json"
+expect_exit 0 "no session: usage unavailable, the duration only" -- \
+  "$S/run-usage" collect --since 2026-11-10T10:00:00Z --until 2026-11-10T10:00:42Z
+expect_jq "... said, not zero" '.source == "unavailable" and .duration_s == 42 and (.reason | test("CLAUDE_CODE_SESSION_ID")) and (.agents == null)'
+expect_exit 0 "a session with no transcript" -- \
+  "$S/run-usage" collect --session nope --since 2026-11-10T10:00:00Z --until 2026-11-10T10:00:42Z
+expect_jq "... unavailable too" '.source == "unavailable" and (.reason | test("no transcript for session nope"))'
+expect_exit 2 "a date that is not UTC ISO is a usage error" -- "$S/run-usage" collect --since yesterday --until 2026-11-10T10:00:00Z
+
+expect_exit 0 "a run in the fixture session" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
+UR="$(jq -r .id <<<"$out")"; UD="$(jq -r .dir <<<"$out")"
+jq '.started = "2026-11-10T10:00:00Z"' "$KH/runs/active/$UR.json" >"$TMP/ur.json" && mv "$TMP/ur.json" "$KH/runs/active/$UR.json"
+printf '# Status\n' >"$UD/status.md"
+expect_exit 0 "run-end records the usage" -- "$S/run-end" "$UR"
+expect_jq "... its cost line and the status.md it went to" \
+  "(.usage | startswith(\"Cost: \")) and (.usage | test(\"3 agents\")) and .status == \"$UD/status.md\""
+[ ! -f "$KH/runs/active/$UR.json" ] && ok "... the grant is withdrawn" || ko "... the grant is withdrawn"
+jq -e '.source == "claude-code" and .totals.agents == 3 and .unpriced == ["claude-mystery-1"]' "$UD/usage.json" >/dev/null \
+  && ok "... usage.json in the run folder" || ko "... usage.json in the run folder" "$(head -c 300 "$UD/usage.json")"
+tail -n 1 "$UD/status.md" | grep -q '^Cost: ' && ok "... a Cost: line at the end of status.md" || ko "... a Cost: line at the end of status.md"
+jq -e --arg id "$UR" 'select(.id == $id) | .workflow == "workflow:pr:review" and .repos == ["acme/docs"] and (.agents | length) == 3' \
+  "$KH/runs/usage.jsonl" >/dev/null && ok "... a summary line in runs/usage.jsonl" || ko "... a summary line in runs/usage.jsonl"
+jq -e '.overlap == false' "$UD/usage.json" >/dev/null \
+  && jq -e --arg id "$UR" 'select(.id == $id) | .overlap == false and .session == "sess-usage" and .started == "2026-11-10T10:00:00Z"' "$KH/runs/usage.jsonl" >/dev/null \
+  && ok "... alone in its session: no overlap" || ko "... alone in its session: no overlap"
+# Two runs of one session at once count the same messages: both say so. The first sees the second still active; the
+# second, ending alone, sees the first in runs/usage.jsonl (ended after it started).
+expect_exit 0 "two runs at once in one session" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
+OA="$(jq -r .id <<<"$out")"; OAD="$(jq -r .dir <<<"$out")"
+expect_exit 0 "... the second one" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:status --mode report --level L0 --repo acme/docs
+OB="$(jq -r .id <<<"$out")"; OBD="$(jq -r .dir <<<"$out")"
+jq '.started = "2026-11-10T10:00:00Z"' "$KH/runs/active/$OB.json" >"$TMP/ob.json" && mv "$TMP/ob.json" "$KH/runs/active/$OB.json"
+expect_exit 0 "... the first ends" -- "$S/run-end" "$OA"
+expect_exit 0 "... then the second" -- "$S/run-end" "$OB"
+for r in "$OA:$OAD" "$OB:$OBD"; do
+  jq -e '.overlap == true' "${r#*:}/usage.json" >/dev/null \
+    && jq -e --arg id "${r%%:*}" 'select(.id == $id) | .overlap == true' "$KH/runs/usage.jsonl" >/dev/null \
+    && ok "... run ${r%%:*} records the overlap" || ko "... run ${r%%:*} records the overlap" "$(jq -c .overlap "${r#*:}/usage.json")"
+done
+# Two runs of one session one after the other (the normal case) share no message: the earlier one, in
+# runs/usage.jsonl, ended no later than the second one started (same second counts as sequential).
+expect_exit 0 "two runs back to back in one session" -- env CLAUDE_CODE_SESSION_ID=sess-seq "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
+QA="$(jq -r .id <<<"$out")"; QAD="$(jq -r .dir <<<"$out")"
+expect_exit 0 "... the first ends" -- "$S/run-end" "$QA"
+expect_exit 0 "... then the second begins" -- env CLAUDE_CODE_SESSION_ID=sess-seq "$S/run-begin" --workflow workflow:pr:status --mode report --level L0 --repo acme/docs
+QB="$(jq -r .id <<<"$out")"; QBD="$(jq -r .dir <<<"$out")"
+expect_exit 0 "... and ends" -- "$S/run-end" "$QB"
+for r in "$QA:$QAD" "$QB:$QBD"; do
+  jq -e '.overlap == false' "${r#*:}/usage.json" >/dev/null \
+    && jq -e --arg id "${r%%:*}" 'select(.id == $id) | .overlap == false and .session == "sess-seq"' "$KH/runs/usage.jsonl" >/dev/null \
+    && ok "... run ${r%%:*}: sequential, no overlap" || ko "... run ${r%%:*}: sequential, no overlap" "$(jq -c .overlap "${r#*:}/usage.json")"
+done
+expect_exit 0 "a run outside any session" -- "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
+UR="$(jq -r .id <<<"$out")"; UD="$(jq -r .dir <<<"$out")"
+mkdir -p "$TMP/elsewhere"; printf '# Status\n' >"$TMP/elsewhere/status.md"
+expect_exit 2 "--status takes a status.md only" -- "$S/run-end" "$UR" --status "$TMP/elsewhere/notes.md"
+expect_exit 0 "... ends with its duration only, into the status.md given" -- "$S/run-end" "$UR" --status "$TMP/elsewhere/status.md"
+expect_jq "... usage unavailable, said in the cost line" '(.usage | test("usage unavailable")) and (.status | endswith("elsewhere/status.md"))'
+grep -q '^Cost: .*usage unavailable' "$TMP/elsewhere/status.md" && ok "... written there" || ko "... written there"
+jq -e '.overlap == false' "$UD/usage.json" >/dev/null && ok "... no session, no overlap" || ko "... no session, no overlap"
+expect_exit 0 "a run whose usage cannot be read" -- env CLAUDE_CODE_SESSION_ID='bad id!' "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
+UR="$(jq -r .id <<<"$out")"; UD="$(jq -r .dir <<<"$out")"
+expect_exit 0 "... still ends" -- "$S/run-end" "$UR"
+expect_jq "... no status.md in its folder: none reported" '.status == null'
+[ ! -e "$UD/status.md" ] && ok "... and none created" || ko "... and none created" "$(head -c 300 "$UD/status.md")"
+[ ! -f "$KH/runs/active/$UR.json" ] && ok "... grant withdrawn first" || ko "... grant withdrawn first"
+grep -q "usage of run $UR not recorded" "$TMP/err" && ok "... the failure said on stderr" || ko "... the failure said on stderr" "$(cat "$TMP/err")"
+jq -e '.source == "error" and (.error | length) > 0' "$UD/usage.json" >/dev/null && ok "... and recorded as an error" || ko "... and recorded as an error"
+
 # the rest of the suite runs inside one auto run at L3
 "$S/run-begin" --workflow workflow:test:suite --mode auto --level L3 \
   --repo acme/docs --repo acme/strict --repo acme/app --repo acme/docs-public --repo acme/readonly --repo other/thing >/dev/null
@@ -511,19 +604,19 @@ expect_jq "my pending review is surfaced" '(.[] | select(.number==10) | .pending
 echo "pr-areas (public default rules from repos.yaml)"
 REAL="$ROOT/dist/claude/.claude/skills/adorno-github/repos.json"
 if [ -f "$REAL" ]; then
-  jq '.repos = {"acme/app": {}, "acme/leak": {"areas": {"back": {"sub": {"n": {"review": ["-agent:review:tests", "agent:review:code"], "skills": ["-typescript-pro"]}}}, "newa": {"review": ["-agent:review:api", "agent:review:code"]}}}, "acme/docs": {"ponytail": "ultra", "areas": {"back": {"review": ["-agent:review:tests", "agent:review:security"]}}}}' "$REAL" >"$TMP/areas-repos.json"
+  jq '.repos = {"acme/app": {"use": ["node", "mongodb"]}, "acme/bare": {}, "acme/leak": {"areas": {"back": {"sub": {"n": {"review": ["-agent:review:tests", "agent:review:code"], "skills": ["-typescript-pro"]}}}, "newa": {"review": ["-agent:review:api", "agent:review:code"]}}}, "acme/docs": {"ponytail": "ultra", "areas": {"back": {"review": ["-agent:review:tests", "agent:review:security"]}}}}' "$REAL" >"$TMP/areas-repos.json"
   reg "$TMP/areas-repos.json"
   expect_exit 0 "classifies a diff" -- "$S/pr-areas" acme/app "$ROOT/tests/fixtures/sample.diff"
   expect_jq "front by extension, with typescript" '.areas.front == ["client/app.tsx"] and .areas.typescript == ["client/app.tsx"] and (.skills | index("typescript-pro"))'
-  expect_jq "a query is the sub-area back.query, and its files also go to back" \
-    '.areas["back.query"] == ["server/users.js"] and .areas.back == ["server/users.js"]'
+  expect_jq "a query is the sub-area back.mongodb (preset), and its files also go to back" \
+    '.areas["back.mongodb"] == ["server/users.js"] and .areas.back == ["server/users.js"]'
   expect_jq "deps and docs" '.areas.deps == ["package.json"] and .areas.docs == ["README.md"]'
   expect_jq "unmatched files land in other" '.other == ["notes/weird.txt"]'
   expect_jq "a files tie goes to config order (front before back)" '.perf == "agent:perf:front" and .build == "agent:feat:front"'
   expect_jq "review: always + every area, deduplicated" \
     '(.review | sort) == (["agent:review:code","agent:review:ponytail","agent:review:front","agent:review:perf","agent:review:back","agent:review:tests","agent:review:perf-back","agent:review:mongodb","agent:review:security"] | sort) and (.review | length) == (.review | unique | length)'
   expect_jq "no reviewers key, always is not an area" '(has("reviewers") | not) and (.areas | has("always") | not)'
-  expect_jq "by_area carries the roles" '.by_area["back.query"].perf == "agent:perf:mongodb" and .by_area.front.perf == "agent:perf:front" and .by_area.docs.perf == null'
+  expect_jq "by_area carries the roles" '.by_area["back.mongodb"].perf == "agent:perf:mongodb" and .by_area.back.perf == "agent:perf:nodejs" and .by_area.front.perf == "agent:perf:front" and .by_area.docs.perf == null'
   expect_jq "no perf fallback when an area has one" '.skills | index("performance-optimization") | not'
   expect_jq "ponytail level: the default" '.ponytail == "full"'
   expect_exit 0 "per-repo override" -- "$S/pr-areas" acme/docs "$ROOT/tests/fixtures/sample.diff"
@@ -537,24 +630,29 @@ if [ -f "$REAL" ]; then
 
   printf 'diff --git a/x/migrations/1.js b/x/migrations/1.js\n--- a/x/migrations/1.js\n+++ b/x/migrations/1.js\n@@ -1 +1 @@\n+module.exports = 1\ndiff --git a/x/auth/login.js b/x/auth/login.js\n--- a/x/auth/login.js\n+++ b/x/auth/login.js\n@@ -1 +1 @@\n+const a = 1\ndiff --git a/docs/api-reference/x.mdx b/docs/api-reference/x.mdx\n--- a/docs/api-reference/x.mdx\n+++ b/docs/api-reference/x.mdx\n@@ -1 +1 @@\n+hello\n' >"$TMP/mixed.diff"
   expect_exit 0 "migration, auth and api reference" -- "$S/pr-areas" acme/app "$TMP/mixed.diff"
-  expect_jq "migration is back.mongodb, and back" '.areas["back.mongodb"] == ["x/migrations/1.js"] and .areas.back == ["x/migrations/1.js"]'
+  expect_jq "migration is the neutral back.migration, and back" '.areas["back.migration"] == ["x/migrations/1.js"] and .areas.back == ["x/migrations/1.js"]'
+  expect_jq "the mongodb preset adds its reviewer to the neutral migration" '.by_area["back.migration"].review | index("agent:review:mongodb")'
+  expect_exit 0 "the same migration without a preset" -- "$S/pr-areas" acme/bare "$TMP/mixed.diff"
+  expect_jq "neutral migration: its skill, no database reviewer" \
+    '(.by_area["back.migration"].skills | index("deprecation-and-migration")) and (.review | index("agent:review:mongodb") | not) and (.review | index("agent:review:sql") | not)'
+  expect_exit 0 "the mixed diff again, with the preset" -- "$S/pr-areas" acme/app "$TMP/mixed.diff"
   expect_jq "auth is security" '.areas.security == ["x/auth/login.js"] and .by_area.security.fix == "agent:fix:security" and .by_area.security.review == ["agent:review:security"]'
   expect_jq "api reference is api and docs, not back" \
     '.areas.api == ["docs/api-reference/x.mdx"] and .areas.docs == ["docs/api-reference/x.mdx"] and (.areas.back == ["x/migrations/1.js"]) and .by_area.api.build == "agent:feat:api"'
 
   printf 'diff --git a/client/List.tsx b/client/List.tsx\n--- a/client/List.tsx\n+++ b/client/List.tsx\n@@ -1 +1 @@\n+const a = items.find(x => x.id)\n' >"$TMP/front-find.diff"
   expect_exit 0 "a front file with a find call" -- "$S/pr-areas" acme/app "$TMP/front-find.diff"
-  expect_jq "the main family is front, not back.query" '.build == "agent:feat:front" and .perf == "agent:perf:front"'
+  expect_jq "the main family is front, not back.mongodb" '.build == "agent:feat:front" and .perf == "agent:perf:front"'
   printf 'diff --git a/server/services/x.js b/server/services/x.js\n--- a/server/services/x.js\n+++ b/server/services/x.js\n@@ -1 +1 @@\n+db.c.aggregate([])\n' >"$TMP/back-agg.diff"
   expect_exit 0 "a back file with an aggregate" -- "$S/pr-areas" acme/app "$TMP/back-agg.diff"
   expect_jq "inside the back family the sub-area wins perf, build stays back" '.perf == "agent:perf:mongodb" and .build == "agent:feat:back"'
-  expect_jq "a perf finding on that query routes to perf:mongodb through by_area" '.by_area["back.query"].perf == "agent:perf:mongodb" and .fallbacks.nit == "agent:refactor:simplify" and .fallbacks.test == "agent:test:unit"'
+  expect_jq "a perf finding on that query routes to perf:mongodb through by_area" '.by_area["back.mongodb"].perf == "agent:perf:mongodb" and .fallbacks.nit == "agent:refactor:simplify" and .fallbacks.test == "agent:test:unit"'
   printf 'diff --git a/server/services/a.js b/server/services/a.js\n--- a/server/services/a.js\n+++ b/server/services/a.js\n@@ -1 +1 @@\n+a\ndiff --git a/server/services/b.js b/server/services/b.js\n--- a/server/services/b.js\n+++ b/server/services/b.js\n@@ -1 +1 @@\n+b\ndiff --git a/client/c.css b/client/c.css\n--- a/client/c.css\n+++ b/client/c.css\n@@ -1 +1 @@\n+c\n' >"$TMP/two-back.diff"
   expect_exit 0 "two back files and one front file" -- "$S/pr-areas" acme/app "$TMP/two-back.diff"
   expect_jq "most files wins the family" '.build == "agent:feat:back"'
 
   expect_exit 0 "--files mode, no content rules" -- "$S/pr-areas" acme/app --files server/services/x.js client/a.tsx
-  expect_jq "--files detects by path" '.files == 2 and .areas.back == ["server/services/x.js"] and .areas.front == ["client/a.tsx"] and (.areas | has("back.query") | not)'
+  expect_jq "--files detects by path" '.files == 2 and .areas.back == ["server/services/x.js"] and .areas.front == ["client/a.tsx"] and (.areas | has("back.mongodb") | not)'
   expect_exit 0 "--files with an unmatched path and a path with a space" -- "$S/pr-areas" acme/app --files server/services/x.js "client/my a.tsx" notes/weird.txt
   expect_jq "--files: the unmatched path lands in other" '.other == ["notes/weird.txt"] and .areas.front == ["client/my a.tsx"]'
   args_out="$out"; printf 'server/services/x.js\nclient/my a.tsx\nnotes/weird.txt\n' >"$TMP/paths"
@@ -578,11 +676,11 @@ if [ -f "$REAL" ]; then
     | .repos = {"ovr/single": {"areas": {"back": {"build": "agent:feat:custom"}, "front": {"skills": ["-frontend-ui-engineering"]}}},
                 "ovr/layers": {"areas": {"back": {"review": ["-agent:review:extra", "-agent:review:tests"], "skills": ["-extra-skill"]}}},
                 "ovr/sub": {"areas": {"back": {"fix": "agent:fix:custom"}}},
-                "ovr/plain": {}}' "$REAL" >"$TMP/ovr-repos.json"
+                "ovr/plain": {}, "ovr/node": {"use": ["node", "mongodb"]}}' "$REAL" >"$TMP/ovr-repos.json"
   reg "$TMP/ovr-repos.json"
   expect_exit 0 "a repo replaces one role of an area" -- "$S/repo-conf" ovr/single
   expect_jq "the replaced role changes, its siblings keep the public value" \
-    '.areas.back.build == "agent:feat:custom" and .areas.back.fix == "agent:fix:patch" and .areas.back.perf == "agent:perf:nodejs" and (.areas.back.review | index("agent:review:back"))'
+    '.areas.back.build == "agent:feat:custom" and .areas.back.fix == "agent:fix:patch" and .areas.back.perf == null and (.areas.back.review | index("agent:review:back"))'
   expect_jq "a -<skill> removes that skill from the list" '.areas.front.skills == []'
   expect_exit 0 "a skill removed by the repo is not in pr-areas skills" -- "$S/pr-areas" ovr/single --files client/a.tsx
   expect_jq "... nor in the result" '(.skills | index("frontend-ui-engineering") | not) and .areas.front == ["client/a.tsx"]'
@@ -601,11 +699,81 @@ if [ -f "$REAL" ]; then
   expect_jq "qa comes from the area" '.qa == "agent:test:e2e"'
 
   expect_exit 0 "effective roles of the sub-areas" -- "$S/repo-conf" ovr/plain
-  expect_jq "back.sub.query inherits build and review from back, not paths" \
-    '.areas.back.sub.query.build == "agent:feat:back" and .areas.back.sub.query.fix == "agent:fix:patch" and (.areas.back.sub.query.review | index("agent:review:back")) and (.areas.back.sub.query.review | index("agent:review:mongodb")) and (.areas.back.sub.query | has("paths") | not) and .areas.back.sub.query.perf == "agent:perf:mongodb"'
+  expect_jq "back.sub.migration inherits build and review from back, not paths" \
+    '.areas.back.sub.migration.build == "agent:feat:back" and .areas.back.sub.migration.fix == "agent:fix:patch" and (.areas.back.sub.migration.review | index("agent:review:back")) and (.areas.back.sub.migration.paths | index("server/*") | not) and .areas.back.sub.migration.perf == null'
+  expect_exit 0 "presets add a sub-area and a reviewer" -- "$S/repo-conf" ovr/node
+  expect_jq "the preset sub-area keeps its own perf, the neutral one inherits the preset perf of back" \
+    '.areas.back.perf == "agent:perf:nodejs" and .areas.back.sub.mongodb.perf == "agent:perf:mongodb" and (.areas.back.sub.mongodb.review | index("agent:review:back")) and .areas.back.sub.migration.perf == "agent:perf:nodejs" and (.areas.back.sub.migration.review | index("agent:review:mongodb")) and (.areas.back.sub.migration.paths | index("db/migrate/*"))'
+  expect_jq "a preset never shows in the result" '(has("use") | not) and .scopes == ["defaults", "repos:ovr/node"]'
   expect_exit 0 "an override of a parent role" -- "$S/repo-conf" ovr/sub
   expect_jq "reaches the sub-areas, whose own roles still win" \
-    '.areas.back.sub.query.fix == "agent:fix:custom" and .areas.back.sub.mongodb.fix == "agent:fix:custom" and .areas.back.sub.query.perf == "agent:perf:mongodb"'
+    '.areas.back.sub.migration.fix == "agent:fix:custom" and (.areas.back.sub | has("mongodb") | not)'
+  reg "$TMP/areas-repos.json"
+
+  echo "pr-areas: stack presets (a sample diff per stack)"
+  jq '.repos = {"acme/node": {"use": ["node", "mongodb"]}, "acme/py": {"use": ["python", "sql"]},
+                "acme/go": {"use": ["go", "sql"]}, "acme/rb": {"use": ["rails", "sql"]},
+                "acme/poly": {"use": ["node", "mongodb", "sql"]}, "acme/bare": {}}' "$REAL" >"$TMP/stack-repos.json"
+  reg "$TMP/stack-repos.json"
+  A="$ROOT/tests/fixtures/areas"
+  has() { printf '((.areas["%s"] // []) as $x | %s | all(. as $f | $x | index($f)))' "$1" "$2"; }  # has AREA JSON_LIST
+  is() { printf '((.areas["%s"] // []) | sort) == (%s | sort)' "$1" "$2"; }  # is AREA JSON_LIST: exactly these files
+
+  expect_exit 0 "node + mongodb" -- "$S/pr-areas" acme/node "$A/node-mongodb.diff"
+  expect_jq "node: every file lands in an area" '.other == []'
+  expect_jq "node: queries, schema and index are back.mongodb, nothing else" \
+    "$(is back.mongodb '["server/services/orders.js","server/models/order.js","migrations/2026-11-16-orders.js"]')"
+  expect_jq "node: a root test/ folder is tests" '.areas.tests == ["test/orders.test.js"] and .areas["back.migration"] == ["migrations/2026-11-16-orders.js"]'
+  expect_jq "node: mongodb reviewer and perf, no sql reviewer" \
+    '(.review | index("agent:review:mongodb")) and (.review | index("agent:review:sql") | not) and .perf == "agent:perf:mongodb" and .by_area.back.perf == "agent:perf:nodejs"'
+
+  expect_exit 0 "python + sql" -- "$S/pr-areas" acme/py "$A/django.diff"
+  expect_jq "django: every file lands in an area" '.other == []'
+  expect_jq "django: ORM by path and by query only, views, tasks, manage.py, settings and commands are back" \
+    "$(is back.django-orm '["shop/models.py","shop/views.py"]') and $(has back.python '["shop/views.py","shop/tasks.py","manage.py","shop/settings.py","shop/management/commands/close_orders.py"]') and .areas[\"back.migration\"] == [\"shop/migrations/0004_order_total.py\"]"
+  expect_jq "django: urls, serializers and routers are api, templates and static front, pytest files tests, pyproject deps" \
+    "$(has api.python '["shop/urls.py","shop/serializers.py","api/routers/orders.py"]') and $(has front '["shop/templates/shop/orders.html"]') and $(is front.python '["shop/static/shop/orders.js"]') and (.areas.tests | sort) == ([\"conftest.py\",\"shop/tests/test_views.py\",\"tests/test_api.py\"] | sort) and .areas.deps == [\"pyproject.toml\"]"
+  expect_jq "django: SQL words in prose (a comment, a doc) are not back.sql" \
+    '(.areas | has("back.sql") | not) and .areas.docs == ["docs/orders.md"]'
+  expect_jq "django: sql reviewer, never the mongodb one (order.delete() is the ORM)" \
+    '(.review | index("agent:review:sql")) and (.review | index("agent:review:mongodb") | not) and .build == "agent:feat:back"'
+
+  expect_exit 0 "the same django diff without a preset" -- "$S/pr-areas" acme/bare "$A/django.diff"
+  expect_jq "neutral areas: no database reviewer, no Mongo false positive, the stack files stay in other" \
+    '(.review | index("agent:review:mongodb") | not) and (.review | index("agent:review:sql") | not) and (.other | index("shop/views.py")) and .areas["back.migration"] == ["shop/migrations/0004_order_total.py"] and (.areas | has("back.mongodb") | not)'
+  expect_jq "neutral areas: back has no perf agent, so a perf finding goes to the fallback" '.by_area.back.perf == null'
+
+  expect_exit 0 "go + sql" -- "$S/pr-areas" acme/go "$A/go.diff"
+  expect_jq "go: every file lands in an area" '.other == []'
+  expect_jq "go: .go files are back, database/sql calls are back.go-sql (a call whose arguments start on the next line too, not r.URL.Query(), not useQuery()), raw SQL is back.sql (a multi-line query too, not a TS enum member)" \
+    "$(has back.go '["cmd/api/main.go","internal/handler/orders.go","internal/store/orders.go","internal/service/orders.go","pkg/handlers/health.go"]') and $(is back.go-sql '["internal/handler/orders.go","internal/store/orders.go"]') and $(is back.sql '["internal/handler/orders.go","internal/store/orders.go","migrations/0002_orders.up.sql"]')"
+  expect_jq "go: handler/ and handlers/ are api, _test.go is tests, go.sum is deps, a React hook is front" \
+    "$(is api.go '["internal/handler/orders.go","internal/handler/orders_test.go","pkg/handlers/health.go"]') and .areas.tests == [\"internal/handler/orders_test.go\"] and (.areas.deps | sort) == [\"go.mod\",\"go.sum\"] and .areas.front == [\"web/src/useOrders.tsx\"]"
+  expect_jq "go: sql reviewer, no mongodb one; no perf agent for go, so the fallback" \
+    '(.review | index("agent:review:sql")) and (.review | index("agent:review:mongodb") | not) and .by_area.back.perf == null and .build == "agent:feat:back"'
+  expect_exit 0 "a test-only go change" -- "$S/pr-areas" acme/go --files pkg/x/foo_test.go
+  expect_jq "today back.go and tests tie and config order gives build and fix to back (pinned: a follow-up gives a test-only change to tests)" \
+    '.areas["back.go"] == ["pkg/x/foo_test.go"] and .areas.tests == ["pkg/x/foo_test.go"] and .build == "agent:feat:back" and .fix == "agent:fix:patch" and .perf == "agent:fix:patch" and (.skills | index("performance-optimization"))'
+
+  expect_exit 0 "rails + sql" -- "$S/pr-areas" acme/rb "$A/rails.diff"
+  expect_jq "rails: every file lands in an area" '.other == []'
+  expect_jq "rails: app/ and lib/ are back, ActiveRecord queries (symbol, hash, array and raw-join forms) and schema are back.activerecord, not the JavaScript .includes( / .pluck(" \
+    "$(has back.rails '["app/models/order.rb","app/controllers/orders_controller.rb","app/mailers/order_mailer.rb","lib/pricing.rb","lib/tasks/orders.rake"]') and $(is back.activerecord '["app/controllers/orders_controller.rb","app/controllers/api/v1/orders_controller.rb","app/mailers/order_mailer.rb","lib/pricing.rb","db/migrate/20261116000000_add_total_to_orders.rb","db/schema.rb","db/structure.sql"]') and .areas[\"back.migration\"] == [\"db/migrate/20261116000000_add_total_to_orders.rb\"]"
+  expect_jq "rails: routes and serializers are api, app/views (erb and slim), app/javascript and app/assets front, specs tests, Gemfile deps" \
+    "$(has api '["app/controllers/api/v1/orders_controller.rb"]') and $(is api.rails '["config/routes.rb","app/serializers/order_serializer.rb"]') and $(is front.rails '["app/views/orders/index.html.erb","app/views/orders/_row.html.slim","app/javascript/tags.js","app/assets/config/manifest.js"]') and .areas.tests == [\"spec/models/order_spec.rb\"] and (.areas.deps | sort) == [\"Gemfile\",\"Gemfile.lock\"]"
+  expect_jq "rails: sql reviewer, never the mongodb one (@order.update is ActiveRecord)" \
+    '(.review | index("agent:review:sql")) and (.review | index("agent:review:mongodb") | not)'
+
+  expect_exit 0 "test naming conventions at the root, without a preset" -- "$S/pr-areas" acme/bare --files test/x.js tests/x.py x_test.go spec/a_spec.rb
+  expect_jq "every one is tests" '(.areas.tests | length) == 4 and .other == []'
+  expect_exit 0 "presets combine" -- "$S/repo-conf" acme/poly
+  expect_jq "two database presets: both sub-areas, both reviewers on the migration" \
+    '(.areas.back.sub | has("mongodb") and has("sql")) and (.areas.back.sub.migration.review | index("agent:review:mongodb")) and (.areas.back.sub.migration.review | index("agent:review:sql")) and .areas.back.perf == "agent:perf:nodejs"'
+  jq '.defaults.use = ["node", "mongodb"] | .repos = {"acme/plain": {}}' "$REAL" >"$TMP/defaults-use-repos.json"
+  reg "$TMP/defaults-use-repos.json"
+  expect_exit 0 "presets called from defaults.use, a repo without use:" -- "$S/pr-areas" acme/plain "$A/node-mongodb.diff"
+  expect_jq "every repo gets the presets: back.mongodb and the node perf agent" \
+    '(.areas | has("back.mongodb")) and .by_area.back.perf == "agent:perf:nodejs" and (.review | index("agent:review:mongodb"))'
   reg "$TMP/areas-repos.json"
 
   jq -e '.repos == {}' "$REAL" >/dev/null && ok "public registry has no repos" || ko "public registry has no repos"
@@ -613,6 +781,40 @@ if [ -f "$REAL" ]; then
 else
   ko "pr-areas tests need dist/ — run bin/kit build first"
 fi
+
+echo "pr-shortcuts"
+printf '%s\n' 'diff --git a/server/list.ts b/server/list.ts' '--- a/server/list.ts' '+++ b/server/list.ts' \
+  '@@ -10,3 +10,4 @@ export function list() {' ' const a = 1' '-// shortcut: removed, ignored' \
+  '+  // shortcut: not paged, page it past 500 items' ' // shortcut: context, ignored' \
+  '+const k = "press the keyboard shortcut: ctrl+k"' '@@ -40,2 +41,3 @@' ' x' '+/* ponytail: legacy prefix */' \
+  'diff --git a/client/A.tsx b/client/A.tsx' '--- /dev/null' '+++ b/client/A.tsx' '@@ -0,0 +1,4 @@' '+/**' \
+  '+ * shortcut: jsdoc, x' '+ */' '+{/* shortcut: jsx, x */}' \
+  'diff --git "a/docs/caf\303\251.vue" "b/docs/caf\303\251.vue"' '--- "a/docs/caf\303\251.vue"' \
+  '+++ "b/docs/caf\303\251.vue"' '@@ -1 +1,2 @@' '+<!-- shortcut: html, x -->' '+# shortcut: hash, x' \
+  'diff --git a/old.sh b/old.sh' '--- a/old.sh' '+++ /dev/null' '@@ -1 +0,0 @@' '-# shortcut: gone' >"$TMP/shortcuts.diff"
+expect_exit 0 "lists the markers a diff adds" -- "$S/pr-shortcuts" "$TMP/shortcuts.diff"
+expect_jq "only added lines: not the removed, context or deleted-file ones, nor prose" '.count == 6'
+expect_jq "line of the new file, across hunks, text trimmed" \
+  '.shortcuts[0] == {file: "server/list.ts", line: 11, text: "// shortcut: not paged, page it past 500 items"} and .shortcuts[1].line == 42'
+expect_jq "legacy ponytail:, JSDoc, JSX, HTML and # prefixes" \
+  '[.shortcuts[1:][] | .text[0:6]] == ["/* pon", "* shor", "{/* sh", "<!-- s", "# shor"]'
+expect_jq "a quoted non-ASCII path is decoded" '[.shortcuts[] | select(.file == "docs/café.vue") | .line] == [1, 2]'
+expect_jq "line of each marker in a new file" '[.shortcuts[] | select(.file == "client/A.tsx") | .line] == [2, 4]'
+printf '%s\n' 'diff --git a/my file.ts b/my file.ts' $'--- a/my file.ts\t' $'+++ b/my file.ts\t' '@@ -1 +1,2 @@' ' x' \
+  '+// shortcut: spaced, x' 'diff --git "a/my caf\303\251.ts" "b/my caf\303\251.ts"' $'--- "a/my caf\\303\\251.ts"\t' \
+  $'+++ "b/my caf\\303\\251.ts"\t' '@@ -0,0 +1 @@' '+const s = "// shortcut: in a string"' >"$TMP/spaced.diff"
+expect_exit 0 "names with a space (git ends their header with a TAB)" -- "$S/pr-shortcuts" "$TMP/spaced.diff"
+expect_jq "a TAB-terminated header, plain or quoted, keeps its marker" \
+  '[.shortcuts[] | [.file, .line]] == [["my file.ts", 2], ["my café.ts", 1]]'
+expect_jq "a marker inside a string is listed (the reader drops non-comments)" \
+  '.shortcuts[1].text == "const s = \"// shortcut: in a string\""'
+printf '%s\n' 'diff --git "a/a\tb\303\251.ts" "b/a\tb\303\251.ts"' '--- "a/a\tb\303\251.ts"' '+++ "b/a\tb\303\251.ts"' \
+  '@@ -0,0 +1 @@' '+// shortcut: x' >"$TMP/unparsable.diff"
+expect_exit 1 "a line it cannot parse fails loudly, never dropped" -- "$S/pr-shortcuts" "$TMP/unparsable.diff"
+printf 'diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n+const a = 1\n' >"$TMP/clean.diff"
+expect_exit 0 "a diff without markers" -- "$S/pr-shortcuts" "$TMP/clean.diff"
+expect_jq "empty ledger" '. == {shortcuts: [], count: 0}'
+expect_exit 2 "a missing diff file is a usage error" -- "$S/pr-shortcuts" "$TMP/none.diff"
 
 echo "pr-review-submit"
 printf '%s' '{"event":"COMMENT","body":"Looks good overall.","comments":[{"path":"a.ts","line":3,"body":"Null check?"}]}' >"$TMP/review.json"
@@ -1130,6 +1332,8 @@ guard_at deny "$C" "" "gh pr merge 42"
 guard_at deny "$C" "sess-other" "gh pr create --title t --body b"
 guard_at deny "$C" "" "gh pr create -R acme/readonly --title t --body b"
 guard_at allow "$C" "" "$S/repo-conf acme/docs"
+guard_at allow "$C" "" "$S/run-usage collect --session s --since 2026-11-10T10:00:00Z --until 2026-11-10T11:00:00Z"
+guard_at allow "$C" "" "$S/pr-shortcuts .agent-run/x/branch.diff"
 guard_at pass "$C" "" "$TMP/fake/adorno-github/scripts/repo-conf"
 guard_at deny "$C" "" "git push" codex
 guard_at pass "$C" "" "git add ." codex

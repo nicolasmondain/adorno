@@ -61,6 +61,7 @@ USE_LOCAL = False   # set per command: install/check/list/conf use local/, build
 RESOLVER = ROOT / "src" / "skills" / "adorno-github" / "scripts" / "resolve.jq"
 LEVELS = ("L0", "L1", "L2", "L3", "L4")
 PONYTAIL_LEVELS = ("lite", "full", "ultra")
+PRICE_KEYS = ("input", "cache_write_5m", "cache_write_1h", "cache_read", "output")  # repos.yaml › prices, read by run-usage
 ACTIONS = ("push", "reply", "comment", "resolve", "rerequest", "review", "submit", "open_pr", "ci_rerun")
 CLAUDE_RULES = ("allow", "ask", "deny")
 VISION_MAX_LINES = 60
@@ -195,7 +196,8 @@ def registry() -> dict:
 
 def _registry() -> dict:
     """repos.yaml, with the personal layer (local/adorno.yaml) on top when it is active: `owner` and `defaults`
-    merged into the defaults, `presets`, `workspaces` (local `paths` turned into the repos found there), `repos`."""
+    merged into the defaults, `presets` (added to the public ones), `workspaces` (local `paths` turned into the repos
+    found there), `repos`."""
     data = load_yaml(ROOT / "repos.yaml")
     loc = local_conf()
     if loc:
@@ -203,7 +205,7 @@ def _registry() -> dict:
         if loc.get("owner"):
             defaults["owner"] = loc["owner"]
         data = deep_merge(data, {"defaults": defaults, "repos": loc.get("repos") or {}})
-        data["presets"] = loc.get("presets") or {}
+        data["presets"] = {**(data.get("presets") or {}), **(loc.get("presets") or {})}  # a clash: validate_registry
         workspaces = {}
         for name, ws in (loc.get("workspaces") or {}).items():
             ws = dict(ws or {})
@@ -214,6 +216,8 @@ def _registry() -> dict:
         for key in ("slack", "notion", "journal"):
             if loc.get(key):
                 data[key] = loc[key]
+        if loc.get("prices"):  # your own rates or models, over the public ones
+            data["prices"] = deep_merge(data.get("prices") or {}, loc["prices"])
     return data
 
 
@@ -572,7 +576,10 @@ def validate_roles(reg: dict, items: dict) -> list[str]:
 
 
 def orphan_agents(reg: dict, items: dict) -> list[str]:
-    reached = {ref for _, ref in area_refs(reg.get("defaults") or {})}
+    """Agents no public area role, fallback or stack preset names, and without an `entry`."""
+    public = load_yaml(ROOT / "repos.yaml").get("presets") or {}
+    scopes = [reg.get("defaults") or {}, *(c or {} for c in public.values())]
+    reached = {ref for conf in scopes if isinstance(conf, dict) for _, ref in area_refs(conf)}
     return sorted(i.id for i in items["agent"].values() if i.id not in reached and not i.meta.get("entry"))
 
 
@@ -907,6 +914,11 @@ def validate_registry(reg: dict, agent_ids: set, delegable: set, skill_names: se
                       f"(`owner` goes top-level; see local.example/)")
     where = "local/adorno.yaml" if local_on() else "repos.yaml"
     presets = reg.get("presets") or {}
+    if local_on():
+        public = set(load_yaml(ROOT / "repos.yaml").get("presets") or {})
+        for name in sorted(public & set(local_conf().get("presets") or {})):
+            errors.append(f"{where}: presets.{name} reuses the name of a public preset (repos.yaml): give yours "
+                          f"another name and `use: [{name}]` in it, then add your keys")
     scopes = [("defaults", reg.get("defaults") or {})]
     scopes += [(f"presets.{n}", c or {}) for n, c in presets.items()]
     scopes += [(f"workspaces.{n}", c or {}) for n, c in (reg.get("workspaces") or {}).items()]
@@ -963,6 +975,13 @@ def validate_registry(reg: dict, agent_ids: set, delegable: set, skill_names: se
             errors.append(f"{where}: {scope} needs `repos` (GitHub globs) or `paths` (local folders)")
     errors += validate_watches(reg, where, agent_ids)
     errors += validate_journal(reg, where)
+    prices = reg.get("prices")
+    if prices is not None and not isinstance(prices, dict):
+        errors.append(f"{where}: prices must be a mapping of model id to rates")
+    for model, rates in (prices or {}).items() if isinstance(prices, dict) else ():
+        if not (isinstance(rates, dict) and set(rates) == set(PRICE_KEYS) and all(
+                isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0 for v in rates.values())):
+            errors.append(f"{where}: prices.{model}: numbers >= 0 ($ per million tokens) for all of {', '.join(PRICE_KEYS)}")
     # presets that use each other must not loop
     def walk(name: str, seen: tuple) -> None:
         if name in seen:
@@ -1353,6 +1372,8 @@ def cmd_list(args) -> None:
 def migrate_areas(public: dict, loc: dict) -> list[dict]:
     """Additive equivalent of each legacy `area_reviewers` of the personal layer against the public `areas`."""
     public_areas = (public.get("defaults") or {}).get("areas") or {}
+    # the legacy `mongodb` area is now the `mongodb` stack preset, on top of the neutral areas
+    mongo_areas = deep_merge(public_areas, ((public.get("presets") or {}).get("mongodb") or {}).get("areas") or {})
     out: list[dict] = []
     scopes = [("defaults", loc.get("defaults"))]
     for group in ("presets", "workspaces", "repos"):
@@ -1361,25 +1382,22 @@ def migrate_areas(public: dict, loc: dict) -> list[dict]:
         legacy = (conf or {}).get("area_reviewers") or {}
         for area, old in legacy.items():
             old = list(old or [])
-            if area == "always":
-                targets = [["always"]]
-            elif area == "mongodb" and "mongodb" not in public_areas:
-                # the legacy area covered query content and schema paths: both sub-areas now
-                targets = [["back", "sub", "query"], ["back", "sub", "mongodb"]]
-            else:
-                targets = [[area]]
-            for parts in targets:
-                node = public_areas
-                inherited: list = []
-                for part in parts:
-                    node = (node.get(part) if isinstance(node, dict) else None) or {}
-                    if part == "sub":
-                        inherited = list(parent.get("review") or [])
-                    parent = node
-                pub = list(node.get("review") or []) if isinstance(node, dict) else []
-                new = [x for x in old if x not in inherited + pub] + ["-" + x for x in pub if x not in old]
-                out.append({"scope": scope, "area_path": "areas." + ".".join(parts) + ".review",
-                            "old": old, "public": pub, "new": new})
+            preset = area == "mongodb" and "mongodb" not in public_areas
+            parts = ["back", "sub", "mongodb"] if preset else [area]
+            node = mongo_areas if preset else public_areas
+            inherited: list = []
+            for part in parts:
+                node = (node.get(part) if isinstance(node, dict) else None) or {}
+                if part == "sub":
+                    inherited = list(parent.get("review") or [])
+                parent = node
+            pub = list(node.get("review") or []) if isinstance(node, dict) else []
+            new = [x for x in old if x not in inherited + pub] + ["-" + x for x in pub if x not in old]
+            # the scope's own `use:` stays, the preset is appended: pasting the snippet must not drop one
+            use = list((conf or {}).get("use") or [])
+            out.append({"scope": scope, "area_path": "areas." + ".".join(parts) + ".review",
+                        "old": old, "public": pub, "new": new,
+                        **({"use": use + ([] if "mongodb" in use else ["mongodb"])} if preset else {})})
     return out
 
 
@@ -1397,6 +1415,8 @@ def cmd_migrate(args) -> None:
     for scope in dict.fromkeys(r["scope"] for r in rows):
         snippet: dict = {}
         for r in (r for r in rows if r["scope"] == scope):
+            if r.get("use"):
+                snippet["use"] = r["use"]
             snippet = deep_merge(snippet, nest(r["area_path"], r["new"]))
         group, _, name = scope.partition(".")
         head = {group: {name: snippet}} if name else {group: snippet}

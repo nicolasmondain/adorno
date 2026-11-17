@@ -4,7 +4,7 @@ args: "<the request, Slack / Notion / GitHub links, a plan file, or the .agent-r
 roles: [build, qa, review, fix, perf]
 uses:
   skills: [adorno-run-plan, adorno-inputs, adorno-notion-sync]
-  agents: [agent:core:router, agent:core:planner, agent:review:code, agent:review:security, agent:review:tests, agent:review:ponytail, agent:test:e2e, agent:adorno, agent:chore:deps, agent:docs:write, agent:feat:api, agent:feat:back, agent:feat:front, agent:test:unit, agent:review:api, agent:review:back, agent:review:front, agent:review:mongodb, agent:review:perf, agent:review:perf-back, agent:ci:fix, agent:fix:patch, agent:fix:security, agent:refactor:simplify, agent:perf:front, agent:perf:mongodb, agent:perf:nodejs]
+  agents: [agent:core:router, agent:core:planner, agent:review:code, agent:review:security, agent:review:tests, agent:review:ponytail, agent:test:e2e, agent:adorno, agent:chore:deps, agent:docs:write, agent:feat:api, agent:feat:back, agent:feat:front, agent:test:unit, agent:review:api, agent:review:back, agent:review:front, agent:review:mongodb, agent:review:sql, agent:review:perf, agent:review:perf-back, agent:ci:fix, agent:fix:patch, agent:fix:security, agent:refactor:simplify, agent:perf:front, agent:perf:mongodb, agent:perf:nodejs]
   workflows: [workflow:spec:new, workflow:pr:ship, workflow:pr:watch]
 model: balanced
 ---
