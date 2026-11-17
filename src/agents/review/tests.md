@@ -1,6 +1,7 @@
 ---
 extends: addy/test-engineer
 description: Test review of a diff — coverage of risky paths, edge cases, errors, test readability. Use whenever logic changes.
+model: balanced
 ---
 
 ## adorno additions
