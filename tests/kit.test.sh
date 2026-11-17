@@ -91,6 +91,8 @@ bad "a commit_skill with a trailing newline" $'  ghost/repo:\n    commit_skill: 
 bad "an empty setup_skill" $'  ghost/repo:\n    setup_skill: ""' "setup_skill must be a skill or command name"
 bad "a pr_skill with a path" $'  ghost/repo:\n    pr_skill: "../x"' "pr_skill must be a skill or command name"
 bad "unknown denied action" $'  ghost/repo:\n    permissions: {deny: [merge]}' "unknown action 'merge'"
+bad "a negative price" $'  ghost/repo: {}\nprices:\n  claude-x: {input: -1}' "prices.claude-x: numbers >= 0"
+bad "an incomplete price" $'  ghost/repo: {}\nprices:\n  claude-x: {input: 1, output: 5}' "prices.claude-x: numbers >= 0"
 bad "an unknown tier" $'  ghost/repo:\n    models: {tiers: {claude: {huge: x}}}' "tiers are inherit, fast, balanced, deep, frontier"
 mkdir -p "$TMP/bad/src/agents/feat"
 printf -- '---\ndescription: x\neffort: extreme\n---\nx\n' >"$TMP/bad/src/agents/feat/odd.md"
@@ -112,6 +114,8 @@ check "nothing to commit: every installed file is excluded from git" '[ -z "$(gi
 check "the tracked CLAUDE.md is untouched" '[ "$(cat "$A/CLAUDE.md")" = "# team rules" ]'
 check "Claude gets the instructions as a rule file" '[ -f "$A/.claude/rules/adorno.md" ]'
 check "the registry lives in the kit home, read-only" '[ "$(ls -l "$ADORNO_HOME/registry.json" | cut -c1-10)" = "-r--------" ]'
+check "the registry carries the public prices" 'jq -e ".prices[\"claude-opus-5-5\"].input == 4" "$ADORNO_HOME/registry.json" >/dev/null'
+check "... with the layer's prices merged in alongside" 'jq -e ".prices[\"claude-sonnet-5\"].input == 2 and .prices[\"claude-opus-5-5\"].output == 20" "$ADORNO_HOME/registry.json" >/dev/null'
 check "no personal registry inside the repo" '! grep -rq "janedoe" "$A/.claude/skills/adorno-github/repos.json"'
 check "SCHEMA.md is neither an item nor shipped" '[ -f "$ROOT/src/agents/review/SCHEMA.md" ] && [ -z "$(find "$A/.claude" "$A/.codex" -iname "schema.md" 2>/dev/null)" ]'
 check "your own rules and keys are kept" 'jq -e ".model == \"x\" and (.permissions.allow | index(\"Bash(make:*)\")) != null" "$A/.claude/settings.local.json" >/dev/null'
@@ -268,13 +272,22 @@ if ! AREA_RE='(?i)token' awk 'BEGIN { if ("" ~ ENVIRON["AREA_RE"]) {} }' 2>/dev/
   bad "a content regex awk cannot run" $'  ghost/repo:\n    areas: {back: {content: "(?i)token"}}' "areas.back.content is an invalid regex"
 fi
 bad "an unknown fallback" $'  ghost/repo:\n    fallbacks: {lint: "agent:fix:patch"}' "fallbacks.lint: unknown key"
-bad "a fallback from the wrong family" $'  ghost/repo:\n    fallbacks: {perf: {agent: "agent:fix:patch"}}' "fallbacks.perf.agent: 'agent:fix:patch' is not a perf agent"
+bad "a fallback from the wrong family" $'  ghost/repo:\n    fallbacks: {perf: {agent: "agent:test:unit"}}' "fallbacks.perf.agent: 'agent:test:unit' is not a perf/fix agent"
 bad "a test fallback from another family" $'  ghost/repo:\n    fallbacks: {test: "agent:fix:patch"}' "fallbacks.test: 'agent:fix:patch' is not a test agent"
 bad "a nit fallback from another family" $'  ghost/repo:\n    fallbacks: {nit: "agent:perf:nodejs"}' "fallbacks.nit: 'agent:perf:nodejs' is not a fix/test/refactor/ci/docs/chore agent"
 bad "area_reviewers is refused with the migration hint" $'  ghost/repo:\n    area_reviewers: {docs: ["agent:review:security"]}' "bin/kit migrate areas"
 OKL="$TMP/okl"; mkdir -p "$OKL"
 printf 'owner: {name: T, github: t, language: fr}\nrepos:\n  ghost/repo:\n    areas: {back: {review: ["-agent:review:tests"]}}\n' >"$OKL/adorno.yaml"
 expect_exit 0 "a removal entry (-x) is accepted" -- env ADORNO_LOCAL="$OKL" "${KIT[@]}" check
+# public stack presets: a repo calls them, a local preset may build on one but not take its name
+printf 'owner: {name: T, github: t, language: fr}\npresets:\n  ours: {use: [rails], context: ["Postgres 16"]}\nrepos:\n  ghost/repo: {use: [ours, sql]}\n' >"$OKL/adorno.yaml"
+expect_exit 0 "a local preset using a public one is accepted" -- env ADORNO_LOCAL="$OKL" "${KIT[@]}" check
+expect_exit 0 "conf of a repo on public presets" -- env ADORNO_LOCAL="$OKL" "${KIT[@]}" conf ghost/repo
+expect_jq "the public presets reach the repo through the local one" \
+  '(.areas.back.sub | has("rails") and has("activerecord") and has("sql") and has("migration")) and (.areas.back.sub.migration.review | index("agent:review:sql")) and .context == ["Postgres 16"]'
+printf 'owner: {name: T, github: t, language: fr}\npresets:\n  sql: {context: ["mine"]}\n' >"$OKL/adorno.yaml"
+out="$(ADORNO_LOCAL="$OKL" "${KIT[@]}" check 2>&1)"; got=$?
+if [ "$got" != 0 ] && grep -q "presets.sql reuses the name of a public preset" <<<"$out"; then ok "a local preset named like a public one fails"; else ko "a local preset named like a public one fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
 
 # a throwaway copy of the kit to break the public sources
 SB="$TMP/sandbox"; mkdir -p "$SB"
@@ -292,6 +305,7 @@ sed -i.bak 's/workflow:spec:new/workflow:spec:ghost/' "$SB/src/agents/feat/lonel
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
 if [ "$got" != 0 ] && grep -q "entry names unknown workflow 'workflow:spec:ghost'" <<<"$out"; then ok "an entry naming no workflow fails"; else ko "an entry naming no workflow fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
 out="$(ADORNO_LOCAL="$TMP/none" "${KIT[@]}" list --orphans 2>&1)"; got=$?
+# perf:nodejs, perf:mongodb, review:mongodb and review:sql are named only by public presets
 check "list --orphans is empty on the real registry" '[ "$got" = 0 ] && [ -z "$out" ]'
 rm -f "$SB/src/agents/feat/lonely.md"
 sed -i.bak 's/agent:fix:security, //' "$SB/src/workflows/pr/ship.md"; rm -f "$SB/src/workflows/pr/ship.md.bak"
@@ -364,18 +378,23 @@ MIG="$TMP/mig"; mkdir -p "$MIG"
 printf '%s\n' 'owner: {name: T, github: t, language: fr}' 'repos:' '  acme/app:' '    area_reviewers:' \
   '      docs: [agent:review:security]' '      api: [agent:review:api, agent:review:security]' \
   '      mongodb: [agent:review:mongodb, agent:review:back]' '      always: [agent:review:code]' \
-  '      front: [agent:review:code]' >"$MIG/adorno.yaml"
+  '      front: [agent:review:code]' '  acme/web:' '    use: [node]' '    area_reviewers:' \
+  '      mongodb: [agent:review:mongodb]' '  acme/mix:' '    use: [mongodb]' '    area_reviewers:' \
+  '      mongodb: [agent:review:mongodb]' >"$MIG/adorno.yaml"
 cp "$MIG/adorno.yaml" "$TMP/mig-before.yaml"
 out="$(ADORNO_LOCAL="$MIG" "${KIT[@]}" migrate areas 2>"$TMP/err")"; got=$?
 check "migrate areas succeeds although check fails" '[ "$got" = 0 ] && ! ADORNO_LOCAL="$MIG" "${KIT[@]}" check >/dev/null 2>&1'
 expect_jq "docs: the old list is all additions" '[.[] | select(.area_path == "areas.docs.review")][0].new == ["agent:review:security"]'
 expect_jq "api: only the addition remains" '[.[] | select(.area_path == "areas.api.review")][0].new == ["agent:review:security"]'
-expect_jq "mongodb maps to both back sub-areas, nothing to add over the inherited reviewers" \
-  '([.[] | select(.area_path == "areas.back.sub.mongodb.review" or .area_path == "areas.back.sub.query.review")] | length == 2 and all(.new == [] and .scope == "repos.acme/app"))'
+expect_jq "mongodb maps to the mongodb preset's sub-area, nothing to add over the inherited reviewers" \
+  '([.[] | select(.area_path == "areas.back.sub.mongodb.review" and .scope == "repos.acme/app")] | length == 1 and all(.new == [] and .use == ["mongodb"]))'
+check "the snippet calls the mongodb preset" 'grep -q -- "- mongodb" "$TMP/err"'
 expect_jq "always: a public reviewer missing from the old list becomes a removal" \
   '[.[] | select(.area_path == "areas.always.review")][0].new == ["-agent:review:ponytail"]'
 expect_jq "an area omitting a public reviewer gets its -x" \
   '[.[] | select(.area_path == "areas.front.review")][0].new == ["agent:review:code", "-agent:review:front"]'
+expect_jq "a scope that already calls a preset keeps it, mongodb is appended once" \
+  '([.[] | select(.scope == "repos.acme/web")][0].use == ["node", "mongodb"]) and ([.[] | select(.scope == "repos.acme/mix")][0].use == ["mongodb"])'
 check "migrate prints a YAML snippet per scope" 'grep -q "repos:" "$TMP/err" && grep -q "areas:" "$TMP/err"'
 check "migrate writes nothing" 'cmp -s "$MIG/adorno.yaml" "$TMP/mig-before.yaml" && [ "$(ls "$MIG")" = "adorno.yaml" ]'
 
@@ -554,7 +573,7 @@ echo "build"
 sed -i.bak 's/^version: .*/version: 9.8.7/' "$SB/kit.yaml"; rm -f "$SB/kit.yaml.bak"
 # shellcheck disable=SC2034  # NAME is read by check's eval on the next lines
 NAME="$(sed -n 's/^name: //p' "$SB/kit.yaml")"
-echo stray >"$SB/dist/stray.md"
+mkdir -p "$SB/dist"; echo stray >"$SB/dist/stray.md"
 expect_exit 0 "build the sandbox" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" build
 check "the plugin manifest carries kit.yaml's name and version" \
   'jq -e --arg n "$NAME" ".name == \$n and .version == \"9.8.7\"" "$SB/dist/claude-plugin/.claude-plugin/plugin.json" >/dev/null'
@@ -563,9 +582,10 @@ check "the marketplace lists that plugin from ./dist/claude-plugin" \
 check "a file left in dist/ by an earlier build is gone" '[ ! -e "$SB/dist/stray.md" ]'
 digest() { (cd "$SB" && find dist .claude-plugin -type f -exec shasum {} + | sort); }
 digest >"$TMP/build-1"
-ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" build >/dev/null 2>&1
-check "a second build is byte-identical" 'digest | cmp -s - "$TMP/build-1"'
+expect_exit 0 "build it again" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" build
+check "... byte-identical" 'digest | cmp -s - "$TMP/build-1"'
 cp "$ROOT/kit.yaml" "$SB/kit.yaml"
+expect_exit 0 "rebuild with the real kit.yaml, so no 9.8.7 is left for the next sections" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" build
 
 echo "new"
 NEW=(env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" new)
@@ -573,11 +593,16 @@ expect_exit 0 "new agent family:specialty" -- "${NEW[@]}" agent feat:probe
 check "... writes src/agents/<family>/<specialty>.md, its name left to the path" \
   'grep -q "^description:" "$SB/src/agents/feat/probe.md" && ! grep -q "^name:" "$SB/src/agents/feat/probe.md"'
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
-if [ "$got" != 0 ] && grep -q "orphan agent 'agent:feat:probe': no area role, fallback or entry names it" <<<"$out"; then ok "a new agent no role names fails the public check as an orphan"; else ko "a new agent no role names fails the public check as an orphan" "exit $got: $(tail -c 300 <<<"$out")"; fi
+if [ "$got" != 0 ] && grep -q "orphan agent 'agent:feat:probe': no area role, fallback or entry names it" <<<"$out" \
+  && [ "$(grep -c "^error: " <<<"$out")" = 1 ]; then ok "a starter agent's only error is being an orphan"
+else ko "a starter agent's only error is being an orphan" "exit $got: $(tail -c 300 <<<"$out")"; fi
 echo mine >>"$SB/src/agents/feat/probe.md"
 expect_exit 1 "new on an existing agent is refused" -- "${NEW[@]}" agent feat:probe
 check "... and leaves the file as it was" 'grep -q "already exists" "$TMP/err" && tail -n 1 "$SB/src/agents/feat/probe.md" | grep -qx mine'
-rm -rf "$SB/src/agents/feat/probe.md"
+rm -f "$SB/src/agents/feat/probe.md"
+expect_exit 0 "new agent without a family" -- "${NEW[@]}" agent probe-solo
+check "... writes src/agents/<name>.md and keeps its name" 'grep -qx "name: probe-solo" "$SB/src/agents/probe-solo.md"'
+rm -f "$SB/src/agents/probe-solo.md"
 expect_exit 0 "new workflow domain:action" -- "${NEW[@]}" workflow dom:act
 check "... writes src/workflows/<domain>/<action>.md with the {{args}} input" \
   'grep -qx "Input: {{args}}" "$SB/src/workflows/dom/act.md" && ! grep -q "^name:" "$SB/src/workflows/dom/act.md"'
@@ -588,10 +613,15 @@ check "... writes src/skills/<name>/SKILL.md named after it" 'grep -qx "name: pr
 expect_exit 0 "a starter skill passes the public check" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check
 rm -rf "$SB/src/skills/probe-skill"
 find "$SB/src" | sort >"$TMP/src-before"
-expect_exit 1 "new with a name that is not lowercase-with-hyphens is refused" -- "${NEW[@]}" skill Bad_Name
-expect_exit 1 "new skill with a group is refused" -- "${NEW[@]}" skill grp:name
-expect_exit 1 "new agent with three parts is refused" -- "${NEW[@]}" agent a:b:c
+refused() {  # refused NAME KIND ITEM — kit new must refuse the name, saying why, without crashing
+  expect_exit 1 "$1" -- "${NEW[@]}" "$2" "$3"
+  check "... saying why" 'grep -q "^kit: name: lowercase-with-hyphens" "$TMP/err" && ! grep -q Traceback "$TMP/err"'
+}
+refused "new with a name that is not lowercase-with-hyphens is refused" skill Bad_Name
+refused "new skill with a group is refused" skill grp:name
+refused "new agent with three parts is refused" agent a:b:c
 check "... none of them writes a file" 'find "$SB/src" | sort | cmp -s - "$TMP/src-before"'
+find "$SB/src" | sort | comm -13 "$TMP/src-before" - | while IFS= read -r f; do rm -rf "$f"; done  # what a regression wrote
 
 echo "import from a local path"
 mkdir -p "$SB/probe-src/skills/probe-skill" "$SB/probe-src/agents"
@@ -604,7 +634,7 @@ expect_exit 0 "import a relative local source, run from outside the kit" -- in_d
 check "... resolves it against the kit root and writes the skill and the agent under vendor/<name>/" \
   '[ -f "$SB/vendor/probe/skills/probe-skill/SKILL.md" ] && [ -f "$SB/vendor/probe/agents/probe-agent.md" ]'
 check "an imported agent's native tools and model become neutral" \
-  'grep -qx -- "- read" "$SB/vendor/probe/agents/probe-agent.md" && grep -qx -- "- search" "$SB/vendor/probe/agents/probe-agent.md" && grep -qx "model: deep" "$SB/vendor/probe/agents/probe-agent.md" && ! grep -q "Grep\|opus" "$SB/vendor/probe/agents/probe-agent.md"'
+  'grep -qx -- "- read" "$SB/vendor/probe/agents/probe-agent.md" && [ "$(grep -cx -- "- search" "$SB/vendor/probe/agents/probe-agent.md")" = 1 ] && grep -qx "model: deep" "$SB/vendor/probe/agents/probe-agent.md" && ! grep -q "Grep\|opus" "$SB/vendor/probe/agents/probe-agent.md"'
 check "an .md without a description is skipped, with a warning" \
   '[ ! -e "$SB/vendor/probe/agents/nodesc.md" ] && grep -q "probe: skipped agents/nodesc.md (no description in frontmatter)" "$TMP/err"'
 lock_entry() { awk -v n="$1:" '$0 == n { f = 1; next } /^[^ ]/ { f = 0 } f' "$SB/kit.lock"; }
@@ -635,12 +665,13 @@ check "... removes every link and leaves the kit's dist/ in place" \
 
 echo "install --dry-run"
 R="$TMP/dry"; mkrepo "$R" acme/dry
-tree_of() { (cd "$R" && find . -path ./.git -prune -o -print | sort && cat .git/info/exclude 2>/dev/null); }
+DH="$TMP/dry-home"; mkdir -p "$DH"  # an empty home: a real install would write ~/.adorno/registry.json into it
+tree_of() { (cd "$R" && find . -path ./.git -prune -o -print | sort && cat .git/info/exclude 2>/dev/null); find "$DH" | sort; }
 tree_of >"$TMP/dry-before"
-expect_exit 0 "install --dry-run" -- "${KIT[@]}" install "$R" --targets claude --dry-run
+expect_exit 0 "install --dry-run" -- env HOME="$DH" "${KIT[@]}" install "$R" --targets claude --dry-run
 check "it lists the files it would write, the managed block and the guard hook" \
   'grep -q "^would install [1-9][0-9]* file(s) into .*/dry for claude$" <<<"$out" && grep -qx "  + .claude/agents/adorno.md" <<<"$out" && grep -qx "  ~ CLAUDE.md (managed block)" <<<"$out" && grep -q "hooks.PreToolUse.*: adorno guard$" <<<"$out"'
-check "... and writes nothing: the repo and its .git/info/exclude are unchanged" 'tree_of | cmp -s - "$TMP/dry-before"'
+check "... and writes nothing: the repo, its .git/info/exclude and the home are unchanged" 'tree_of | cmp -s - "$TMP/dry-before"'
 
 echo "conf without a repo"
 expect_exit 0 "conf outside any repo" -- in_dir "$TMP" "${KIT[@]}" conf
