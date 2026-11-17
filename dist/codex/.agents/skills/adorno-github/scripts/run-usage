@@ -9,6 +9,8 @@
 # Prints {source, session, started, ended, duration_s, session_usage, agents, totals, unpriced, summary}. Without a
 # session or a transcript (Codex, Gemini, a terminal): {source: "unavailable", reason, …, duration_s, summary}.
 # Called by run-end, which writes it to the run folder; also usable by hand on a past session.
+# The jq programs must parse on jq 1.7.1 too: inside an object literal, a value continued on the next line by an
+# operator (`t: 1, model: ("x"` newline `+ "y")`) is a syntax error there, accepted only from jq 1.8.
 . "$(dirname "$0")/_lib.sh"
 
 [ "${1:-}" = "collect" ] || die "usage: run-usage collect --session ID --since ISO --until ISO" "$E_USAGE"
