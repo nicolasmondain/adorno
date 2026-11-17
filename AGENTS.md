@@ -21,7 +21,7 @@ adorno is a portable, reusable agent setup. Agents, workflows and skills are wri
 | a repo, a workspace, permissions, a voice, a vision | `local/` (ignored by git; template: `local.example/`) — never in the repo |
 | a default public setting | `repos.yaml` (+ its validation in `bin/kit` › `validate_registry`) |
 | a settings resolution rule | `src/skills/adorno-github/scripts/resolve.jq` (shared by the scripts and `kit conf`) + its tests |
-| content from another repo | `imports:` in `kit.yaml`, then `bin/kit import` |
+| content from another repo | `imports:` in `kit.yaml`, then `bin/kit import` (`--check`: what changed upstream, writes nothing; `--update`: move the pin, in its own PR) |
 | modifying an imported item | a local file with `extends: <import>/<name>` (never edit in `vendor/`) |
 
 `bin/kit new agent perf:redis` (or `new workflow ci:flaky`, `new skill <name>`) creates a starter file.
