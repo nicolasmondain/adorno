@@ -1,0 +1,5 @@
+{"agent": "agent:review:back", "verdict": "block", "findings": [
+  {"severity": "blocker", "file": "server/services/orders.ts", "line": 38,
+   "title": "Cross-tenant read: the customer lookup is not scoped to the account",
+   "detail": "The customer is looked up by _id only, so an order can expose the name of a customer that belongs to another account.",
+   "fix": "Add the tenant key to the filter of the lookup."}]}

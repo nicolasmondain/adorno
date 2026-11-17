@@ -113,7 +113,7 @@ check "the tracked CLAUDE.md is untouched" '[ "$(cat "$A/CLAUDE.md")" = "# team 
 check "Claude gets the instructions as a rule file" '[ -f "$A/.claude/rules/adorno.md" ]'
 check "the registry lives in the kit home, read-only" '[ "$(ls -l "$ADORNO_HOME/registry.json" | cut -c1-10)" = "-r--------" ]'
 check "no personal registry inside the repo" '! grep -rq "janedoe" "$A/.claude/skills/adorno-github/repos.json"'
-check "SCHEMA.md is neither an item nor shipped" '[ -f "$ROOT/src/agents/review/SCHEMA.md" ] && [ -z "$(find "$A/.claude" "$A/.codex" -iname "*schema*" 2>/dev/null)" ]'
+check "SCHEMA.md is neither an item nor shipped" '[ -f "$ROOT/src/agents/review/SCHEMA.md" ] && [ -z "$(find "$A/.claude" "$A/.codex" -iname "schema.md" 2>/dev/null)" ]'
 check "your own rules and keys are kept" 'jq -e ".model == \"x\" and (.permissions.allow | index(\"Bash(make:*)\")) != null" "$A/.claude/settings.local.json" >/dev/null'
 check "the repo's and the default rules are added" 'jq -e "(.permissions.allow | index(\"Bash(npm test:*)\")) != null and (.permissions.deny | index(\"Bash(gh pr merge:*)\")) != null" "$A/.claude/settings.local.json" >/dev/null'
 check "the guard hook refuses direct writes in this repo" 'jq -e "[.hooks.PreToolUse[].hooks[].command | select(contains(\"guard_bash.py\") and contains(\" deny --format=claude\"))] | length == 1" "$A/.claude/settings.local.json" >/dev/null'
@@ -129,6 +129,23 @@ check "without python3 the hook blocks (exit 2), it does not let commands throug
 # shellcheck disable=SC2034  # err is read by check's eval on the next line
 err="$(printf '%s' '{"tool_name":"AskUserQuestion","permission_mode":"default","tool_input":{}}' | PATH=/nonexistent /bin/sh -c "$HOOK" 2>&1 >/dev/null)"; got=$?
 check "without python3 the hook also blocks questions (exit 2), and says so" '[ "$got" = 2 ] && printf "%s" "$err" | grep -q "questions"'
+# shellcheck disable=SC2034  # JQ_J is read by check's eval on the next lines
+JQ_J='[.hooks | to_entries[] | .key as $e | .value[] | .hooks[] | select(.command | contains("adorno-journal/scripts/journal.py")) | {event: $e, async: (.async // false), timeout}]'
+check "the journal's hooks are next to the guard, one per event it records" 'jq -e "$JQ_J | map(.event) | sort == [\"PostCompact\", \"PostToolUse\", \"PostToolUseFailure\", \"SessionEnd\", \"SessionStart\", \"Stop\", \"SubagentStart\", \"SubagentStop\", \"UserPromptSubmit\"]" "$A/.claude/settings.local.json" >/dev/null'
+check "a tool call is never waited for; the end of a session is" 'jq -e "$JQ_J | (map(select(.async) | .event) | sort) == [\"PostToolUse\", \"PostToolUseFailure\"] and all(.[]; .timeout == 5)" "$A/.claude/settings.local.json" >/dev/null'
+check "Codex and Gemini get no journal hook" '! grep -q journal.py "$A/.codex/hooks.json"'
+JHOOK="$(jq -r '.hooks.PostToolUse[] | .hooks[] | select(.command | contains("journal.py")) | .command' "$A/.claude/settings.local.json")"
+PAYLOAD='{"hook_event_name":"PostToolUse","session_id":"sess-k","tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":{"stdout":"a.txt"},"duration_ms":12}'
+printf '%s' "$PAYLOAD" | sh -c "$JHOOK"; got=$?
+check "without an open run the journal hook does nothing and lets the session go on" '[ "$got" = 0 ] && [ -z "$(find "$ADORNO_HOME/runs" -name events.jsonl 2>/dev/null)" ]'
+mkdir -p "$ADORNO_HOME/runs/active"
+jq -n --arg j "$ADORNO_HOME/runs/test-20260101T000000-1-1" --argjson exp "$(( $(date +%s) + 600 ))" \
+  '{id: "20260101T000000-1-1", session: "sess-k", workflow: "workflow:test:run", expires: $exp, journal: $j}' >"$ADORNO_HOME/runs/active/20260101T000000-1-1.json"
+printf '%s' "$PAYLOAD" | sh -c "$JHOOK"; got=$?
+check "inside a run the installed hook records the tool call" '[ "$got" = 0 ] && jq -e ".type == \"tool.call\" and .tool == \"Bash\" and .input == \"ls\" and .dur == 12 and .session == \"sess-k\"" "$ADORNO_HOME/runs/test-20260101T000000-1-1/events.jsonl" >/dev/null'
+printf '%s' "$PAYLOAD" | PATH=/nonexistent /bin/sh -c "$JHOOK" 2>/dev/null; got=$?
+check "without python3 the journal hook lets the session go on (exit 0): it records, it does not guard" '[ "$got" = 0 ]'
+rm -rf "$ADORNO_HOME/runs"
 check "tiers become Claude models" 'grep -q "^model: opus" "$A/.claude/agents/adorno.md"'
 check "frontier becomes fable" 'grep -q "^model: fable" "$A/.claude/agents/adorno-agent-core-planner.md"'
 check "an agent's effort reaches Claude" 'grep -q "^effort: low" "$A/.claude/agents/adorno-agent-core-triage.md"'
@@ -178,8 +195,18 @@ awk '{ print } /^repos:/ { print "  newco/svc: {max_level: L1}" }' "$TMP/layer.b
 mkrepo "$TMP/newco/svc" newco/svc
 expect_exit 0 "install for a repo added to the layer" -- "${KIT[@]}" install "$TMP/newco/svc" --targets claude
 check "the registry knows it at once" 'jq -e "[.. | objects | has(\"newco/svc\")] | any" "$ADORNO_HOME/registry.json" >/dev/null'
+check "the run journal's settings are in it, where the writer reads them" 'jq -e ".journal == {reasoning: false, retention_days: 30, max_mb: 2048}" "$ADORNO_HOME/registry.json" >/dev/null'
 "${KIT[@]}" uninstall "$TMP/newco/svc" --force >/dev/null
+sed 's/^  retention_days: 30 .*/  retention_days: soon/; s/^  reasoning: false .*/  reasoning: sometimes/' "$TMP/layer.bak" >"$ADORNO_LOCAL/adorno.yaml"
+printf '  keep_forever: true\n' >>"$ADORNO_LOCAL/adorno.yaml"
+expect_exit 1 "invalid journal settings are refused" -- "${KIT[@]}" check
+check "... each one named" 'grep -q "journal.retention_days must be a positive integer" "$TMP/err" && grep -q "journal.reasoning must be true or false" "$TMP/err" && grep -q "journal.keep_forever: unknown setting" "$TMP/err"'
 cp "$TMP/layer.bak" "$ADORNO_LOCAL/adorno.yaml"
+
+# an install made before the journal recorded one hook per settings file: the next one takes it over
+jq '.hook |= with_entries(.value |= .[0])' "$A/.adorno/installed.json" >"$TMP/state.json" && mv "$TMP/state.json" "$A/.adorno/installed.json"
+expect_exit 0 "reinstall over an older install's state" -- "${KIT[@]}" install "$A" --targets claude,codex
+check "... the guard is still there once, the journal hooks once each" 'jq -e "([.hooks.PreToolUse[].hooks[] | select(.command | contains(\"guard_bash.py\"))] | length == 1) and ([.hooks.Stop[].hooks[] | select(.command | contains(\"journal.py\"))] | length == 1)" "$A/.claude/settings.local.json" >/dev/null'
 
 echo "uninstall"
 expect_exit 0 "uninstall the repo" -- "${KIT[@]}" uninstall "$A" --force
@@ -194,14 +221,17 @@ expect_exit 0 "install --global" -- "${KIT[@]}" install --global --targets claud
 check "Codex asks before direct writes (its own rules)" 'grep -q "prefix_rule(pattern=\[\"git\", \"push\"\], decision=\"prompt\"" "$HOME/.codex/rules/adorno.rules"'
 check "Gemini asks too (its policy engine)" 'grep -q "decision = \"ask_user\"" "$HOME/.gemini/policies/adorno.toml" && grep -q "\"gh pr comment\"" "$HOME/.gemini/policies/adorno.toml"'
 check "in your user settings, direct shell writes ask (they apply to every project)" 'jq -e "(.permissions.ask | index(\"Bash(gh pr comment:*)\")) != null and ((.permissions.deny // []) | index(\"Bash(gh pr comment:*)\")) == null" "$HOME/.claude/settings.json" >/dev/null'
+check "the global install records runs too" 'jq -e "[.hooks.Stop[].hooks[].command | select(contains(\"adorno-journal/scripts/journal.py\"))] | length == 1" "$HOME/.claude/settings.json" >/dev/null'
 check "the global guard hook asks" 'jq -e "[.hooks.PreToolUse[].hooks[].command | select(contains(\"guard_bash.py\") and contains(\" ask --format=claude\"))] | length == 1" "$HOME/.claude/settings.json" >/dev/null'
 check "... and edits of adorno's files stay denied" 'jq -e "(.permissions.deny | index(\"Edit(~/.adorno/registry.json)\")) != null" "$HOME/.claude/settings.json" >/dev/null'
 expect_exit 0 "dry run of --global" -- "${KIT[@]}" install --global --targets claude --dry-run
 check "... names your user settings" 'grep -q "~/.claude/settings.json" <<<"$out"'
 expect_exit 0 "a project next to a global install" -- "${KIT[@]}" install "$A" --targets claude
 check "takes its instructions from the global one" '[ ! -e "$A/.claude/rules/adorno.md" ] && [ ! -e "$A/AGENTS.md" ]'
+check "... and leaves the recording to it (no event written twice), keeping its own guard" '! grep -q journal.py "$A/.claude/settings.local.json" && grep -q guard_bash.py "$A/.claude/settings.local.json"'
 "${KIT[@]}" uninstall "$A" --force >/dev/null
 expect_exit 0 "uninstall --global" -- "${KIT[@]}" uninstall --global
+check "the hooks are removed from your user settings" '[ ! -e "$HOME/.claude/settings.json" ] || ! jq -e ".hooks" "$HOME/.claude/settings.json" >/dev/null'
 check "rules removed from your user settings" '[ ! -e "$HOME/.claude/settings.json" ] || ! jq -e ".permissions.deny // .permissions.ask" "$HOME/.claude/settings.json" >/dev/null'
 check "the Codex and Gemini rules are removed" '[ ! -e "$HOME/.codex/rules/adorno.rules" ] && [ ! -e "$HOME/.gemini/policies/adorno.toml" ]'
 check "the registry is removed" '[ ! -e "$ADORNO_HOME/registry.json" ]'
@@ -259,27 +289,29 @@ sed -i.bak 's/^roles: \[.*\]/roles: [fix, deploy]/' "$SB/src/workflows/pr/ship.m
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
 if [ "$got" != 0 ] && grep -q "roles: unknown role 'deploy'" <<<"$out"; then ok "an unknown role value fails"; else ko "an unknown role value fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
 cp "$ROOT/src/workflows/pr/ship.md" "$SB/src/workflows/pr/ship.md"
-mkdir -p "$SB/vendor/addy/skills/lonely"
-printf -- '---\nname: lonely\ndescription: An imported skill no item cites.\n---\n\nNothing.\n' >"$SB/vendor/addy/skills/lonely/SKILL.md"
+# a sandbox import of its own (the last one in kit.yaml), so the real `uncited` lists stay out of the way
+printf '  - name: fixture\n    source: ./fixture\n' >>"$SB/kit.yaml"
+mkdir -p "$SB/vendor/fixture/skills/lonely"
+printf -- '---\nname: lonely\ndescription: An imported skill no item cites.\n---\n\nNothing.\n' >"$SB/vendor/fixture/skills/lonely/SKILL.md"
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
-if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import addy): no item cites it" <<<"$out"; then ok "an imported skill no item cites fails the public check"; else ko "an imported skill no item cites fails the public check" "exit $got: $(tail -c 300 <<<"$out")"; fi
+if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import fixture): no item cites it" <<<"$out"; then ok "an imported skill no item cites fails the public check"; else ko "an imported skill no item cites fails the public check" "exit $got: $(tail -c 300 <<<"$out")"; fi
 printf 'Use `lonely-helper` for this.\n' >"$SB/src/instructions/99-probe.md"
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
-if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import addy)" <<<"$out"; then ok "a longer name containing the skill's is not a citation"; else ko "a longer name containing the skill's is not a citation" "exit $got: $(tail -c 300 <<<"$out")"; fi
-mkdir -p "$SB/vendor/addy/skills/other"
-printf -- '---\nname: other\ndescription: An imported skill that cites another.\n---\n\nSee `lonely`.\n' >"$SB/vendor/addy/skills/other/SKILL.md"
+if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import fixture)" <<<"$out"; then ok "a longer name containing the skill's is not a citation"; else ko "a longer name containing the skill's is not a citation" "exit $got: $(tail -c 300 <<<"$out")"; fi
+mkdir -p "$SB/vendor/fixture/skills/other"
+printf -- '---\nname: other\ndescription: An imported skill that cites another.\n---\n\nSee `lonely`.\n' >"$SB/vendor/fixture/skills/other/SKILL.md"
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
-if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import addy)" <<<"$out"; then ok "an imported skill citing it is not a citation"; else ko "an imported skill citing it is not a citation" "exit $got: $(tail -c 300 <<<"$out")"; fi
-rm -rf "$SB/vendor/addy/skills/other"
+if [ "$got" != 0 ] && grep -q "orphan skill 'lonely' (import fixture)" <<<"$out"; then ok "an imported skill citing it is not a citation"; else ko "an imported skill citing it is not a citation" "exit $got: $(tail -c 300 <<<"$out")"; fi
+rm -rf "$SB/vendor/fixture/skills/other"
 printf 'Use `lonely` for this.\n' >"$SB/src/instructions/99-probe.md"
 expect_exit 0 "an instruction citing the exact name clears the orphan" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check
 rm -f "$SB/src/instructions/99-probe.md"
-sed -i.bak 's/^    source: github:addyosmani\/agent-skills$/&\n    uncited: [lonely]/' "$SB/kit.yaml"; rm -f "$SB/kit.yaml.bak"
+printf '    uncited: [lonely]\n' >>"$SB/kit.yaml"
 expect_exit 0 "listed in its import's uncited, it passes" -- env ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check
 sed -i.bak 's/uncited: \[lonely\]/uncited: [lonely, ghost]/' "$SB/kit.yaml"; rm -f "$SB/kit.yaml.bak"
 out="$(ADORNO_LOCAL="$TMP/none" "${SBKIT[@]}" check 2>&1)"; got=$?
-if [ "$got" != 0 ] && grep -q "import addy: uncited 'ghost' is not one of its skills" <<<"$out"; then ok "an uncited entry naming no imported skill fails"; else ko "an uncited entry naming no imported skill fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
-rm -rf "$SB/vendor/addy/skills/lonely"; cp "$ROOT/kit.yaml" "$SB/kit.yaml"
+if [ "$got" != 0 ] && grep -q "import fixture: uncited 'ghost' is not one of its skills" <<<"$out"; then ok "an uncited entry naming no imported skill fails"; else ko "an uncited entry naming no imported skill fails" "exit $got: $(tail -c 300 <<<"$out")"; fi
+rm -rf "$SB/vendor/fixture"; cp "$ROOT/kit.yaml" "$SB/kit.yaml"
 expect_exit 0 "the real registry passes with every dispatcher's roles covered" -- env ADORNO_LOCAL="$TMP/none" "${KIT[@]}" check
 check "no area_reviewers reader is left in src/" '! grep -rn "area_reviewers" "$ROOT/src" "$ROOT/bin/kit" | grep -v -e "src/skills/adorno-setup/" -e "bin/kit:.*AREA_REVIEWERS_MSG\|bin/kit:.*area_reviewers" -e SCHEMA.md | grep .'
 check "pr:ship leaves no family agent of its subject" '! grep -q "family agent of its subject" "$ROOT/src/workflows/pr/ship.md"'

@@ -53,4 +53,5 @@ if dry_run; then
   exit 0
 fi
 git -C "$dir" push --quiet -u origin "refs/heads/$branch:refs/heads/$branch" >&2
+journal_github push "$REPO@$branch"
 jq -n --arg r "$REPO" --arg b "$branch" --arg s "$sha" '{pushed: true, repo: $r, branch: $b, sha: $s}'

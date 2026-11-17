@@ -16,6 +16,8 @@ Gemini CLI, Copilot, Cursor and any tool that reads Agent Skills (SKILL.md).
   kit build                     public build into dist/ (never includes local/)
   kit install PATH|--global|--workspace NAME [--targets a,b] [--link] [--public-only] [--force] [--dry-run]
   kit uninstall PATH|--global|--workspace NAME [--force]
+  kit journal enrich RUN        read a run's Claude Code transcripts again into its journal (models, tokens)
+  kit serve [--port 8765] [--runs DIR]   the run journals and their viewer, on 127.0.0.1 only, read-only
 
 Personal layer: local/ (or $ADORNO_LOCAL), git-ignored, template in local.example/.
   local/adorno.yaml   owner, defaults, presets, workspaces, repos (settings, permissions, voice, vision lines)
@@ -208,7 +210,8 @@ def _registry() -> dict:
             ws["repos"] = list(dict.fromkeys(list(ws.get("repos") or []) + list(workspace_dirs(ws))))
             workspaces[name] = ws
         data["workspaces"] = workspaces
-        for key in ("slack", "notion"):  # owner-level watches (workflow:slack:*, workflow:notion:*)
+        # owner-level: the watches (workflow:slack:*, workflow:notion:*) and the run journal's settings
+        for key in ("slack", "notion", "journal"):
             if loc.get(key):
                 data[key] = loc[key]
     return data
@@ -711,6 +714,23 @@ WATCH_NOTIFY = ("dm", "draft", "none")
 SINCE_RE = re.compile(r"^(\d+[mhd]|\d{4}-\d{2}-\d{2}(T[\d:]+Z?)?)$")
 
 
+def validate_journal(reg: dict, where: str) -> list[str]:
+    """`journal` of the personal layer: what the run journal keeps (adorno-journal/scripts/journal.py › DEFAULTS)."""
+    conf = reg.get("journal")
+    if conf is None:
+        return []
+    if not isinstance(conf, dict):
+        return [f"{where}: journal must be a mapping"]
+    errors = [f"{where}: journal.{k}: unknown setting (known: reasoning, retention_days, max_mb)"
+              for k in conf if k not in ("reasoning", "retention_days", "max_mb")]
+    if "reasoning" in conf and not isinstance(conf["reasoning"], bool):
+        errors.append(f"{where}: journal.reasoning must be true or false")
+    for k in ("retention_days", "max_mb"):
+        if k in conf and not (isinstance(conf[k], int) and not isinstance(conf[k], bool) and conf[k] > 0):
+            errors.append(f"{where}: journal.{k} must be a positive integer")
+    return errors
+
+
 def validate_watches(reg: dict, where: str, agent_ids: set) -> list[str]:
     """`slack` and `notion` sections of the personal layer (workflow:slack:*, workflow:notion:*)."""
     errors: list[str] = []
@@ -942,6 +962,7 @@ def validate_registry(reg: dict, agent_ids: set, delegable: set, skill_names: se
         if scope.startswith("workspaces.") and not (conf.get("repos") or conf.get("paths")):
             errors.append(f"{where}: {scope} needs `repos` (GitHub globs) or `paths` (local folders)")
     errors += validate_watches(reg, where, agent_ids)
+    errors += validate_journal(reg, where)
     # presets that use each other must not loop
     def walk(name: str, seen: tuple) -> None:
         if name in seen:
@@ -2017,9 +2038,11 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
         warn("models.agents in your defaults send agents to external routes in every repo; set `external: false` "
              "on the repos whose data must stay with you")
     spath = settings_path(dest, args.global_)
-    hooks = guards(dest, args.global_, targets, plan)
+    hooks = {rel: [h] for rel, h in guards(dest, args.global_, targets, plan).items()}
+    for rel, more in journal_hooks(dest, args.global_, targets, plan, gstate).items():
+        hooks.setdefault(rel, []).extend(more)
     for rel in [r for r in hooks if in_git and not args.global_ and is_tracked(dest, r)]:
-        warn(f"{rel} is tracked by the repo: adorno's guard hook is not added to it")
+        warn(f"{rel} is tracked by the repo: adorno's hooks are not added to it")
         del hooks[rel]
     previous_hooks = owned_hooks(load_state(dest), dest, args.global_)
     if perms or env or load_state(dest).get("permissions") or load_state(dest).get("env"):
@@ -2034,9 +2057,11 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
         for kind, rules in perms.items():
             for r in rules:
                 print(f"  ! {shown} permissions.{kind}: {r}")
-        for rel, h in hooks.items():
+        for rel, hs in hooks.items():
             where = "~/" + rel if args.global_ else rel
-            print(f"  ! {where} hooks.{h['event']} ({h['matcher']}): adorno guard")
+            for h in hs:
+                print(f"  ! {where} hooks.{h['event']}" + (f" ({h['matcher']})" if h.get("matcher") else "")
+                      + f": adorno {'journal' if JOURNAL_NAME in h['command'] else 'guard'}")
         stale = sorted(set(state["files"]) - set(plan))
         print(f"would install {len(plan)} file(s) into {dest} for {', '.join(targets)}")
         for p in sorted(plan):
@@ -2111,7 +2136,7 @@ def install_into(args, cfg: Config, items, dest: Path) -> None:
     record["env"] = apply_env(spath, env, state.get("env") or {}, dest)
     owned = {}
     for rel in sorted(set(hooks) | set(previous_hooks)):
-        got = apply_hook(dest / rel, hooks.get(rel), previous_hooks.get(rel), dest)
+        got = apply_hooks(dest / rel, hooks.get(rel) or [], previous_hooks.get(rel) or [], dest)
         if got:
             owned[rel] = got
     record["hook"] = owned
@@ -2200,14 +2225,39 @@ SHELL_WRITES = [
     ["gh", "issue", ["create", "comment", "edit", "close"]], ["gh", "release"], ["gh", "api"],
 ]
 GUARD_NAME = "adorno-github/scripts/guard_bash.py"
+JOURNAL_NAME = "adorno-journal/scripts/journal.py"
+# The Claude Code hooks that record a run (adorno-journal), and whether each runs without being waited for. A tool
+# call is never slowed down; the others are rare and waited for, because a hook still running when a `claude -p`
+# session ends is killed, and the end of the run would be lost.
+JOURNAL_HOOKS = {"SessionStart": False, "UserPromptSubmit": False, "PostToolUse": True, "PostToolUseFailure": True,
+                 "SubagentStart": False, "SubagentStop": False, "Stop": False, "PostCompact": False,
+                 "SessionEnd": False}
 
 
-def guard_path(plan: dict, target: str) -> str | None:
-    """Where the target's copy of the guard lands (relative to the install folder), or None."""
+def guard_path(plan: dict, target: str, name: str = GUARD_NAME) -> str | None:
+    """Where the target's copy of the guard (or of another skill script) lands, relative to the install folder, or
+    None."""
     for path, (_data, _exe, src) in plan.items():
-        if path.endswith(GUARD_NAME) and src is not None and str(src).startswith(str(DIST / target) + os.sep):
+        if path.endswith(name) and src is not None and str(src).startswith(str(DIST / target) + os.sep):
             return path
     return None
+
+
+def journal_hooks(dest: Path, global_: bool, targets: list[str], plan: dict, gstate: dict) -> dict[str, list[dict]]:
+    """The hooks that record a run, as {settings file: [{event, command, timeout, async}]}: Claude Code only. Open on
+    failure, the opposite of the guard: without an open run, python3 or the script, nothing is recorded and the
+    session goes on. A project next to a global install that already records adds none (every event would be
+    written twice)."""
+    script = guard_path(plan, "claude", JOURNAL_NAME) if "claude" in targets else None
+    if not script:
+        return {}
+    if not global_ and any(JOURNAL_NAME in h.get("command", "")
+                           for hs in owned_hooks(gstate, Path.home(), True).values() for h in hs):
+        return {}
+    command = f'ls "$HOME"/.adorno/runs/active/*.json >/dev/null 2>&1 || exit 0; python3 "{dest / script}" hook; exit 0'
+    return {str(settings_path(dest, global_).relative_to(dest)): [
+        {"event": event, "command": command, "timeout": 5, **({"async": True} if is_async else {})}
+        for event, is_async in JOURNAL_HOOKS.items()]}
 
 
 def guard_command(script: Path, mode: str, fmt: str) -> str:
@@ -2262,21 +2312,23 @@ def global_rule_files(targets: list[str]) -> dict[str, bytes]:
     return files
 
 
-def apply_hook(path: Path, wanted: dict | None, previous: dict | None, stop: Path) -> dict | None:
-    """Our guard hook into a settings file (Claude Code, Codex hooks.json, Gemini): add it, remove the one a previous
-    install added, never touch a hook we did not add. Returns what we own."""
+def apply_hooks(path: Path, wanted: list[dict], previous: list[dict], stop: Path) -> list[dict]:
+    """Our hooks (the guard, the journal) into a settings file (Claude Code, Codex hooks.json, Gemini): add them,
+    remove the ones a previous install added, never touch a hook we did not add. Returns what we own."""
     if not wanted and not previous:
-        return None
+        return []
     data = read_settings(path)
     hooks = data.setdefault("hooks", {})
-    ours = {h.get("command") for h in (previous, wanted) if h}
-    for event in {h["event"] for h in (previous, wanted) if h}:
+    ours = {h.get("command") for h in previous + wanted}
+    for event in {h["event"] for h in previous + wanted}:
         entries = [e for e in hooks.get(event) or []
                    if not (isinstance(e, dict) and any(isinstance(x, dict) and x.get("command") in ours
                                                        for x in e.get("hooks") or []))]
-        if wanted and wanted["event"] == event:
-            entries.append({"matcher": wanted["matcher"], "hooks": [
-                {"type": "command", "command": wanted["command"], "timeout": wanted["timeout"]}]})
+        for h in wanted:
+            if h["event"] == event:
+                entries.append({**({"matcher": h["matcher"]} if h.get("matcher") else {}), "hooks": [
+                    {"type": "command", "command": h["command"], "timeout": h["timeout"],
+                     **({"async": True} if h.get("async") else {})}]})
         if entries:
             hooks[event] = entries
         else:
@@ -2287,12 +2339,15 @@ def apply_hook(path: Path, wanted: dict | None, previous: dict | None, stop: Pat
     return wanted
 
 
-def owned_hooks(state: dict, dest: Path, global_: bool) -> dict[str, dict]:
-    """The hooks a previous install added (an older install recorded one Claude command as a string)."""
+def owned_hooks(state: dict, dest: Path, global_: bool) -> dict[str, list[dict]]:
+    """The hooks a previous install added, per settings file (older installs recorded one Claude command as a
+    string, then one hook per file)."""
     h = state.get("hook")
     if isinstance(h, str):
-        return {str(settings_path(dest, global_).relative_to(dest)): {"event": "PreToolUse", "command": h}}
-    return h if isinstance(h, dict) else {}
+        return {str(settings_path(dest, global_).relative_to(dest)): [{"event": "PreToolUse", "command": h}]}
+    if not isinstance(h, dict):
+        return {}
+    return {rel: [one] if isinstance(one, dict) else list(one) for rel, one in h.items()}
 
 
 def apply_env(path: Path, wanted: dict[str, str], previous: dict[str, str], stop: Path) -> dict:
@@ -2336,8 +2391,8 @@ def uninstall_from(args, dest: Path) -> None:
     spath = settings_path(dest, dest == Path.home())
     apply_permissions(spath, {}, state.get("permissions") or {}, dest)
     apply_env(spath, {}, state.get("env") or {}, dest)
-    for rel, h in owned_hooks(state, dest, dest == Path.home()).items():
-        apply_hook(dest / rel, None, h, dest)
+    for rel, hs in owned_hooks(state, dest, dest == Path.home()).items():
+        apply_hooks(dest / rel, [], hs, dest)
     if dest != Path.home():
         update_exclude(dest, [])
     elif (kit_home() / "registry.json").exists():
@@ -2351,6 +2406,19 @@ def uninstall_from(args, dest: Path) -> None:
         sp.unlink()
         prune(sp, dest)
     print(f"uninstalled from {dest}" + (f" ({len(kept)} modified file(s) kept)" if kept else ""))
+
+
+def cmd_journal(args) -> None:
+    """`kit journal enrich RUN`: the skill's own writer does it (run-end starts it too; this runs it again)."""
+    sys.exit(subprocess.run([sys.executable, str(ROOT / "src" / "skills" / JOURNAL_NAME), args.action, args.run]).returncode)
+
+
+def cmd_serve(args) -> None:
+    """`kit serve`: the local server of the run journals and their viewer (bin/kit_serve.py, standard library)."""
+    sys.dont_write_bytecode = True  # no bin/__pycache__ left behind
+    sys.path.insert(0, str(ROOT / "bin"))
+    import kit_serve
+    sys.exit(kit_serve.serve(args.port, args.runs or str(kit_home() / "runs"), str(ROOT / "viewer")))
 
 
 # ───────────────────────────── cli ─────────────────────────────
@@ -2404,6 +2472,15 @@ def main() -> None:
             p.add_argument("--dry-run", action="store_true")
             p.add_argument("--public-only", action="store_true", help="ignore local/ (your personal layer)")
         p.set_defaults(fn=fn)
+
+    p = sub.add_parser("journal", help="a run's journal (skill adorno-journal)")
+    p.add_argument("action", choices=["enrich"], help="enrich: read the run's Claude Code transcripts again")
+    p.add_argument("run", help="a run id, or the name of its folder under ~/.adorno/runs")
+    p.set_defaults(fn=cmd_journal)
+    p = sub.add_parser("serve", help="serve the run journals and their viewer on 127.0.0.1 (read-only)")
+    p.add_argument("--port", type=int, default=8765, help="default 8765; 0: any free port")
+    p.add_argument("--runs", help="the folder of the runs (default: ~/.adorno/runs)")
+    p.set_defaults(fn=cmd_serve)
 
     args = ap.parse_args()
     try:

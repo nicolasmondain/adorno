@@ -1,0 +1,5 @@
+{"agent": "agent:review:code", "verdict": "fix", "findings": [
+  {"severity": "major", "file": "server/lib/duration.ts", "line": 6,
+   "title": "Negative input is not rejected",
+   "detail": "formatDuration(-5) returns -5s: the function accepts any number.",
+   "fix": "Throw a RangeError when totalSeconds is negative or not an integer."}]}
