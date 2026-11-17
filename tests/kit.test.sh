@@ -382,35 +382,51 @@ check "migrate writes nothing" 'cmp -s "$MIG/adorno.yaml" "$TMP/mig-before.yaml"
 echo "migrate agents"
 bad "a merged agent id points to the migration" $'  ghost/repo:\n    areas: {front: {review: ["agent:review:perf"]}}' "names unknown agent 'agent:review:perf' (merged into 'agent:review:front': \`bin/kit migrate agents\`"
 check "an unknown agent is not also reported as missing from the dispatchers" '! grep -q "uses.agents lacks" <<<"$out"'
+mkdir -p "$TMP/old"
+for layer in 'notion:|  assigned: {agents: {Perf: agent:review:perf}}' \
+  'defaults:|  models:|    agents: {agent:review:perf: fast}' \
+  'slack:|  watches:|    w: {channels: ["#c"], includes: [x], action: {agent: agent:review:perf-back}}'; do
+  printf 'owner: {name: T, github: t, language: fr}\n%s\n' "$(tr '|' '\n' <<<"$layer")" >"$TMP/old/adorno.yaml"
+  out="$(ADORNO_LOCAL="$TMP/old" "${KIT[@]}" check 2>&1)"; got=$?
+  check "a merged agent id in ${layer%%:*} points to the migration" '[ "$got" != 0 ] && grep -q "merged into '"'"'agent:review:" <<<"$out"'
+done
+rm -rf "$TMP/old"
 MA="$TMP/ma"; mkdir -p "$MA"
 printf '%s\n' 'owner: {name: T, github: t, language: fr}' \
   'defaults:' '  models:' '    agents: {agent:review:perf-back: balanced, agent:review:perf: fast, agent:review:front: deep}' \
   'presets:' '  web:' '    areas:' '      front: {review: [agent:review:perf, agent:review:front]}' \
+  '      back: {review: "-agent:review:perf-back"}' \
   'workspaces:' '  acme:' '    repos: ["acme/*"]' '    areas:' '      front: {review: ["-agent:review:perf"]}' \
   'repos:' '  acme/app:' '    areas:' '      back:' '        review: [agent:review:tests, agent:review:perf-back]' \
   '        sub: {query: {review: ["-agent:review:perf-back", "-agent:review:back"]}}' \
+  '      front: {review: ["-agent:review:front", "agent:review:perf"]}' \
   '      docs: {review: [agent:review:security]}' \
   'slack:' '  watches:' '    w: {channels: ["#c"], includes: [x], action: {agent: agent:review:perf-back}}' \
-  'notion:' '  assigned: {agents: {Perf: agent:review:perf, Bugs: workflow:issue:fix}}' >"$MA/adorno.yaml"
+  'notion:' '  assigned: {agents: {"Perf v2.1": agent:review:perf, Bugs: workflow:issue:fix}}' >"$MA/adorno.yaml"
 cp "$MA/adorno.yaml" "$TMP/ma-before.yaml"
 out="$(ADORNO_LOCAL="$MA" "${KIT[@]}" migrate agents 2>"$TMP/err")"; got=$?
 check "migrate agents succeeds although check fails" '[ "$got" = 0 ] && ! ADORNO_LOCAL="$MA" "${KIT[@]}" check >/dev/null 2>&1'
 expect_jq "one row per setting naming a merged id, nothing else" \
-  '([.[] | .scope + " " + .path] | sort) == (["defaults models.agents.agent:review:perf-back", "defaults models.agents.agent:review:perf", "presets.web areas.front.review", "workspaces.acme areas.front.review", "repos.acme/app areas.back.review", "repos.acme/app areas.back.sub.query.review", "slack watches.w.action.agent", "notion assigned.agents.Perf"] | sort)'
+  '([.[] | .scope + " " + .path] | sort) == (["defaults models.agents.agent:review:perf-back", "defaults models.agents.agent:review:perf", "presets.web areas.front.review", "presets.web areas.back.review", "workspaces.acme areas.front.review", "repos.acme/app areas.back.review", "repos.acme/app areas.back.sub.query.review", "repos.acme/app areas.front.review", "slack watches.w.action.agent", "notion assigned.agents.Perf v2.1"] | sort)'
 expect_jq "a renamed reviewer is renamed in place" \
   '(.[] | select(.path == "areas.back.review")) | .old == ["agent:review:tests", "agent:review:perf-back"] and .new == ["agent:review:tests", "agent:review:back"] and (has("decision") | not)'
 expect_jq "a renamed reviewer already present is dropped as a duplicate" \
-  '(.[] | select(.scope == "presets.web")) | .new == ["agent:review:front"]'
+  '(.[] | select(.scope == "presets.web" and .path == "areas.front.review")) | .new == ["agent:review:front"]'
+expect_jq "a scalar removal that would remove the surviving reviewer asks a human" \
+  '(.[] | select(.scope == "presets.web" and .path == "areas.back.review")) | .new == null and (.decision | test("agent:review:back"))'
+expect_jq "a merged reviewer next to the removal of its survivor asks a human" \
+  '(.[] | select(.path == "areas.front.review" and .scope == "repos.acme/app")) | .new == ["-agent:review:front"] and (.decision | test("agent:review:front"))'
 expect_jq "a removal already made on the target only loses its duplicate" \
   '(.[] | select(.path == "areas.back.sub.query.review")) | .new == ["-agent:review:back"] and (has("decision") | not)'
 expect_jq "a removal that would remove the surviving reviewer asks a human" \
   '(.[] | select(.scope == "workspaces.acme")) | .new == [] and (.decision | test("agent:review:front"))'
-expect_jq "a model setting moves to the new id, unless the new id has its own" \
-  '([.[] | select(.path | startswith("models.agents."))] | map({(.old): .new}) | add) == {"agent:review:perf-back": "agent:review:back", "agent:review:perf": null}'
+expect_jq "a model setting is removed, its tier left to a human" \
+  '[.[] | select(.path | startswith("models.agents."))] | length == 2 and all(.new == null and (.decision | test("agent:review:")))'
 expect_jq "a watch action and a Notion agent are renamed" \
   '([.[] | select(.scope == "slack" or .scope == "notion") | .new] | sort) == ["agent:review:back", "agent:review:front"]'
 check "migrate agents prints a YAML snippet per scope and flags the decision" \
-  'grep -q "workspaces:" "$TMP/err" && grep -q "agent:review:back: balanced" "$TMP/err" && grep -qi "decide" "$TMP/err"'
+  'grep -q "workspaces:" "$TMP/err" && grep -q "remove models.agents.agent:review:perf-back" "$TMP/err" && ! grep -q "balanced" "$TMP/err" && grep -qi "decide" "$TMP/err"'
+check "migrate agents keeps a key with a dot whole in the snippet" 'grep -q "Perf v2.1: agent:review:front" "$TMP/err"'
 check "migrate agents writes nothing" 'cmp -s "$MA/adorno.yaml" "$TMP/ma-before.yaml" && [ "$(ls "$MA")" = "adorno.yaml" ]'
 out="$("${KIT[@]}" migrate agents 2>/dev/null)"
 check "nothing to migrate in the template layer" '[ "$out" = "[]" ]'

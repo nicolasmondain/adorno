@@ -500,10 +500,11 @@ def validate(cfg: Config, items: dict[str, dict[str, Item]]) -> list[str]:
 
     delegable = {i.id for i in items["agent"].values() if i.meta.get("delegable")}
     reg = registry()
-    errors += validate_registry(reg, {i.id for i in items["agent"].values()} | set(items["agent"]), delegable,
+    agent_ids = {i.id for i in items["agent"].values()} | set(items["agent"])
+    errors += validate_registry(reg, agent_ids, delegable,
                                 {i.name for i in items["skill"].values()} | set(items["skill"]),
                                 {w.id for w in items["workflow"].values()})
-    errors += validate_roles(reg, items)
+    errors += validate_roles(reg, items, agent_ids)
     if not local_on():   # the public registry must leave no agent unreachable
         for orphan in orphan_agents(reg, items):
             errors.append(f"orphan agent '{orphan}': no area role, fallback or entry names it")
@@ -554,12 +555,12 @@ def area_refs(conf: dict) -> list[tuple[str, str]]:
     return refs
 
 
-def validate_roles(reg: dict, items: dict) -> list[str]:
+def validate_roles(reg: dict, items: dict, known: set) -> list[str]:
     """`roles:` of a dispatcher workflow: known roles, and `uses.agents` covers every agent the areas give them."""
     errors: list[str] = []
     scopes = [reg.get("defaults") or {}, *(c or {} for c in (reg.get("presets") or {}).values()),
               *(c or {} for c in (reg.get("workspaces") or {}).values()), *(c or {} for c in (reg.get("repos") or {}).values())]
-    known = {i.id for i in items["agent"].values()}   # an unknown agent is validate_areas' error, with its migration hint
+    # an unknown agent is validate_areas' error, with its migration hint
     refs = [(path, ref) for conf in scopes if isinstance(conf, dict) for path, ref in area_refs(conf) if ref in known]
     for it in sorted(items["workflow"].values(), key=lambda w: w.id):
         roles = it.meta.get("roles")
@@ -806,6 +807,9 @@ def validate_watches(reg: dict, where: str, agent_ids: set) -> list[str]:
         common("notion.assigned", a)
         if a.get("mode") is not None and a["mode"] not in ("report", "run"):
             errors.append(f"{where}: notion.assigned.mode must be report or run")
+        for db, target in (a.get("agents") or {}).items():
+            if isinstance(target, str) and target.startswith("agent:") and target not in agent_ids:
+                errors.append(f"{where}: notion.assigned.agents.{db} {unknown_agent(target)}")
     return errors
 
 
@@ -1421,7 +1425,8 @@ def migrate_areas(public: dict, loc: dict) -> list[dict]:
 
 def rename_refs(old) -> tuple:
     """A role value (one ref or a list) with every merged id renamed, duplicates dropped: (new, decision or None).
-    A removal `-old` would become `-new` and drop the surviving agent entirely: left out, for a human to decide."""
+    A removal `-old` would become `-new` and drop the surviving agent entirely, and `old` next to `-new` would go with
+    it: both left out, for a human to decide."""
     vals = old if isinstance(old, list) else [old]
     new: list = []
     notes: list[str] = []
@@ -1434,6 +1439,10 @@ def rename_refs(old) -> tuple:
                 notes.append(f"`{v}` removed only {name}, whose checks are now in {target}; `-{target}` would remove "
                              f"{target} entirely: keep {target} (proposed: the entry is dropped) or add `-{target}`")
                 continue
+            if not neg and "-" + target in vals:
+                notes.append(f"`{v}` kept only the perf checks of {target}, which this list removes: keep `-{target}` "
+                             f"(the perf checks go too; proposed: the entry is dropped) or drop `-{target}` (the whole review comes back)")
+                continue
             v = ("-" if neg else "") + target
         if v not in new:
             new.append(v)
@@ -1444,18 +1453,19 @@ def migrate_agents(loc: dict) -> list[dict]:
     """Every setting of the personal layer that names a merged agent id (AGENT_RENAMES), and what it becomes."""
     out: list[dict] = []
 
-    def ref(scope: str, path: str, old) -> None:
+    def ref(scope: str, keys: list, old) -> None:
         vals = old if isinstance(old, list) else [old]
         if any(isinstance(v, str) and v.lstrip("-") in AGENT_RENAMES for v in vals):
             new, decision = rename_refs(old)
-            out.append({"scope": scope, "path": path, "old": old, "new": new, **({"decision": decision} if decision else {})})
+            out.append({"scope": scope, "path": ".".join(keys), "keys": keys, "old": old, "new": new,
+                        **({"decision": decision} if decision else {})})
 
-    def area(scope: str, path: str, a: dict) -> None:
+    def area(scope: str, keys: list, a: dict) -> None:
         for role in ROLE_FAMILIES:
-            ref(scope, f"{path}.{role}", a.get(role))
+            ref(scope, [*keys, role], a.get(role))
         for name, sub in (a.get("sub") or {}).items():
             if isinstance(sub, dict):
-                area(scope, f"{path}.sub.{name}", sub)
+                area(scope, [*keys, "sub", name], sub)
 
     scopes = [("defaults", loc.get("defaults"))]
     for group in ("presets", "workspaces", "repos"):
@@ -1465,28 +1475,20 @@ def migrate_agents(loc: dict) -> list[dict]:
             continue
         for name, a in (conf.get("areas") or {}).items():
             if isinstance(a, dict):
-                area(scope, f"areas.{name}", a)
-        for key, v in (conf.get("fallbacks") or {}).items():
-            ref(scope, f"fallbacks.{key}" + (".agent" if isinstance(v, dict) else ""), v.get("agent") if isinstance(v, dict) else v)
-        agents = (conf.get("models") or {}).get("agents") or {}
-        for old, spec in agents.items():
+                area(scope, ["areas", name], a)
+        for old in (conf.get("models") or {}).get("agents") or {}:
             if old in AGENT_RENAMES:
-                new = AGENT_RENAMES[old]
-                row = {"scope": scope, "path": f"models.agents.{old}", "old": old, "new": new, "value": spec}
-                if new in agents:   # the surviving agent has its own setting: it stays, the old one goes
-                    row["new"] = None
-                    if agents[new] != spec:
-                        row["decision"] = f"{new} keeps its own setting {agents[new]!r}; {old} had {spec!r}"
-                out.append(row)
+                out.append({"scope": scope, "path": f"models.agents.{old}", "old": old, "new": None,
+                            "decision": f"remove it; {AGENT_RENAMES[old]} now runs the whole review: give it a tier yourself if you want one"})
     for name, w in ((loc.get("slack") or {}).get("watches") or {}).items():
-        ref("slack", f"watches.{name}.action.agent", ((w or {}).get("action") or {}).get("agent"))
+        ref("slack", ["watches", name, "action", "agent"], ((w or {}).get("action") or {}).get("agent"))
     for db, target in (((loc.get("notion") or {}).get("assigned") or {}).get("agents") or {}).items():
-        ref("notion", f"assigned.agents.{db}", target)
+        ref("notion", ["assigned", "agents", db], target)
     return out
 
 
-def nest(path: str, value) -> dict:
-    for key in reversed(path.split(".")):
+def nest(keys: list, value) -> dict:
+    for key in reversed(keys):
         value = {key: value}
     return value
 
@@ -1502,14 +1504,12 @@ def cmd_migrate(args) -> None:
         notes: list[str] = []
         for r in (r for r in rows if r["scope"] == scope):
             if not agents:
-                snippet = deep_merge(snippet, nest(r["area_path"], r["new"]))
+                snippet = deep_merge(snippet, nest(r["area_path"].split("."), r["new"]))
                 continue
             if r["path"].startswith("models.agents."):
                 notes.append(f"remove {r['path']}")
-                if r["new"]:
-                    snippet = deep_merge(snippet, {"models": {"agents": {r["new"]: r["value"]}}})
             else:
-                snippet = deep_merge(snippet, nest(r["path"], r["new"]))
+                snippet = deep_merge(snippet, nest(r["keys"], r["new"]))
             if r.get("decision"):
                 notes.append(f"decide ({r['path']}): {r['decision']}")
         group, _, name = scope.partition(".")

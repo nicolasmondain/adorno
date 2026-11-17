@@ -174,10 +174,12 @@ yes, then `bin/kit check` and `bin/kit install`.
 **Merged agents.** `agent:review:perf` is part of `agent:review:front` and `agent:review:perf-back` of
 `agent:review:back` ([decision 6](decisions/areas.md)). `bin/kit check` refuses a setting that still names an old id and
 points to `bin/kit migrate agents` (read-only, runs even when `check` fails): per scope, every `areas` role (removals and
-sub-areas included), `fallbacks`, `models.agents` key, Slack watch `action.agent` and Notion `assigned.agents` naming
-one, with what it becomes. A reviewer listed twice after renaming loses its duplicate; a removal `-agent:review:perf`
-is flagged `decision`, since `-agent:review:front` would drop the whole front review. The `adorno-setup` skill applies
-it at its start, like `migrate areas`.
+sub-areas included), `models.agents` key, Slack watch `action.agent` and Notion `assigned.agents` naming one, with what
+it becomes. A reviewer listed twice after renaming loses its duplicate. Three cases are flagged `decision` and never
+converted: a removal `-agent:review:perf` (`-agent:review:front` would drop the whole front review), `agent:review:perf`
+next to `-agent:review:front` in the same list (renamed, it would go with the rest of the front review), and a
+`models.agents` key (its tier would apply to the whole surviving review). The `adorno-setup` skill applies it at its
+start, like `migrate areas`.
 
 ## 4. Permissions
 
