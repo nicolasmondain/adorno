@@ -519,8 +519,9 @@ def validate(cfg: Config, items: dict[str, dict[str, Item]]) -> list[str]:
 ROLE_FAMILIES = {"build": ("feat", "test", "docs", "chore"), "fix": ("fix", "test", "refactor", "ci", "docs", "chore"),
                  "perf": ("perf",), "review": ("review",), "qa": ("test",)}
 AREA_KEYS = {"paths", "content", *ROLE_FAMILIES, "skills", "sub"}
-# the families a fallback may come from: a nit is a fix, a missing test a test, a perf point a perf agent
-FALLBACK_FAMILIES = {"nit": ROLE_FAMILIES["fix"], "test": ("test",), "perf": ROLE_FAMILIES["perf"]}
+# the families a fallback may come from: a nit is a fix, a missing test a test, a perf point a perf agent, or a fixer
+# with the perf skill (the neutral default: perf agents are stack-specific)
+FALLBACK_FAMILIES = {"nit": ROLE_FAMILIES["fix"], "test": ("test",), "perf": ROLE_FAMILIES["perf"] + ("fix",)}
 AREA_REVIEWERS_MSG = ("`area_reviewers` is replaced by `areas.<area>.review`: run the adorno-setup skill (mode repo) "
                       "to migrate; `bin/kit migrate areas` prints the conversion")
 

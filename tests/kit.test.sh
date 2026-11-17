@@ -272,7 +272,7 @@ if ! AREA_RE='(?i)token' awk 'BEGIN { if ("" ~ ENVIRON["AREA_RE"]) {} }' 2>/dev/
   bad "a content regex awk cannot run" $'  ghost/repo:\n    areas: {back: {content: "(?i)token"}}' "areas.back.content is an invalid regex"
 fi
 bad "an unknown fallback" $'  ghost/repo:\n    fallbacks: {lint: "agent:fix:patch"}' "fallbacks.lint: unknown key"
-bad "a fallback from the wrong family" $'  ghost/repo:\n    fallbacks: {perf: {agent: "agent:fix:patch"}}' "fallbacks.perf.agent: 'agent:fix:patch' is not a perf agent"
+bad "a fallback from the wrong family" $'  ghost/repo:\n    fallbacks: {perf: {agent: "agent:test:unit"}}' "fallbacks.perf.agent: 'agent:test:unit' is not a perf/fix agent"
 bad "a test fallback from another family" $'  ghost/repo:\n    fallbacks: {test: "agent:fix:patch"}' "fallbacks.test: 'agent:fix:patch' is not a test agent"
 bad "a nit fallback from another family" $'  ghost/repo:\n    fallbacks: {nit: "agent:perf:nodejs"}' "fallbacks.nit: 'agent:perf:nodejs' is not a fix/test/refactor/ci/docs/chore agent"
 bad "area_reviewers is refused with the migration hint" $'  ghost/repo:\n    area_reviewers: {docs: ["agent:review:security"]}' "bin/kit migrate areas"
