@@ -558,7 +558,7 @@ if [ -f "$REAL" ]; then
   expect_exit 2 "--files needs paths" -- "$S/pr-areas" acme/app --files
   expect_exit 0 "docs only" -- "$S/pr-areas" acme/app --files docs/guide.md
   expect_jq "perf falls back to the fallback agent and its skills" \
-    '.perf == "agent:fix:patch" and (.skills | index("performance-optimization")) and .by_area.docs.perf == null and .fallbacks.perf.agent == "agent:fix:patch" and (.fallbacks.perf.skills | index("performance-optimization")) and .build == "agent:docs:write"'
+    '.perf == "agent:perf:nodejs" and (.skills | index("performance-optimization")) and .by_area.docs.perf == null and .fallbacks.perf.agent == "agent:perf:nodejs" and (.fallbacks.perf.skills | index("performance-optimization")) and .build == "agent:docs:write"'
   echo "pr-areas: overrides across layers, ranking and sub-area inheritance"
   jq '.workspaces = {"ovr-ws": {"repos": ["ovr/layers"], "areas": {"back": {"review": ["agent:review:extra"], "skills": ["extra-skill"]}}}}
     | .repos = {"ovr/single": {"areas": {"back": {"build": "agent:feat:custom"}, "front": {"skills": ["-frontend-ui-engineering"]}}},

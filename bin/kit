@@ -515,7 +515,9 @@ def validate(cfg: Config, items: dict[str, dict[str, Item]]) -> list[str]:
 ROLE_FAMILIES = {"build": ("feat", "test", "docs", "chore"), "fix": ("fix", "test", "refactor", "ci", "docs", "chore"),
                  "perf": ("perf",), "review": ("review",), "qa": ("test",)}
 AREA_KEYS = {"paths", "content", *ROLE_FAMILIES, "skills", "sub"}
-FALLBACK_KEYS = ("nit", "test", "perf")
+# the families a fallback may come from: a nit is a fix, a missing test a test, a perf point a perf agent
+FALLBACK_FAMILIES = {"nit": ROLE_FAMILIES["fix"], "test": ("test",), "perf": ROLE_FAMILIES["perf"]}
+FALLBACK_KEYS = tuple(FALLBACK_FAMILIES)
 AREA_REVIEWERS_MSG = ("`area_reviewers` is replaced by `areas.<area>.review`: run the adorno-setup skill (mode repo) "
                       "to migrate; `bin/kit migrate areas` prints the conversion")
 
@@ -712,11 +714,11 @@ def validate_areas(conf: dict, where: str, scope: str, agent_ids: set, skill_nam
             for k in v:
                 if k not in ("agent", "skills"):
                     errors.append(f"{where}: {p}.{k}: unknown key (known: agent, skills)")
-            agent(f"{p}.agent", v.get("agent"), None)
+            agent(f"{p}.agent", v.get("agent"), FALLBACK_FAMILIES[key])
             if v.get("skills") is not None:
                 skills(f"{p}.skills", v["skills"])
         else:
-            agent(p, v, None)
+            agent(p, v, FALLBACK_FAMILIES[key])
     return errors
 
 

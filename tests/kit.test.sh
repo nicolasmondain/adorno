@@ -268,6 +268,7 @@ if ! AREA_RE='(?i)token' awk 'BEGIN { if ("" ~ ENVIRON["AREA_RE"]) {} }' 2>/dev/
   bad "a content regex awk cannot run" $'  ghost/repo:\n    areas: {back: {content: "(?i)token"}}' "areas.back.content is an invalid regex"
 fi
 bad "an unknown fallback" $'  ghost/repo:\n    fallbacks: {lint: "agent:fix:patch"}' "fallbacks.lint: unknown key"
+bad "a fallback from the wrong family" $'  ghost/repo:\n    fallbacks: {perf: {agent: "agent:fix:patch"}}' "fallbacks.perf.agent: 'agent:fix:patch' is not a perf agent"
 bad "area_reviewers is refused with the migration hint" $'  ghost/repo:\n    area_reviewers: {docs: ["agent:review:security"]}' "bin/kit migrate areas"
 OKL="$TMP/okl"; mkdir -p "$OKL"
 printf 'owner: {name: T, github: t, language: fr}\nrepos:\n  ghost/repo:\n    areas: {back: {review: ["-agent:review:tests"]}}\n' >"$OKL/adorno.yaml"

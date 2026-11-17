@@ -172,7 +172,7 @@ defaults:
   fallbacks:
     nit: agent:refactor:simplify
     test: agent:test:unit
-    perf: { agent: agent:fix:patch, skills: [performance-optimization] }
+    perf: { agent: agent:perf:nodejs, skills: [performance-optimization] }
 
 # Your real repos (reviewers, team, context, permissions, voice, vision) live in local/adorno.yaml, git-ignored
 # and applied by `bin/kit install`. Template: local.example/adorno.yaml. Result for a repo: `bin/kit conf`.

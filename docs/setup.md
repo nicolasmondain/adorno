@@ -142,7 +142,8 @@ agent outside its role's families (`build`: feat, test, docs, chore; `fix`: fix,
   order). An area without the role is skipped. `review` and `skills` are the union of every touched area plus
   `always`. `by_area` gives each area's roles, for a fixer chosen by the file a finding is on.
 - **`fallbacks`** cover work outside any area: `nit` → `refactor:simplify`, `test` → `test:unit`, and `perf` →
-  `fix:patch` with the skill `performance-optimization` when no touched area has a `perf`.
+  `perf:nodejs` with the skill `performance-optimization` when no touched area has a `perf`. Each comes from the
+  family of its role (`bin/kit check`): a nit from a fixer family, a test from `test`, a perf point from `perf`.
 
 **Overriding an area for a repo**, at any level of `local/adorno.yaml`: `paths`, `content` and the single roles
 replace; `review` and `skills` add to the public list, and an entry `-x` removes `x`.

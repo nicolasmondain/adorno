@@ -240,7 +240,7 @@
       "nit": "agent:refactor:simplify",
       "test": "agent:test:unit",
       "perf": {
-        "agent": "agent:fix:patch",
+        "agent": "agent:perf:nodejs",
         "skills": [
           "performance-optimization"
         ]
