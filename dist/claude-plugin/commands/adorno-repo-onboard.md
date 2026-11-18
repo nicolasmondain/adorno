@@ -13,12 +13,16 @@ Input: $ARGUMENTS
    (`use:`) `agent:chore:repo` proposed, possibly a workspace, written to `local/adorno.yaml` (ignored by git) after
    validation, then `bin/kit install` on the repo. Nothing is written or committed in the tracked files of the adorno
    repo.
-4. **Ship**, without asking, once the repo is declared (before, no run can cover it):
+4. **Design** (front repos: step 9 of `adorno-setup` mode `repo` applied), in this session, not an agent (it asks the
+   owner): the skill `impeccable`, `init` then, if the repo already has a UI, `document`: `PRODUCT.md`, `DESIGN.md`
+   and `.impeccable/config.json` go on `chore/agents-onboarding`, with the other files; `.impeccable/config.local.json`
+   never (impeccable excludes it from git). `--unattended`: skipped, the reason at the top of the report.
+5. **Ship**, without asking, once the repo is declared (before, no run can cover it):
    `adorno-github/scripts/run-begin --workflow workflow:repo:onboard --mode auto --level L3 --repo owner/repo`, then
-   `workflow:pr:ship owner/repo chore/agents-onboarding <clone>`: the repo's `commit_skill` commits the two files
+   `workflow:pr:ship owner/repo chore/agents-onboarding <clone>`: the repo's `commit_skill` commits the files
    (`chore(agents): …`), its `pr_skill` opens the PR. The repo's `max_level` below L3 or a denied `push` / `open_pr`:
    the files stay committed locally, and the report says so.
-5. Always `run-end <id>`, even after a failure.
-6. **Audit** (`--audit` only), once the onboarding run is ended, so no L3 grant is open while the repo's code is read:
+6. Always `run-end <id>`, even after a failure.
+7. **Audit** (`--audit` only), once the onboarding run is ended, so no L3 grant is open while the repo's code is read:
    `workflow:repo:audit owner/repo <clone>`, which opens its own report L0 run; give the path of the `audit.md` it
    prints. Its findings stay in that local report: never in the onboarding PR, its description or `CONSTRAINTS.md`.
