@@ -1,0 +1,37 @@
+diff --git a/server/services/pricing.test.ts b/server/services/pricing.test.ts
+index f4ef9b5..df74697 100644
+--- a/server/services/pricing.test.ts
++++ b/server/services/pricing.test.ts
+@@ -1,6 +1,6 @@
+ import assert from 'node:assert/strict';
+ import { test } from 'node:test';
+-import { applyDiscount } from './pricing.ts';
++import { applyDiscount, refund } from './pricing.ts';
+ 
+ test('applyDiscount takes the percentage off', () => {
+   assert.equal(applyDiscount(2000, 25), 1500);
+@@ -9,3 +9,7 @@ test('applyDiscount takes the percentage off', () => {
+ test('applyDiscount rejects a percentage out of range', () => {
+   assert.throws(() => applyDiscount(2000, 120), RangeError);
+ });
++
++test('refund gives what can still be refunded', () => {
++  assert.equal(refund(5000, 1000, 1500), 2500);
++});
+diff --git a/server/services/pricing.ts b/server/services/pricing.ts
+index 9ebf12d..a538b06 100644
+--- a/server/services/pricing.ts
++++ b/server/services/pricing.ts
+@@ -5,3 +5,12 @@ export function applyDiscount(totalCents: number, percent: number): number {
+   }
+   return Math.round((totalCents * (100 - percent)) / 100);
+ }
++
++// Refunds `amountCents` on an order paid `paidCents`, of which `refundedCents` were already refunded.
++// Returns what can still be refunded afterwards.
++export function refund(paidCents: number, refundedCents: number, amountCents: number): number {
++  if (amountCents <= 0 || refundedCents + amountCents > paidCents) {
++    throw new RangeError(`refund out of range: ${amountCents}`);
++  }
++  return paidCents - refundedCents - amountCents;
++}

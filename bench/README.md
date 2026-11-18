@@ -27,6 +27,7 @@ Per case and overall, on the merged review (`review.json`):
 | verdict | the merged verdict (`pass`, `fix`, `block`) is one the case accepts |
 | clean cases | on a case without defect: findings reported (false alarms), and the verdict must be `pass` |
 | reviews | reviews that `review-merge` rejected or that never came, after one retry |
+| per reviewer | each reviewer on its own review, before the merge: own recall (the expected findings the case gives to it, that it raised itself), precision of its findings, false alarms on the clean cases, rejected or missing reviews, cost per call; on the review cases only (a case of kind `adorno` runs no reviewer) |
 | after `agent:adorno` | the same recall and precision on what it kept (`review-final.json`, inline comments and their badges), over the runs where that file is readable, or where it wrote only its notes (nothing worth posting: no comment, verdict `pass`) when its pass ended without error; the runs where it wrote nothing, an invalid file, or notes from a pass cut by the budget or the turns are counted apart |
 | `agent:adorno` on a fixed review | on the cases of kind `adorno` (below), apart from the reviewers' measures: true findings kept, planted false findings dropped, precision, severity and verdict of what it would post |
 | cost | tokens in and out, the cost the tool reports, agent time, the model that really ran, per agent and in total |
@@ -58,7 +59,7 @@ bench/run --label tiers --budget-usd 30               # every case
 bench/report --label tiers                            # the report again, after grading extras for instance
 ```
 
-`bench/run [--case ID]… [--model X] [--repeat N] [--label NAME] [--budget-usd N] [--repo owner/repo] [--parallel N]`
+`bench/run [--case ID]… [--model X] [--agent-model ID=X]… [--repeat N] [--label NAME] [--budget-usd N] [--repo owner/repo] [--parallel N]`
 builds a throwaway workspace per case (`base/` committed, then `change.diff`), starts every reviewer `pr-areas` picks
 (`--parallel` at a time), merges with `review-merge`, runs a missing or invalid review once more, then starts
 `agent:adorno` on the merged review. It ends with the report. Everything goes to `bench/results/<label>/`, ignored by
@@ -70,7 +71,8 @@ What a run is made of:
 - **The prompts of this working tree** (`dist/`, public layer only): the agents come from `dist/claude-plugin`, the
   instructions from `dist/AGENTS.md`. Your user settings, global instructions, installed agents and hooks are not
   loaded, so a result is tied to a commit (`prompts.sha`, and `dirty` when `src/` or `dist/` had uncommitted changes).
-- **Each agent on its own tier**, unless `--model` replaces the model of all of them.
+- **Each agent on its own tier**, unless `--model` replaces the model of all of them, or `--agent-model ID=X`
+  that of one reviewer or `agent:adorno` (repeat it; it wins over `--model`).
 - **A sandbox**: an agent writes inside its workspace only and has no network (Claude Code's sandbox, macOS or Linux).
   Nothing reaches GitHub, your registry or your learning notes. The runner, outside the sandbox, never follows a link
   an agent leaves in its run folder: that case run fails, nothing of it is kept, and the report names it at the top.
@@ -100,6 +102,24 @@ bench/report --label haiku --against 2026-11-opus
 A baseline holds scores, tokens, costs, model names and the sha of the prompts, and no text written by a model. It is
 never overwritten, and it is yours to create and commit.
 
+## Compare a tier per reviewer
+
+The merged review hides a reviewer that got worse when another one finds the same defect. To judge one reviewer on
+a cheaper model, move it alone and read the "Per reviewer" table, which scores each one on its own review:
+
+```sh
+bench/run --label deep --repeat 2 --budget-usd 55
+bench/run --label mixed --repeat 2 --budget-usd 45 \
+  --agent-model agent:review:ponytail=sonnet --agent-model agent:review:tests=sonnet
+bench/report --label mixed --against deep
+```
+
+Each reviewer is compared on the case runs both runs have, so that a case the budget skipped or a failed case run
+does not weigh on one side only. The reviewers that did not move are the control: when their scores move as much as
+the others', the difference is noise, not the model. A reviewer holds on the cheaper model when it loses none of its
+own expected findings, its precision drops by 10 points at most, it raises at most one false alarm more on the clean
+cases, no more of its reviews are rejected, and one call costs at least 30 % less.
+
 ## Findings to grade
 
 A finding that matches nothing the case plans may be a false positive, or a real point the case did not think of.
@@ -120,14 +140,16 @@ than its fix.
 
 ## Cost to expect
 
-Measured on 2026-11-14 with Claude Code 2.1.325, each agent on its default tier, on `mongo-n-plus-one` (6 reviewers
-and `agent:adorno`): **1.53 USD** and 4 minutes. A reviewer cost 0.15 to 0.22 USD, `agent:adorno` 0.44 USD; 653k
-tokens in (mostly read from cache) and 16k out. The 13 review cases start 69 reviewers and 13 `agent:adorno` passes, the 2
-cases of kind `adorno` one pass each (about 0.45 USD): count
-about 18 USD and 50 minutes per repeat, to be measured on your side with one case first. Always pass `--budget-usd`:
-no case starts once the spent amount plus the dearest case so far would exceed it, what is left is split over the
-calls (over the reviewers of a round, then all of it to `agent:adorno`), and the report says at the top what was
-skipped. The budget relies on the cost the tool reports.
+Measured on 2026-11-14 with Claude Code 2.1.325, each agent on its default tier, on `mongo-n-plus-one` as it routed
+then (6 reviewers, and `agent:adorno`): **1.53 USD** and 4 minutes. A reviewer cost 0.15 to 0.22 USD, `agent:adorno`
+0.44 USD; 653k tokens in (mostly read from cache) and 16k out. At that routing, the benchmark projected about 18 USD
+and 50 minutes for the 13 cases it had then ([decision 2](../docs/decisions/bench.md)). None of that has been measured
+again: it predates #39, which merged `review:perf` into `review:front` and `review:perf-back` into `review:back`, and
+#31, which changed the default areas. As of 2026-11-17, `mongo-n-plus-one` starts 5 reviewers, the 17 review cases
+start 75 reviewers, and the set runs 19 `agent:adorno` passes, the 2 cases of kind `adorno` one pass each. Measure it
+on your side with one case first. Always pass `--budget-usd`: no case starts once the spent amount plus the dearest
+case so far would exceed it, what is left is split over the calls (over the reviewers of a round, then all of it to
+`agent:adorno`), and the report says at the top what was skipped. The budget relies on the cost the tool reports.
 
 ## A case for agent:adorno alone
 

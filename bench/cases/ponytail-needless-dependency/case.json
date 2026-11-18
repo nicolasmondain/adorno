@@ -1,0 +1,47 @@
+{
+  "title": "feat(exports): give each accounting export its own id",
+  "description": "Accounting cannot tell two export runs apart. Adds `exportBatch(invoices)`, which returns the CSV lines with a unique id per run, with its test.",
+  "rationale": "The `uuid` package is added for one `v4()` call, while Node.js ships `crypto.randomUUID()` in its standard library: a dependency to install, audit and update for nothing. A good review asks to drop it.",
+  "routing": {
+    "areas": [
+      "back",
+      "deps",
+      "tests",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:back",
+      "agent:review:tests",
+      "agent:review:security"
+    ]
+  },
+  "verdict": [
+    "pass",
+    "fix"
+  ],
+  "findings": [
+    {
+      "file": "server/services/exports.ts",
+      "lines": null,
+      "category": "needless-dependency",
+      "severity": [
+        "minor",
+        "major"
+      ],
+      "keywords": [
+        "randomUUID",
+        "node:crypto",
+        "\\bcrypto\\b",
+        "built[- ]?in",
+        "standard library",
+        "\\bstdlib\\b",
+        "native",
+        "(extra|new|needless|unnecessary|avoidable) dependenc",
+        "dependenc(y|ies) for"
+      ],
+      "reviewer": "agent:review:ponytail"
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+diff --git a/package.json b/package.json
+index ab0ddf9..eb09cef 100644
+--- a/package.json
++++ b/package.json
+@@ -6,6 +6,9 @@
+     "test": "tsx --test \"server/**/*.test.ts\"",
+     "typecheck": "tsc --noEmit"
+   },
++  "dependencies": {
++    "uuid": "^11.0.0"
++  },
+   "devDependencies": {
+     "tsx": "^4.19.0",
+     "typescript": "^5.6.0"
+diff --git a/server/services/exports.test.ts b/server/services/exports.test.ts
+index f13a211..c148a4f 100644
+--- a/server/services/exports.test.ts
++++ b/server/services/exports.test.ts
+@@ -1,7 +1,17 @@
+ import assert from 'node:assert/strict';
+ import { test } from 'node:test';
+-import { invoiceLine } from './exports.ts';
++import { exportBatch, invoiceLine } from './exports.ts';
+ 
+ test('invoiceLine gives the number and the total in euros', () => {
+   assert.equal(invoiceLine({ number: 'F-1', totalCents: 12345 }), 'F-1;123.45');
+ });
++
++test('exportBatch gives each run its own id, and one line per invoice', () => {
++  const invoices = [{ number: 'F-1', totalCents: 12345 }, { number: 'F-2', totalCents: 500 }];
++  const first = exportBatch(invoices);
++  const second = exportBatch(invoices);
++
++  assert.deepEqual(first.lines, ['F-1;123.45', 'F-2;5.00']);
++  assert.match(first.id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
++  assert.notEqual(first.id, second.id);
++});
+diff --git a/server/services/exports.ts b/server/services/exports.ts
+index 2d2400f..0246aa7 100644
+--- a/server/services/exports.ts
++++ b/server/services/exports.ts
+@@ -1,9 +1,21 @@
++import { v4 as uuidv4 } from 'uuid';
++
+ export interface Invoice {
+   number: string;
+   totalCents: number;
+ }
+ 
++export interface ExportBatch {
++  id: string;
++  lines: string[];
++}
++
+ // One CSV line per invoice, for the accounting export.
+ export function invoiceLine(invoice: Invoice): string {
+   return [invoice.number, (invoice.totalCents / 100).toFixed(2)].join(';');
+ }
++
++// One batch per export run: its id lets accounting tell two runs apart.
++export function exportBatch(invoices: Invoice[]): ExportBatch {
++  return { id: uuidv4(), lines: invoices.map(invoiceLine) };
++}

@@ -1,0 +1,56 @@
+{
+  "title": "feat(contacts): page through the contact list with offset",
+  "description": "Integrations need to read every contact, not only the first page. Adds an `offset` query parameter to `GET /v1/contacts`, documented in the reference, with its test.",
+  "rationale": "`offset` reaches `skip()` unchecked: a negative value makes MongoDB reject the query, so the public endpoint answers 500 instead of 400, and `offset=abc` silently reads the first page. A public parameter is validated (a non-negative integer) and refused with 400 otherwise.",
+  "routing": {
+    "areas": [
+      "api",
+      "back",
+      "back.mongodb",
+      "docs",
+      "tests",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:back",
+      "agent:review:tests",
+      "agent:review:mongodb",
+      "agent:review:api"
+    ],
+    "skills": [
+      "api-and-interface-design"
+    ]
+  },
+  "verdict": [
+    "fix"
+  ],
+  "findings": [
+    {
+      "file": "server/routes/contacts.ts",
+      "lines": [
+        20,
+        22
+      ],
+      "category": "unvalidated-input",
+      "severity": [
+        "major",
+        "blocker"
+      ],
+      "keywords": [
+        "validat",
+        "\\b400\\b",
+        "bad request",
+        "negative",
+        "non[- ]?negative",
+        "reject",
+        "NaN",
+        "(not|non)[- ]?(an? )?integer",
+        "\\b500\\b",
+        "sanitiz"
+      ],
+      "reviewer": "agent:review:api"
+    }
+  ]
+}
