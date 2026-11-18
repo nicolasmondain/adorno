@@ -1,6 +1,7 @@
 ---
 description: agent:review:tests — Test review of a diff — coverage of risky paths, edge cases, errors, test readability. Use whenever logic changes.
 argument-hint: <request>
+disable-model-invocation: true
 ---
 
 Delegate the request below to the `adorno-agent-review-tests` sub-agent (agent:review:tests) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-review-tests`) to handle the request.

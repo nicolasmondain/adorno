@@ -964,7 +964,8 @@ def watch_runs():
 
 # The one run-end that goes through in a watching session: an ordinary run's, alone, by its literal id (the workflows a
 # watch launches close their own runs).
-OWN_RUN_END = re.compile(r"\s*[\w./~-]*run-end\s+" + RUN_ID.pattern + r"\s*")
+OWN_RUN_END = re.compile(r"\s*[\w./~-]*run-end\s+" + RUN_ID.pattern
+                         + r"(\s+(done|draft|stopped|failed|ended))?(\s+--status\s+[\w./~-]+)?\s*")
 
 
 def lifts_watch(command, session):

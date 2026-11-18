@@ -1,6 +1,7 @@
 ---
 description: agent:adorno — Adorno, the agent that speaks and decides like you. Last step of every workflow that acts in your name (final pass on the reviews you issue, review of your branch and its PR description, verdict and replies on feedback received on your PRs), with your standards, your verification discipline, your severities, your vision and your voice (skills adorno-profile, adorno-voice and the current repo's settings). Use at the end of workflow:pr:review, workflow:review:requested and workflow:review:received, and in workflow:pr:open and workflow:pr:ship.
 argument-hint: <request>
+disable-model-invocation: true
 ---
 
 Delegate the request below to the `adorno` sub-agent (agent:adorno) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno`) to handle the request.

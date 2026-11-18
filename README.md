@@ -70,6 +70,8 @@ that you set.
 
 ## Getting started
 
+New to adorno? Read the one-page [overview](docs/overview.md) first.
+
 Prerequisites: [uv](https://docs.astral.sh/uv/) (`brew install uv`), authenticated `gh`, `jq`.
 
 ```sh
@@ -129,7 +131,7 @@ The public repo contains no profile: only templates, in `local.example/`.
 | --- | --- | --- |
 | — | `agent:adorno`: speaks and decides in your name, last step of the workflows | none |
 | `core` | `intake`, `router`, `planner`, `triage`, `analyst` (analysis of a conversation or a document) | none |
-| `review` | `code`, `security`, `tests` (extend addy's agents), `ponytail`, per area: `front`, `perf` (front), `back`, `perf-back`, `mongodb`, `api`, and after merge: `impact` | none, read-only |
+| `review` | `code`, `security`, `tests`, `ponytail`, per area: `front`, `back` (both with performance), `mongodb`, `api`, and after merge: `impact` | none, read-only |
 | `feat` | `front`, `back`, `api` | `feat` |
 | `fix` | `investigate` (read-only), `patch`, `security` | `fix` |
 | `perf` | `front`, `mongodb`, `nodejs` | `perf`, before/after measurements |
@@ -191,7 +193,7 @@ viewer/                 the run journal's viewer, served by bin/kit serve (a too
 repos.yaml              default public settings (code areas and their agents and skills, permissions)
 local.example/          template of your personal layer
 vendor/                 imported skills and agents (kit import), pinned in kit.lock
-dist/                   generated outputs (kit build), Claude Code plugin included
+dist/                   generated outputs (kit build); only claude-plugin/ and AGENTS.md are committed
 docs/                   guides
 bench/                  reviewer benchmark: cases, routing check, runner, scoring and report (bench/README.md)
 tests/                  tests of the adorno-github scripts against a fake gh
@@ -200,7 +202,7 @@ tests/                  tests of the adorno-github scripts against a fake gh
 ## Kit commands
 
 ```sh
-bin/kit check [--dist]       # validates (and checks that dist/ is up to date)
+bin/kit check [--dist]       # validates (and checks that the committed dist/ is up to date)
 bin/kit build                # regenerates dist/ and the marketplace (never with local/)
 bin/kit list                 # everything available, with its provenance
 bin/kit conf [owner/repo]    # the settings a repo resolves

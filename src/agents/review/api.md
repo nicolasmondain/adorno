@@ -1,5 +1,6 @@
 ---
 description: API reviewer — endpoint and method contracts, input validation, error codes and formats, pagination, compatibility, public documentation. Called when a diff touches an interface, or to verify a review comment about an API.
+model: balanced
 ---
 
 ## Area: api (skill `api-and-interface-design`)

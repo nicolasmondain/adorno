@@ -93,10 +93,13 @@ and the choice for each step: `docs/models.md` in the adorno repo. For that choi
 - **Minimal context**: an agent only receives the deliverable of the previous step and the files of its area, never the
   whole history.
 - **Skills by area**: when you delegate to an agent, pass it the `skills` that `pr-areas` returns for the files it works
-  on (`by_area.<a>.skills`, or the top-level `skills`); it loads them. The profile and the repo's rules win over a
-  skill's choices (no dependency or framework it suggests without approval, e.g. typescript-pro's tRPC). Pass it the
-  `ponytail` level too (`pr-areas` › `ponytail`, or `repo-conf` before any diff), unless its specialty sets its own
-  (`refactor:simplify`: `ultra`).
+  on (`by_area.<a>.skills`, or the top-level `skills`). Whoever plays an agent (its sub-agent, or you when you take
+  on its role) loads these skills and those its rules name by reading their `SKILL.md` in the skills folder of the
+  repo, else of the home (Claude Code: `.claude/skills/<name>/`, read directly: the Skill tool refuses the ones kept
+  out of the model's list). The profile and the repo's rules win over a skill's choices (no dependency or framework
+  it suggests without approval, e.g. the tRPC a TypeScript skill suggests). Pass it the `ponytail` level too
+  (`pr-areas` › `ponytail`, or `repo-conf` before any diff), unless its specialty sets its own (`refactor:simplify`:
+  `ultra`).
 - An agent whose body starts with "Role delegated to model" sends its judgment to an external model through the
   `adorno-llm` skill: follow its steps, and do the work yourself only as a fallback.
 
