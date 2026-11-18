@@ -5,7 +5,7 @@
   "routing": {
     "areas": [
       "back",
-      "back.query",
+      "back.mongodb",
       "tests",
       "typescript"
     ],
@@ -14,7 +14,6 @@
       "agent:review:ponytail",
       "agent:review:back",
       "agent:review:tests",
-      "agent:review:perf-back",
       "agent:review:mongodb"
     ]
   },
@@ -41,6 +40,81 @@
         "sequential"
       ],
       "reviewer": "agent:review:mongodb"
+    }
+  ],
+  "extras": [
+    {
+      "file": "server/services/orders.ts",
+      "lines": [
+        38,
+        38
+      ],
+      "keywords": [
+        "tenant"
+      ],
+      "valid": true,
+      "note": "the accountId filter of the customer lookup is the tenant isolation and no test fails if it is dropped"
+    },
+    {
+      "file": "server/services/orders.test.ts",
+      "lines": [
+        23,
+        23
+      ],
+      "keywords": [
+        "tenant"
+      ],
+      "valid": true,
+      "note": "same point as orders.ts:38, anchored on the test: no customer of another account in the fixtures"
+    },
+    {
+      "file": "server/services/orders.test.ts",
+      "lines": [
+        23,
+        23
+      ],
+      "keywords": [
+        "empty account"
+      ],
+      "valid": false,
+      "note": "a loop over [] returns []: no branch to test; the points bundled with it (field passthrough, same customer, PAGE_SIZE inherited from listOrders) do not hold either"
+    },
+    {
+      "file": "server/services/orders.test.ts",
+      "lines": [
+        23,
+        23
+      ],
+      "keywords": [
+        "sharing one customer",
+        "duplicate customers"
+      ],
+      "valid": false,
+      "note": "tests a batched Map/$in path that does not exist in this diff; it belongs with the N+1 fix, not as a finding on the loop"
+    },
+    {
+      "file": "server/services/orders.test.ts",
+      "lines": [
+        34,
+        34
+      ],
+      "keywords": [
+        "order fields"
+      ],
+      "valid": false,
+      "note": "`OrderWithCustomer extends Order`: tsc fails if the spread is dropped, and the [null, 'Ada'] assertion already pins the order"
+    },
+    {
+      "file": "server/services/orders.ts",
+      "lines": [
+        20,
+        33
+      ],
+      "keywords": [
+        "\\bindex"
+      ],
+      "valid": false,
+      "note": "index of the pre-existing listOrders query, unchanged by the diff: out of scope"
     }
   ]
 }

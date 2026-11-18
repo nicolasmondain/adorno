@@ -6,7 +6,7 @@
     "areas": [
       "api",
       "back",
-      "back.query",
+      "back.mongodb",
       "security",
       "tests",
       "typescript"
@@ -16,7 +16,6 @@
       "agent:review:ponytail",
       "agent:review:back",
       "agent:review:tests",
-      "agent:review:perf-back",
       "agent:review:mongodb",
       "agent:review:api",
       "agent:review:security"
@@ -51,6 +50,171 @@
         "(is|be|to) a string"
       ],
       "reviewer": "agent:review:security"
+    }
+  ],
+  "extras": [
+    {
+      "file": "server/routes/account.ts",
+      "lines": [
+        19,
+        22
+      ],
+      "keywords": [
+        "req\\.body`? is `?undefined",
+        "TypeError"
+      ],
+      "valid": true,
+      "note": "express ^5 leaves req.body undefined without a JSON body: `req.body.token` throws and the extension gets a 500 instead of the JSON 401/400 (139's Express 4 hang claim is wrong, its body point stands)"
+    },
+    {
+      "file": "server/routes/account.ts",
+      "lines": [
+        22,
+        22
+      ],
+      "keywords": [
+        "ignoreUndefined"
+      ],
+      "valid": true,
+      "note": "a missing token becomes `{ apiToken: null }` and matches an account without a token: the planned defect's root (no string check) through another input, on its line, missed by the case keywords"
+    },
+    {
+      "file": "server/routes/account.ts",
+      "lines": [
+        22,
+        22
+      ],
+      "keywords": [
+        "No index on",
+        "collection scan",
+        "COLLSCAN"
+      ],
+      "valid": true,
+      "note": "new query on accounts.apiToken with no index anywhere in the repo, on an unauthenticated route; a unique index also guarantees one account per token"
+    },
+    {
+      "file": "server/routes/account.ts",
+      "lines": [
+        19,
+        19
+      ],
+      "keywords": [
+        "rate limit"
+      ],
+      "valid": false,
+      "note": "generic hardening: every token-authenticated route already answers 401 on a bad token, nothing shows guessable tokens, and the limiter lives outside the diff"
+    },
+    {
+      "file": "server/routes/account.ts",
+      "lines": [
+        8,
+        8
+      ],
+      "keywords": [
+        "plain ?text",
+        "clear text"
+      ],
+      "valid": false,
+      "note": "token storage model predates the change (Account.apiToken is in the base): out of scope"
+    },
+    {
+      "file": "server/routes/account.ts",
+      "lines": [
+        22,
+        22
+      ],
+      "keywords": [
+        "plaintext"
+      ],
+      "valid": false,
+      "note": "token storage model predates the change (Account.apiToken is in the base): out of scope"
+    },
+    {
+      "file": "server/routes/account.ts",
+      "lines": [
+        19,
+        19
+      ],
+      "keywords": [
+        "async handler without",
+        "unhandled rejection"
+      ],
+      "valid": false,
+      "note": "express ^5 forwards a rejected async handler to the error handler (500): no hang, no wrapper needed"
+    },
+    {
+      "file": "server/routes/account.ts",
+      "lines": [
+        27,
+        27
+      ],
+      "keywords": [
+        "projection"
+      ],
+      "valid": false,
+      "note": "_id is returned by default by MongoDB, documented behaviour; the explicit mapping is fine: restyle of working code"
+    },
+    {
+      "file": "server/routes/account.ts",
+      "lines": [
+        18,
+        18
+      ],
+      "keywords": [
+        "CORS"
+      ],
+      "valid": false,
+      "note": "the code matches the described 401; CORS, limiter and body limit are mount-level config outside the diff"
+    },
+    {
+      "file": "server/routes/account.test.ts",
+      "lines": [
+        30,
+        35
+      ],
+      "keywords": [
+        "non-string",
+        "operator",
+        "missing[- ]token"
+      ],
+      "valid": true,
+      "note": "the planned defect, anchored elsewhere: the planned injection seen from the tests (no operator object or non-string token sent); the defect itself is at account.ts:20-22"
+    },
+    {
+      "file": "server/routes/account.test.ts",
+      "lines": [
+        33,
+        34
+      ],
+      "keywords": [
+        "invalid_token"
+      ],
+      "valid": true,
+      "note": "the 401 path only checks the status: the `{ error: 'invalid_token' }` contract the extension reads is untested, unlike the happy path's deepEqual"
+    },
+    {
+      "file": "server/routes/account.test.ts",
+      "lines": [
+        24,
+        25
+      ],
+      "keywords": [
+        "second account"
+      ],
+      "valid": false,
+      "note": "the unknown-token test already fails if the filter is ignored (findOne({}) would return acme), and the deepEqual already keeps apiToken out"
+    },
+    {
+      "file": "server/routes/account.test.ts",
+      "lines": [
+        26,
+        26
+      ],
+      "keywords": [
+        "echoed"
+      ],
+      "valid": false,
+      "note": "the deepEqual on the full body already fails if apiToken is returned"
     }
   ]
 }

@@ -12,8 +12,7 @@
       "agent:review:code",
       "agent:review:ponytail",
       "agent:review:back",
-      "agent:review:tests",
-      "agent:review:perf-back"
+      "agent:review:tests"
     ],
     "skills": [
       "typescript-pro"
@@ -46,6 +45,70 @@
         "validat"
       ],
       "reviewer": "agent:review:code"
+    }
+  ],
+  "extras": [
+    {
+      "file": "server/services/subscriptions.ts",
+      "lines": [
+        24,
+        24
+      ],
+      "keywords": [
+        "accountId"
+      ],
+      "valid": true,
+      "note": "applyPlanChange ignores event.accountId: an event for another account would change this subscription; check or drop the field"
+    },
+    {
+      "file": "server/services/subscriptions.ts",
+      "lines": [
+        23,
+        23
+      ],
+      "keywords": [
+        "webhook handling",
+        "handler"
+      ],
+      "valid": false,
+      "note": "asks for code outside the diff (handler, idempotency): out of scope"
+    },
+    {
+      "file": "server/services/subscriptions.test.ts",
+      "lines": [
+        11,
+        12
+      ],
+      "keywords": [
+        "downgrade"
+      ],
+      "valid": false,
+      "note": "no branch distinguishes an upgrade from a downgrade; free's price belongs to monthlyPrice"
+    },
+    {
+      "file": "server/services/subscriptions.test.ts",
+      "lines": [
+        11,
+        12
+      ],
+      "keywords": [
+        "mutat",
+        "unchanged"
+      ],
+      "valid": false,
+      "note": "the function returns a spread; asserting non-mutation guards a hypothetical refactor"
+    },
+    {
+      "file": "server/services/subscriptions.test.ts",
+      "lines": [
+        15,
+        15
+      ],
+      "keywords": [
+        "two concepts"
+      ],
+      "valid": false,
+      "note": "checking the new plan's price is a fair end-to-end assertion; splitting it is style"
     }
   ]
 }

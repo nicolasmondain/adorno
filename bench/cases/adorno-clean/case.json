@@ -1,0 +1,53 @@
+{
+  "kind": "adorno",
+  "title": "refactor(duration): flatten formatDuration",
+  "description": "`formatDuration` nested three levels of `if / else`. Early returns and named constants replace them; the output is unchanged, and a test now pins the unit boundaries.",
+  "rationale": "agent:adorno gets two false findings on a behavior-preserving refactor: dropped seconds (the ternary keeps them, and the new test pins 3599 to 59m 59s) and negative input (the doc comment restricts the input, and the behavior did not change). Nothing is worth posting: the verdict is pass.",
+  "routing": {
+    "areas": [
+      "back",
+      "tests",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:back",
+      "agent:review:tests"
+    ]
+  },
+  "verdict": [
+    "pass"
+  ],
+  "findings": [],
+  "planted": [
+    {
+      "file": "server/lib/duration.ts",
+      "lines": [
+        10,
+        12
+      ],
+      "keywords": [
+        "drop",
+        "seconds (are |is )?(lost|missing|gone)",
+        "behaviou?r change",
+        "59m(?! 59s)"
+      ],
+      "why": "line 12 returns `${minutes}m ${seconds}s` when there are seconds, and the new test asserts 3599 is 59m 59s"
+    },
+    {
+      "file": "server/lib/duration.ts",
+      "lines": [
+        5,
+        7
+      ],
+      "keywords": [
+        "negative",
+        "RangeError",
+        "not an integer",
+        "validat"
+      ],
+      "why": "the doc comment documents a whole, non-negative input, and the refactor does not change what happens outside it"
+    }
+  ]
+}

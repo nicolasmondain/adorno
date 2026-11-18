@@ -1,0 +1,49 @@
+diff --git a/docs/api-reference/contacts.md b/docs/api-reference/contacts.md
+index d83ae30..42e70e4 100644
+--- a/docs/api-reference/contacts.md
++++ b/docs/api-reference/contacts.md
+@@ -9,6 +9,7 @@ Lists the contacts of the account, newest first.
+ | Query parameter | Type | Description |
+ | --- | --- | --- |
+ | `limit` | integer | Page size, 50 by default, 200 at most. |
++| `offset` | integer | Contacts to skip before the page, 0 by default. |
+ 
+ ```json
+ {
+diff --git a/server/routes/contacts.test.ts b/server/routes/contacts.test.ts
+index d5db241..3b62bd3 100644
+--- a/server/routes/contacts.test.ts
++++ b/server/routes/contacts.test.ts
+@@ -30,3 +30,17 @@ test('GET /v1/contacts lists a page of the account and counts every contact', as
+     assert.equal(res.body.total, 2);
+   });
+ });
++
++test('GET /v1/contacts skips the first contacts with offset', async () => {
++  await withDb(async (db) => {
++    await db.collection<Contact>('contacts').insertMany([
++      { _id: 'con_1', accountId: 'acc_1', email: 'ada@example.test', createdAt: new Date('2026-01-01') },
++      { _id: 'con_2', accountId: 'acc_1', email: 'bob@example.test', createdAt: new Date('2026-01-02') },
++    ]);
++
++    const res = await api(db, 'acc_1').get('/v1/contacts?limit=1&offset=1').expect(200);
++
++    assert.deepEqual(res.body.items.map((contact: Contact) => contact._id), ['con_1']);
++    assert.equal(res.body.total, 2);
++  });
++});
+diff --git a/server/routes/contacts.ts b/server/routes/contacts.ts
+index bc2287e..1d238a6 100644
+--- a/server/routes/contacts.ts
++++ b/server/routes/contacts.ts
+@@ -17,8 +17,9 @@ export function contactsRouter(db: Db): Router {
+   router.get('/v1/contacts', async (req, res) => {
+     const accountId: string = res.locals.accountId;
+     const limit = Math.min(Number(req.query.limit) || 50, 200);
++    const offset = Number(req.query.offset) || 0;
+     const [items, total] = await Promise.all([
+-      contacts.find({ accountId }).sort({ createdAt: -1 }).limit(limit).toArray(),
++      contacts.find({ accountId }).sort({ createdAt: -1 }).skip(offset).limit(limit).toArray(),
+       contacts.countDocuments({ accountId }),
+     ]);
+     res.json({ items, total });

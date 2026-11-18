@@ -14,12 +14,15 @@ adorno is a portable, reusable agent setup. Agents, workflows and skills are wri
 | an on-demand know-how | `src/skills/<name>/SKILL.md` (+ `scripts/`, `references/`) |
 | a diagram of an agent family, workflow domain or skill | `SCHEMA.md` in that folder (mermaid only; ignored by `bin/kit` as an item and not shipped to `dist/`) |
 | a GitHub access | a script in `src/skills/adorno-github/scripts/` + its test in `tests/adorno-github.test.sh` |
+| an event of the run journal | `src/skills/adorno-journal/schema.json` (the format) + `scripts/journal.py` (the only writer: redaction, hooks, transcripts) + `tests/adorno-journal.test.sh`; fixtures are synthetic journals in `tests/fixtures/journal/`, never a real one |
+| the journals' server or their viewer | `bin/kit_serve.py` + `tests/kit-serve.test.sh` (it computes, read-only, on 127.0.0.1); `viewer/` + `tests/journal-viewer.test.sh` (it draws: no build, no library, colours and fonts in `tokens.css` only) — a tool of this repo, never shipped to `dist/` |
 | a Slack or Notion watch | a workflow `src/workflows/slack/…` or `src/workflows/notion/…`; the deterministic part in `src/skills/adorno-watch/scripts/` + `tests/adorno-watch.test.sh`; read through the connectors, only write: the report to oneself |
 | an agent's or workflow's model | its `model:` tier (`fast`, `balanced`, `deep`, `frontier`) and, if needed, `effort:` (`low` … `max`), chosen by [docs/models.md](docs/models.md); `delegable: true` if it can judge on inputs gathered in advance (external route); the actual choice per tool and per repo is in `local/` › `models` |
 | a repo, a workspace, permissions, a voice, a vision | `local/` (ignored by git; template: `local.example/`) — never in the repo |
-| a default public setting | `repos.yaml` (+ its validation in `bin/kit` › `validate_registry`) |
+| a default public setting | `repos.yaml` (+ its validation in `bin/kitlib/validate.py` › `validate_registry`) |
+| a change to the kit itself | `bin/kitlib/<module>.py` (`bin/kit` only calls `kitlib.cli.main`); a module imports only from the ones below it: `paths`, `ctx` (per-command state, read as `ctx.X`), `util`, `registry`, `model`, `validate`, `render`, `build`, `commands`, `imports`, `install`, `cli` |
 | a settings resolution rule | `src/skills/adorno-github/scripts/resolve.jq` (shared by the scripts and `kit conf`) + its tests |
-| content from another repo | `imports:` in `kit.yaml`, then `bin/kit import` |
+| content from another repo | `imports:` in `kit.yaml`, then `bin/kit import` (`--check`: what changed upstream, writes nothing; `--update`: move the pin, in its own PR) |
 | modifying an imported item | a local file with `extends: <import>/<name>` (never edit in `vendor/`) |
 
 `bin/kit new agent perf:redis` (or `new workflow ci:flaky`, `new skill <name>`) creates a starter file.
@@ -47,7 +50,8 @@ adorno is a portable, reusable agent setup. Agents, workflows and skills are wri
 bin/kit check && bin/kit build && for t in tests/*.test.sh; do $t || break; done
 ```
 
-Commit `src/`, `dist/`, `vendor/`, `kit.yaml`, `kit.lock` and `repos.yaml` together: CI rejects a stale `dist/`.
+Commit `src/`, `dist/`, `vendor/`, `kit.yaml`, `kit.lock` and `repos.yaml` together: CI rejects a stale committed
+`dist/`, which is only `dist/claude-plugin/` and `dist/AGENTS.md` (`.gitignore` keeps the other targets local).
 
 ## Branches and pull requests
 

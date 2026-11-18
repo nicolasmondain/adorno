@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Usage: pr-areas owner/repo DIFF_FILE
 #        pr-areas owner/repo --files PATH [PATH…]      (paths only, before any code exists: no `content` rules)
+#        pr-areas owner/repo --files -                 (same, one path per line on stdin: a whole repo's file list)
 # Classifies a change into the code areas of repos.yaml › areas (front, back, api, …) — path globs, plus a regex on
 # added lines when given a diff — and says which agents and skills to use. A sub-area is keyed `parent.sub`
-# (back.query): when detected it also adds its files to its parent. `always` is not an area. Files matching no area
+# (back.migration): when detected it also adds its files to its parent. `always` is not an area. Files matching no area
 # land in `other`.
 # Prints JSON {files, areas: {area: [paths]}, other: [paths],
 #              by_area: {area: {build, fix, perf, qa, review, skills}},
@@ -20,7 +21,7 @@
 . "$(dirname "$0")/_lib.sh"
 
 split_repo "${1:-}"
-usage="usage: pr-areas owner/repo DIFF_FILE | pr-areas owner/repo --files PATH [PATH…]"
+usage="usage: pr-areas owner/repo DIFF_FILE | pr-areas owner/repo --files PATH [PATH…] | --files -"
 mode="diff"; diff="${2:-}"
 if [ "${2:-}" = "--files" ]; then
   mode=files; [ $# -ge 3 ] || die "$usage" "$E_USAGE"
@@ -29,11 +30,15 @@ else
 fi
 conf="$(repo_conf "$REPO")"
 
-tmp="$(work_dir)/areas-$$"; mkdir -p "$tmp"; trap 'rm -rf "$tmp"' EXIT
+tmp="$(work_dir)/areas-$$"; mkdir -p "$tmp"; trap '_journal_exit $? "$tmp"' EXIT
 : >"$tmp/raw"; : >"$tmp/files"; : >"$tmp/added"; : >"$tmp/hits"
 
 if [ "$mode" = files ]; then
-  shift 2; printf '%s\n' "$@" >"$tmp/files"
+  shift 2
+  # stdin: drop CRLF and empty lines, end every line (a last one without newline included) with a newline
+  if [ $# -eq 1 ] && [ "$1" = - ]; then
+    awk '{ sub(/\r$/, "") } length' >"$tmp/files"; [ -s "$tmp/files" ] || die "$usage" "$E_USAGE"
+  else printf '%s\n' "$@" >"$tmp/files"; fi
 else
 # file list from the `--- a/x` / `+++ b/y` headers (new name for renames, old name for deletions; git quotes
 # names with spaces or non-ASCII characters and escapes them in octal), and `path<TAB>added line` per added line
@@ -63,11 +68,13 @@ unit_rule='(.areas | if ($a | contains(".")) then .[($a | split(".")[0])].sub[($
 for area in $units; do
   globs="$(jq -r --arg a "$area" "$unit_rule | .paths // [] | .[]" <<<"$conf")"
   if [ -n "$globs" ]; then
+    # read the globs once (bash 3.2: no mapfile), not once per file
+    gl=(); while IFS= read -r g; do gl+=("$g"); done <<<"$globs"
     while IFS= read -r f; do
-      while IFS= read -r g; do
+      for g in "${gl[@]}"; do
         # shellcheck disable=SC2053  # $g is a glob on purpose
         if [[ "$f" == $g ]]; then printf '%s\t%s\n' "$area" "$f" >>"$tmp/hits"; break; fi
-      done <<<"$globs"
+      done
     done <"$tmp/files"
   fi
   regex="$(jq -r --arg a "$area" "$unit_rule | .content // empty" <<<"$conf")"
@@ -90,6 +97,7 @@ jq -n --rawfile files "$tmp/files" --rawfile hits "$tmp/hits" --argjson conf "$c
      | map(., (select(.area | contains(".")) | .area |= split(".")[0])) | unique) as $h
   | ($order | map(. as $u | {key: $u, value: [$h[] | select(.area == $u) | .file]} | select(.value | length > 0))
      | from_entries) as $areas
+  | ($h | map({key: .file, value: true}) | from_entries) as $hit
   | ($areas | keys_unsorted) as $found
   | ($found | map(. as $u | ($u | split(".")[0]) as $f
        | {u: $u, sub: contains("."), n: ($areas[$u] | length), i: ($order | index($u)),
@@ -101,7 +109,7 @@ jq -n --rawfile files "$tmp/files" --rawfile hits "$tmp/hits" --argjson conf "$c
     pick("perf") as $perf
   | { files: ($all | length),
       areas: $areas,
-      other: [$all[] | select(. as $f | $h | map(.file) | index($f) | not)],
+      other: [$all[] | select($hit[.] | not)],
       by_area: ($areas | with_entries(.value = (.key | rules
           | {build, fix, perf, qa, review: lst("review"), skills: lst("skills")}))),
       build: pick("build"), fix: pick("fix"), perf: ($perf // $fb.perf.agent), qa: pick("qa"),

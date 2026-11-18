@@ -23,9 +23,13 @@ flowchart TD
   B --> C["Correctness: edge cases, swallowed errors, missing await"]
   C --> D["Concurrency and idempotence: double run, races, retries"]
   D --> E["Entry points: schema validation, server-side user, no cross-account data"]
-  E --> F["External dependencies: timeout, bounded retry"]
+  E --> K["Performance: unbounded reads, per-item I/O, blocking work, unbounded cache; query detail goes to review:sql or review:mongodb"]
+  K --> F["External dependencies: timeout, bounded retry"]
   F --> G["Observability: useful log, no personal data"]
-  G --> H{"Mode?"}
+  G --> P{"Needs a measurement (explain, profile) that cannot run?"}
+  P -->|"yes"| Q["Question with the command to run, never blocker"]
+  P -->|"no"| H{"Mode?"}
+  Q --> H
   H -->|"review"| I["reviews/agent.json + verdict line"]
   H -->|"consultation"| J["JSON: right, partly, wrong, unclear with evidence"]
 ```
@@ -34,7 +38,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A["Input: diff or branch (before any PR, fix diffs)"] --> B["Extends addy/code-reviewer, skill code-review-and-quality"]
+  A["Input: diff or branch (before any PR, fix diffs)"] --> B["Five axes, skill code-review-and-quality"]
   B --> C{"Diff over ~400 lines?"}
   C -->|"yes"| D["Flag major: split it"]
   C -->|"no"| E["Review five axes"]
@@ -58,12 +62,15 @@ flowchart TD
 ```mermaid
 flowchart TD
   A["Input: diff + UI files, or a review comment"] --> B["Read repo rules and context"]
-  B --> C["State and rendering: derived state, effects, keys, leaks"]
+  B --> C["State and rendering: derived state, effects, keys, unstable references, long lists, leaks"]
   C --> D["Accessibility WCAG 2.1 AA: roles, focus, keyboard, contrast"]
   D --> E["Consistency: design system, i18n"]
   E --> F["Robustness: empty, loading, error states, unescaped input"]
-  F --> G["Weight: heavy deps, images"]
-  G --> H{"Mode?"}
+  F --> G["Performance: bundle weight, deferred code, loading, interaction (INP)"]
+  G --> P{"Needs a measurement (Lighthouse, profile) that cannot run?"}
+  P -->|"yes"| Q["Question with the command to run, never blocker"]
+  P -->|"no"| H{"Mode?"}
+  Q --> H
   H -->|"review"| I["reviews/agent.json + verdict line"]
   H -->|"consultation"| J["JSON: right, partly, wrong, unclear with evidence"]
 ```
@@ -78,9 +85,9 @@ flowchart TD
   D -->|"no"| T["Verdict too_early"]
   D -->|"yes"| E["Windows: impact.window before and after, same weekdays"]
   E --> F["Query sources: impact.sources then every connector, note queried, no data, unavailable"]
-  F --> G["Measure before/after: usage, reliability, performance, resources"]
+  F --> G["Measure before/after: usage, reliability, performance, resources, client (front end)"]
   G --> H["Confounders: pr-merged, incidents, traffic"]
-  H --> I["Verdict: positive, neutral, regression, inconclusive + confidence"]
+  H --> I["Verdict: grade each signal green/yellow/red, worst decides: positive, neutral, regression, inconclusive + confidence"]
   I --> J["impact/N.json and impact/N.md, aggregates only, every number sourced"]
   T --> J
 ```
@@ -101,20 +108,20 @@ flowchart TD
   I -->|"consultation"| K["JSON: right, partly, wrong, unclear with evidence"]
 ```
 
-## `agent:review:perf`
+## `agent:review:sql`
 
 ```mermaid
 flowchart TD
-  A["Input: front-end diff, or a review comment"] --> B["Scope: only what the diff changes, tied to file:line"]
-  B --> C["Bundle: new deps, whole-lib imports, deferred loading"]
-  C --> D["Rendering: unstable references, long lists, global state, DOM reads"]
-  D --> E["Loading: image dimensions, fonts, request waterfalls, double fetch"]
-  E --> F["Interaction: long sync handlers, layout-forcing animation"]
-  F --> G{"Needs a measurement (Lighthouse, profile)?"}
-  G -->|"yes, cannot run"| Q["Question with the command to run, never blocker"]
-  G -->|"no"| H["Finding with severity and fix"]
-  Q --> I["reviews/agent.json"]
-  H --> I
+  A["Input: diff with SQL, ORM queries or a migration, or a review comment"] --> B["Read repo rules, schema and migrations"]
+  B --> C["Queries: index coverage, bounded reads, columns used"]
+  C --> D["N+1: eager loading, join or IN"]
+  D --> E["Injection: bound parameters, allowlisted names"]
+  E --> F["Writes: atomic update, transaction scope"]
+  F --> G["Migrations: no long lock, expand then contract, index first"]
+  G --> H["New index: cost, duplicate leading columns, order"]
+  H --> I{"Mode?"}
+  I -->|"review"| J["reviews/agent.json + verdict line"]
+  I -->|"consultation"| K["JSON: right, partly, wrong, unclear with evidence"]
 ```
 
 ## `agent:review:ponytail`
@@ -123,12 +130,18 @@ flowchart TD
 flowchart TD
   A["Input: diff and touched code"] --> B["Skill ponytail-review, section 2 item 6 Lean only"]
   B --> O["Out of scope: correctness, security, tests, performance, split → review:code and area reviewers"]
-  B --> C["delete, reuse, stdlib or dependency, yagni, merge, shortcut without limit"]
+  B --> C["delete, reuse, stdlib or dependency, yagni, merge"]
   C --> D{"Kind?"}
-  D -->|"code or dependency that should not be added, shortcut without limit or plan"| F["major"]
+  D -->|"code or dependency that should not be added"| F["major"]
   D -->|"possible simplification"| G["minor"]
+  A --> S["pr-shortcuts on the diff: shortcut: markers added"]
+  S -->|"limit or trigger missing, or a known limit left unmarked"| G
+  S -->|"limit and trigger named"| N["a decision, not a finding"]
   F --> H["reviews/agent.json"]
   G --> H
+  M["Audit mode: clone and optional scope"] --> AU["Apply skill ponytail-audit"]
+  AU --> AO["audit.md: Must fix / Should fix / Nice to have, Verdict, Lean, Not checked"]
+  AO --> AP["Written in the run folder only, never published"]
 ```
 
 ## `agent:review:security`
@@ -137,7 +150,7 @@ flowchart TD
 flowchart TD
   A["Input: diff matched by a security keyword"] --> Q{"Step 0: real sensitive surface? input, authn, authz, secret, personal data, dependency"}
   Q -->|"no"| P["pass, no finding, one-line reason in the reply"]
-  Q -->|"yes"| B["Extends addy/security-auditor, skill security-and-hardening, concerned files only"]
+  Q -->|"yes"| B["Audit, skill security-and-hardening, concerned files only"]
   B --> C["OWASP Top 10, authentication and authorization, sensitive data"]
   C --> D{"Real secret, token or personal data in diff, fixture or docs?"}
   D -->|"yes"| E["blocker"]
@@ -152,7 +165,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A["Input: diff where logic changes"] --> B["Extends addy/test-engineer"]
+  A["Input: diff where logic changes"] --> B["Scenarios and level per changed function"]
   B --> C["Coverage of risky paths, edge cases, errors, readability"]
   C --> D["List missing tests: behavior, case, file"]
   D --> E{"Risky logic without a test?"}
@@ -160,21 +173,4 @@ flowchart TD
   E -->|"no"| G["Run the repo's test suite"]
   F --> G
   G --> H["reviews/agent.json with tests: command, passed, failed"]
-```
-
-## `agent:review:perf-back`
-
-```mermaid
-flowchart TD
-  A["Input: server diff, or a review comment"] --> B["Scope: only what the diff changes, tied to file:line"]
-  B --> C["Unbounded work: no limit, whole collection in memory"]
-  C --> D["Per-item I/O: N+1, unbounded concurrency"]
-  D --> E["Event loop: heavy CPU, sync I/O, huge JSON"]
-  E --> F["Hot paths: repeated work, unbounded cache, unreleased listeners"]
-  F --> G["Projection: whole documents for a few fields; index detail goes to review:mongodb"]
-  G --> H{"Needs a measurement (explain, profile)?"}
-  H -->|"yes, cannot run"| Q["Question with the command to run, never blocker"]
-  H -->|"no"| I["Finding with severity and fix"]
-  Q --> J["reviews/agent.json"]
-  I --> J
 ```

@@ -5,7 +5,7 @@
   "routing": {
     "areas": [
       "back",
-      "back.query",
+      "back.mongodb",
       "tests",
       "typescript"
     ],
@@ -14,7 +14,6 @@
       "agent:review:ponytail",
       "agent:review:back",
       "agent:review:tests",
-      "agent:review:perf-back",
       "agent:review:mongodb"
     ]
   },
@@ -40,6 +39,118 @@
         "in[ -]memory sort"
       ],
       "reviewer": "agent:review:mongodb"
+    }
+  ],
+  "extras": [
+    {
+      "file": "server/services/events.ts",
+      "lines": [
+        31,
+        31
+      ],
+      "keywords": [
+        "\\bcap\\b"
+      ],
+      "valid": true,
+      "note": "the 500 cap is the stated behaviour and the only bound on a cross-account query; the test inserts 3 replies, so dropping `.limit` stays green"
+    },
+    {
+      "file": "server/services/events.ts",
+      "lines": [
+        29,
+        29
+      ],
+      "keywords": [
+        "boundary"
+      ],
+      "valid": true,
+      "note": "`$gte` vs `$gt` is not pinned: every fixture sits far from `since`, and a polling dashboard depends on that edge"
+    },
+    {
+      "file": "server/services/events.test.ts",
+      "lines": [
+        24,
+        24
+      ],
+      "keywords": [
+        "boundary"
+      ],
+      "valid": true,
+      "note": "same point as events.ts:29, anchored on the test: no fixture on the `since` boundary"
+    },
+    {
+      "file": "server/services/events.ts",
+      "lines": [
+        26,
+        26
+      ],
+      "keywords": [
+        "ops-only",
+        "\\b403\\b"
+      ],
+      "valid": true,
+      "note": "first read across every account in the service, and the diff adds no caller: asking where the ops-only gate sits is fair"
+    },
+    {
+      "file": "server/services/events.ts",
+      "lines": [
+        25,
+        25
+      ],
+      "keywords": [
+        "bounded by the caller"
+      ],
+      "valid": false,
+      "note": "the limit already bounds the result, and without an index a narrower `since` does not avoid the scan; the caller is not in the diff"
+    },
+    {
+      "file": "server/services/events.ts",
+      "lines": [
+        26,
+        26
+      ],
+      "keywords": [
+        "empty[- ](case|result|list)"
+      ],
+      "valid": false,
+      "note": "a find with no match returns []: no branch in the code to test, the test would exercise the driver"
+    },
+    {
+      "file": "server/services/events.test.ts",
+      "lines": [
+        24,
+        24
+      ],
+      "keywords": [
+        "empty[- ](case|result|list)"
+      ],
+      "valid": false,
+      "note": "a find with no match returns []: no branch in the code to test, the test would exercise the driver"
+    },
+    {
+      "file": "server/services/events.test.ts",
+      "lines": [
+        35,
+        35
+      ],
+      "keywords": [
+        "day strings",
+        "toISOString"
+      ],
+      "valid": false,
+      "note": "dates are unique among the fixtures, so the date list identifies each event (cross-account reply included); same shape as the sibling test mapping to `type`"
+    },
+    {
+      "file": "server/services/events.test.ts",
+      "lines": [
+        23,
+        34
+      ],
+      "keywords": [
+        "\\bindex"
+      ],
+      "valid": true,
+      "note": "the planned defect, anchored elsewhere: the planned missing index seen from the test (withDb never builds indexes, nothing checks the plan); the defect itself is at events.ts:29-30"
     }
   ]
 }
