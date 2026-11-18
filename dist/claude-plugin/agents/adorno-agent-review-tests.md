@@ -2,7 +2,7 @@
 name: adorno-agent-review-tests
 description: Test review of a diff — coverage of risky paths, edge cases, errors, test readability. Use whenever logic changes.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 ---
 
 ## Rules of the `review` family

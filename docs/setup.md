@@ -453,11 +453,11 @@ each tool:
 | Tool | Default | Configurable |
 | --- | --- | --- |
 | Claude Code | `haiku`, `sonnet`, `opus`, `fable` (subagents and workflow commands) | `models.tiers.claude`, or a specific identifier per agent |
-| Gemini CLI | the session's model (`inherit`) | `models.tiers.gemini` (e.g. `gemini-2.5-flash` / `gemini-2.5-pro`) |
+| Gemini CLI | the session's model (`inherit`) | `models.tiers.gemini` (e.g. `gemini-2.5-flash` / `gemini-2.5-pro`; a flash model for `balanced` is not measured, see [Known limits](models.md#known-limits)) |
 | Codex | the session's model: Codex has no subagents, the agents are skills there | the session's model (`.codex/config.toml`) |
 
 The repo's defaults: `triage`, `router` and `workflow:pr:status` on `fast`; the sessions that orchestrate the other
-workflows on `balanced`; every other agent on `deep`; `intake`, `planner` and `fix:investigate` on `frontier`. A capped
+workflows on `balanced`; `review:api` and `review:tests` on `balanced` (measured, [models.md](models.md#measuring)); every other agent on `deep`; `intake`, `planner` and `fix:investigate` on `frontier`. A capped
 loop's last round climbs one tier (`adorno-run-plan` › Loops).
 
 **Setting it**, at any level of `local/adorno.yaml` (defaults, preset, workspace, repo):
@@ -468,7 +468,7 @@ defaults:
     tiers:
       claude: {fast: haiku, balanced: sonnet, deep: opus, frontier: fable}
     agents:
-      agent:review:mongodb: balanced                 # another tier
+      agent:refactor:simplify: balanced                 # another tier
       agent:core:analyst: claude-opus-5-5            # a specific model
       agent:core:triage: {route: openrouter-small}   # an external model
     workflows:
