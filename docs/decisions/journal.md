@@ -39,7 +39,7 @@ Consequences:
   itself was not at hand. `viewer/tokens.css` is the one file to align with it, with the font files next to it.
 - The browser test pins Playwright (`tests/journal-viewer.smoke.py`) and runs offline: nothing is downloaded by a test.
 - The redaction patterns are the writer's own (none existed to reuse); the secret names are those of `bin/kit`
-  (`SECRET_ENV_RE`), kept equal by a test.
+  (`SECRET_ENV_RE` in `bin/kitlib/paths.py`), kept equal by a test.
 - An agent's `tier` is not recorded: no producer knows it (a hook gives the model the agent resolved to, not the tier
   its definition declared), and a field nothing can fill is a field readers would learn to ignore. It is reopened by a
   producer that knows it, e.g. the installed agent definition carrying its tier.

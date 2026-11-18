@@ -14,7 +14,6 @@
       "agent:review:ponytail",
       "agent:review:back",
       "agent:review:tests",
-      "agent:review:perf-back",
       "agent:review:mongodb"
     ]
   },
@@ -44,6 +43,132 @@
         "green"
       ],
       "reviewer": "agent:review:back"
+    }
+  ],
+  "extras": [
+    {
+      "file": "server/jobs/syncInvoices.ts",
+      "lines": [
+        26,
+        26
+      ],
+      "keywords": [
+        "write failure is swallowed"
+      ],
+      "valid": true,
+      "note": "the planned defect, anchored elsewhere: the planned defect (the empty catch also hides a database error) anchored on the bulkWrite line instead of the catch"
+    },
+    {
+      "file": "server/jobs/syncInvoices.ts",
+      "lines": [
+        24,
+        26
+      ],
+      "keywords": [
+        "upserts applied",
+        "partially applied"
+      ],
+      "valid": true,
+      "note": "an ordered bulkWrite failing midway keeps earlier upserts while the swallowed error leaves them uncounted; minor, a consequence of the catch"
+    },
+    {
+      "file": "server/jobs/syncInvoices.ts",
+      "lines": [
+        18,
+        18
+      ],
+      "keywords": [
+        "toArray",
+        "index"
+      ],
+      "valid": false,
+      "note": "unchanged accounts query, the finding itself says it is not introduced by this PR: out of scope"
+    },
+    {
+      "file": "server/jobs/syncInvoices.test.ts",
+      "lines": [
+        31,
+        31
+      ],
+      "keywords": [
+        "seen failing"
+      ],
+      "valid": false,
+      "note": "self-answered: the reviewer reads that the test fails on base, nothing to act on"
+    },
+    {
+      "file": "server/jobs/syncInvoices.test.ts",
+      "lines": [
+        35,
+        35
+      ],
+      "keywords": [
+        "failure in the middle or at the end"
+      ],
+      "valid": false,
+      "note": "the try is per iteration: a failing first account already proves the loop goes on, position adds no coverage"
+    },
+    {
+      "file": "server/jobs/syncInvoices.test.ts",
+      "lines": [
+        31,
+        31
+      ],
+      "keywords": [
+        "bulkWrite"
+      ],
+      "valid": true,
+      "note": "no test that a database write failure still fails the run, the side the scheduler's retry and paging rely on"
+    },
+    {
+      "file": "server/jobs/syncInvoices.test.ts",
+      "lines": [
+        31,
+        46
+      ],
+      "keywords": [
+        "every account",
+        "all accounts"
+      ],
+      "valid": true,
+      "note": "no test for a provider outage (every account fails), which today resolves as a success"
+    },
+    {
+      "file": "server/jobs/syncInvoices.test.ts",
+      "lines": [
+        43,
+        44
+      ],
+      "keywords": [
+        "silent skip",
+        "skipped account"
+      ],
+      "valid": true,
+      "note": "the assertion pins the silent skip: nothing checks the failed account is reported"
+    },
+    {
+      "file": "server/jobs/syncInvoices.test.ts",
+      "lines": [
+        44,
+        44
+      ],
+      "keywords": [
+        "countDocuments"
+      ],
+      "valid": true,
+      "note": "a count of 1 does not prove acc_2's invoice was stored with the right accountId"
+    },
+    {
+      "file": "server/jobs/syncInvoices.test.ts",
+      "lines": [
+        31,
+        31
+      ],
+      "keywords": [
+        "which errors"
+      ],
+      "valid": true,
+      "note": "the catch skips every error while the description only justifies a deleted billing id: a fair question on the catch's scope"
     }
   ]
 }
