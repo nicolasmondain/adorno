@@ -101,7 +101,9 @@ goes out); `draft` lets the code go out (commit, push, PR) and keeps the convers
 re-request, review and submit refused), even if a command forgets it. A workflow called by another reuses the open
 run. Push with `git-push` (branch without a PR) or `pr-push` (branch of a PR), which check the level and the rights;
 a direct `git push` / `gh pr create|edit` only from the repo's own `commit_skill` / `pr_skill` in `workflow:pr:ship`,
-which the guard lets through at the run's level.
+which the guard lets through at the run's level. `run-end` also records what the run consumed: `usage.json` in its
+folder, a `Cost:` line in its `status.md` (`--status <file>` when that file is not in the run folder). The final
+report quotes the `usage` line it prints.
 
 **Every workflow that touched code ends with `workflow:pr:ship`**: the repo's `commit_skill` commits what is left;
 the area reviewers and `agent:adorno` check the change against the repo's rules and the request, and every 🔴 or 🟠
@@ -138,10 +140,13 @@ and the choice for each step: `docs/models.md` in the adorno repo. For that choi
 - **Minimal context**: an agent only receives the deliverable of the previous step and the files of its area, never the
   whole history.
 - **Skills by area**: when you delegate to an agent, pass it the `skills` that `pr-areas` returns for the files it works
-  on (`by_area.<a>.skills`, or the top-level `skills`); it loads them. The profile and the repo's rules win over a
-  skill's choices (no dependency or framework it suggests without approval, e.g. typescript-pro's tRPC). Pass it the
-  `ponytail` level too (`pr-areas` › `ponytail`, or `repo-conf` before any diff), unless its specialty sets its own
-  (`refactor:simplify`: `ultra`).
+  on (`by_area.<a>.skills`, or the top-level `skills`). Whoever plays an agent (its sub-agent, or you when you take
+  on its role) loads these skills and those its rules name by reading their `SKILL.md` in the skills folder of the
+  repo, else of the home (Claude Code: `.claude/skills/<name>/`, read directly: the Skill tool refuses the ones kept
+  out of the model's list). The profile and the repo's rules win over a skill's choices (no dependency or framework
+  it suggests without approval, e.g. the tRPC a TypeScript skill suggests). Pass it the `ponytail` level too
+  (`pr-areas` › `ponytail`, or `repo-conf` before any diff), unless its specialty sets its own (`refactor:simplify`:
+  `ultra`).
 - An agent whose body starts with "Role delegated to model" sends its judgment to an external model through the
   `adorno-llm` skill: follow its steps, and do the work yourself only as a fallback.
 
@@ -202,6 +207,7 @@ Each one is a command of the same name (without native commands: the skill of th
 - `workflow:pr:status` (`/adorno-pr-status`) — Status of all your open PRs (or those of one repo)
 - `workflow:pr:watch` (`/adorno-pr-watch`) — Accompanies an open PR until it is ready to merge
 - `workflow:profile:learn` (`/adorno-profile-learn`) — Evolve your profile and your voice
+- `workflow:repo:audit` (`/adorno-repo-audit`) — Audits a whole repo, read-only
 - `workflow:repo:onboard` (`/adorno-repo-onboard`) — Prepare a repo for the agents
 - `workflow:review:received` (`/adorno-review-received`) — Goes over all your open PRs (or a single one)
 - `workflow:review:requested` (`/adorno-review-requested`) — Analyzes all the PRs where your review is requested

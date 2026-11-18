@@ -201,9 +201,9 @@ for c in a -; do
   last 20260101T100000-1-1
   fast "$took" && jq -e '(.reasoning | length) == 51200' >/dev/null <<<"$out" && ok "50 KB of '$c' as reasoning, redacted whole: ${took}s" || ko "50 KB of '$c' as reasoning" "$took"
 done
-kit_names="$(grep -o 'SECRET_ENV_RE = re.compile(r"[^"]*"' "$ROOT/bin/kit" | sed 's/.*r"//; s/"$//')"
+kit_names="$(grep -o 'SECRET_ENV_RE = re.compile(r"[^"]*"' "$ROOT/bin/kitlib/paths.py" | sed 's/.*r"//; s/"$//')"
 grep -qF "SECRET_NAME = r\"$kit_names\"" "$J" && ok "same secret names as bin/kit (SECRET_ENV_RE)" || ko "secret names differ from bin/kit" "$kit_names"
-kit_settings="$(grep -o 'for k in conf if k not in ([^)]*)' "$ROOT/bin/kit" | grep -o '"[a-z_]*"' | tr -d '"' | sort | tr '\n' ' ')"
+kit_settings="$(grep -o 'for k in conf if k not in ([^)]*)' "$ROOT/bin/kitlib/validate.py" | grep -o '"[a-z_]*"' | tr -d '"' | sort | tr '\n' ' ')"
 own_settings="$(python3 -B -c 'import sys; sys.path.insert(0, sys.argv[1]); import journal; print(" ".join(sorted(journal.DEFAULTS)))' "$(dirname "$J")") "
 [ -n "$kit_settings" ] && [ "$kit_settings" = "$own_settings" ] && ok "same journal settings as bin/kit (validate_journal)" || ko "journal settings differ from bin/kit" "kit: $kit_settings / journal.py: $own_settings"
 

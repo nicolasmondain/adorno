@@ -47,7 +47,7 @@ Once: `bin/kit build`, then declare the repo the cases are routed as. In `local/
 
 ```yaml
 repos:
-  adorno/bench: {}
+  adorno/bench: {use: [node, mongodb]}   # the cases are a Node.js + MongoDB codebase
 ```
 
 and `bin/kit install --global`. Or pass `--repo` with a repo your registry already declares: the routing then follows
@@ -140,14 +140,16 @@ than its fix.
 
 ## Cost to expect
 
-Measured on 2026-11-14 with Claude Code 2.1.325, each agent on its default tier, on `mongo-n-plus-one` (6 reviewers
-and `agent:adorno`): **1.53 USD** and 4 minutes. A reviewer cost 0.15 to 0.22 USD, `agent:adorno` 0.44 USD; 653k
-tokens in (mostly read from cache) and 16k out. The 17 review cases start 91 reviewers and 17 `agent:adorno` passes, the 2
-cases of kind `adorno` one pass each (about 0.45 USD): count
-about 25 USD and 65 minutes per repeat, to be measured on your side with one case first. Always pass `--budget-usd`:
-no case starts once the spent amount plus the dearest case so far would exceed it, what is left is split over the
-calls (over the reviewers of a round, then all of it to `agent:adorno`), and the report says at the top what was
-skipped. The budget relies on the cost the tool reports.
+Measured on 2026-11-14 with Claude Code 2.1.325, each agent on its default tier, on `mongo-n-plus-one` as it routed
+then (6 reviewers, and `agent:adorno`): **1.53 USD** and 4 minutes. A reviewer cost 0.15 to 0.22 USD, `agent:adorno`
+0.44 USD; 653k tokens in (mostly read from cache) and 16k out. At that routing, the benchmark projected about 18 USD
+and 50 minutes for the 13 cases it had then ([decision 2](../docs/decisions/bench.md)). None of that has been measured
+again: it predates #39, which merged `review:perf` into `review:front` and `review:perf-back` into `review:back`, and
+#31, which changed the default areas. As of 2026-11-17, `mongo-n-plus-one` starts 5 reviewers, the 17 review cases
+start 75 reviewers, and the set runs 19 `agent:adorno` passes, the 2 cases of kind `adorno` one pass each. Measure it
+on your side with one case first. Always pass `--budget-usd`: no case starts once the spent amount plus the dearest
+case so far would exceed it, what is left is split over the calls (over the reviewers of a round, then all of it to
+`agent:adorno`), and the report says at the top what was skipped. The budget relies on the cost the tool reports.
 
 ## A case for agent:adorno alone
 
@@ -192,9 +194,9 @@ A case is a folder `cases/<id>/`:
   "title": "feat(orders): list orders with the customer name",
   "description": "What the pull request says: the reviewers read it.",
   "rationale": "One line: the defect, and what a good review says.",
-  "routing": {"areas": ["back", "back.query", "tests", "typescript"],
+  "routing": {"areas": ["back", "back.mongodb", "tests", "typescript"],
               "review": ["agent:review:code", "agent:review:ponytail", "agent:review:back", "agent:review:tests",
-                         "agent:review:perf-back", "agent:review:mongodb"],
+                         "agent:review:mongodb"],
               "skills": ["typescript-pro"]},
   "verdict": ["fix"],
   "findings": [{"file": "server/services/orders.ts", "lines": [35, 39], "category": "n-plus-one",

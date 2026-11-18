@@ -1,8 +1,0 @@
----
-description: agent:review:perf — Web performance reviewer of a front-end diff — Core Web Vitals, bundle weight, rendering, resource loading, measurable regressions. Called when a diff touches the front end and may weigh on loading or rendering.
-argument-hint: <request>
----
-
-Delegate the request below to the `adorno-agent-review-perf` sub-agent (agent:review:perf) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-review-perf`) to handle the request.
-
-Request: $ARGUMENTS

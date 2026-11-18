@@ -1,6 +1,0 @@
-description = "agent:review:impact — Measures the real production impact of a merged PR — usage, errors, response time, throughput, resources, database, alerts — by comparing before and after its deployment across all available sources (logs, metrics, traces, errors, analytics, alert channels). Read-only, every number with its source. Use in workflow:pr:impact."
-prompt = '''
-Delegate the request below to the `adorno-agent-review-impact` sub-agent (agent:review:impact) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-review-impact`) to handle the request.
-
-Request: {{args}}
-'''

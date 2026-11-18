@@ -70,6 +70,8 @@ that you set.
 
 ## Getting started
 
+New to adorno? Read the one-page [overview](docs/overview.md) first.
+
 Prerequisites: [uv](https://docs.astral.sh/uv/) (`brew install uv`), authenticated `gh`, `jq`.
 
 ```sh
@@ -129,7 +131,7 @@ The public repo contains no profile: only templates, in `local.example/`.
 | --- | --- | --- |
 | — | `agent:adorno`: speaks and decides in your name, last step of the workflows | none |
 | `core` | `intake`, `router`, `planner`, `triage`, `analyst` (analysis of a conversation or a document) | none |
-| `review` | `code`, `security`, `tests` (extend addy's agents), `ponytail`, per area: `front`, `perf` (front), `back`, `perf-back`, `mongodb`, `api`, and after merge: `impact` | none, read-only |
+| `review` | `code`, `security`, `tests`, `ponytail`, per area: `front`, `back` (both with performance), `mongodb`, `api`, and after merge: `impact` | none, read-only |
 | `feat` | `front`, `back`, `api` | `feat` |
 | `fix` | `investigate` (read-only), `patch`, `security` | `fix` |
 | `perf` | `front`, `mongodb`, `nodejs` | `perf`, before/after measurements |
@@ -140,7 +142,8 @@ The public repo contains no profile: only templates, in `local.example/`.
 | `docs` | `write` | `docs` |
 
 Which agent builds, fixes, optimizes, reviews and checks a change, and which skills it loads, is decided per code area
-by `repos.yaml` › `areas`, overridable per repo ([setup](docs/setup.md#areas-and-roles)).
+by `repos.yaml` › `areas`, neutral by default, with stack presets (`node`, `mongodb`, `sql`, `python`, `go`, `rails`)
+called per repo with `use:`, and overridable per repo ([setup](docs/setup.md#areas-and-roles)).
 
 | Workflow | Does |
 | --- | --- |
@@ -155,7 +158,8 @@ by `repos.yaml` › `areas`, overridable per repo ([setup](docs/setup.md#areas-a
 | `workflow:pr:status` | the state of all your PRs |
 | `workflow:pr:impact` | the production impact of the PRs you merged, as a comment on each; `report`, `comment` |
 | `workflow:ci:red` | diagnosis of a red CI, one rerun if flaky, otherwise a fix |
-| `workflow:repo:onboard` | prepares a repo for the agents, then declares it with `adorno-setup` |
+| `workflow:repo:onboard` | prepares a repo for the agents, then declares it with `adorno-setup`; `--audit` adds `repo:audit` |
+| `workflow:repo:audit` | a read-only audit of a whole repo (or `--area`, `--path`): bugs, security, load, untested risky code, code to delete; the report stays on your machine |
 | `workflow:profile:learn` | the profile adjustments noticed during work (tech, product, code, method, voice), one by one, with their evidence; writes only what you validate |
 | `workflow:slack:mentions` | your Slack mentions: analysis and draft reply, sent to you alone |
 | `workflow:slack:watch` | a watch rule for a Slack channel, and its action on each matching message |
@@ -189,7 +193,7 @@ viewer/                 the run journal's viewer, served by bin/kit serve (a too
 repos.yaml              default public settings (code areas and their agents and skills, permissions)
 local.example/          template of your personal layer
 vendor/                 imported skills and agents (kit import), pinned in kit.lock
-dist/                   generated outputs (kit build), Claude Code plugin included
+dist/                   generated outputs (kit build); only claude-plugin/ and AGENTS.md are committed
 docs/                   guides
 bench/                  reviewer benchmark: cases, routing check, runner, scoring and report (bench/README.md)
 tests/                  tests of the adorno-github scripts against a fake gh
@@ -198,7 +202,7 @@ tests/                  tests of the adorno-github scripts against a fake gh
 ## Kit commands
 
 ```sh
-bin/kit check [--dist]       # validates (and checks that dist/ is up to date)
+bin/kit check [--dist]       # validates (and checks that the committed dist/ is up to date)
 bin/kit build                # regenerates dist/ and the marketplace (never with local/)
 bin/kit list                 # everything available, with its provenance
 bin/kit conf [owner/repo]    # the settings a repo resolves

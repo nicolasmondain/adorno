@@ -83,7 +83,8 @@ other reviewers stay on `deep` (table in [Measuring](#measuring)). A test keeps 
 | `pr:status` | fast, effort low | `pr-status` (script) |
 | `pr:watch` | balanced | `ci:red`, `review:received` (nested) |
 | `profile:learn` | deep | none: the session proposes, you validate each point |
-| `repo:onboard` | balanced | `chore:repo` → deep; `pr:ship` |
+| `repo:audit` | balanced | `review:ponytail` (mode Audit) → deep |
+| `repo:onboard` | balanced | `chore:repo` → deep; `pr:ship`; `repo:audit` with `--audit` |
 | `review:received` | balanced | `triage` → fast, effort low; specialists (consult) → deep; `adorno` → deep; fixers → deep (3 rounds, the 3rd on frontier); `pr:ship` |
 | `review:requested` | balanced | the steps of `pr:review` per PR |
 | `slack:mentions` | balanced | `core:analyst` → deep; `adorno` → deep (draft reply) |
@@ -92,9 +93,15 @@ other reviewers stay on `deep` (table in [Measuring](#measuring)). A test keeps 
 
 ## Measuring
 
+Every run measures itself: `run-end` writes `usage.json` in the run folder (duration, each agent with the model it
+really ran on, its tokens by kind and its cost from `repos.yaml` › `prices`) and a line to
+`~/.adorno/runs/usage.jsonl`. For a past session: `adorno-github/scripts/run-usage collect --session <id> --since
+<ISO> --until <ISO>`. The source is the Claude Code transcripts; Codex and Gemini expose no session id to the shell,
+so their runs record the duration only (`source: unavailable`).
+
 Before changing a tier for good, take a real task with a check (a test that passes, a review that holds), run it on
-both models (`/model`), and compare `/usage`. Keep a mix of models only if it beats the best single model on cost per
-finished task.
+both models, and compare their `usage.json`. Keep a mix of models only if it beats the best single model on cost per
+finished task. Compare costs, not token totals: cache reads are most of the tokens and a small share of the bill.
 
 **A tier per reviewer, with `bench/`.** Move one reviewer alone with `bench/run --agent-model agent:review:<x>=sonnet`
 and compare each reviewer on its own review before the merge with `bench/report --label b --against a`
@@ -117,7 +124,9 @@ the base, a wrong Express 5 claim). On `test-asserts-nothing` (run 1), `review:t
 expected finding as a blocker where the case accepts major (over-rating, 1 occurrence in 4; deep rated it major both
 runs). It did not change that run's merged verdict, already `block` from `review:ponytail`, and `agent:adorno` (deep)
 re-rates every finding before anything is posted. The remaining risk is that a 🔴 can start a fix loop. Not decided by the measure: `review:ponytail` stays on `deep` (decided with its prompt rescope),
-and `review:perf` is to be merged into `review:front`. The controls (`code`, `back`, `front`, `security`, `perf-back`,
+and `review:perf` has since been merged into `review:front` (#39). The prompt of `review:tests` was rewritten after
+the measure (#38: its own scenarios instead of `addy/test-engineer`): the tier rests on the old prompt until the next
+run. The controls (`code`, `back`, `front`, `security`, `perf-back`,
 unchanged) kept recall and cost within 3 %, but their ungraded precision moved by up to 10 points between runs: that
 is the noise of one run pair.
 
