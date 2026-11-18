@@ -35,6 +35,13 @@ anthropic:
   - skill/webapp-testing
   ref: main
   source: github:anthropics/skills
+impeccable:
+  commit: b49177d32788f2dc585c42831d845dacf1ebed2c
+  fetched: '2026-11-18T23:06:22Z'
+  items:
+  - skill/impeccable
+  ref: main
+  source: github:pbakaus/impeccable
 jeffallan:
   commit: 078a25cc5bfd8011459be7b91d004e900c1d02d3
   fetched: '2026-11-04T21:20:48Z'

@@ -69,7 +69,8 @@
         ],
         "qa": "agent:test:e2e",
         "skills": [
-          "frontend-ui-engineering"
+          "frontend-ui-engineering",
+          "impeccable"
         ]
       },
       "back": {

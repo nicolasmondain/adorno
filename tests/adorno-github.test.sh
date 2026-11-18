@@ -681,7 +681,7 @@ if [ -f "$REAL" ]; then
   expect_exit 0 "a repo replaces one role of an area" -- "$S/repo-conf" ovr/single
   expect_jq "the replaced role changes, its siblings keep the public value" \
     '.areas.back.build == "agent:feat:custom" and .areas.back.fix == "agent:fix:patch" and .areas.back.perf == null and (.areas.back.review | index("agent:review:back"))'
-  expect_jq "a -<skill> removes that skill from the list" '.areas.front.skills == []'
+  expect_jq "a -<skill> removes that skill from the list" '.areas.front.skills == ["impeccable"]'
   expect_exit 0 "a skill removed by the repo is not in pr-areas skills" -- "$S/pr-areas" ovr/single --files client/a.tsx
   expect_jq "... nor in the result" '(.skills | index("frontend-ui-engineering") | not) and .areas.front == ["client/a.tsx"]'
   expect_exit 0 "the workspace adds, the repo removes" -- "$S/repo-conf" ovr/layers

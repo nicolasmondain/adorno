@@ -81,3 +81,12 @@ imports:
     source: github:Jeffallan/claude-skills
     ref: main
     include: [skills/typescript-pro]
+
+  # Frontend design: PRODUCT.md / DESIGN.md context, craft floor, and a deterministic detector (`impeccable detect`,
+  # no LLM) the front agents run on UI files. Its launcher downloads a pinned engine into ~/.impeccable/bin, checked
+  # against scripts/engine-checksums.txt. Apache-2.0. Claude build, shipped to every target (paths resolve from the
+  # skill folder).
+  - name: impeccable
+    source: github:pbakaus/impeccable
+    ref: main
+    include: [.claude/skills/impeccable]

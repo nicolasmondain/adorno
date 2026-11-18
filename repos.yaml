@@ -102,7 +102,7 @@ defaults:
       perf: agent:perf:front
       review: [agent:review:front]
       qa: agent:test:e2e
-      skills: [frontend-ui-engineering]
+      skills: [frontend-ui-engineering, impeccable]
 
     back:
       paths: ["server/*", "*/server/*", "*/services/*", "*/jobs/*", "*/workers/*", "*/lib/*"]
