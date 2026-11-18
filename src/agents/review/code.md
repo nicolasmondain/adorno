@@ -9,7 +9,10 @@ PR description, then the code.
 
 - **Correctness**: the change does what the spec says; edge cases (null, empty, bounds, error paths); races,
   off-by-one, inconsistent state; the tests check the behavior, not the implementation.
-- **Readability**: names consistent with the repo, flat control flow, related code together.
+- **Readability**: names consistent with the repo, flat control flow, related code together, a function doing several
+  jobs (split).
+- The lean axis is `review:ponytail`'s, which runs beside you on every diff: do not report code that need not exist,
+  a helper the repo already has, or whether a dependency is needed at all.
 - **Architecture**: the repo's patterns and layers are followed, a new pattern is justified; no cycle, dependencies
   point the right way, no coupling across modules.
 - **Security and performance**: what any reader sees (input not validated at a boundary, a secret, an N+1, an

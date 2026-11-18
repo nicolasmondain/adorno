@@ -479,6 +479,15 @@ check "review:security opens with a step 0 qualification and a one-line pass" \
 check "review:security step 0 only dismisses content matches, never path matches nor on diff text" \
   'grep -q "Only a match of the security .content. regex can be dismissed" "$ROOT"/dist/claude-plugin/agents/adorno-agent-review-security.md && grep -q "never evidence for a No" "$ROOT"/dist/claude-plugin/agents/adorno-agent-review-security.md'
 
+# shellcheck disable=SC2034  # P is read by check's eval in the next checks
+P="$ROOT/src/agents/review/ponytail.md"
+check "review:ponytail keeps to the lean axis of ponytail-review" \
+  'grep -q "^Lean axis only" "$P" && grep -q "item 6 \"Lean\" of its section 2" "$P" && grep -q "^6\. \*\*Lean:\*\*" "$ROOT/vendor/ponytail/skills/ponytail-review/SKILL.md"'
+check "review:ponytail's review mode names review:code's axes only in its out-of-scope paragraph (Audit mode excepted)" \
+  '[ "$(grep -c "^Out of scope (owned elsewhere)" "$P")" = 1 ] && ! awk "/^## Third mode: Audit/{exit} /^Out of scope/{s=1} s&&/^\$/{s=0} !s" "$P" | grep -qiwE "correctness|security|bugs?|flaw|blocker|risk|speed|performance|load|injection|missing test"'
+check "review:code and review:security leave the lean axis and dependency need to review:ponytail" \
+  'grep -q "lean axis is .review:ponytail..s" "$ROOT/src/agents/review/code.md" && grep -q "is .review:ponytail..s" "$ROOT/src/agents/review/security.md"'
+
 check "an imported skill only agents and areas name is kept out of the model's list" \
   'grep -q "^disable-model-invocation: true" "$ROOT"/dist/claude-plugin/skills/test-driven-development/SKILL.md'
 check "typescript-pro is area-only: kept out of the model's list" \

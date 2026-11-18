@@ -48,6 +48,7 @@ flowchart TD
   E --> E3["Architecture"]
   E --> E4["Security"]
   E --> E5["Performance"]
+  E --> L["Lean axis (code that need not exist, reuse, is a dependency needed) → review:ponytail"]
   E1 --> F["Check Conventional Commit type per commit"]
   E2 --> F
   E3 --> F
@@ -127,21 +128,20 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A["Input: diff and touched code"] --> B["Apply skill ponytail-review"]
-  B --> C["Per finding: what it does, what is wrong, fix, consequence"]
+  A["Input: diff and touched code"] --> B["Skill ponytail-review, section 2 item 6 Lean only"]
+  B --> O["Out of scope: correctness, security, tests, performance, split → review:code and area reviewers"]
+  B --> C["delete, reuse, stdlib or dependency, yagni, merge"]
   C --> D{"Kind?"}
-  D -->|"bug or flaw"| E["blocker"]
-  D -->|"excess code or dependency, missing test on risky logic"| F["major"]
+  D -->|"code or dependency that should not be added"| F["major"]
   D -->|"possible simplification"| G["minor"]
   A --> S["pr-shortcuts on the diff: shortcut: markers added"]
   S -->|"limit or trigger missing, or a known limit left unmarked"| G
   S -->|"limit and trigger named"| N["a decision, not a finding"]
-  E --> H["reviews/agent.json"]
-  F --> H
+  F --> H["reviews/agent.json"]
   G --> H
-  M["Audit mode: clone and optional scope"] --> N["Apply skill ponytail-audit"]
-  N --> O["audit.md: Must fix / Should fix / Nice to have, Verdict, Lean, Not checked"]
-  O --> P["Written in the run folder only, never published"]
+  M["Audit mode: clone and optional scope"] --> AU["Apply skill ponytail-audit"]
+  AU --> AO["audit.md: Must fix / Should fix / Nice to have, Verdict, Lean, Not checked"]
+  AO --> AP["Written in the run folder only, never published"]
 ```
 
 ## `agent:review:security`
@@ -156,7 +156,7 @@ flowchart TD
   D -->|"yes"| E["blocker"]
   D -->|"no"| F{"Dependency added?"}
   E --> F
-  F -->|"yes"| G["Maintained and necessary? Three lines of use = major"]
+  F -->|"yes"| G["Maintained, licence, known vulnerabilities; whether it is needed → review:ponytail"]
   F -->|"no"| H["reviews/agent.json"]
   G --> H
 ```
