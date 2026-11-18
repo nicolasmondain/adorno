@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Usage: run [--case ID]… [--tool claude] [--model X] [--repeat N] [--label NAME] [--budget-usd N]
-           [--repo owner/repo] [--parallel N] [--cases DIR] [--results DIR]
+"""Usage: run [--case ID]… [--tool claude] [--model X] [--agent-model ID=X]… [--repeat N] [--label NAME]
+           [--budget-usd N] [--repo owner/repo] [--parallel N] [--cases DIR] [--results DIR]
 
 Runs the review stage of workflow:pr:review on the benchmark cases, headless and without GitHub. This calls models
 and costs money: it never runs in CI. For each case and each repeat:
@@ -19,6 +19,8 @@ The prompts are those of this working tree (dist/, public layer only): the agent
 the instructions from dist/AGENTS.md, placed in the workspace as .claude/rules/adorno.md. Your user settings, your
 global instructions and your hooks are not loaded. An agent runs sandboxed: it writes inside its workspace only and
 has no network. --model replaces the model of every agent; without it each agent runs on its own tier.
+--agent-model ID=X replaces the model of one reviewer or agent:adorno (agent:review:ponytail=sonnet), over --model:
+repeat it to compare a tier per reviewer while the others stay on theirs.
 
 Results go to RESULTS/<label>/ (bench/results by default, ignored by git):
   run.json                     the run: tool, model, prompts (sha, dirty), cost, what the budget skipped, the case
@@ -81,9 +83,13 @@ CLAUDE_SETTINGS = {"autoMemoryEnabled": False,
                    "sandbox": {"enabled": True, "autoAllowBashIfSandboxed": True, "allowUnsandboxedCommands": False}}
 
 
+def plugin_name(agent):
+    """agent:review:mongodb -> adorno-agent-review-mongodb, the file name of the agent in the plugin."""
+    return "adorno" if agent == ADORNO else "adorno-" + agent.replace(":", "-")
+
+
 def claude_command(agent, prompt, model, budget):
-    name = "adorno:adorno" if agent == ADORNO else "adorno:adorno-" + agent.replace(":", "-")
-    cmd = ["claude", "-p", prompt, "--agent", name, "--output-format", "json", "--no-session-persistence",
+    cmd = ["claude", "-p", prompt, "--agent", "adorno:" + plugin_name(agent), "--output-format", "json", "--no-session-persistence",
            "--setting-sources", "project,local", "--settings", json.dumps(CLAUDE_SETTINGS), "--strict-mcp-config",
            "--plugin-dir", str(PLUGIN), "--permission-mode", "dontAsk"]
     if model:
@@ -241,7 +247,7 @@ def run_case(args, tool, case_id, entry, always, state, dest):
         return args.budget_usd is not None and state["spent"] >= args.budget_usd
 
     def play(agent, prompt, budget):
-        attempt = call_agent(tool, agent, prompt, workspace, args.model, budget)
+        attempt = call_agent(tool, agent, prompt, workspace, args.agent_models.get(agent, args.model), budget)
         meta = metas.setdefault(agent, {"agent": agent, "attempts": 0, "delivered": "none", "is_error": False,
                                         "stop": None, "models": [], "cost_usd": None, "duration_ms": 0, "turns": 0,
                                         "denied": 0, "tokens": {"input": 0, "cache_read": 0, "cache_write": 0,
@@ -344,6 +350,7 @@ def main():
     parser.add_argument("--case", action="append", default=[])
     parser.add_argument("--tool", default="claude")
     parser.add_argument("--model")
+    parser.add_argument("--agent-model", action="append", default=[], metavar="ID=X")
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--label")
     parser.add_argument("--budget-usd", type=float)
@@ -363,8 +370,16 @@ def main():
             die(f"unknown case: {case_id}", 2)
     if not PLUGIN.is_dir() or not INSTRUCTIONS.is_file():
         die("dist/ is missing: run bin/kit build")
+    args.agent_models = {}
+    for spec in args.agent_model:
+        agent, _, model = spec.partition("=")
+        if (not model or not (agent == ADORNO or agent.startswith("agent:review:"))
+                or not (PLUGIN / "agents" / f"{plugin_name(agent)}.md").is_file()):
+            die(f"--agent-model {spec}: expected ID=MODEL with a reviewer of dist/claude-plugin or {ADORNO}", 2)
+        args.agent_models[agent] = model
     started = datetime.datetime.now(datetime.timezone.utc)
-    label = args.label or f"{started:%Y%m%d-%H%M%S}-{args.tool}-{args.model or 'tiers'}"
+    label = args.label or (f"{started:%Y%m%d-%H%M%S}-{args.tool}-{args.model or 'tiers'}"
+                           + ("-mixed" if args.agent_models else ""))
     top = args.results / label
     if top.exists():
         die(f"{top} already exists: pick another --label", 2)
@@ -409,7 +424,8 @@ def main():
     priced = any(r["cost_usd"] is not None for r in runs)
     if args.budget_usd is not None and runs and not priced:
         print(f"run: {args.tool} reports no cost: --budget-usd did not apply", file=sys.stderr)
-    report = {"label": label, "tool": args.tool, "tool_version": version, "model": args.model, "repo": args.repo,
+    report = {"label": label, "tool": args.tool, "tool_version": version, "model": args.model,
+              "agent_models": args.agent_models, "repo": args.repo,
               "repeat": args.repeat, "cases": cases, "prompts": {"sha": sha, "dirty": dirty},
               "started_at": started.isoformat(timespec="seconds"),
               "finished_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),

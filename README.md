@@ -70,6 +70,8 @@ that you set.
 
 ## Getting started
 
+New to adorno? Read the one-page [overview](docs/overview.md) first.
+
 Prerequisites: [uv](https://docs.astral.sh/uv/) (`brew install uv`), authenticated `gh`, `jq`.
 
 ```sh
@@ -129,7 +131,7 @@ The public repo contains no profile: only templates, in `local.example/`.
 | --- | --- | --- |
 | — | `agent:adorno`: speaks and decides in your name, last step of the workflows | none |
 | `core` | `intake`, `router`, `planner`, `triage`, `analyst` (analysis of a conversation or a document) | none |
-| `review` | `code`, `security`, `tests`, `ponytail`, per area: `front`, `perf` (front), `back`, `perf-back`, `mongodb`, `api`, and after merge: `impact` | none, read-only |
+| `review` | `code`, `security`, `tests`, `ponytail`, per area: `front`, `back` (both with performance), `mongodb`, `api`, and after merge: `impact` | none, read-only |
 | `feat` | `front`, `back`, `api` | `feat` |
 | `fix` | `investigate` (read-only), `patch`, `security` | `fix` |
 | `perf` | `front`, `mongodb`, `nodejs` | `perf`, before/after measurements |

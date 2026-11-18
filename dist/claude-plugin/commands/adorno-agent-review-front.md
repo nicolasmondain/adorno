@@ -1,5 +1,5 @@
 ---
-description: agent:review:front — Front-end reviewer — components, state, rendering, WCAG 2.1 AA accessibility, design system, perceived performance. Called when a diff touches the interface, or to verify a review comment about the front end.
+description: agent:review:front — Front-end reviewer — components, state, rendering, WCAG 2.1 AA accessibility, design system, web performance (Core Web Vitals, bundle weight, loading, interaction latency). Called when a diff touches the interface, or to verify a review comment about the front end.
 argument-hint: <request>
 disable-model-invocation: true
 ---

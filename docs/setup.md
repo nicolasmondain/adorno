@@ -1,5 +1,7 @@
 # Install and configure adorno
 
+New to adorno? Start with the one-page [overview](overview.md).
+
 This guide goes from installation to an Adorno that reviews, replies and opens PRs like you, on the repos and with
 the permissions you choose. Everything about you lives in `local/`, ignored by git: the public repo stays generic.
 
@@ -116,8 +118,8 @@ What depends on the stack comes from a [stack preset](#stack-presets) the repo c
 | Area | Detected by (excerpt) | `build` | `fix` | `perf` | `review` | `qa` | `skills` |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `always` | every change | | | | `review:code`, `review:ponytail` | | |
-| `front` | `*.tsx`, `*.css`, `*/components/*`… | `feat:front` | `fix:patch` | `perf:front` | `review:front`, `review:perf` | `test:e2e` | `frontend-ui-engineering` |
-| `back` | `server/*`, `*/services/*`, `*/jobs/*`… | `feat:back` | `fix:patch` | (a preset's, else fallback) | `review:back`, `review:tests`, `review:perf-back` | | |
+| `front` | `*.tsx`, `*.css`, `*/components/*`… | `feat:front` | `fix:patch` | `perf:front` | `review:front` | `test:e2e` | `frontend-ui-engineering` |
+| `back` | `server/*`, `*/services/*`, `*/jobs/*`… | `feat:back` | `fix:patch` | (a preset's, else fallback) | `review:back`, `review:tests` | | |
 | `back.migration` | `migrations/*`, `*/migrations/*`, `db/migrate/*`… | | | | (+ the database preset's) | | + `deprecation-and-migration` |
 | `api` | `*/api/*`, `*/routes/*`, `*openapi*`… | `feat:api` | | | `review:api` | | `api-and-interface-design` |
 | `security` | `*/auth/*`, `*.env*`, words like `token`, `role` | | `fix:security` | | `review:security` | | `security-and-hardening` |
@@ -190,7 +192,7 @@ repos:
   acme/app:
     areas:
       back:
-        review: ["-agent:review:perf-back"]   # this repo's server is a thin proxy
+        review: ["-agent:review:tests"]   # this repo's server is a thin proxy, tested end to end
         sub:
           migration: {review: [agent:review:security]}
       always:
@@ -206,6 +208,16 @@ points to the migration. `bin/kit migrate areas` (read-only, runs even when `che
 equivalent `areas.<area>.review` in the additive form, with a `-x` for each public reviewer the old list left out. The
 `adorno-setup` skill does it for you at its start: it shows the diff of `local/adorno.yaml` and writes only after your
 yes, then `bin/kit check` and `bin/kit install`.
+
+**Merged agents.** `agent:review:perf` is part of `agent:review:front` and `agent:review:perf-back` of
+`agent:review:back` ([decision 6](decisions/areas.md)). `bin/kit check` refuses a setting that still names an old id and
+points to `bin/kit migrate agents` (read-only, runs even when `check` fails): per scope, every `areas` role (removals and
+sub-areas included), `models.agents` key, Slack watch `action.agent` and Notion `assigned.agents` naming one, with what
+it becomes. A reviewer listed twice after renaming loses its duplicate. Three cases are flagged `decision` and never
+converted: a removal `-agent:review:perf` (`-agent:review:front` would drop the whole front review), `agent:review:perf`
+next to `-agent:review:front` in the same list (renamed, it would go with the rest of the front review), and a
+`models.agents` key (its tier would apply to the whole surviving review). The `adorno-setup` skill applies it at its
+start, like `migrate areas`.
 
 ## 4. Permissions
 
@@ -441,11 +453,11 @@ each tool:
 | Tool | Default | Configurable |
 | --- | --- | --- |
 | Claude Code | `haiku`, `sonnet`, `opus`, `fable` (subagents and workflow commands) | `models.tiers.claude`, or a specific identifier per agent |
-| Gemini CLI | the session's model (`inherit`) | `models.tiers.gemini` (e.g. `gemini-2.5-flash` / `gemini-2.5-pro`) |
+| Gemini CLI | the session's model (`inherit`) | `models.tiers.gemini` (e.g. `gemini-2.5-flash` / `gemini-2.5-pro`; a flash model for `balanced` is not measured, see [Known limits](models.md#known-limits)) |
 | Codex | the session's model: Codex has no subagents, the agents are skills there | the session's model (`.codex/config.toml`) |
 
 The repo's defaults: `triage`, `router` and `workflow:pr:status` on `fast`; the sessions that orchestrate the other
-workflows on `balanced`; every other agent on `deep`; `intake`, `planner` and `fix:investigate` on `frontier`. A capped
+workflows on `balanced`; `review:api` and `review:tests` on `balanced` (measured, [models.md](models.md#measuring)); every other agent on `deep`; `intake`, `planner` and `fix:investigate` on `frontier`. A capped
 loop's last round climbs one tier (`adorno-run-plan` › Loops).
 
 **Setting it**, at any level of `local/adorno.yaml` (defaults, preset, workspace, repo):
@@ -456,7 +468,7 @@ defaults:
     tiers:
       claude: {fast: haiku, balanced: sonnet, deep: opus, frontier: fable}
     agents:
-      agent:review:mongodb: balanced                 # another tier
+      agent:refactor:simplify: balanced                 # another tier
       agent:core:analyst: claude-opus-5-5            # a specific model
       agent:core:triage: {route: openrouter-small}   # an external model
     workflows:

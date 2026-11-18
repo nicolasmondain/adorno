@@ -14,7 +14,7 @@ through `pr-areas`, and `bin/kit check` proves every agent is reachable. How it 
 | 3 | **One PR** (commits per lot), opened ready by `pr:ship`. Run at **L3**. | Per-lot commits keep the review readable; a single PR removes the need for any transition layer between lots. |
 | 4 | Single-use agents declare front-matter **`entry: [workflow:…]`**, checked by `kit check` (the workflow exists and lists the agent in `uses.agents`). | The declaration lives next to the agent it concerns, rather than in a separate list in `bin/kit` or `kit.yaml` that drifts. |
 | 5 | **`api` is a top-level area** (not under `back`); no front sub-areas. | A route is both server code and a contract: as its own area it also matches `api-reference/` docs without pulling in `back`. Front sub-areas had no agent to give. |
-| 6 | `agent:review:perf` **keeps its name**. | Renaming it to `review:perf-front` would break the local configs that name it, for symmetry alone. |
+| 6 | ~~`agent:review:perf` **keeps its name**.~~ **Superseded 2026-11-17**: see below. | Renaming it to `review:perf-front` would break the local configs that name it, for symmetry alone. |
 | 7 | `agent:chore:deps` commits **`chore(deps)`**, chore family. | The usual convention for dependency bumps; the default `branch_pattern` accepts it. |
 | 8 | Sub-areas on **one level only** (`back.query`, `back.mongodb`); `sub` inside `sub` is refused. | One level covers the real need (queries vs schema under `back`) and keeps inheritance and the main-area rule simple to predict and test. |
 | 9 | **Neutral default areas, stack presets** (`repos.yaml` › `presets`: `node`, `mongodb`, `sql`, `python`, `go`, `rails`), called with `use:`. A preset adds sub-areas named after its stack and entries to the lists of neutral sub-areas; it never rewrites a neutral `paths`. (2026-11-16) | Measured on Django, Go and Rails sample files: most fell in `other`, and `*/models/*`, `*/migrations/*`, `.find(` / `.update(` sent ActiveRecord and Django code to `review:mongodb`. Keeping `paths` replaced (decision 1) and adding by sub-area keeps presets combinable without copying the defaults. |
@@ -23,3 +23,14 @@ through `pr-areas`, and `bin/kit check` proves every agent is reachable. How it 
 
 Consequence of 3 and C3: `pr-areas` has no `reviewers` output and `resolve.jq` no legacy reading; dispatchers read
 `review` directly. A local `area_reviewers` makes `bin/kit check` and `bin/kit install` fail until it is migrated.
+
+## 2026-11-17 — decision 6 superseded: the perf reviewers merge into their area's reviewer
+
+`agent:review:perf` is merged into `agent:review:front` and `agent:review:perf-back` into `agent:review:back`; both old
+ids are gone. Each pair had the same trigger (`areas.front.review`, `areas.back.review`) and overlapping checks: front's
+weight and re-renders repeated perf's bundle and rendering, and a query diff got four back reviewers, N+1 checked three
+times. The reviewer bench baseline graded 56 duplicates out of 85 findings (precision 44%): fewer reviewers per diff
+means fewer duplicates and less context. Decision 6 avoided a rename to spare local configs; a merge removes an id
+anyway, so the cost is paid once, with a migration: `bin/kit check` names `bin/kit migrate agents`, which lists every
+local setting naming an old id and what it becomes (single table `AGENT_RENAMES` in `bin/kitlib/validate.py`). A removal of a merged
+reviewer is left to the owner, since it would become the removal of the whole area review.

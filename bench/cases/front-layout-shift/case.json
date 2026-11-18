@@ -1,0 +1,48 @@
+{
+  "title": "feat(contacts): show the avatar in the contact list",
+  "description": "Shows each contact's avatar before its name in the contact list. The avatar is decorative: the name next to it says who it is.",
+  "rationale": "The `<img>` has no `width` and `height` (and no reserved size in CSS): each row grows when its avatar loads, so the list shifts under the user (CLS, a Core Web Vital), and nothing is lazy-loaded on a long list. Give it its dimensions.",
+  "routing": {
+    "areas": [
+      "front",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:front"
+    ],
+    "skills": [
+      "frontend-ui-engineering"
+    ]
+  },
+  "verdict": [
+    "pass",
+    "fix"
+  ],
+  "findings": [
+    {
+      "file": "client/components/ContactList.tsx",
+      "lines": [
+        17,
+        17
+      ],
+      "category": "layout-shift",
+      "severity": [
+        "minor",
+        "major"
+      ],
+      "keywords": [
+        "\\bCLS\\b",
+        "layout[ -]?shift",
+        "\\bwidth\\b",
+        "\\bheight\\b",
+        "dimension",
+        "aspect[- ]ratio",
+        "reflow",
+        "jump"
+      ],
+      "reviewer": "agent:review:front"
+    }
+  ]
+}

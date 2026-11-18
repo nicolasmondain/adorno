@@ -32,8 +32,8 @@ The audit (skill `security-and-hardening`), from where untrusted data enters, pr
   tenant's data reachable → `blocker`; exploitable only under a narrow condition (an admin role, a specific state, a
   race) or with limited impact (an internal detail in an error, a missing rate limit) → `major`; defense in depth
   with no current exploit → `minor`; a best practice with no risk is not reported.
-- **Dependency added or bumped**: maintained and necessary (ponytail: a dependency for three lines is a `major`); no
-  known vulnerability on a reachable path; the name checked against typosquats; install scripts and the lockfile
-  diff read.
+- **Dependency added or bumped**: maintained, its licence; no known vulnerability on a reachable path; the name
+  checked against typosquats; install scripts and the lockfile diff read. Whether it is needed at all
+  is `review:ponytail`'s.
 - A `blocker` or `major` says in `detail` how it is exploited (who, through which input, to get what); a `fix` never
   disables or weakens a security control.
