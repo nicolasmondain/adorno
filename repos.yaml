@@ -100,7 +100,7 @@ defaults:
       build: agent:feat:front
       fix: agent:fix:patch
       perf: agent:perf:front
-      review: [agent:review:front, agent:review:perf]
+      review: [agent:review:front]
       qa: agent:test:e2e
       skills: [frontend-ui-engineering]
 
@@ -108,7 +108,7 @@ defaults:
       paths: ["server/*", "*/server/*", "*/services/*", "*/jobs/*", "*/workers/*", "*/lib/*"]
       build: agent:feat:back
       fix: agent:fix:patch
-      review: [agent:review:back, agent:review:tests, agent:review:perf-back]
+      review: [agent:review:back, agent:review:tests]
       sub:
         migration:
           paths: ["migrations/*", "*/migrations/*", "*migration*", "db/migrate/*"]
@@ -167,6 +167,8 @@ defaults:
       skills: [documentation-and-adrs]
 
   # Agents for work that belongs to no single area: a nit, a missing test, and `perf` when no touched area has one.
+  # The areas are neutral, so the perf fallback is too: fix:patch with the perf skill (a perf agent is stack-specific;
+  # a repo may name one, e.g. perf:nodejs).
   fallbacks:
     nit: agent:refactor:simplify
     test: agent:test:unit

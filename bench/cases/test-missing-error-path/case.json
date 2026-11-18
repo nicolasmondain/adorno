@@ -1,0 +1,88 @@
+{
+  "title": "feat(pricing): refund part of an order",
+  "description": "Support refunds orders in several steps. Adds `refund(paidCents, refundedCents, amountCents)`, which refuses a refund that is not positive or that exceeds what is left, with its test.",
+  "rationale": "Only the nominal refund is tested: the refusal (a zero or negative amount, a refund beyond what was paid) is the risky branch, and no test covers it, while the module already tests the refusal of `applyDiscount`.",
+  "routing": {
+    "areas": [
+      "back",
+      "tests",
+      "typescript"
+    ],
+    "review": [
+      "agent:review:code",
+      "agent:review:ponytail",
+      "agent:review:back",
+      "agent:review:tests"
+    ]
+  },
+  "verdict": [
+    "fix"
+  ],
+  "findings": [
+    {
+      "file": "server/services/pricing.ts",
+      "lines": [
+        12,
+        14
+      ],
+      "category": "untested-error-path",
+      "severity": [
+        "minor",
+        "major"
+      ],
+      "keywords": [
+        "(not|never|un)[ -]?tested",
+        "no test",
+        "missing test",
+        "test (for|of|the) (the )?(error|refus|reject|throw|range|over)",
+        "(error|failure|rejection|refusal|edge)[ -](path|branch|case)",
+        "RangeError",
+        "assert\\.throws",
+        "coverage",
+        "exceed",
+        "over[- ]?refund"
+      ],
+      "reviewer": "agent:review:tests"
+    }
+  ],
+  "extras": [
+    {
+      "file": "server/services/pricing.test.ts",
+      "lines": [
+        13,
+        13
+      ],
+      "keywords": [
+        "refusal branch"
+      ],
+      "valid": true,
+      "note": "the planned defect, anchored elsewhere: the planned defect (refusal branch of refund untested) anchored on the test file instead of pricing.ts:12"
+    },
+    {
+      "file": "server/services/pricing.test.ts",
+      "lines": [
+        13,
+        15
+      ],
+      "keywords": [
+        "off-by-one",
+        "boundary"
+      ],
+      "valid": true,
+      "note": "refunding exactly what is left is untested: > vs >= would pass the current test"
+    },
+    {
+      "file": "server/services/pricing.test.ts",
+      "lines": [
+        13,
+        13
+      ],
+      "keywords": [
+        "multi-step",
+        "chains"
+      ],
+      "valid": false,
+      "note": "refund is pure and the test already passes a prior refund (refundedCents 1000); chaining calls adds no coverage"
+    }
+  ]
+}

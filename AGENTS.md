@@ -19,7 +19,8 @@ adorno is a portable, reusable agent setup. Agents, workflows and skills are wri
 | a Slack or Notion watch | a workflow `src/workflows/slack/…` or `src/workflows/notion/…`; the deterministic part in `src/skills/adorno-watch/scripts/` + `tests/adorno-watch.test.sh`; read through the connectors, only write: the report to oneself |
 | an agent's or workflow's model | its `model:` tier (`fast`, `balanced`, `deep`, `frontier`) and, if needed, `effort:` (`low` … `max`), chosen by [docs/models.md](docs/models.md); `delegable: true` if it can judge on inputs gathered in advance (external route); the actual choice per tool and per repo is in `local/` › `models` |
 | a repo, a workspace, permissions, a voice, a vision | `local/` (ignored by git; template: `local.example/`) — never in the repo |
-| a default public setting | `repos.yaml` (+ its validation in `bin/kit` › `validate_registry`) |
+| a default public setting | `repos.yaml` (+ its validation in `bin/kitlib/validate.py` › `validate_registry`) |
+| a change to the kit itself | `bin/kitlib/<module>.py` (`bin/kit` only calls `kitlib.cli.main`); a module imports only from the ones below it: `paths`, `ctx` (per-command state, read as `ctx.X`), `util`, `registry`, `model`, `validate`, `render`, `build`, `commands`, `imports`, `install`, `cli` |
 | a settings resolution rule | `src/skills/adorno-github/scripts/resolve.jq` (shared by the scripts and `kit conf`) + its tests |
 | content from another repo | `imports:` in `kit.yaml`, then `bin/kit import` (`--check`: what changed upstream, writes nothing; `--update`: move the pin, in its own PR) |
 | modifying an imported item | a local file with `extends: <import>/<name>` (never edit in `vendor/`) |

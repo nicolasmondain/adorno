@@ -12,8 +12,7 @@
       "agent:review:code",
       "agent:review:ponytail",
       "agent:review:back",
-      "agent:review:tests",
-      "agent:review:perf-back"
+      "agent:review:tests"
     ]
   },
   "verdict": [
@@ -40,6 +39,74 @@
         "return(ed)? value"
       ],
       "reviewer": "agent:review:tests"
+    }
+  ],
+  "extras": [
+    {
+      "file": "server/services/pricing.ts",
+      "lines": [
+        12,
+        12
+      ],
+      "keywords": [
+        "constructor",
+        "toString",
+        "prototype",
+        "hasOwn"
+      ],
+      "valid": true,
+      "note": "VAT_RATES is a plain object: 'constructor' or 'toString' pass the undefined guard and addVat returns NaN instead of RangeError"
+    },
+    {
+      "file": "server/services/pricing.ts",
+      "lines": [
+        16,
+        16
+      ],
+      "keywords": [
+        "Math\\.round",
+        "rounding"
+      ],
+      "valid": true,
+      "note": "every test input is 1000, so the Math.round path of a money computation never runs"
+    },
+    {
+      "file": "server/services/pricing.ts",
+      "lines": [
+        11,
+        16
+      ],
+      "keywords": [
+        "negative",
+        "non-integer"
+      ],
+      "valid": false,
+      "note": "speculative input domain: the module states integer cents and the sibling applyDiscount does not validate either"
+    },
+    {
+      "file": "server/services/pricing.test.ts",
+      "lines": [
+        19,
+        19
+      ],
+      "keywords": [
+        "Math\\.round",
+        "rounding"
+      ],
+      "valid": true,
+      "note": "rounding of addVat is untested (all inputs are multiples of 100)"
+    },
+    {
+      "file": "server/services/pricing.test.ts",
+      "lines": [
+        20,
+        20
+      ],
+      "keywords": [
+        "case sensitivity"
+      ],
+      "valid": false,
+      "note": "nothing in the change suggests lowercase codes arrive, and a zero total is trivially 0: noise"
     }
   ]
 }
