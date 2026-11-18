@@ -52,5 +52,120 @@
       ],
       "reviewer": "agent:review:api"
     }
+  ],
+  "extras": [
+    {
+      "file": "server/routes/contacts.ts",
+      "lines": [
+        22,
+        22
+      ],
+      "keywords": [
+        "skip or repeat",
+        "skips and repeats",
+        "duplicat",
+        "non-deterministic",
+        "not deterministic",
+        "unstable pages",
+        "not stable",
+        "no (defined|stable|fixed|guaranteed)"
+      ],
+      "valid": true,
+      "note": "sort on createdAt alone has no tie-breaker: with skip, tied contacts can be repeated or missed across pages, defeating the stated goal of reading every contact"
+    },
+    {
+      "file": "server/routes/contacts.ts",
+      "lines": [
+        22,
+        22
+      ],
+      "keywords": [
+        "in-memory sort"
+      ],
+      "valid": true,
+      "note": "skip cost grows with an unbounded offset and no index on { accountId, createdAt } is declared: deep pages are a scale risk the PR opens"
+    },
+    {
+      "file": "server/routes/contacts.ts",
+      "lines": [
+        23,
+        23
+      ],
+      "keywords": [
+        "countDocuments`? runs"
+      ],
+      "valid": true,
+      "note": "reading every contact now pays a full account count per page, a cost that did not exist with a single page"
+    },
+    {
+      "file": "server/routes/contacts.ts",
+      "lines": [
+        23,
+        23
+      ],
+      "keywords": [
+        "data can change",
+        "without a snapshot"
+      ],
+      "valid": true,
+      "note": "newest-first offset paging drifts when contacts are inserted during a full read"
+    },
+    {
+      "file": "docs/api-reference/contacts.md",
+      "lines": [
+        12,
+        12
+      ],
+      "keywords": [
+        "by one"
+      ],
+      "valid": true,
+      "note": "the reference does not say that offset pages shift when contacts are created or deleted during paging"
+    },
+    {
+      "file": "docs/api-reference/contacts.md",
+      "lines": [
+        12,
+        12
+      ],
+      "keywords": [
+        "non-integer",
+        "non-negative integer"
+      ],
+      "valid": true,
+      "note": "the planned defect, anchored elsewhere: the missing validation seen from the reference: no accepted range and no error for an invalid offset"
+    },
+    {
+      "file": "server/routes/contacts.test.ts",
+      "lines": [
+        34,
+        41
+      ],
+      "keywords": [
+        "happy path",
+        "invalid",
+        "negative",
+        "offset >= total",
+        "past the end",
+        "past-the-end",
+        "\\bties\\b",
+        "\\btied\\b"
+      ],
+      "valid": true,
+      "note": "the offset test covers one happy path: no past-the-end page, no tied createdAt, no invalid offset (that last part is the planned defect seen from the test)"
+    },
+    {
+      "file": "server/routes/contacts.test.ts",
+      "lines": [
+        36,
+        36
+      ],
+      "keywords": [
+        "does not check account isolation",
+        "skip comes after the account filter"
+      ],
+      "valid": false,
+      "note": "the account filter is the same find() the first test already pins with acc_2 data; skip cannot run outside it"
+    }
   ]
 }

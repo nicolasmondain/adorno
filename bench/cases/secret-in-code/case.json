@@ -40,5 +40,45 @@
       ],
       "reviewer": "agent:review:code"
     }
+  ],
+  "extras": [
+    {
+      "file": "server/config.ts",
+      "lines": [
+        13,
+        13
+      ],
+      "keywords": [
+        "empty PAYMENTS_API_KEY"
+      ],
+      "valid": true,
+      "note": "`??` keeps '' where requireEnv rejected it: `PAYMENTS_API_KEY=` now sends an empty bearer instead of failing at boot"
+    },
+    {
+      "file": "server/config.ts",
+      "lines": [
+        13,
+        13
+      ],
+      "keywords": [
+        "security-relevant fallback",
+        "NODE_ENV"
+      ],
+      "valid": true,
+      "note": "the fallback change has no test, and a production start without the key silently boots on the sandbox key (the planned defect's second half, same line, missed by the case keywords)"
+    },
+    {
+      "file": "package.json",
+      "lines": [
+        5,
+        5
+      ],
+      "keywords": [
+        "start` script",
+        "no start script"
+      ],
+      "valid": true,
+      "note": "the description promises `npm start` right after cloning, package.json has no start script: the PR's proof does not hold"
+    }
   ]
 }

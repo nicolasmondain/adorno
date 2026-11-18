@@ -18,5 +18,31 @@
   "verdict": [
     "pass"
   ],
-  "findings": []
+  "findings": [],
+  "extras": [
+    {
+      "file": "server/lib/duration.test.ts",
+      "lines": [
+        20,
+        20
+      ],
+      "keywords": [
+        "exactly at"
+      ],
+      "valid": true,
+      "note": "nit: the test named 'exactly at' asserts the values one second below the switch, and 7199 is no unit switch"
+    },
+    {
+      "file": "server/lib/duration.ts",
+      "lines": [
+        16,
+        16
+      ],
+      "keywords": [
+        "3601"
+      ],
+      "valid": true,
+      "note": "the hours branch with zero minutes but leftover seconds (3601 -> '1h') is the one branch condition no test pins"
+    }
+  ]
 }
