@@ -22,7 +22,7 @@ language (`owner.language` from `repo-conf`); any text published on GitHub is in
    leaves the repo green.
 3. For each slice: goal, likely files, **acceptance test** (which of the spec's criteria it satisfies), and the agent
    that builds it: `adorno-github/scripts/pr-areas owner/repo --files <likely files>` → its `build` (main area's).
-   A provided plan keeps its own agent choices when they fit the role families of the table (`bin/kit` `ROLE_FAMILIES`).
+   A provided plan keeps its own agent choices when they fit the role families of the table (`bin/kitlib/validate.py` `ROLE_FAMILIES`).
 4. A slice visible in the interface also gets the `qa` agent of `pr-areas` (journey, screenshots, video) once built.
    A performance criterion in the spec gets its own `perf` slice, with the `perf` of its area (`fallbacks.perf`
    when the area has none).

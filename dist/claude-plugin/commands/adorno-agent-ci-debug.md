@@ -1,6 +1,7 @@
 ---
 description: agent:ci:debug — Diagnose a red CI from the logs — classify the failure (flaky, infra, real failure) and name the agent that must fix it. Use as soon as a check fails on a PR or on the default branch.
 argument-hint: <request>
+disable-model-invocation: true
 ---
 
 Delegate the request below to the `adorno-agent-ci-debug` sub-agent (agent:ci:debug) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-ci-debug`) to handle the request.

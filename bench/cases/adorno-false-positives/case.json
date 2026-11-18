@@ -2,11 +2,11 @@
   "kind": "adorno",
   "title": "feat(orders): list orders with the customer name",
   "description": "The orders page needs the customer name next to each order. Adds `listOrdersWithCustomer`, which returns the page of orders with `customerName` (null when the customer was deleted).",
-  "rationale": "agent:adorno gets the merged review of six specialists: the real N+1 (mongodb), the same N+1 again from perf-back at an inflated blocker, and four false findings: three the code contradicts and one on a line the diff does not touch. It must keep the N+1 once, at major, and drop the other four: the lookup filter has accountId, it has a projection on name, the test covers a deleted customer, and listOrders already has its limit and is not part of the change.",
+  "rationale": "agent:adorno gets the merged review of five specialists: the real N+1 (mongodb), the same N+1 again from back at an inflated blocker, and four false findings: three the code contradicts and one on a line the diff does not touch. It must keep the N+1 once, at major, and drop the other four: the lookup filter has accountId, it has a projection on name, the test covers a deleted customer, and listOrders already has its limit and is not part of the change.",
   "routing": {
     "areas": [
       "back",
-      "back.query",
+      "back.mongodb",
       "tests",
       "typescript"
     ],
@@ -15,7 +15,6 @@
       "agent:review:ponytail",
       "agent:review:back",
       "agent:review:tests",
-      "agent:review:perf-back",
       "agent:review:mongodb"
     ]
   },

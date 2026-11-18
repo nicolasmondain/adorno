@@ -26,6 +26,12 @@ Otherwise `local/adorno.yaml` still has `area_reviewers`, now replaced by `areas
    and order stay.
 4. Apply: `<source>/bin/kit check`, then `<source>/bin/kit install`.
 
+## Merged agent ids (any mode, at the start)
+
+Run `<source>/bin/kit migrate agents` (read-only, works even when `check` fails). An empty list → nothing to do.
+Otherwise each row (`scope`, `path`: `old` → `new`) is a setting naming an agent merged into another: show the diff and
+apply it as in steps 1, 3 and 4 above. A row with `decision` is a question for the owner, never converted silently.
+
 ## Mode `profile`
 
 Goal: `agent:adorno` decides and writes like the owner. The templates of `local.example/` show the expected shape;
@@ -100,6 +106,10 @@ Goal: the workflows know this repo — or a whole set of repos — and act withi
    settings in a `presets:` block, and keep only what differs under `repos:`.
 3. **Detect, then ask** — from the repo, not from memory:
    - commands `test`, `lint`, `typecheck` (package scripts, Makefile, CI workflow), `base` (default branch);
+   - stack presets (`repos.yaml` › `presets`, see `agent:chore:repo` › Propose): `use: [node, mongodb]`,
+     `use: [python, sql]`… on the workspace only when all its repos share the stack, otherwise on each repo (`use:`
+     adds up across layers: a repo cannot remove a preset its workspace calls); none fits → no `use:`, and say the
+     neutral areas apply;
    - default `reviewers`: who reviewed the last PRs (`gh pr list --state merged --limit 20 --json reviews`), never the
      owner; `team` (name, GitHub team, Slack channels) by asking;
    - `context`: 3-8 one-line facts every agent must know (priorities, conventions, coverage bar, module layout), from

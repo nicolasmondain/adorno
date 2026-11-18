@@ -10,8 +10,7 @@
     "review": [
       "agent:review:code",
       "agent:review:ponytail",
-      "agent:review:front",
-      "agent:review:perf"
+      "agent:review:front"
     ],
     "skills": [
       "frontend-ui-engineering"
@@ -43,7 +42,7 @@
         "reflow",
         "jump"
       ],
-      "reviewer": "agent:review:perf"
+      "reviewer": "agent:review:front"
     }
   ]
 }

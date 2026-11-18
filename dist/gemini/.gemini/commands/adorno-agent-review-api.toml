@@ -1,6 +1,0 @@
-description = "agent:review:api — API reviewer — endpoint and method contracts, input validation, error codes and formats, pagination, compatibility, public documentation. Called when a diff touches an interface, or to verify a review comment about an API."
-prompt = '''
-Delegate the request below to the `adorno-agent-review-api` sub-agent (agent:review:api) and return its result as is. If the sub-agent is not available, take on its role (skill or file `adorno-agent-review-api`) to handle the request.
-
-Request: {{args}}
-'''

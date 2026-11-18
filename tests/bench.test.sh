@@ -125,10 +125,10 @@ PY
 then ok "every keyword is a valid regular expression"; else ko "every keyword is a valid regular expression" "$(tail -c 300 "$TMP/err")"; fi
 
 echo "routing (public default rules from repos.yaml)"
-REAL="$ROOT/dist/claude/.claude/skills/adorno-github/repos.json"
+REAL="$ROOT/dist/claude-plugin/skills/adorno-github/repos.json"
 if [ -f "$REAL" ]; then
   # adorno/bare drops the `always` reviewers: docs-only then routes to no reviewer at all
-  jq '.repos = {"adorno/bench": {}, "adorno/bare": {"areas": {"always": {"review": ["-agent:review:code", "-agent:review:ponytail"]}}}}' \
+  jq '.repos = {"adorno/bench": {"use": ["node", "mongodb"]}, "adorno/bare": {"areas": {"always": {"review": ["-agent:review:code", "-agent:review:ponytail"]}}}}' \
     "$REAL" >"$KH/registry.json"
   expect_exit 0 "every case routes as its case.json says" -- "$B/route"
   expect_jq "one entry per case, all ok, each with the full pr-areas output" \
@@ -172,19 +172,19 @@ if [ -f "$REAL" ]; then
   out="$(cat "$R/first/run.json")"
   expect_jq "the run is described" \
     '.label == "first" and .tool == "claude" and .model == null and .repo == "adorno/bench" and .repeat == 1 and .cases == ["docs-only", "mongo-n-plus-one"] and (.prompts.sha | type) == "string" and (.tool_version | test("fake")) and .skipped == [] and (.runs | length) == 2'
-  # docs-only: 2 reviewers + adorno; mongo-n-plus-one: 6 reviewers + adorno; 0.01 a call
-  expect_jq "its cost is the sum of what the tool reported" '(.cost_usd * 100 | round) == 10'
+  # docs-only: 2 reviewers + adorno; mongo-n-plus-one: 5 reviewers + adorno; 0.01 a call
+  expect_jq "its cost is the sum of what the tool reported" '(.cost_usd * 100 | round) == 9'
   D="$R/first/mongo-n-plus-one/1"
   out="$(cat "$D/review.json")"
-  expect_jq "the reviews are merged by review-merge" '.verdict == "fix" and .counts.major == 1 and .invalid == [] and (.agents | length) == 6'
+  expect_jq "the reviews are merged by review-merge" '.verdict == "fix" and .counts.major == 1 and .invalid == [] and (.agents | length) == 5'
   out="$(cat "$D/run.json")"
   expect_jq "the case run is described" \
-    '.case == "mongo-n-plus-one" and .routing_ok and .missing == [] and .invalid == [] and .verdict == "fix" and (.diff_base | length) == 40 and (.budget_exhausted | not) and (.cost_usd * 100 | round) == 7'
+    '.case == "mongo-n-plus-one" and .routing_ok and .missing == [] and .invalid == [] and .verdict == "fix" and (.diff_base | length) == 40 and (.budget_exhausted | not) and (.cost_usd * 100 | round) == 6'
   out="$(cat "$D/meta/mongodb.json")"
   expect_jq "per agent: the model actually used, tokens, cost, duration" \
     '.agent == "agent:review:mongodb" and .models == ["fake-tier-model"] and .tokens == {"input": 1554, "cache_read": 49887, "cache_write": 18571, "output": 1902} and .cost_usd == 0.01 and .duration_ms > 0 and .attempts == 1 and .delivered == "file" and (.is_error | not)'
   if [ -f "$D/review-final.json" ] && [ -f "$D/review-notes.md" ] && [ -f "$D/areas.json" ] && [ -f "$D/meta/adorno.json" ] \
-    && [ -f "$D/messages/mongodb.md" ] && [ "$(find "$D/reviews" -name '*.json' | wc -l)" -eq 6 ] \
+    && [ -f "$D/messages/mongodb.md" ] && [ "$(find "$D/reviews" -name '*.json' | wc -l)" -eq 5 ] \
     && [ "$(find "$R/first/docs-only/1/reviews" -name '*.json' | wc -l)" -eq 2 ]; then
     ok "one review per reviewer, the adorno pass, the routing and the messages are kept"
   else
@@ -197,7 +197,7 @@ if [ -f "$REAL" ]; then
   fi
   calls
   expect_jq "one call per reviewer, then agent:adorno" \
-    'length == 10 and ([.[] | .[index("--agent") + 1]] | .[2] == "adorno:adorno" and .[-1] == "adorno:adorno" and (index("adorno:adorno-agent-review-perf-back") != null))'
+    'length == 9 and ([.[] | .[index("--agent") + 1]] | .[2] == "adorno:adorno" and .[-1] == "adorno:adorno" and (index("adorno:adorno-agent-review-back") != null))'
   expect_jq "the prompts of the working tree, user settings left out, sandboxed, no permission bypass" \
     'all(.[]; (.[index("--plugin-dir") + 1] | endswith("dist/claude-plugin")) and .[index("--setting-sources") + 1] == "project,local" and .[index("--permission-mode") + 1] == "dontAsk" and (.[index("--settings") + 1] | fromjson | .sandbox.enabled and (.sandbox.allowUnsandboxedCommands | not) and (.autoMemoryEnabled | not)) and (index("--dangerously-skip-permissions") == null) and (index("--model") == null) and (index("--max-budget-usd") == null))'
   expect_jq "a reviewer gets diffBase, the files of its area and the skills of the areas they fall in" \
@@ -214,10 +214,10 @@ if [ -f "$REAL" ]; then
   expect_jq "starts agent:adorno alone" 'length == 1 and (.[0] | .[index("--agent") + 1] == "adorno:adorno")'
   D="$R/fixed/adorno-false-positives/1"
   out="$(cat "$D/review.json")"
-  expect_jq "on the merged reviews the case brings" '.verdict == "block" and (.findings | length) == 6 and .invalid == [] and (.agents | length) == 6'
+  expect_jq "on the merged reviews the case brings" '.verdict == "block" and (.findings | length) == 6 and .invalid == [] and (.agents | length) == 5'
   out="$(cat "$D/run.json")"
   expect_jq "with no review missing or invalid" '.missing == [] and .invalid == [] and .verdict == "block"'
-  if [ "$(find "$D/reviews" -name '*.json' | wc -l)" -eq 6 ] && [ -f "$D/review-final.json" ]; then
+  if [ "$(find "$D/reviews" -name '*.json' | wc -l)" -eq 5 ] && [ -f "$D/review-final.json" ]; then
     ok "the reviews given and what agent:adorno wrote are kept"
   else
     ko "the reviews given and what agent:adorno wrote are kept" "$(find "$D" -type f | head -20)"
@@ -325,7 +325,7 @@ if [ -f "$REAL" ]; then
   expect_exit 0 "a budget on a case with more reviewers than --parallel" -- "$B/run" --case mongo-n-plus-one --parallel 3 --budget-usd 0.5 --label wide --results "$R"
   calls
   expect_jq "splits what is left over every reviewer's call, not over the slots" \
-    '[.[] | select(.[index("--agent") + 1] != "adorno:adorno") | .[index("--max-budget-usd") + 1] | tonumber] | length == 6 and add <= 0.5'
+    '[.[] | select(.[index("--agent") + 1] != "adorno:adorno") | .[index("--max-budget-usd") + 1] | tonumber] | length == 5 and add <= 0.5'
   expect_exit 0 "a budget on a routing that picks no reviewer" -- "$B/run" --repo adorno/bare --case docs-only --budget-usd 0.05 --label bare --results "$R"
   calls
   expect_jq "goes straight to agent:adorno, with the whole budget" \
@@ -528,7 +528,7 @@ PLANT_T='{"file":"a.ts","lines":[20,20],"keywords":["tenant"],"why":"w"}' PLANT_
 jq --argjson t "$PLANT_T" --argjson p "$PLANT_P" '.kind = "adorno" | .planted = [$t, $p]' "$SC/defect/case.json" >"$SC/fixed/case.json"
 jq --argjson t "$PLANT_T" '.kind = "adorno" | .planted = [$t]' "$SC/clean/case.json" >"$SC/fixed-clean/case.json"
 TENANT="$(finding a.ts 20 blocker 'Not scoped to the tenant' back)"
-PROJ="$(finding a.ts 30 major 'No projection' perf-back)"
+PROJ="$(finding a.ts 30 major 'No projection' back)"
 N1='{"path":"a.ts","line":11,"body":"issue (non-blocking): N+1, one query per item."}'
 POST_T='{"path":"a.ts","line":20,"body":"issue (blocking): not scoped to the tenant."}'
 POST_P='{"path":"a.ts","line":30,"body":"issue (non-blocking): no projection."}'
