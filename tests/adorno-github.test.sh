@@ -171,6 +171,34 @@ expect_jq "... no status.md in its folder: none reported" '.status == null'
 grep -q "usage of run $UR not recorded" "$TMP/err" && ok "... the failure said on stderr" || ko "... the failure said on stderr" "$(cat "$TMP/err")"
 jq -e '.source == "error" and (.error | length) > 0' "$UD/usage.json" >/dev/null && ok "... and recorded as an error" || ko "... and recorded as an error"
 
+echo "runs: budget"
+B() { env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 "$@"; }
+expect_exit 0 "a run over two repos" -- B --repo acme/docs --repo acme/strict
+expect_jq "... keeps the smallest cap (acme/strict's 2 under the default 10), in the run file too" \
+  ".max_usd == 2 and ($(jq .max_usd "$KH/runs/active/$(jq -r .id <<<"$out").json") == 2)"
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "a run over one repo" -- B --repo acme/docs
+expect_jq "... the default cap" '.max_usd == 10'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "a run over a repo declared nowhere and a declared one" -- B --repo nobody/repo --repo acme/docs
+expect_jq "... the undeclared one brings no cap" '.max_usd == 10'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "a workflow with no cap" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:status --mode report --level L0 --repo acme/strict
+expect_jq "... no cap" '.max_usd == null'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "--max-usd replaces the cap" -- B --repo acme/docs --repo acme/strict --max-usd 99
+expect_jq "... even above the repos' caps (the resume command)" '.max_usd == 99'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "--max-usd off removes it" -- B --repo acme/strict --max-usd off
+expect_jq "... no cap" '.max_usd == null'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 2 "--max-usd that is not a number" -- B --repo acme/docs --max-usd abc
+expect_exit 2 "--max-usd 0" -- B --repo acme/docs --max-usd 0
+expect_exit 2 "a watch run takes no cap" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:slack:watch --watch --max-usd 5
+expect_exit 0 "a watch run" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:slack:watch --watch
+expect_jq "... has none" '.max_usd == null'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+
 # the rest of the suite runs inside one auto run at L3
 "$S/run-begin" --workflow workflow:test:suite --mode auto --level L3 \
   --repo acme/docs --repo acme/strict --repo acme/app --repo acme/docs-public --repo acme/readonly --repo other/thing >/dev/null
