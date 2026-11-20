@@ -39,6 +39,8 @@ command.
      area (`pr-areas --files <file>`; nit: `fallbacks.nit`, missing test: `fallbacks.test`), with that area's `skills`, tests and lint green, committed with `commit_skill`;
      then the reviewers again on the new commits and on the points still open. Two fix rounds at most, each opened
      with `run-mark round <n> 2 "<what is left>"` (the run's journal frames it).
+   - Before each review and each fix round: `run-budget <id>`. A non-zero exit → stop here, nothing pushed nor opened: the
+     commits stay in the worktree on their branch (`Stopped: budget`, orchestration › Runs).
    - Clean (no 🔴 nor 🟠, the request met) → **ready for review**. The cap reached with a 🔴 or 🟠 still open:
      no PR yet → it is opened as **draft**, those points at the top of its description with `file:line`; a PR already
      open → those commits are not pushed (reviewers would see known 🔴 or 🟠 land on it). Either way `status.md` says
