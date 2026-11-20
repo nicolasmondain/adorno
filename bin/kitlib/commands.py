@@ -1,9 +1,12 @@
-"""Commands: check, conf, list, migrate, build, new."""
+"""Commands: check, doctor, conf, list, migrate, build, new."""
 
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -51,6 +54,41 @@ def cmd_check(args) -> None:
         if fresh != committed(tree_digest(DIST), "dist") or fresh_mp != tree_digest(ROOT / ".claude-plugin"):
             die("dist/ is out of date — run `bin/kit build` and commit the result")
         print("ok: dist/ is up to date")
+
+
+# tool -> (minimum, what needs it); README.md and docs/setup.md state the same minimums (tests/kit.test.sh checks it)
+PREREQUISITES = {
+    "jq": ("1.7.1", "the scripts and tests fail on 1.6"),
+    "python3": ("3.9", "the guard hook, the journal and the bench run on the PATH python3"),
+    "gh": ("2.99.0", "--attach on gh pr create/edit/comment"),
+    "uv": ("0.4.19", "uv run --script, which runs bin/kit"),
+}
+
+
+def cmd_doctor(args) -> None:
+    errors = 0
+    # `uv run` puts kit's own environment (python3 >= 3.11) first in PATH: look past it, at the user's PATH
+    own = os.path.join(sys.prefix, "bin") if sys.prefix != sys.base_prefix else None
+    search = os.pathsep.join(d for d in os.environ.get("PATH", "").split(os.pathsep) if d != own)
+    for tool, (minimum, why) in PREREQUISITES.items():
+        path = shutil.which(tool, path=search)
+        if not path:
+            print(f"error: {tool} not found on PATH; needs >= {minimum}: {why}", file=sys.stderr)
+            errors += 1
+            continue
+        res = subprocess.run([path, "--version"], capture_output=True, text=True)
+        m = re.search(r"\d+(\.\d+)+", res.stdout + res.stderr)
+        if not m:
+            print(f"error: {tool}: no version in `{tool} --version` (exit {res.returncode}); needs >= {minimum}: {why}",
+                  file=sys.stderr)
+            errors += 1
+        elif tuple(map(int, m.group().split("."))) < tuple(map(int, minimum.split("."))):
+            print(f"error: {tool} {m.group()} is too old; needs >= {minimum}: {why}", file=sys.stderr)
+            errors += 1
+        else:
+            print(f"ok: {tool} {m.group()} (>= {minimum})")
+    if errors:
+        die(f"{errors} prerequisite(s) missing or too old")
 
 
 def cmd_conf(args) -> None:

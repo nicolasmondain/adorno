@@ -5,10 +5,12 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"; trap 'chmod -R u+w "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
-# python3 with PyYAML runs bin/kit directly; else uv, keeping its real cache (the throwaway HOME would hide it)
-if python3 -c 'import yaml' 2>/dev/null; then KIT=(python3 "$ROOT/bin/kit")
+# python3 with PyYAML runs bin/kit directly; else uv, keeping its real cache (the throwaway HOME would hide it).
+# Both by absolute path: the doctor section puts fake python3 and uv first in PATH.
+if python3 -c 'import yaml' 2>/dev/null; then KIT=("$(python3 -c 'import sys; print(sys.executable)')" "$ROOT/bin/kit")
 elif command -v uv >/dev/null 2>&1; then
-  UV_CACHE_DIR="${UV_CACHE_DIR:-$(uv cache dir 2>/dev/null)}"; export UV_CACHE_DIR; KIT=("$ROOT/bin/kit")
+  UV_CACHE_DIR="${UV_CACHE_DIR:-$(uv cache dir 2>/dev/null)}"; export UV_CACHE_DIR
+  KIT=("$(command -v uv)" run --quiet --script "$ROOT/bin/kit")
 else echo "needs python3 with PyYAML, or uv" >&2; exit 1; fi
 export HOME="$TMP/home" ADORNO_HOME="$TMP/home/.adorno" ADORNO_LOCAL="$TMP/local"
 mkdir -p "$HOME"
@@ -715,6 +717,39 @@ check "... each one by name" \
   'grep -q "^scopes (weakest first" <<<"$out" && grep -q "^  workspaces.acme: " <<<"$out" && grep -qx "  repos.acme/app" <<<"$out" && grep -qx "  presets.platform-team (used with \`use:\`)" <<<"$out"'
 expect_exit 0 "conf with no argument inside a declared repo" -- in_dir "$TMP/code/acme/app" "${KIT[@]}" conf
 expect_jq "... resolves that repo" '(.scopes | index("repos:acme/app")) != null'
+
+echo "doctor"
+FAKE="$TMP/fake-tools"; mkdir -p "$FAKE"
+fake() { printf '#!/bin/sh\necho "%s"\n' "$2" >"$FAKE/$1"; chmod +x "$FAKE/$1"; }  # fake TOOL "VERSION LINE"
+fakes() { fake jq "$1"; fake python3 "$2"; fake gh "$3"; fake uv "$4"; }
+doctor() { expect_exit "$1" "$2" -- env PATH="$FAKE" "${KIT[@]}" doctor; }  # only the fakes on PATH
+fakes jq-1.7.1 "Python 3.9" "gh version 2.99.0" "uv 0.4.19"
+doctor 0 "doctor: every tool exactly at its minimum"
+check "... four ok: lines" '[ "$(grep -c "^ok: " <<<"$out")" = 4 ]'
+for f in README.md docs/setup.md; do
+  check "every minimum doctor prints is on the Prerequisites line of $f" \
+    '(vs="$(sed -n "s/^ok: .* (>= \(.*\))$/\1/p" <<<"$out")"; [ "$(wc -l <<<"$vs")" -eq 4 ] || exit 1
+      for v in $vs; do grep "^Prerequisites:" -A1 "$ROOT/$f" | grep -qF "$v" || exit 1; done)'
+done
+fakes jq-1.7.1-apple "Python 3.9.6" "gh version 2.103.3 (2026-10-26)" "uv 0.8.18 (Homebrew 2025-09-17)"
+doctor 0 "doctor: real version strings"
+check "... read as their versions" \
+  'grep -qx "ok: jq 1.7.1 (>= 1.7.1)" <<<"$out" && grep -qx "ok: python3 3.9.6 (>= 3.9)" <<<"$out" && grep -qx "ok: gh 2.103.3 (>= 2.99.0)" <<<"$out" && grep -qx "ok: uv 0.8.18 (>= 0.4.19)" <<<"$out"'
+fake jq jq-1.6
+doctor 1 "doctor: jq 1.6 refused"
+check "... the error names jq, 1.6 and 1.7.1" 'grep -q "^error: jq 1\.6 .*1\.7\.1" "$TMP/err"'
+check "... the three others still reported ok" '[ "$(grep -c "^ok: " <<<"$out")" = 3 ] && ! grep -q "^ok: jq" <<<"$out"'
+fake jq jq-1.7
+doctor 1 "doctor: jq 1.7 (two components) refused"
+fake jq jq-1.7.1; fake gh "gh version 2.98.0"
+doctor 1 "doctor: gh 2.98.0 refused"
+check "... the error names gh and 2.99.0" 'grep -q "^error: gh 2\.98\.0 .*2\.99\.0" "$TMP/err"'
+fake gh "gh version 2.99.0"; fake uv "uv (dev build)"
+doctor 1 "doctor: an unreadable version refused"
+check "... named" 'grep -q "^error: uv" "$TMP/err"'
+rm "$FAKE/uv"
+doctor 1 "doctor: a tool missing from PATH"
+check "... named" 'grep -q "^error: uv .*not found" "$TMP/err" && [ "$(grep -c "^ok: " <<<"$out")" = 3 ]'
 
 echo
 echo "$pass passed, $fail failed"
