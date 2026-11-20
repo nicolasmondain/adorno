@@ -10,7 +10,12 @@ cmd="${1:-}"; key="${2:-}"
 [ -n "$cmd" ] && [ -n "$key" ] || die "usage: watch-seen list|mark|filter|last|touch KEY …" "$E_USAGE"
 valid_key "$key"
 f="$(state_dir)/$key.json"
-[ -f "$f" ] || printf '{"last_run": null, "seen": {}}\n' >"$f"
+if [ ! -f "$f" ]; then  # seed through a hard link: atomic, never truncates a state another mark already saved
+  printf '{"last_run": null, "seen": {}}\n' >"$f.$$.seed"
+  ln "$f.$$.seed" "$f" 2>/dev/null || true
+  rm -f "$f.$$.seed"
+  [ -f "$f" ] || die "cannot create $f"
+fi
 shift 2
 case "$cmd" in
   list)  jq '.seen | keys' "$f" ;;
