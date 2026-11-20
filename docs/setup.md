@@ -12,10 +12,13 @@ flowchart LR
 
 ## 1. Install
 
-Prerequisites: [uv](https://docs.astral.sh/uv/) (`brew install uv`), authenticated `gh` (`gh auth status`), `jq`, `git`.
+Prerequisites: [uv](https://docs.astral.sh/uv/) >= 0.4.19 (`brew install uv`; `bin/kit` runs on the Python 3.11 it
+provides), authenticated `gh` >= 2.99.0 (`gh auth status`), `jq` >= 1.7.1, `python3` >= 3.9 on PATH, `git`.
+`bin/kit doctor` checks the versions.
 
 ```sh
 git clone https://github.com/<owner>/adorno ~/code/adorno && cd ~/code/adorno
+bin/kit doctor                    # jq, python3, gh and uv at their minimum versions
 cp -r local.example local
 bin/kit check
 bin/kit install --global          # ~/.claude, ~/.agents, ~/.gemini

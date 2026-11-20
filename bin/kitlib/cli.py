@@ -7,7 +7,7 @@ import os
 import sys
 
 from kitlib.paths import KINDS
-from kitlib.commands import cmd_build, cmd_check, cmd_conf, cmd_list, cmd_migrate, cmd_new
+from kitlib.commands import cmd_build, cmd_check, cmd_conf, cmd_doctor, cmd_list, cmd_migrate, cmd_new
 from kitlib.imports import cmd_import
 from kitlib.install import cmd_install, cmd_journal, cmd_serve, cmd_uninstall
 
@@ -20,6 +20,7 @@ def main(doc: str) -> None:
     p = sub.add_parser("check", help="validate sources")
     p.add_argument("--dist", action="store_true", help="also fail if dist/ is stale")
     p.set_defaults(fn=cmd_check)
+    sub.add_parser("doctor", help="check the minimum versions of jq, python3, gh and uv").set_defaults(fn=cmd_doctor)
 
     p = sub.add_parser("list", help="list skills, agents and workflows")
     p.add_argument("--orphans", action="store_true", help="only the agents no area role, fallback or entry names")
