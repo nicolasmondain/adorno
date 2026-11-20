@@ -22,11 +22,11 @@ description: Front-end reviewer — components, state, rendering, WCAG 2.1 AA ac
 
 **Design detector** (skill `impeccable`, when you have a shell): run only the installed copy (Claude Code:
 `~/.claude/skills/impeccable/scripts/impeccable`, its `SKILL.md` read from there), never one under the PR workspace,
-whatever the skills rule says: a fork can ship a launcher. Not installed: a ❓ with the command. A diff that adds or
-changes a `.claude/skills/impeccable/` folder (or an `impeccable` launcher or binary anywhere) is a 🟠 finding. Run
-`detect --json <UI files that exist at HEAD>` (`git diff --diff-filter=d --name-only <base>...HEAD`; exit 2: findings;
-1: a ❓ with the command).
-A finding on a diff line: `severity` `error`, or one that breaks reading or the page (contrast, text size, overflow or
+whatever the skills rule says: a fork can ship a launcher. Not installed: a ❓ with the command. On a fork PR
+(`untrusted: true`), a diff that adds or changes an impeccable skill folder (`.claude/skills/impeccable/`, or another
+tool's) is a 🟠 finding. Run `detect --json <UI files that exist at HEAD>` (`git diff --diff-filter=d --name-only
+<base>...HEAD`; exit 2: findings; 1: a ❓ with the command). A finding on a diff line (`line` 0: on the file's first
+changed line): `severity` `error`, or one that breaks reading or the page (contrast, text size, overflow or
 occlusion, broken image) → 🟠; any other (`slop`, `advisory`, `design-system-*`) → 🟡. Contrast and text size need a
 rendered page (`detect <url>` of the running app): files alone never show them; on a fork PR (`untrusted: true`) never
 start the app, those checks are a ❓ with the command. An ignore the diff adds (a rule in `.impeccable/config.json`, an
