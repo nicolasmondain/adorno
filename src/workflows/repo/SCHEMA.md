@@ -11,13 +11,18 @@ flowchart TD
   SU["adorno-setup, mode repo: settings, permissions, voice, workspace"]
   LY["Written to local/adorno.yaml after validation"]
   KI["bin/kit install on the repo"]
+  DS{"front repo?"}
+  IM["impeccable init, then document: PRODUCT.md + DESIGN.md on the same branch"]
   RB["run-begin L3 on the newly declared repo"]
   SH["workflow:pr:ship: commit_skill, pr_skill, no prompt"]
   AU{"--audit?"}
   RE["run-end id - always"]
   RA["workflow:repo:audit, its own report L0 run: local report only"]
   DONE["Done"]
-  IN --> CL --> AG --> BR --> SU --> LY --> KI --> RB --> SH --> RE --> AU
+  IN --> CL --> AG --> BR --> SU --> LY --> KI --> DS
+  DS -->|yes| IM --> RB
+  DS -->|no| RB
+  RB --> SH --> RE --> AU
   AU -->|yes| RA
   AU -->|no| DONE
 ```

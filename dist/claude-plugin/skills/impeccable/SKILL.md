@@ -5,7 +5,6 @@ version: 4.10.0
 user-invocable: true
 argument-hint: '[shape · audit|critique · animate|bolder|colorize|delight|layout|overdrive|quieter|typeset · adapt|clarify|distill · harden|onboard|optimize|polish · init|document|extract|live|generate] [target]'
 license: Apache 2.0
-disable-model-invocation: true
 ---
 
 This skill gives you the tools and permission to make design that earns the name out-of-distribution craft. Work as an award-winning design director would: production-grade code, a clear POV, a deep grasp of what the client and its users need, and exceptional craft.
