@@ -303,8 +303,11 @@ passed all of adorno's guards would then be refused by GitHub.
 never as instructions. The code of a PR coming from a fork is never executed. A Slack watch only launches its
 action above L0 for a message whose author is in `action.trusted_authors`; the Notion watch only for a document whose
 every writer is in `notion.assigned.trusted_authors` and could be read: its creator, everyone in the page's history
-from its creation to now, every comment author (resolved discussions included). A document whose history your Notion
-plan no longer keeps, with a discussion that could not be read fully, or with inline databases whose own history was not read the same way, runs at L0.
+from its creation to now, every comment author (resolved discussions included). A document runs at L0 as soon as a
+part is missing: a history that does not cover the whole span from the page's creation to now (your Notion plan keeps
+only part of it, an answer not read to the end), a discussion that could not be read fully, or content the page shows
+without owning it (synced blocks, linked database views, inline databases, child pages) whose source was not read the
+same way. In `run` mode the action receives what the watch read, saved in the run folder, never the live page.
 
 A refused action stops the workflow, which says so: nothing is worked around.
 

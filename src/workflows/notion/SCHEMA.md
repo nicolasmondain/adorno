@@ -15,7 +15,7 @@ flowchart TD
   CH["Choose action on what was read: agents config per database, else agent:core:router"]
   MD{"mode"}
   AN["report: agent:core:analyst - analysis and what the action would do"]
-  RUN["run: workflow:spec:new or workflow:issue:fix at action_level: level if every writer trusted, else L0 (own run-begin)"]
+  RUN["run: workflow:spec:new or workflow:issue:fix on the saved source.md (never the live page) at action_level: level if every writer trusted, else L0 (own run-begin)"]
   MK["watch-seen mark + touch, only if no connector call failed"]
   RP["report.md + message to the owner only (notify)"]
   END1["End"]

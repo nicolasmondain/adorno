@@ -58,7 +58,7 @@ never scrape, never ask for a token.
 | `watch-conf notion-assigned` | the Notion watch (`properties`, `databases`, `exclude_status`, `agents`, `mode`, `trusted_authors` []) |
 | `watch-conf channel-repos CHANNEL` | the repos whose `team.slack` lists the channel: where the code behind a conversation lives |
 | `watch-match NAME [FILE\|-] [--all]` | filters normalised messages: period, `includes` OR `regex`, `max_messages`, not processed yet |
-| `watch-trust notion-assigned [FILE\|-]` | adds `trusted`, `action_level` (`level` if `authors_complete` and every one of `authors` is in `trusted_authors`, else L0), `untrusted` to each doc. `authors`: the creator, the authors of the page's history from its creation to now, every comment author; `authors_complete` false when one of them could not be read (history the plan no longer keeps, a discussion not read fully, inline databases): workflow:notion:assigned step 4 |
+| `watch-trust notion-assigned [FILE\|-]` | adds `trusted`, `action_level` (`level` if `authors_complete` and every one of `authors` is in `trusted_authors`, else L0), `untrusted` to each doc of `{id, authors: [user ids], authors_complete}`; how `authors` and `authors_complete` are built: workflow:notion:assigned step 4 |
 | `watch-seen filter KEY [FILE\|-]` | drops items already processed (state `~/.adorno/state/KEY.json`) |
 | `watch-seen mark KEY ID…` | records items as processed — **only after** their action and report are done |
 | `watch-seen last KEY` / `touch KEY` | time of the last run / record this run |
