@@ -112,7 +112,7 @@ def cmd_import(args) -> None:
                     else:
                         write_tree(out / KINDS[kind], {f"{item_name}.md": payload})
             out.mkdir(parents=True, exist_ok=True)
-            for lic in sorted(repo.glob("LICEN[CS]E*")) + sorted(repo.glob("COPYING*")):
+            for lic in sorted(repo.glob("LICEN[CS]E*")) + sorted(repo.glob("COPYING*")) + sorted(repo.glob("NOTICE*")):
                 shutil.copy2(lic, out / lic.name)
         same = commit != "local" and commit == locked.get("commit") and "fetched" in locked
         lock[name] = {
