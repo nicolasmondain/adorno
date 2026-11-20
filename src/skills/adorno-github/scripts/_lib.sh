@@ -277,7 +277,7 @@ with_lock() {
   lock="$(kit_home)/locks/$name.lock"
   mkdir -p "$(kit_home)/locks"
   until ( set -C; echo "$$" >"$lock" ) 2>/dev/null; do
-    pid="$(cat "$lock" 2>/dev/null || true)"
+    pid="$(cat "$lock" 2>/dev/null || cat "$lock/pid" 2>/dev/null || true)"  # or a directory lock of a previous version
     if { [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; } || [ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ]; then
       rm -rf "$lock"; continue
     fi
