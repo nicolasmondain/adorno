@@ -60,7 +60,7 @@ flowchart TD
   VO --> SH["Show the YAML block, merge by hand into local/adorno.yaml once validated"]
   SH --> AP["bin/kit check, bin/kit conf owner/repo, offer bin/kit install"]
   AP --> AU["adorno-github/scripts/repo-audit owner/repo (read only): token, branch protection, admin"]
-  AU --> FR{"impeccable in the front area's skills?"}
+  AU --> FR{"kit install done and impeccable in the front area's skills?"}
   FR -->|"yes"| HK["Offer impeccable hooks on: detector after each UI edit"]
   FR -->|"no"| OUT
   HK --> OUT["Output: local/ updated, advice on GitHub settings, never changed by the skill"]

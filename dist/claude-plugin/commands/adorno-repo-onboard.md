@@ -13,10 +13,12 @@ Input: $ARGUMENTS
    (`use:`) `agent:chore:repo` proposed, possibly a workspace, written to `local/adorno.yaml` (ignored by git) after
    validation, then `bin/kit install` on the repo. Nothing is written or committed in the tracked files of the adorno
    repo.
-4. **Design** (front repos: step 9 of `adorno-setup` mode `repo` applied), in this session, not an agent (it asks the
-   owner): the skill `impeccable`, `init` then, if the repo already has a UI, `document`: `PRODUCT.md`, `DESIGN.md`
-   and `.impeccable/config.json` go on `chore/agents-onboarding`, with the other files; `.impeccable/config.local.json`
-   never (impeccable excludes it from git). `--unattended`: skipped, the reason at the top of the report.
+4. **Design** (front repos: the `pr-areas` test of `adorno-setup` mode `repo` step 9 passes, whatever the hook
+   answer), in this session, not an agent (it asks the owner): the skill `impeccable`, each command run from `<clone>`
+   (`cd <clone> && …` in the same call; `context` reporting another project root → stop), `init` without its live-mode
+   setup (no helper, dev server or app source edit in this PR), then, if the repo already has a UI, `document`. The
+   files init's wrap-up says to commit go on `chore/agents-onboarding`, with the other files;
+   `.impeccable/config.local.json` never. `--unattended`: skipped, the reason at the top of the report.
 5. **Ship**, without asking, once the repo is declared (before, no run can cover it):
    `adorno-github/scripts/run-begin --workflow workflow:repo:onboard --mode auto --level L3 --repo owner/repo`, then
    `workflow:pr:ship owner/repo chore/agents-onboarding <clone>`: the repo's `commit_skill` commits the files
