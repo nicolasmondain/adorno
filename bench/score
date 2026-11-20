@@ -388,7 +388,8 @@ def main():
     score = {"label": run["label"],
              "run": {key: run[key] for key in ("tool", "tool_version", "model", "repo", "repeat", "prompts",
                                                "started_at", "budget_usd", "skipped")}
-             | {"failed": run.get("failed", []), "agent_models": run.get("agent_models", {})},
+             | {"failed": run.get("failed", []), "agent_models": run.get("agent_models", {}),
+                "only": run.get("only", [])},
              "overall": summarize(every), "adorno": summarize_adorno(adorno) if adorno else None, "cases": cases,
              "agents": agents,
              "reviewers": {agent: dict(summarize_agent(entries), runs=entries)
