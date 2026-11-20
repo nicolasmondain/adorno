@@ -727,21 +727,42 @@ fakes jq-1.7.1 "Python 3.9" "gh version 2.99.0" "uv 0.4.19"
 doctor 0 "doctor: every tool exactly at its minimum"
 check "... four ok: lines" '[ "$(grep -c "^ok: " <<<"$out")" = 4 ]'
 for f in README.md docs/setup.md; do
-  check "every minimum doctor prints is on the Prerequisites line of $f" \
-    '(vs="$(sed -n "s/^ok: .* (>= \(.*\))$/\1/p" <<<"$out")"; [ "$(wc -l <<<"$vs")" -eq 4 ] || exit 1
-      for v in $vs; do grep "^Prerequisites:" -A1 "$ROOT/$f" | grep -qF "$v" || exit 1; done)'
+  check "every tool and minimum doctor prints is in the Prerequisites paragraph of $f, as \`tool >= minimum\`" \
+    '(mins="$(sed -n "s/^ok: \([^ ]*\) .* (>= \(.*\))$/\1 \2/p" <<<"$out")"; [ "$(wc -l <<<"$mins")" -eq 4 ] || exit 1
+      para="$(sed -n "/^Prerequisites:/,/^$/p" "$ROOT/$f" | tr "\n" " ")"
+      while read -r t v; do grep -qE "$t[^ ]* >= $v[ ,]" <<<"$para" || exit 1; done <<<"$mins")'
 done
+# kit's own environment (a venv, or uv's) comes first in PATH: doctor must look past its python3, at the fake one
+VENV="$TMP/venv"
+if [ "${KIT[0]##*/}" != uv ] && "${KIT[0]}" -m venv --without-pip --system-site-packages "$VENV" 2>/dev/null &&
+  "$VENV/bin/python3" -c 'import yaml' 2>/dev/null; then
+  expect_exit 0 "doctor: run from a venv first in PATH" -- env PATH="$VENV/bin:$FAKE" "$VENV/bin/python3" "$ROOT/bin/kit" doctor
+  check "... reports the PATH python3, not the venv's" 'grep -qx "ok: python3 3.9 (>= 3.9)" <<<"$out"'
+elif [ "${KIT[0]##*/}" = uv ]; then
+  doctor 0 "doctor: run by uv, its environment first in PATH"
+  check "... reports the PATH python3, not uv's" 'grep -qx "ok: python3 3.9 (>= 3.9)" <<<"$out"'
+else
+  echo "  skip doctor: kit's own environment left out of PATH (no venv with PyYAML from ${KIT[0]})"
+fi
 fakes jq-1.7.1-apple "Python 3.9.6" "gh version 2.103.3 (2026-10-26)" "uv 0.8.18 (Homebrew 2025-09-17)"
 doctor 0 "doctor: real version strings"
 check "... read as their versions" \
   'grep -qx "ok: jq 1.7.1 (>= 1.7.1)" <<<"$out" && grep -qx "ok: python3 3.9.6 (>= 3.9)" <<<"$out" && grep -qx "ok: gh 2.103.3 (>= 2.99.0)" <<<"$out" && grep -qx "ok: uv 0.8.18 (>= 0.4.19)" <<<"$out"'
+echo 'echo jq-1.7.1' >"$FAKE/jq"  # no shebang: exec fails with ENOEXEC
+doctor 1 "doctor: a tool that cannot be run"
+check "... an error names it, the three others still ok" \
+  'grep -q "^error: jq" "$TMP/err" && ! grep -q Traceback "$TMP/err" && [ "$(grep -c "^ok: " <<<"$out")" = 3 ]'
 fake jq jq-1.6
 doctor 1 "doctor: jq 1.6 refused"
 check "... the error names jq, 1.6 and 1.7.1" 'grep -q "^error: jq 1\.6 .*1\.7\.1" "$TMP/err"'
 check "... the three others still reported ok" '[ "$(grep -c "^ok: " <<<"$out")" = 3 ] && ! grep -q "^ok: jq" <<<"$out"'
 fake jq jq-1.7
 doctor 1 "doctor: jq 1.7 (two components) refused"
-fake jq jq-1.7.1; fake gh "gh version 2.98.0"
+check "... as too old, against 1.7.1" 'grep -q "^error: jq 1\.7 is too old.*1\.7\.1" "$TMP/err"'
+fake jq jq-1.7.1; fake python3 "Python 3.8.18"
+doctor 1 "doctor: python3 3.8.18 refused"
+check "... the error names python3, 3.8.18 and 3.9" 'grep -q "^error: python3 3\.8\.18 .*3\.9" "$TMP/err"'
+fake python3 "Python 3.9"; fake gh "gh version 2.98.0"
 doctor 1 "doctor: gh 2.98.0 refused"
 check "... the error names gh and 2.99.0" 'grep -q "^error: gh 2\.98\.0 .*2\.99\.0" "$TMP/err"'
 fake gh "gh version 2.99.0"; fake uv "uv (dev build)"
@@ -750,6 +771,7 @@ check "... named" 'grep -q "^error: uv" "$TMP/err"'
 rm "$FAKE/uv"
 doctor 1 "doctor: a tool missing from PATH"
 check "... named" 'grep -q "^error: uv .*not found" "$TMP/err" && [ "$(grep -c "^ok: " <<<"$out")" = 3 ]'
+check "... and counted in the summary" 'grep -q "^kit: 1 prerequisite" "$TMP/err"'
 
 echo
 echo "$pass passed, $fail failed"

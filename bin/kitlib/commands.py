@@ -76,7 +76,12 @@ def cmd_doctor(args) -> None:
             print(f"error: {tool} not found on PATH; needs >= {minimum}: {why}", file=sys.stderr)
             errors += 1
             continue
-        res = subprocess.run([path, "--version"], capture_output=True, text=True)
+        try:
+            res = subprocess.run([path, "--version"], capture_output=True, text=True, timeout=10)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            print(f"error: {tool}: cannot run `{path} --version` ({e}); needs >= {minimum}: {why}", file=sys.stderr)
+            errors += 1
+            continue
         m = re.search(r"\d+(\.\d+)+", res.stdout + res.stderr)
         if not m:
             print(f"error: {tool}: no version in `{tool} --version` (exit {res.returncode}); needs >= {minimum}: {why}",

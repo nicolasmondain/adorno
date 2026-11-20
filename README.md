@@ -73,7 +73,8 @@ that you set.
 New to adorno? Read the one-page [overview](docs/overview.md) first.
 
 Prerequisites: [uv](https://docs.astral.sh/uv/) >= 0.4.19 (`brew install uv`; `bin/kit` runs on the Python 3.11 it
-provides), authenticated `gh` >= 2.99.0 (`--attach`), `jq` >= 1.7.1, `python3` >= 3.9 on PATH. `bin/kit doctor` checks them.
+provides), authenticated `gh` >= 2.99.0 (`--attach`), `jq` >= 1.7.1, `python3` >= 3.9 on PATH, `git`.
+`bin/kit doctor` checks the versions.
 
 ```sh
 git clone https://github.com/<owner>/adorno && cd adorno
