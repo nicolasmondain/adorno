@@ -17,12 +17,22 @@ client, e.g. `slack_search_public_and_private`, `slack_read_channel`, `slack_rea
 never scrape, never ask for a token.
 
 - **Read-only** on Slack and Notion: never post in a channel or a thread, never react, never edit a Notion page.
-- **One write**: the report to the owner themself, as their `notify` setting says — check the recipient before
-  sending: it is exactly `slack.user_id` (their own DM); any doubt → a draft instead:
+- **One write**: the report to the owner themself, as their `notify` setting says — sent with
+  `channel_id` = `slack.user_id` (their own DM), never a channel or a `D…` id; any doubt → a draft instead:
   - `dm` (default) — a direct message to themself (their own Slack user, `slack.user_id`);
   - `draft` — a Slack draft in their DM to themself, not sent;
   - `none` — the report stays in the run folder and in the answer.
   A draft reply to someone else is part of the report, never sent.
+- **Enforced, not only asked**: each watch workflow opens a watch run (`adorno-github/scripts/run-begin --workflow
+  <id> --watch`, `run-end <id>` at the end, failure included). While it is open, the guard hook (Claude Code) denies
+  every Slack tool named `slack_*` and Notion tool named `notion-*` that writes, and every message or draft whose
+  `channel_id` is not `slack.user_id` (`slack.user_id` missing → none goes out), for the whole session: the
+  workflows a watch launches write nothing to Notion either: each refused update (page, what it would set) is listed
+  in the report, for you to apply. Ending the run (`run-end` on it) asks you; unattended, the run ends on its TTL
+  (24h). It stops a planted instruction to post, react, edit, or run `run-end`; it is not a sandbox. Not covered: a
+  deliberate shell evasion (a glob for `run-end`, deleting the run file, code that builds a path), another Slack or
+  Notion server (other tool names), a session Takt starts (it has no watch run), Codex and Gemini (they do not pass
+  connector calls to the hook): there the rule above is the only barrier.
 
 ## Scripts
 

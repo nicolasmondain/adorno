@@ -171,6 +171,82 @@ expect_jq "... no status.md in its folder: none reported" '.status == null'
 grep -q "usage of run $UR not recorded" "$TMP/err" && ok "... the failure said on stderr" || ko "... the failure said on stderr" "$(cat "$TMP/err")"
 jq -e '.source == "error" and (.error | length) > 0' "$UD/usage.json" >/dev/null && ok "... and recorded as an error" || ko "... and recorded as an error"
 
+echo "runs: budget"
+B() { env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 "$@"; }
+expect_exit 0 "a run over two repos" -- B --repo acme/docs --repo acme/strict
+expect_jq "... keeps the smallest cap (acme/strict's 2 under the default 10), in the run file too" \
+  ".max_usd == 2 and ($(jq .max_usd "$KH/runs/active/$(jq -r .id <<<"$out").json") == 2)"
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "the same two repos in reverse order" -- B --repo acme/strict --repo acme/docs
+expect_jq "... the same smallest cap" '.max_usd == 2'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "a run over one repo" -- B --repo acme/docs
+expect_jq "... the default cap" '.max_usd == 10'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "a run over a repo declared nowhere and a declared one" -- B --repo nobody/repo --repo acme/docs
+expect_jq "... the undeclared one brings no cap" '.max_usd == 10'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "a workflow with no cap" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:status --mode report --level L0 --repo acme/strict
+expect_jq "... no cap" '.max_usd == null'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "--max-usd replaces the cap" -- B --repo acme/docs --repo acme/strict --max-usd 99
+expect_jq "... even above the repos' caps (the resume command)" '.max_usd == 99'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "--max-usd off removes it" -- B --repo acme/strict --max-usd off
+expect_jq "... no cap" '.max_usd == null'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 2 "--max-usd that is not a number" -- B --repo acme/docs --max-usd abc
+expect_exit 2 "--max-usd 0" -- B --repo acme/docs --max-usd 0
+expect_exit 2 "a watch run takes no cap" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:slack:watch --watch --max-usd 5
+expect_exit 0 "a watch run" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:slack:watch --watch
+expect_jq "... has none" '.max_usd == null'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+# run-budget measures the run since it started: the fixture session from 10:00 (claude-mystery-1 at 10:50 included)
+BR() {  # BR [run-begin args…] — opens a run in the fixture session, started at 10:00; sets BID
+  B --repo acme/docs "$@" >"$TMP/br.json" || return
+  BID="$(jq -r .id "$TMP/br.json")"
+  jq '.started = "2026-11-10T10:00:00Z"' "$KH/runs/active/$BID.json" >"$TMP/br-run.json" && mv "$TMP/br-run.json" "$KH/runs/active/$BID.json"
+}
+jq '.prices["claude-mystery-1"] = {input: 1, cache_write_5m: 1, cache_write_1h: 1, cache_read: 1, output: 1}' \
+  "$ROOT/tests/fixtures/repos.json" >"$TMP/all-priced.json"; reg "$TMP/all-priced.json"
+BR --max-usd 99
+expect_exit 0 "run-budget under the cap" -- "$S/run-budget" "$BID"
+# up to now: the 10:30 window's 111060 µUSD + claude-mystery-1 (2) + the haiku agent at 12:00 (47.8)
+expect_jq "... what was spent and what is left" \
+  '.capped == true and .id != null and .workflow == "workflow:pr:review" and .max_usd == 99 and .source == "claude-code"
+   and (.usd * 1e6 | round) == 111110 and .remaining > 98 and .unpriced == [] and .stop == false'
+[ ! -e "$(jq -r .dir "$TMP/br.json")/usage.json" ] && [ -f "$KH/runs/active/$BID.json" ] \
+  && ok "... writes nothing, the run stays open" || ko "... writes nothing, the run stays open"
+"$S/run-end" "$BID" >/dev/null
+BR --max-usd 0.1
+expect_exit 7 "run-budget over the cap" -- "$S/run-budget" "$BID"
+expect_jq "... says so" '.capped == true and .max_usd == 0.1 and .usd > 0.1 and .remaining < 0 and (.reason | test("over")) and .stop == true'
+"$S/run-end" "$BID" >/dev/null
+reg "$ROOT/tests/fixtures/repos.json"
+BR --max-usd 99
+expect_exit 7 "run-budget with a model that has no price" -- "$S/run-budget" "$BID"
+expect_jq "... the cap cannot be guaranteed: the models listed, where to price them" \
+  '.unpriced == ["claude-mystery-1"] and .usd == null and .remaining == null and (.reason | test("prices")) and .stop == true'
+"$S/run-end" "$BID" >/dev/null
+expect_exit 0 "a capped run outside any session" -- "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs --max-usd 99
+BID="$(jq -r .id <<<"$out")"
+expect_exit 7 "run-budget cannot measure it" -- "$S/run-budget" "$BID"
+expect_jq "... unavailable, and --max-usd off named as the way to run uncapped" \
+  '.source == "unavailable" and .usd == null and (.reason | test("--max-usd off")) and .stop == true'
+"$S/run-end" "$BID" >/dev/null
+expect_exit 0 "a capped run whose usage cannot be read" -- env CLAUDE_CODE_SESSION_ID='bad id!' "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs --max-usd 99
+BID="$(jq -r .id <<<"$out")"
+expect_exit 7 "run-budget when run-usage fails" -- "$S/run-budget" "$BID"
+expect_jq "... an error, its message in the reason" \
+  '.source == "error" and .usd == null and (.reason | test("run-usage failed: .*session")) and .stop == true'
+"$S/run-end" "$BID" >/dev/null
+BR --max-usd off
+expect_exit 0 "run-budget on a run with no cap" -- "$S/run-budget" "$BID"
+expect_jq "... nothing to check" '.capped == false and .max_usd == null'
+"$S/run-end" "$BID" >/dev/null
+expect_exit 2 "run-budget on an unknown run" -- "$S/run-budget" 20261120T000000-1-1
+expect_exit 2 "run-budget without an id" -- "$S/run-budget"
+
 # the rest of the suite runs inside one auto run at L3
 "$S/run-begin" --workflow workflow:test:suite --mode auto --level L3 \
   --repo acme/docs --repo acme/strict --repo acme/app --repo acme/docs-public --repo acme/readonly --repo other/thing >/dev/null
@@ -681,7 +757,7 @@ if [ -f "$REAL" ]; then
   expect_exit 0 "a repo replaces one role of an area" -- "$S/repo-conf" ovr/single
   expect_jq "the replaced role changes, its siblings keep the public value" \
     '.areas.back.build == "agent:feat:custom" and .areas.back.fix == "agent:fix:patch" and .areas.back.perf == null and (.areas.back.review | index("agent:review:back"))'
-  expect_jq "a -<skill> removes that skill from the list" '.areas.front.skills == []'
+  expect_jq "a -<skill> removes that skill from the list" '.areas.front.skills | index("frontend-ui-engineering") | not'
   expect_exit 0 "a skill removed by the repo is not in pr-areas skills" -- "$S/pr-areas" ovr/single --files client/a.tsx
   expect_jq "... nor in the result" '(.skills | index("frontend-ui-engineering") | not) and .areas.front == ["client/a.tsx"]'
   expect_exit 0 "the workspace adds, the repo removes" -- "$S/repo-conf" ovr/layers
@@ -691,6 +767,7 @@ if [ -f "$REAL" ]; then
     '(.areas.back.review | index("agent:review:tests") | not) and (.areas.back.review | index("agent:review:back"))'
   expect_exit 0 "the workspace alone keeps its addition" -- "$S/repo-conf" ovr/plain
   expect_jq "no workspace match: public list unchanged" '(.areas.back.review | index("agent:review:extra") | not) and (.areas.back.review | index("agent:review:tests"))'
+  expect_jq "no front override: the default front skills include impeccable" '.areas.front.skills | index("impeccable")'
 
   expect_exit 0 "two auth files and one service file" -- "$S/pr-areas" ovr/plain --files x/auth/a.js x/auth/b.js server/services/c.js
   expect_jq "security has the most files but no build: build skips to back, fix stays security" \
@@ -1076,6 +1153,145 @@ expect_jq "a question in dontAsk: deny" '.hookSpecificOutput.permissionDecision 
 out="$(jq -n '{tool_name: "AskUserQuestion", permission_mode: "default", tool_input: {}}' | python3 "$S/guard_bash.py" deny)"
 [ -z "$out" ] && ok "a question in an interactive session passes untouched" || ko "a question in an interactive session passes untouched" "$out"
 
+echo "guard_bash: the Slack and Notion connectors"
+jq '. + {slack: {user_id: "U0SELF"}}' "$ROOT/tests/fixtures/repos.json" >"$TMP/reg-slack.json"
+reg "$TMP/reg-slack.json"
+hook() {  # hook EVENT_JSON — the hook's decision (pass = none, crash = the guard failed: the installed hook denies)
+  local raw
+  raw="$(printf '%s' "$1" | python3 "$S/guard_bash.py" deny)" || { echo crash; return; }
+  [ -n "$raw" ] || { echo pass; return; }
+  jq -r '.hookSpecificOutput.permissionDecision' <<<"$raw" 2>/dev/null || echo crash
+}
+mcp() {  # mcp WANT SESSION TOOL INPUT [MODE] — the decision for a connector call
+  local got
+  got="$(hook "$(jq -n --arg t "$3" --argjson i "$4" --arg s "$2" --arg m "${5:-default}" \
+    '{tool_name: $t, tool_input: $i, session_id: $s, permission_mode: $m}')")"
+  if [ "$got" = "$1" ]; then ok "mcp: $1 · $3 $4${5:+ ($5)}"; else ko "mcp: $1 · $3 $4" "got $got"; fi
+}
+endrun() {  # endrun WANT SESSION COMMAND [MODE] — the decision for a shell command that may end a watch run
+  local got
+  got="$(hook "$(jq -n --arg c "$3" --arg s "$2" --arg m "${4:-default}" \
+    '{tool_name: "Bash", tool_input: {command: $c}, session_id: $s, permission_mode: $m}')")"
+  if [ "$got" = "$1" ]; then ok "end: $1 · $3${4:+ ($4)}"; else ko "end: $1 · $3" "got $got"; fi
+}
+SEND=mcp__claude_ai_Slack__slack_send_message DRAFT=mcp__claude_ai_Slack__slack_send_message_draft
+expect_exit 2 "a watch run names no repo" -- "$S/run-begin" --workflow workflow:slack:watch --watch --repo acme/docs
+expect_exit 2 "a watch run has no level of its own" -- "$S/run-begin" --workflow workflow:slack:watch --watch --level L3
+expect_exit 2 "a watch run needs a session (the guard enforces it per session)" -- "$S/run-begin" --workflow workflow:slack:watch --watch
+expect_exit 0 "a watch run" -- env CLAUDE_CODE_SESSION_ID=sess-w "$S/run-begin" --workflow workflow:slack:mentions --watch
+expect_jq "report, L0, no repo, marked watch" '.watch == true and .mode == "report" and .level == "L0" and .dry_run and .repos == []'
+expect_jq "a watch run lasts 24h by default (unattended, it only ends on its TTL)" '(.expires - now) > 86000'
+WATCH="$(jq -r .id <<<"$out")"
+expect_exit 5 "a watch run grants no GitHub write" -- env CLAUDE_CODE_SESSION_ID=sess-w "$S/pr-reply" acme/docs#42 T1 "$TMP/norun.md"
+mcp pass sess-w "$SEND" '{"channel_id": "U0SELF", "message": "report"}'
+mcp pass sess-w "$DRAFT" '{"channel_id": "U0SELF", "message": "report"}'
+mcp pass sess-w mcp__plugin_slack_slack__slack_send_message '{"channel_id": "U0SELF", "message": "report"}'
+mcp deny sess-w "$SEND" '{"channel_id": "C0123", "message": "hi"}'
+mcp deny sess-w "$SEND" '{"channel_id": "C0123", "thread_ts": "1730800000.000100", "message": "hi"}'
+mcp deny sess-w "$DRAFT" '{"channel_id": "U0456", "message": "draft for alice"}'
+mcp deny sess-w "$SEND" '{"channel_id": "U0SELF", "message": "report", "draft_id": "Dr0123"}'
+mcp deny sess-w mcp__claude_ai_Slack__slack_get_file_upload_url '{"filename": "x"}'
+mcp deny sess-w mcp__claude_ai_Slack__slack_schedule_message '{"channel_id": "C0123", "message": "later"}'
+mcp deny sess-w mcp__claude_ai_Slack__slack_add_reaction '{"channel_id": "C0123", "timestamp": "1.2", "name": "eyes"}'
+mcp deny sess-w mcp__claude_ai_Slack__slack_create_canvas '{"title": "x"}'
+mcp deny sess-w mcp__notion__notion-update-page '{"page_id": "p1"}'
+mcp deny sess-w mcp__notion__notion-create-comment '{"page_id": "p1"}'
+mcp pass sess-w mcp__claude_ai_Slack__slack_read_thread '{"channel_id": "C0123", "message_ts": "1.2"}'
+mcp pass sess-w mcp__claude_ai_Slack__slack_search_public_and_private '{"query": "<@U0SELF>"}'
+mcp pass sess-w mcp__notion__notion-fetch '{"id": "p1"}'
+mcp pass sess-w mcp__notion__notion-query-data-sources '{}'
+mcp pass sess-w mcp__notion__notion-get-comments '{"page_id": "p1"}'
+mcp pass sess-w mcp__notion__notion-search '{"query": "assigned"}'
+mcp pass sess-w mcp__claude_ai_Slack__slack_get_reactions '{"channel_id": "C0123", "timestamp": "1.2"}'
+printf 'not json' >"$KH/runs/active/zz-unreadable.json"
+mcp pass sess-other mcp__notion__notion-update-page '{"page_id": "p1"}'
+mcp deny sess-w mcp__notion__notion-update-page '{"page_id": "p1"}'
+rm -f "$KH/runs/active/zz-unreadable.json"
+# ending a watch run asks, nobody to answer: deny; a deliberate shell evasion (a glob, deleting the file) is a
+# documented limit, not tested here
+endrun ask sess-w "$S/run-end $WATCH"
+endrun deny sess-w "$S/run-end $WATCH" bypassPermissions
+endrun ask sess-other "$S/run-end $WATCH"
+endrun ask sess-other "$S/run-end \"${WATCH:0:4}\"${WATCH:4}"
+endrun ask sess-w "$S/run-end \"\$ID\""
+endrun ask sess-w "$S/run-end \"\$ID\"  # 20260101T000000-1-1"
+endrun ask sess-w "$S/run-end 20260101T000000-1-1; $S/run-end \"\$ID\""
+endrun ask sess-w "$S/run-end \"${WATCH:0:4}\"${WATCH:4} 20260101T000000-1-1"
+endrun ask sess-w "$S/run-e\"\"nd 20260101T000000-1-1"
+endrun ask sess-w "$S/run-e\\nd 20260101T000000-1-1"
+endrun deny sess-w "cd ~/.adorno/runs && rm -f active/*"  # the state rule already refuses it
+endrun pass sess-w "printf x > ~/.adorno/runs/slack-mentions-1-2/report.md"
+endrun pass sess-w "rm -rf .agent-run/old"
+endrun pass sess-w "git rm -q old.txt"
+endrun pass sess-w "grep -n 'rm -rf' notes.md"
+endrun pass sess-other "$S/run-end \"\$ID\""
+# a launched workflow closes its own run: an ordinary run, alone, by its literal id, with its outcome and status file
+for c in "$S/run-end 20260101T000000-1-1" "$S/run-end 20260101T000000-1-1 done" \
+         "$S/run-end 20260101T000000-1-1 failed --status .agent-run/x/status.md"; do
+  for who in sess-w sess-other; do
+    got="$(hook "$(jq -n --arg c "$c" --arg s "$who" '{tool_name: "Bash", tool_input: {command: $c}, session_id: $s}')")"
+    case "$got" in ask|crash) ko "$who: ending an ordinary run: the usual decision · ${c#"$S/"}" "got $got" ;;
+      *) ok "$who: ending an ordinary run: the usual decision ($got) · ${c#"$S/"}" ;; esac
+  done
+done
+endrun ask sess-w "$S/run-end 20260101T000000-1-1 done; $S/run-end \"\$ID\""
+got="$(printf '%s' '{"tool_name": "Bash", "tool_input": {"command": "run-end $ID"}, "session_id": "sess-w"}' | python3 -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+import guard_bash as g
+def boom(*a):
+    raise RuntimeError("boom")
+g.watch_runs = boom
+sys.argv = sys.argv[:1]
+g.main()' "$S" | jq -r '.hookSpecificOutput.permissionDecision')"
+[ "$got" = ask ] && ok "the watch-end check fails: run-end asks" || ko "the watch-end check fails: run-end asks" "got $got"
+for t in "$SEND" mcp__notion__notion-update-page mcp__notion__notion-fetch; do
+  raw="$(printf '%s' "{\"tool_name\": \"$t\", \"tool_input\": {}, \"session_id\": \"sess-w\"}" | python3 -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+import guard_bash as g
+def boom(*a):
+    raise RuntimeError("boom")
+g.check_mcp = boom
+sys.argv = sys.argv[:1]
+g.main()' "$S")" || raw=CRASH
+  if [ "$raw" = CRASH ]; then got=crash; elif [ -z "$raw" ]; then got=pass
+  else got="$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$raw")"; fi
+  want=deny; [ "$t" = mcp__notion__notion-fetch ] && want=pass
+  [ "$got" = "$want" ] && ok "the guard fails: $want · $t" || ko "the guard fails: $want · $t" "got $got"
+done
+PR="$(env CLAUDE_CODE_SESSION_ID=sess-p "$S/run-begin" --workflow workflow:pr:ship --mode auto --level L3 --repo acme/docs | jq -r .id)"
+mcp pass sess-p mcp__notion__notion-update-page '{"page_id": "p1"}'
+mcp pass sess-p "$DRAFT" '{"channel_id": "C0123", "message": "draft"}'
+"$S/run-end" "$PR" >/dev/null
+# the owner's call: a run a watch launches (same session) does not lift the watch
+PR="$(env CLAUDE_CODE_SESSION_ID=sess-w "$S/run-begin" --workflow workflow:issue:fix --mode auto --level L3 --repo acme/docs | jq -r .id)"
+mcp deny sess-w mcp__notion__notion-update-page '{"page_id": "p1"}'
+mcp deny sess-w "$DRAFT" '{"channel_id": "C0123", "message": "draft"}'
+"$S/run-end" "$PR" >/dev/null
+mcp pass sess-w mcp__figma__get_screenshot '{}'
+mcp ask sess-other "$SEND" '{"channel_id": "C0123", "message": "hi"}'
+mcp pass sess-other "$DRAFT" '{"channel_id": "C0123", "message": "draft"}'
+mcp pass sess-other mcp__notion__notion-update-page '{"page_id": "p1"}'
+mcp pass sess-other "$SEND" '{"channel_id": "U0SELF", "message": "note to self"}'
+mcp deny sess-other "$SEND" '{"channel_id": "C0123", "message": "hi"}' bypassPermissions
+mcp ask sess-other mcp__claude_ai_Slack__slack_schedule_message '{"channel_id": "C0123", "message": "later"}'
+expect_exit 0 "the watch run ends" -- "$S/run-end" "$WATCH"
+mcp ask sess-w "$SEND" '{"channel_id": "C0123", "message": "hi"}'
+mcp pass sess-w mcp__notion__notion-update-page '{"page_id": "p1"}'
+OLD="$(env CLAUDE_CODE_SESSION_ID=sess-e "$S/run-begin" --workflow workflow:slack:watch --watch | jq -r .id)"
+mcp deny sess-e mcp__notion__notion-update-page '{"page_id": "p1"}'
+jq '.expires = 1' "$KH/runs/active/$OLD.json" >"$TMP/expired.json" && cp "$TMP/expired.json" "$KH/runs/active/$OLD.json"
+mcp pass sess-e mcp__notion__notion-update-page '{"page_id": "p1"}'
+rm -f "$KH/runs/active/$OLD.json"
+out="$(jq -n --arg t "$SEND" '{tool_name: $t, tool_input: {channel_id: "U0SELF", message: "x"}}' | python3 "$S/guard_bash.py" ask --format=codex)"
+[ -z "$out" ] && ok "Codex and Gemini: connector calls are not read" || ko "Codex and Gemini: connector calls are not read" "$out"
+NOUSER="$(env CLAUDE_CODE_SESSION_ID=sess-n "$S/run-begin" --workflow workflow:slack:watch --watch | jq -r .id)"
+reg "$ROOT/tests/fixtures/repos.json"
+mcp deny sess-n "$SEND" '{"channel_id": "U0SELF", "message": "report"}'
+mcp ask sess-x "$SEND" '{"channel_id": "U0SELF", "message": "hi"}'
+"$S/run-end" "$NOUSER" >/dev/null
+
 echo "a registry older than the personal layer"
 printf 'repos: {}\n' >"$TMP/layer.yaml"
 jq --arg f "$TMP/layer.yaml" '. + {_layer: {file: $f}}' "$ROOT/tests/fixtures/repos.json" >"$TMP/reg-layer.json"
@@ -1200,6 +1416,7 @@ guard_at deny "$C" "" "gh pr create -R acme/readonly --title t --body b"
 guard_at allow "$C" "" "$S/repo-conf acme/docs"
 guard_at allow "$C" "" "$S/run-usage collect --session s --since 2026-11-10T10:00:00Z --until 2026-11-10T11:00:00Z"
 guard_at allow "$C" "" "$S/pr-shortcuts .agent-run/x/branch.diff"
+guard_at allow "$C" "" "$S/run-budget 20261120T000000-1-1"
 guard_at pass "$C" "" "$TMP/fake/adorno-github/scripts/repo-conf"
 guard_at deny "$C" "" "git push" codex
 guard_at pass "$C" "" "git add ." codex

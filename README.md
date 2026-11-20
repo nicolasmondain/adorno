@@ -174,7 +174,8 @@ model, replayed by `bin/kit serve`), `adorno-commit`, and the skills imported as
 to deployment), [ponytail](https://ponytail.dev/) (the least code that works),
 [playwright-cli](https://github.com/microsoft/playwright-cli) and
 [webapp-testing](https://github.com/anthropics/skills) (browser QA),
-[typescript-pro](https://github.com/Jeffallan/claude-skills) (advanced TypeScript).
+[typescript-pro](https://github.com/Jeffallan/claude-skills) (advanced TypeScript),
+[impeccable](https://impeccable.style) (frontend design, and a design detector the front agents run).
 
 **Naming**: `agent:<type>:<specialty>` (one Conventional Commit type per family) and
 `workflow:<domain>:<action>`. Everything installed starts with `adorno`: `workflow:review:requested` →

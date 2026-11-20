@@ -22,7 +22,10 @@ notion:
     notify: dm
 ```
 
-Run folder: `~/.adorno/runs/notion-assigned-<date>/`.
+Run: `adorno-github/scripts/run-begin --workflow workflow:notion:assigned --watch` opens it and prints its folder
+(`dir`); `run-end <id>` closes it at the end, failure included (the guard asks you to confirm it; where nobody
+answers, the run ends on its TTL, 24h). While it is open, the guard hook lets Notion and Slack
+read only, and sends or drafts only to `slack.user_id` (pass it as `channel_id`).
 
 1. **Settings** — `adorno-watch/scripts/watch-conf notion-assigned` (exit code 3 → skill `adorno-setup`); `--mode` and
    `--since` override them. You in Notion: the connector (your user).
@@ -40,7 +43,9 @@ Run folder: `~/.adorno/runs/notion-assigned-<date>/`.
      repo, permissions needed), without launching anything;
    - `run`: the chosen action, which opens its own run at the `level` level (`run-begin --level <level>`), bounded by
      the permissions of the target repo. Steps that ask for your validation (the spec) remain stop points; the PR opens
-     without one (`workflow:pr:ship`).
+     without one (`workflow:pr:ship`). It runs inside the watch run: Notion stays untouched (the guard refuses any
+     write); list each refused update (`adorno-notion-sync`, an `after_pr` skill: page, what it would set) in the
+     report, for you to apply.
    Documents are independent: in parallel, in batches of 3.
 6. **Remember** — `watch-seen mark notion-assigned <id>…` for each processed document, then
    `watch-seen touch notion-assigned`.

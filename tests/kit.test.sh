@@ -91,6 +91,19 @@ bad "a commit_skill with a trailing newline" $'  ghost/repo:\n    commit_skill: 
 bad "an empty setup_skill" $'  ghost/repo:\n    setup_skill: ""' "setup_skill must be a skill or command name"
 bad "a pr_skill with a path" $'  ghost/repo:\n    pr_skill: "../x"' "pr_skill must be a skill or command name"
 bad "unknown denied action" $'  ghost/repo:\n    permissions: {deny: [merge]}' "unknown action 'merge'"
+bad "max_usd that is not a mapping" $'  ghost/repo:\n    max_usd: 10' "max_usd must be a mapping"
+bad "max_usd for an unknown workflow" $'  ghost/repo:\n    max_usd: {workflow:pr:nope: 5}' "max_usd: unknown workflow 'workflow:pr:nope'"
+bad "a negative max_usd" $'  ghost/repo:\n    max_usd: {workflow:pr:review: -1}' "max_usd.workflow:pr:review must be a number > 0"
+bad "a boolean max_usd" $'  ghost/repo:\n    max_usd: {workflow:pr:review: true}' "max_usd.workflow:pr:review must be a number > 0"
+bad "a string max_usd" $'  ghost/repo:\n    max_usd: {workflow:pr:review: "10"}' "max_usd.workflow:pr:review must be a number > 0"
+printf 'owner: {name: T, github: t, language: fr}\nrepos:\n  ghost/repo:\n    max_usd: {workflow:pr:review: 2.5}\n' >"$OKP/adorno.yaml"
+expect_exit 0 "max_usd: a decimal cap is accepted" -- env ADORNO_LOCAL="$OKP" "${KIT[@]}" check
+expect_exit 0 "conf of a repo, with the public cost caps" -- "${KIT[@]}" conf acme/app
+expect_jq "... max_usd merged from repos.yaml's defaults" \
+  '.max_usd["workflow:review:requested"] == 30 and .max_usd["workflow:pr:review"] == 10'
+expect_exit 0 "conf of a repo with its own cap" -- "${KIT[@]}" conf acme/docs
+expect_jq "... its cap over the default, the other workflows kept" \
+  '.max_usd["workflow:pr:review"] == 5 and .max_usd["workflow:review:requested"] == 30'
 bad "a negative price" $'  ghost/repo: {}\nprices:\n  claude-x: {input: -1}' "prices.claude-x: numbers >= 0"
 bad "an incomplete price" $'  ghost/repo: {}\nprices:\n  claude-x: {input: 1, output: 5}' "prices.claude-x: numbers >= 0"
 bad "an unknown tier" $'  ghost/repo:\n    models: {tiers: {claude: {huge: x}}}' "tiers are inherit, fast, balanced, deep, frontier"
@@ -121,7 +134,7 @@ check "SCHEMA.md is neither an item nor shipped" '[ -f "$ROOT/src/agents/review/
 check "your own rules and keys are kept" 'jq -e ".model == \"x\" and (.permissions.allow | index(\"Bash(make:*)\")) != null" "$A/.claude/settings.local.json" >/dev/null'
 check "the repo's and the default rules are added" 'jq -e "(.permissions.allow | index(\"Bash(npm test:*)\")) != null and (.permissions.deny | index(\"Bash(gh pr merge:*)\")) != null" "$A/.claude/settings.local.json" >/dev/null'
 check "the guard hook refuses direct writes in this repo" 'jq -e "[.hooks.PreToolUse[].hooks[].command | select(contains(\"guard_bash.py\") and contains(\" deny --format=claude\"))] | length == 1" "$A/.claude/settings.local.json" >/dev/null'
-check "the Claude guard also sees questions (unattended runs)" 'jq -e "[.hooks.PreToolUse[] | select(.matcher == \"Bash|AskUserQuestion\")] | length == 1" "$A/.claude/settings.local.json" >/dev/null'
+check "the Claude guard also sees questions and the Slack and Notion connectors" 'jq -e "[.hooks.PreToolUse[] | select(.matcher == \"Bash|AskUserQuestion|mcp__.*__(slack_|notion-).*\")] | length == 1" "$A/.claude/settings.local.json" >/dev/null'
 check "Codex gets the same hook" 'jq -e "[.hooks.PreToolUse[] | select(.matcher == \"^Bash$\") | .hooks[].command | select(contains(\"--format=codex\"))] | length == 1" "$A/.codex/hooks.json" >/dev/null'
 HOOK="$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$A/.claude/settings.local.json")"
 got="$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git -C x push"}}' | sh -c "$HOOK" | jq -r .hookSpecificOutput.permissionDecision)"
@@ -262,7 +275,7 @@ check "Codex asks before direct writes (its own rules)" 'grep -q "prefix_rule(pa
 check "Gemini asks too (its policy engine)" 'grep -q "decision = \"ask_user\"" "$HOME/.gemini/policies/adorno.toml" && grep -q "\"gh pr comment\"" "$HOME/.gemini/policies/adorno.toml"'
 check "in your user settings, direct shell writes ask (they apply to every project)" 'jq -e "(.permissions.ask | index(\"Bash(gh pr comment:*)\")) != null and ((.permissions.deny // []) | index(\"Bash(gh pr comment:*)\")) == null" "$HOME/.claude/settings.json" >/dev/null'
 check "the global install records runs too" 'jq -e "[.hooks.Stop[].hooks[].command | select(contains(\"adorno-journal/scripts/journal.py\"))] | length == 1" "$HOME/.claude/settings.json" >/dev/null'
-check "the global guard hook asks" 'jq -e "[.hooks.PreToolUse[].hooks[].command | select(contains(\"guard_bash.py\") and contains(\" ask --format=claude\"))] | length == 1" "$HOME/.claude/settings.json" >/dev/null'
+check "the global guard hook asks, on the Slack and Notion connectors too" 'jq -e "[.hooks.PreToolUse[] | select(.matcher == \"Bash|AskUserQuestion|mcp__.*__(slack_|notion-).*\") | .hooks[].command | select(contains(\"guard_bash.py\") and contains(\" ask --format=claude\"))] | length == 1" "$HOME/.claude/settings.json" >/dev/null'
 check "... and edits of adorno's files stay denied" 'jq -e "(.permissions.deny | index(\"Edit(~/.adorno/registry.json)\")) != null" "$HOME/.claude/settings.json" >/dev/null'
 expect_exit 0 "dry run of --global" -- "${KIT[@]}" install --global --targets claude --dry-run
 check "... names your user settings" 'grep -q "~/.claude/settings.json" <<<"$out"'
@@ -507,6 +520,7 @@ git init -q -b main "$UP"; mkdir -p "$UP/skills/foo" "$UP/agents"
 printf -- '---\nname: foo\ndescription: Foo things.\n---\n\nDo foo.\n' >"$UP/skills/foo/SKILL.md"
 printf -- '---\nname: bar\ndescription: Bar reviewer.\n---\n\nReview bar.\n' >"$UP/agents/bar.md"
 printf 'readme\n' >"$UP/README.md"
+printf 'MIT\n' >"$UP/LICENSE"; printf 'notice\n' >"$UP/NOTICE.md"
 git -C "$UP" add -A; git -C "$UP" commit -q -m init
 upcommit() { git -C "$UP" add -A; git -C "$UP" commit -q -m "$1"; }
 mkdir -p "$IK/src/agents/review" "$IK/src/instructions"
@@ -523,6 +537,7 @@ expect_exit 1 "check before any import: exits 1" -- "${IKKIT[@]}" import --check
 check "it says not imported yet" 'grep -q "^up: not imported yet" <<<"$out"'
 expect_exit 0 "import from a file:// source" -- "${IKKIT[@]}" import
 check "it pins the upstream commit" 'grep -q "commit: $(git -C "$UP" rev-parse HEAD)" "$IK/kit.lock"'
+check "it carries the upstream LICENSE and NOTICE into vendor/<import>/" '[ -f "$IK/vendor/up/LICENSE" ] && [ -f "$IK/vendor/up/NOTICE.md" ]'
 expect_exit 0 "check right after the import: up to date" -- "${IKKIT[@]}" import --check
 check "it says up to date" 'grep -q "^up: up to date" <<<"$out"'
 printf 'more\n' >>"$UP/README.md"; upcommit readme

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Claude Code PreToolUse hook for Bash and AskUserQuestion: stops the writes that must go through adorno's scripts.
+"""Claude Code PreToolUse hook for Bash, AskUserQuestion and the Slack and Notion connectors: stops the writes that must
+go through adorno's scripts.
 
 Usage (bin/kit install writes it into the settings of Claude Code, Codex and Gemini CLI):
     guard_bash.py deny|ask [--format=claude|codex|gemini]
@@ -23,6 +24,16 @@ edit|ready N` on your own open PR (listed flags, a body file inside the repo), a
 open run covers the repo at the level each needs (run-check, git-push --check: max_level, permissions.deny, denied
 actions, no dry run). That is how a repo's own commit_skill and pr_skill push and open a PR (workflow:pr:ship). Any
 other flag or shape: the decision above, unchanged.
+
+Slack and Notion connector tools (Claude Code only): while a watch run of the session is open (run-begin --watch:
+workflow:slack:*, workflow:notion:assigned), they read only, and send or draft to your own DM only (channel_id ==
+slack.user_id of the registry, no draft_id; without it, no recipient is you): anything else is denied, the workflows
+the watch launches included. Ending a watch run asks (run-end on its id; in a watching session, any run-end but an
+ordinary run's alone by its literal id), so a planted instruction to run run-end does not lift it; where nobody
+answers, it ends on its TTL. A deliberate shell evasion (a glob for the name, deleting the run file, code that builds a
+path) is not stopped: the guard is not a sandbox. Outside one, a Slack message sent to someone else asks (denied where
+nobody answers): drafts over sends. Drafts and Notion pass. Only tools named slack_* and notion-* are read: another
+Slack or Notion server (e.g. a local Notion API server) is not covered.
 """
 import glob
 import json
@@ -32,6 +43,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import time
 
 WRAPPERS = {"command", "exec", "builtin", "nohup", "time", "sudo", "doas", "nice", "xargs", "stdbuf", "setsid"}
 WRAPPER_ARGS = {"timeout": 1}
@@ -568,7 +580,7 @@ GH_VALUED = {"create": {"-t", "--title", "-F", "--body-file", "-b", "--body", "-
              "ready": set()}
 # adorno's scripts that may run without a prompt: read-only, or checking require_level themselves. Never run-begin
 # (opening a run, and its level, is the owner's call), nor the scripts that send data out or write local/.
-ALLOWED_SCRIPTS = {"repo-conf", "run-check", "run-end", "run-mark", "run-usage", "pr-status", "pr-areas",
+ALLOWED_SCRIPTS = {"repo-conf", "run-check", "run-budget", "run-end", "run-mark", "run-usage", "pr-status", "pr-areas",
                    "pr-shortcuts", "pr-diff", "pr-feedback-fetch", "issue-fetch", "ci-wait", "ci-failed",
                    "pr-workspace", "git-push", "pr-push", "pr-open", "pr-edit", "pr-ready"}
 
@@ -905,6 +917,96 @@ def granted(checks, session):
     return True
 
 
+# Slack and Notion through their MCP connectors (Claude Code only). The server part of the tool name varies by client
+# (mcp__claude_ai_Slack__…, mcp__plugin_slack_slack__…): the tool is read from its own name.
+SLACK_SENDS = {"slack_send_message", "slack_send_message_draft", "slack_schedule_message"}
+SLACK_READS = ("slack_read_", "slack_search_", "slack_list_", "slack_get_reactions")
+NOTION_READS = ("notion-fetch", "notion-search", "notion-get-", "notion-query-", "notion-list-", "notion-view-",
+                "notion-connector-search", "notion-memory-search")
+MCP_MESSAGES = {
+    "watch-send": "a watch run (workflow:slack:*, workflow:notion:assigned) sends and drafts to your own DM only: "
+                  "channel_id must be your slack.user_id; a reply to someone else stays in the report",
+    "watch-write": "a watch run reads Slack and Notion, it never writes there (no post, reaction, canvas, list, "
+                   "Notion edit or comment)",
+    "send": "a Slack message to someone else: drafts over sends, it goes only on your explicit confirmation",
+    "error": "adorno's guard failed on this Slack or Notion write: refused rather than let through",
+    "watch-end": "this may end a watch run, which lifts its guard on Slack and Notion: only you end it (where "
+                 "nobody answers, it ends on its TTL)",
+}
+RUN_ID = re.compile(r"\d{8}T\d{6}-\d+-\d+")
+
+
+def mcp_tool(name):
+    """-> ("slack" | "notion", tool) for a Slack or Notion connector tool, else None."""
+    name = str(name or "")
+    tool = name.rpartition("__")[2] if name.startswith("mcp__") else ""
+    if tool.startswith("slack_"):
+        return "slack", tool
+    if tool.startswith("notion-"):
+        return "notion", tool
+    return None
+
+
+def watch_runs():
+    """-> {id: session} of the open watch runs (run-begin --watch), expired and unreadable files skipped."""
+    now, out = time.time(), {}
+    for path in glob.glob(os.path.join(os.path.expanduser("~"), ".adorno", "runs", "active", "*.json")):
+        try:
+            with open(path) as f:
+                run = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if (isinstance(run, dict) and run.get("watch") is True
+                and isinstance(run.get("expires"), (int, float)) and run["expires"] > now):
+            out[str(run.get("id") or "")] = str(run.get("session") or "")
+    return out
+
+
+# The one run-end that goes through in a watching session: an ordinary run's, alone, by its literal id (the workflows a
+# watch launches close their own runs).
+OWN_RUN_END = re.compile(r"\s*[\w./~-]*run-end\s+" + RUN_ID.pattern
+                         + r"(\s+(done|draft|stopped|failed|ended))?(\s+--status\s+[\w./~-]+)?\s*")
+
+
+def lifts_watch(command, session):
+    """True when the command runs run-end on a watch run: its id anywhere (quotes and backslashes removed, as the shell
+    drops them), or, in a session watching, any run-end but an ordinary run's alone by its literal id (a variable, a
+    second id, a comment: asked). It stops a planted instruction to run run-end; it does not stop a deliberate shell
+    evasion (a glob for the name, deleting the run file, code that builds a path): the guard is not a sandbox."""
+    flat = re.sub(r"[\"'\\]", "", command)
+    if "run-end" not in flat:
+        return False
+    runs = watch_runs()
+    if any(i in runs for i in RUN_ID.findall(flat)):
+        return True
+    return session in runs.values() and not OWN_RUN_END.fullmatch(command)
+
+
+def own_user():
+    """Your Slack user id (registry › slack.user_id), or None: then no recipient counts as you."""
+    try:
+        with open(os.path.join(os.path.expanduser("~"), ".adorno", "registry.json")) as f:
+            user = (json.load(f).get("slack") or {}).get("user_id")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return user if isinstance(user, str) and user else None
+
+
+def check_mcp(kind, tool, tool_input, session):
+    """-> (decision, reason key) for a Slack or Notion tool call, or None to let it through."""
+    me = own_user() if tool in SLACK_SENDS else None
+    to_self = me is not None and tool_input.get("channel_id") == me
+    if session in watch_runs().values():
+        if tool in SLACK_SENDS:  # draft_id: a send that would also delete a draft, possibly another channel's
+            return None if to_self and not tool_input.get("draft_id") else ("deny", "watch-send")
+        if tool.startswith(SLACK_READS if kind == "slack" else NOTION_READS):
+            return None
+        return "deny", "watch-write"
+    if tool in ("slack_send_message", "slack_schedule_message") and not to_self:
+        return "ask", "send"
+    return None
+
+
 FORMATS = ("claude", "codex", "gemini")
 UNATTENDED_QUESTION = ("nobody can answer a question here (bypassPermissions or dontAsk): do not ask, apply the "
                        "'Unattended runs' rule of your instructions as if the run had --unattended, and go on")
@@ -947,10 +1049,22 @@ def main():
         return 0
     # bypassPermissions (a schedule, an agent profile) and dontAsk: no one answers a prompt, the tool call would hang
     unattended = event.get("permission_mode") in ("bypassPermissions", "dontAsk")
+    session = str(event.get("session_id") or os.environ.get("CLAUDE_CODE_SESSION_ID") or "")
     if event.get("tool_name") == "AskUserQuestion":
         if unattended:
             print(json.dumps(answer(fmt, "deny", UNATTENDED_QUESTION)))
             record(event, "deny", UNATTENDED_QUESTION, "AskUserQuestion")
+        return 0
+    mcp = mcp_tool(event.get("tool_name")) if fmt == "claude" else None
+    if mcp:
+        tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
+        try:
+            found = check_mcp(mcp[0], mcp[1], tool_input, session)
+        except Exception:  # a bug here must not let a write through; a read still passes
+            found = None if mcp[1].startswith(SLACK_READS + NOTION_READS) else ("deny", "error")
+        if found:
+            decision = "deny" if found[0] == "ask" and unattended else found[0]
+            print(json.dumps(answer(fmt, decision, MCP_MESSAGES[found[1]])))
         return 0
     if event.get("tool_name") not in ("Bash", "run_shell_command", "shell"):
         return 0
@@ -971,11 +1085,17 @@ def main():
     if fmt == "claude" and found in (None, "push", "gh"):
         try:
             checks = allowable(command, cwd)
-            session = str(event.get("session_id") or os.environ.get("CLAUDE_CODE_SESSION_ID") or "")
             if checks is not None and granted(checks, session):
                 decision, reason = "allow", "inside the open run, at its level (workflow:pr:ship)"
         except Exception:
             pass
+    if fmt == "claude" and decision != "deny":
+        try:
+            if lifts_watch(command, session):
+                decision, reason = "ask", MCP_MESSAGES["watch-end"]
+        except Exception:
+            if "run-" in command:
+                decision, reason = "ask", MCP_MESSAGES["watch-end"]
     if decision == "ask" and unattended:
         decision = "deny"
     if decision:
