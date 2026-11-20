@@ -12,6 +12,15 @@
     "max_parallel": 3,
     "commit_skill": "adorno-commit",
     "pr_skill": "adorno-pr-open",
+    "max_usd": {
+      "workflow:review:requested": 30,
+      "workflow:review:received": 20,
+      "workflow:pr:review": 10,
+      "workflow:feature:build": 40,
+      "workflow:issue:fix": 20,
+      "workflow:pr:ship": 15,
+      "workflow:ci:red": 10
+    },
     "permissions": {
       "deny": [],
       "claude": {
