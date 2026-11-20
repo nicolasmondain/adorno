@@ -93,6 +93,19 @@ bad "a commit_skill with a trailing newline" $'  ghost/repo:\n    commit_skill: 
 bad "an empty setup_skill" $'  ghost/repo:\n    setup_skill: ""' "setup_skill must be a skill or command name"
 bad "a pr_skill with a path" $'  ghost/repo:\n    pr_skill: "../x"' "pr_skill must be a skill or command name"
 bad "unknown denied action" $'  ghost/repo:\n    permissions: {deny: [merge]}' "unknown action 'merge'"
+bad "max_usd that is not a mapping" $'  ghost/repo:\n    max_usd: 10' "max_usd must be a mapping"
+bad "max_usd for an unknown workflow" $'  ghost/repo:\n    max_usd: {workflow:pr:nope: 5}' "max_usd: unknown workflow 'workflow:pr:nope'"
+bad "a negative max_usd" $'  ghost/repo:\n    max_usd: {workflow:pr:review: -1}' "max_usd.workflow:pr:review must be a number > 0"
+bad "a boolean max_usd" $'  ghost/repo:\n    max_usd: {workflow:pr:review: true}' "max_usd.workflow:pr:review must be a number > 0"
+bad "a string max_usd" $'  ghost/repo:\n    max_usd: {workflow:pr:review: "10"}' "max_usd.workflow:pr:review must be a number > 0"
+printf 'owner: {name: T, github: t, language: fr}\nrepos:\n  ghost/repo:\n    max_usd: {workflow:pr:review: 2.5}\n' >"$OKP/adorno.yaml"
+expect_exit 0 "max_usd: a decimal cap is accepted" -- env ADORNO_LOCAL="$OKP" "${KIT[@]}" check
+expect_exit 0 "conf of a repo, with the public cost caps" -- "${KIT[@]}" conf acme/app
+expect_jq "... max_usd merged from repos.yaml's defaults" \
+  '.max_usd["workflow:review:requested"] == 30 and .max_usd["workflow:pr:review"] == 10'
+expect_exit 0 "conf of a repo with its own cap" -- "${KIT[@]}" conf acme/docs
+expect_jq "... its cap over the default, the other workflows kept" \
+  '.max_usd["workflow:pr:review"] == 5 and .max_usd["workflow:review:requested"] == 30'
 bad "a negative price" $'  ghost/repo: {}\nprices:\n  claude-x: {input: -1}' "prices.claude-x: numbers >= 0"
 bad "an incomplete price" $'  ghost/repo: {}\nprices:\n  claude-x: {input: 1, output: 5}' "prices.claude-x: numbers >= 0"
 bad "an unknown tier" $'  ghost/repo:\n    models: {tiers: {claude: {huge: x}}}' "tiers are inherit, fast, balanced, deep, frontier"
