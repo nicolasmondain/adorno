@@ -198,6 +198,45 @@ expect_exit 2 "a watch run takes no cap" -- env CLAUDE_CODE_SESSION_ID=sess-usag
 expect_exit 0 "a watch run" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:slack:watch --watch
 expect_jq "... has none" '.max_usd == null'
 "$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+# run-budget measures the run since it started: the fixture session from 10:00 (claude-mystery-1 at 10:50 included)
+BR() {  # BR [run-begin args…] — opens a run in the fixture session, started at 10:00; sets BID
+  B --repo acme/docs "$@" >"$TMP/br.json" || return
+  BID="$(jq -r .id "$TMP/br.json")"
+  jq '.started = "2026-11-10T10:00:00Z"' "$KH/runs/active/$BID.json" >"$TMP/br-run.json" && mv "$TMP/br-run.json" "$KH/runs/active/$BID.json"
+}
+jq '.prices["claude-mystery-1"] = {input: 1, cache_write_5m: 1, cache_write_1h: 1, cache_read: 1, output: 1}' \
+  "$ROOT/tests/fixtures/repos.json" >"$TMP/all-priced.json"; reg "$TMP/all-priced.json"
+BR --max-usd 99
+expect_exit 0 "run-budget under the cap" -- "$S/run-budget" "$BID"
+# up to now: the 10:30 window's 111060 µUSD + claude-mystery-1 (2) + the haiku agent at 12:00 (47.8)
+expect_jq "... what was spent and what is left" \
+  '.capped == true and .id != null and .workflow == "workflow:pr:review" and .max_usd == 99 and .source == "claude-code"
+   and (.usd * 1e6 | round) == 111110 and .remaining > 98 and .unpriced == []'
+[ ! -e "$(jq -r .dir "$TMP/br.json")/usage.json" ] && [ -f "$KH/runs/active/$BID.json" ] \
+  && ok "... writes nothing, the run stays open" || ko "... writes nothing, the run stays open"
+"$S/run-end" "$BID" >/dev/null
+BR --max-usd 0.1
+expect_exit 7 "run-budget over the cap" -- "$S/run-budget" "$BID"
+expect_jq "... says so" '.capped == true and .max_usd == 0.1 and .usd > 0.1 and .remaining < 0 and (.reason | test("over"))'
+"$S/run-end" "$BID" >/dev/null
+reg "$ROOT/tests/fixtures/repos.json"
+BR --max-usd 99
+expect_exit 7 "run-budget with a model that has no price" -- "$S/run-budget" "$BID"
+expect_jq "... the cap cannot be guaranteed: the models listed, where to price them" \
+  '.unpriced == ["claude-mystery-1"] and .usd == null and .remaining == null and (.reason | test("prices"))'
+"$S/run-end" "$BID" >/dev/null
+expect_exit 0 "a capped run outside any session" -- "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs --max-usd 99
+BID="$(jq -r .id <<<"$out")"
+expect_exit 7 "run-budget cannot measure it" -- "$S/run-budget" "$BID"
+expect_jq "... unavailable, and --max-usd off named as the way to run uncapped" \
+  '.source == "unavailable" and .usd == null and (.reason | test("--max-usd off"))'
+"$S/run-end" "$BID" >/dev/null
+BR --max-usd off
+expect_exit 0 "run-budget on a run with no cap" -- "$S/run-budget" "$BID"
+expect_jq "... nothing to check" '.capped == false and .max_usd == null'
+"$S/run-end" "$BID" >/dev/null
+expect_exit 2 "run-budget on an unknown run" -- "$S/run-budget" 20261120T000000-1-1
+expect_exit 2 "run-budget without an id" -- "$S/run-budget"
 
 # the rest of the suite runs inside one auto run at L3
 "$S/run-begin" --workflow workflow:test:suite --mode auto --level L3 \
@@ -1368,6 +1407,7 @@ guard_at deny "$C" "" "gh pr create -R acme/readonly --title t --body b"
 guard_at allow "$C" "" "$S/repo-conf acme/docs"
 guard_at allow "$C" "" "$S/run-usage collect --session s --since 2026-11-10T10:00:00Z --until 2026-11-10T11:00:00Z"
 guard_at allow "$C" "" "$S/pr-shortcuts .agent-run/x/branch.diff"
+guard_at allow "$C" "" "$S/run-budget 20261120T000000-1-1"
 guard_at pass "$C" "" "$TMP/fake/adorno-github/scripts/repo-conf"
 guard_at deny "$C" "" "git push" codex
 guard_at pass "$C" "" "git add ." codex

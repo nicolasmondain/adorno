@@ -530,5 +530,6 @@ Clone the repo, copy `local/` over (or point `ADORNO_LOCAL` to a synced folder),
 | "not declared in your local config" (code 3) | the repo is in no `repos` or `workspaces` | `adorno-setup` repo mode, then `bin/kit install` |
 | "allows up to L2" (code 5) | the repo's `max_level`, or the workflow's mode is too low | raise `max_level` or change mode |
 | "denies 'submit'" (code 4) | the repo's `permissions.deny` | remove the action from the list if intended |
+| "must stop" (code 7, `run-budget`) | the run reached its `max_usd`, a model has no price (`unpriced`), or the cost cannot be measured (no Claude Code session) | raise the cap for the run (`run-begin … --max-usd N`), add the price in `local/adorno.yaml` › `prices` then `bin/kit install`, or run uncapped explicitly with `--max-usd off` |
 | "profile is not set up" | no `local/src/skills/adorno-profile/references/` | `adorno-setup` profile mode |
 | a repo of a folder-based workspace is not found | cloned after the install, or more than 2 levels below `paths` | rerun `bin/kit install`, or add it to `repos:` |
