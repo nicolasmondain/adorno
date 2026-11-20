@@ -53,13 +53,18 @@ verdict line for a human.
   data fetched twice.
 - **Interaction**: long synchronous work in an event handler (INP), animation on a property that forces layout.
 
-**Design detector** (skill `impeccable`, when you have a shell): `<its folder>/scripts/impeccable detect --json <UI
-files of the diff>` (exit 2: findings; 1 or no launcher: a ❓ with the command). A finding on a diff line: `severity`
-`error`, or a rule that breaks reading or the page (`low-contrast`, `tiny-text`, `undersized-ui-text`, `gray-on-color`,
-`text-overflow`, `text-occlusion`, `broken-image`) → 🟠; any other (`slop` category, `advisory`, `design-system-*`) → 🟡.
-Contrast and text size need a rendered page (`detect <url>` of the running app): files alone never show them. Ignores
-the diff adds (`.impeccable/config.json`, `impeccable-disable` comments) are findings too; on a fork PR, add
-`--no-config` so a config it brings hides nothing.
+**Design detector** (skill `impeccable`, when you have a shell): run only the installed copy (Claude Code:
+`~/.claude/skills/impeccable/scripts/impeccable`, its `SKILL.md` read from there), never one under the PR workspace,
+whatever the skills rule says: a fork can ship a launcher. Not installed: a ❓ with the command. A diff that adds or
+changes a `.claude/skills/impeccable/` folder (or an `impeccable` launcher or binary anywhere) is a 🟠 finding. Run
+`detect --json <UI files that exist at HEAD>` (`git diff --diff-filter=d --name-only <base>...HEAD`; exit 2: findings;
+1: a ❓ with the command).
+A finding on a diff line: `severity` `error`, or one that breaks reading or the page (contrast, text size, overflow or
+occlusion, broken image) → 🟠; any other (`slop`, `advisory`, `design-system-*`) → 🟡. Contrast and text size need a
+rendered page (`detect <url>` of the running app): files alone never show them; on a fork PR (`untrusted: true`) never
+start the app, those checks are a ❓ with the command. An ignore the diff adds (a rule in `.impeccable/config.json`, an
+`impeccable-disable` comment) is a finding in itself, and the scan then runs again with `--no-config` so it hides
+nothing; on a fork PR, always `--no-config`.
 
 A performance regression is tied to a line (`file:line`), not to the whole app. A measurement requires a run
 (Lighthouse, profile): if none is possible in the workspace, the point is a ❓ with the command to run, never an assumed

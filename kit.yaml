@@ -83,9 +83,12 @@ imports:
     include: [skills/typescript-pro]
 
   # Frontend design: PRODUCT.md / DESIGN.md context, craft floor, and a deterministic detector (`impeccable detect`,
-  # no LLM) the front agents run on UI files. Its launcher downloads a pinned engine into ~/.impeccable/bin, checked
-  # against scripts/engine-checksums.txt. Apache-2.0. Claude build, shipped to every target (paths resolve from the
-  # skill folder).
+  # no LLM) the front agents run on UI files. Its launcher runs an engine already installed (sibling, ~/.impeccable/bin,
+  # PATH: probed, not hashed), else downloads a pinned one into ~/.impeccable/bin, checked against
+  # scripts/engine-checksums.txt. Apache-2.0. Claude build, shipped to every target (paths resolve from the skill
+  # folder).
+  # shortcut: whole skill folder (~1.7 MB of live/Windows assets in vendor/ and dist/); add an exclude key to imports
+  # when a second heavy import lands or the plugin size matters.
   - name: impeccable
     source: github:pbakaus/impeccable
     ref: main
