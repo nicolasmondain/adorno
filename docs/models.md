@@ -135,7 +135,8 @@ is the noise of one run pair.
 change, what the workspace does not show, the fix it proposes, the other areas) and which severity a cost read from
 the code gets. Measured alone, with `bench/run --only agent:review:mongodb`, on the 6 cases that route to it, 3 repeats
 (18 reviews per run), Claude Code 2.1.330, 2026-11-20: the old prompt (as of `1bba2b0`), then the new one. The four
-runs cost 8.87 USD. The grades of the 10 unplanned findings were validated by the owner.
+runs cost 8.87 USD. The grades of the 10 unplanned findings were validated by the owner. Precision is the mean of the
+three repeats' precision (`bench/score`), not the ratio of the summed counts.
 
 | Prompt, model | Own recall | Own severity | Matched / false positives | Precision | Cost per call |
 | --- | --- | --- | --- | --- | --- |
