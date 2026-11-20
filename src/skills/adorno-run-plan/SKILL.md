@@ -14,7 +14,9 @@ its input.
    the whole history. `parallel` steps: start them in the same turn. Before each step and each loop round,
    `adorno-github/scripts/run-budget <id>`: a non-zero exit → stop (step 5).
 3. **Loops**: `loop.evaluator: tests` = the repo's `test`/`lint` commands; send the failing output back to the agent,
-   up to `max`. `fix_with: same_agent` = the agent that wrote the slice fixes the review findings. A round that
+   up to `max`. `loop.evaluator: refactor-gate` = those tests, then `adorno-github/scripts/refactor-gate` (no
+   existing test changed or lost, `workflow:feature:refactor` step 4); its refusal goes back like a failing test.
+   `fix_with: same_agent` = the agent that wrote the slice fixes the review findings. A round that
    fails again climbs, within `max` (the same rule for every capped loop of a workflow):
    - first round: the agent on its own tier;
    - middle rounds (from `max: 3`): the same agent with `effort: high`;

@@ -33,6 +33,10 @@ No checkpoint: the PR opens without waiting for a "yes" (running the workflow is
      `` - `file:line` — <the limit> · upgrade: <the trigger> ``, taken from the comment; a marker that names no
      trigger is tagged `no-trigger` (skill `ponytail-debt`). The match is textual: a hit that is not a comment in the
      code (inside a string, a test fixture, prose) is not a marker and is dropped. No marker: no section;
+   - a `## Behavior preserved` section, before `## Sources`, only when the run has `qa/refactor-gate.json`
+     (`workflow:feature:refactor`): the characterization tests added (the `test:` commits), the gate's proof that no
+     existing test changed or was lost (its `ok`, `report` and `tests`), and the before/after table of
+     `measures.md`;
    - a `## Sources` section, before `## Proof`: one line per Notion page, doc (`url`) and Slack thread of the run's
      `refs.json`, in the request's order, its title from `source.md` § Sources
      (`- [Notion · Export CSV](https://www.notion.so/…)`), the URL copied verbatim from `refs.json`. A doc link is

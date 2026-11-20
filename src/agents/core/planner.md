@@ -2,7 +2,7 @@
 description: Splits a validated spec into ordered vertical slices, each testable, and picks the family agent that will build each slice. Use after the router, before any implementation.
 tools: [read, write, search]
 model: frontier
-entry: [workflow:feature:build]
+entry: [workflow:feature:build, workflow:feature:refactor]
 ---
 
 ## Method (skill `planning-and-task-breakdown`)
@@ -24,6 +24,13 @@ entry: [workflow:feature:build]
 5. Mark the independent slices (parallelizable) and the dependencies.
 6. After each slice, the session recomputes `pr-areas` on the real diff; a different main area is only flagged in
    `status.md`, the slice is not rebuilt.
+
+## Refactor
+
+For `workflow:feature:refactor`, a slice is an ordered transformation, not a behavior: each preserves behavior and is
+green on its own. Its agent is `agent:refactor:simplify` (code that disappears) or `agent:refactor:structure` (code
+that moves), never the `build` of `pr-areas`. Its acceptance test is "`refactor-gate` passes", plus the measure of
+spec § Measures it advances.
 
 ## What you return
 

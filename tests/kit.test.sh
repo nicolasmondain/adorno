@@ -408,6 +408,22 @@ mv "$TMP/agents.bak" "$SB/dist/AGENTS.md"
 expect_exit 0 "the real registry passes with every dispatcher's roles covered" -- env ADORNO_LOCAL="$TMP/none" "${KIT[@]}" check
 check "no area_reviewers reader is left in src/" '[ -d "$ROOT/src" ] && [ -f "$ROOT/bin/kit" ] && [ -f "$ROOT/bin/kitlib/validate.py" ] && [ -f "$ROOT/bin/kitlib/commands.py" ] && ! grep -rn --exclude-dir=__pycache__ "area_reviewers" "$ROOT/src" "$ROOT/bin/kit" "$ROOT/bin/kitlib" | grep -v -e "src/skills/adorno-setup/" -e "bin/kitlib/validate.py:.*area_reviewers\|bin/kitlib/commands.py:.*area_reviewers" -e SCHEMA.md | grep .'
 check "pr:ship leaves no family agent of its subject" '! grep -q "family agent of its subject" "$ROOT/src/workflows/pr/ship.md"'
+RF="$ROOT/src/workflows/feature/refactor.md"
+refactor_ends_ship_watch() {  # top-level numbered steps (indented and blank lines continue one); last two
+  awk '/^[0-9]+\. /{n++; b[n]=$0; on=1; next} /^$/{next} on && /^ /{b[n]=b[n] " " $0; next} {on=0}
+    END{exit !(n > 1 && index(b[n], "workflow:pr:watch") && index(b[n-1], "workflow:pr:ship"))}' "$RF"
+}
+refactor_agents_in_uses() {  # every agent named in the body is in the frontmatter's uses.agents
+  local uses names name
+  uses="$(grep -E '^  agents: \[' "$RF" | sed 's/^  agents: //' | tr -d '[] ' | tr ',' '\n')"
+  names="$(awk '/^---$/{f++; next} f >= 2' "$RF" | grep -oE 'agent:([a-z0-9-]+:[a-z0-9-]+|adorno)' | sort -u)"
+  [ -n "$uses" ] && [ -n "$names" ] || return 1
+  for name in $names; do grep -qxF "$name" <<<"$uses" || { echo "  not in uses.agents: $name"; return 1; }; done
+}
+check "feature:refactor exists" '[ -f "$RF" ]'
+check "feature:refactor uses workflow:pr:ship" 'grep -qE "^  workflows: \[.*workflow:pr:ship[],]" "$RF"'
+check "feature:refactor calls pr:ship, then ends on pr:watch" refactor_ends_ship_watch
+check "feature:refactor lists in uses.agents every agent its body names" refactor_agents_in_uses
 
 echo "migrate areas"
 MIG="$TMP/mig"; mkdir -p "$MIG"

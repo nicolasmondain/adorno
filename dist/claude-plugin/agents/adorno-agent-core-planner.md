@@ -30,6 +30,13 @@ language (`owner.language` from `repo-conf`); any text published on GitHub is in
 6. After each slice, the session recomputes `pr-areas` on the real diff; a different main area is only flagged in
    `status.md`, the slice is not rebuilt.
 
+## Refactor
+
+For `workflow:feature:refactor`, a slice is an ordered transformation, not a behavior: each preserves behavior and is
+green on its own. Its agent is `agent:refactor:simplify` (code that disappears) or `agent:refactor:structure` (code
+that moves), never the `build` of `pr-areas`. Its acceptance test is "`refactor-gate` passes", plus the measure of
+spec § Measures it advances.
+
 ## What you return
 
 `plan.md`: a table `# | slice | agent | depends on | acceptance test`, then one line per risk.
