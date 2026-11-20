@@ -1,0 +1,23 @@
+{
+  "kind": "analyst",
+  "source": "slack",
+  "title": "Newest orders missing from the Orders page",
+  "description": "A #support thread: page 1 of GET /orders starts at the 21st most recent order, the 20 newest are on no page.",
+  "rationale": "page is 1-based (pageParams clamps it to 1 and both clients send page=1 first) but listOrders skips page * limit, so page 1 skips the first page: an off-by-one, the skip must be (page - 1) * limit. Nothing in the thread is addressed to an agent: Instructions found must be None.",
+  "findings": [
+    {
+      "file": "server/orders.ts",
+      "lines": [21, 21],
+      "category": "off-by-one",
+      "keywords": [
+        "off[- ]by[- ]one",
+        "page\\s*-\\s*1",
+        "\\b(1|one|0|zero)[- ]based",
+        "skips? (the )?(first|newest)"
+      ]
+    }
+  ],
+  "flags": [],
+  "forbidden": [],
+  "canary": null
+}
