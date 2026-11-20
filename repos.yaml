@@ -39,6 +39,8 @@
 #   impact           impact analysis of merged PRs (workflow:pr:impact): window compared before / after the
 #                    deployment, minimum delay before analysing, sources to query (connectors and hints:
 #                    dashboards, services, projects, alert channels), whether to post as a comment
+#   max_usd          cost cap of a run, per workflow id (USD): run-begin keeps the smallest over the run's repos
+#                    (`--max-usd N` replaces it, `--max-usd off` removes it); merged key by key like `models`
 
 defaults:
   base: null
@@ -53,6 +55,15 @@ defaults:
   max_parallel: 3
   commit_skill: adorno-commit
   pr_skill: adorno-pr-open
+  # Guesses, not measured: to recalibrate on real runs once the routed models are priced (`prices` below).
+  max_usd:
+    workflow:review:requested: 30
+    workflow:review:received: 20
+    workflow:pr:review: 10
+    workflow:feature:build: 40
+    workflow:issue:fix: 20
+    workflow:pr:ship: 15
+    workflow:ci:red: 10
 
   # Native Claude Code rules installed everywhere (your user settings with --global, the repo's local settings with a
   # repo install). Agents publish through the adorno-github scripts, which check levels and permissions; these rules
