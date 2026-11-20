@@ -43,6 +43,7 @@ bad "an unknown type" '"type":"nope"'
 bad "a value outside its enum" '"type":"guard","decision":"allow","reason":"r","command":"c"'
 bad "a wrong value type" '"type":"script.call","script":"x","exit":"0"'
 bad "a session kind outside its enum" '"type":"session","kind":"pause"'
+bad "a self-review without its count" '"type":"self-review","name":"agent:feat:back"'
 bad "a tier (Claude Code's hooks give the resolved model, never the kit's tier)" '"type":"agent.spawn","agent":{"id":"a1"},"tool":"claude","tier":"deep"'
 printf '%s\n' "${base/session\",\"parent/bot\",\"parent},\"type\":\"loop\",\"round\":1,\"cap\":2}" >"$TMP/bad.jsonl"
 expect_exit 1 "refused: an unknown actor" -- valid "$TMP/bad.jsonl"
@@ -70,6 +71,8 @@ expect_exit 0 "--run names one run, whatever the session" -- \
   python3 "$J" event run.end '{"workflow":"workflow:test:run","outcome":"ended"}' --run 20260101T100000-2-2 --session sess-b
 last 20260101T100000-2-2; expect_jq "run.end" '.type == "run.end"'
 [ "$(lines 20260101T100000-1-1)" = 1 ] && ok "and only that run" || ko "only that run" "$(lines 20260101T100000-1-1) lines"
+expect_exit 0 "a builder's self-review" -- python3 "$J" event self-review '{"name":"agent:feat:back","fixed":2}' --session sess-a
+last 20260101T100000-1-1; expect_jq "... its agent and its count" '.type == "self-review" and .name == "agent:feat:back" and .fixed == 2'
 expect_exit 0 "an agent's event" -- python3 "$J" event tool.call '{"tool":"Read","input":"a.ts"}' --session sess-a --actor agent:a1
 last 20260101T100000-1-1; expect_jq "an agent's parent is the session" '.actor == "agent:a1" and .parent == "session"'
 long="$(printf 'x%.0s' $(seq 1 600))"
