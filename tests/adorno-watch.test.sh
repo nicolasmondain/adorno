@@ -104,6 +104,29 @@ expect_exit 0 "trust from stdin" -- sh -c "\"$S/watch-trust\" notion-assigned < 
 expect_jq "stdin works" 'length == 4 and .[0].action_level == "L2"'
 printf '[{"id": "x"}]' >"$TMP/baddocs.json"
 expect_exit 2 "doc without authors refused" -- "$S/watch-trust" notion-assigned "$TMP/baddocs.json"
+printf '[{"id": "x", "authors": ["N1"]}]' >"$TMP/baddocs.json"
+expect_exit 2 "doc without authors_complete refused" -- "$S/watch-trust" notion-assigned "$TMP/baddocs.json"
+printf '[{"id": "x", "authors": ["N1"], "authors_complete": "true"}]' >"$TMP/baddocs.json"
+expect_exit 2 "non-boolean authors_complete refused" -- "$S/watch-trust" notion-assigned "$TMP/baddocs.json"
+printf '[{"id": "x", "authors": [1], "authors_complete": true}]' >"$TMP/baddocs.json"
+expect_exit 2 "non-string author id refused" -- "$S/watch-trust" notion-assigned "$TMP/baddocs.json"
+printf '{}' >"$TMP/baddocs.json"
+expect_exit 2 "input that is not an array refused" -- "$S/watch-trust" notion-assigned "$TMP/baddocs.json"
+printf '[]' >"$TMP/nodocs.json"
+expect_exit 0 "no documents" -- "$S/watch-trust" notion-assigned "$TMP/nodocs.json"
+expect_jq "no documents gives []" '. == []'
+doc D5 '["N1", "N9", "N9"]' true | jq -s . >"$TMP/dupdocs.json"
+expect_exit 0 "duplicate writer" -- "$S/watch-trust" notion-assigned "$TMP/dupdocs.json"
+expect_jq "an untrusted writer is listed once" '.[0].untrusted == ["N9"] and .[0].action_level == "L0"'
+jq '.notion.assigned.trusted_authors = null' "$FIX" >"$TMP/nulltrust.json"
+conf "$TMP/nulltrust.json"
+expect_exit 0 "trust with trusted_authors: null" -- "$S/watch-trust" notion-assigned "$TMP/docs.json"
+expect_jq "null trusted_authors trusts nobody" 'all(.[]; .action_level == "L0")'
+jq 'del(.notion.assigned.level)' "$FIX" >"$TMP/nolevel.json"
+conf "$TMP/nolevel.json"
+expect_exit 0 "trust without a level" -- "$S/watch-trust" notion-assigned "$TMP/docs.json"
+expect_jq "a trusted document without level runs at the default L0" '.[0].trusted and .[0].action_level == "L0"'
+conf "$FIX"
 expect_exit 2 "usage" -- "$S/watch-trust" bogus "$TMP/docs.json"
 jq 'del(.notion)' "$FIX" >"$TMP/nonotion.json"
 conf "$TMP/nonotion.json"; expect_exit 3 "no notion section" -- "$S/watch-trust" notion-assigned "$TMP/docs.json"; conf "$FIX"

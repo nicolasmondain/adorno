@@ -147,8 +147,9 @@ notion:                                # workflow:notion:assigned (Notion connec
       "Bugs": workflow:issue:fix
     mode: report                       # report: analysis and plan · run: launches the agent or the workflow
     level: L0                          # permission level in run mode, for trusted documents only
-    trusted_authors: [0a1b2c3d-…]      # Notion user IDs; a document with any other writer (creator, last editor,
-                                       # comment author) or one the connector could not read: runs at L0
+    trusted_authors: [0a1b2c3d-…]      # Notion user IDs; a document with any other writer (creator, page history up
+                                       # to now, comment author) or one not read fully (history the plan no longer
+                                       # keeps, a truncated discussion, inline databases): runs at L0
 
 journal:                               # the journal of every run (skill adorno-journal), private, under ~/.adorno/runs
   reasoning: false                     # true: also copy the models' reasoning when the tool's transcripts hold it

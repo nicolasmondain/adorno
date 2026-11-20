@@ -108,6 +108,7 @@ bad "slack trusted_authors that is not a list" $'  ghost/repo: {}\nslack:\n  use
 bad "slack trusted_authors with an empty id" $'  ghost/repo: {}\nslack:\n  user_id: U0\n  watches:\n    w: {channels: ["#x"], includes: [a], action: {agent: agent:adorno, trusted_authors: ["U1", ""]}}' "trusted_authors must be a list of non-empty strings"
 bad "notion trusted_authors that is not a list" $'  ghost/repo: {}\nnotion:\n  assigned: {trusted_authors: N1}' "trusted_authors must be a list of non-empty strings"
 bad "notion trusted_authors with an empty id" $'  ghost/repo: {}\nnotion:\n  assigned: {trusted_authors: ["N1", ""]}' "trusted_authors must be a list of non-empty strings"
+bad "notion trusted_authors with a number" $'  ghost/repo: {}\nnotion:\n  assigned: {trusted_authors: [1]}' "trusted_authors must be a list of non-empty strings"
 printf 'owner: {name: T, github: t, language: fr}\nrepos:\n  ghost/repo: {}\nslack:\n  watches:\n    w: {channels: ["#x"], includes: [a], action: {agent: agent:adorno, trusted_authors: [U1]}}\nnotion:\n  assigned: {trusted_authors: [N1, N2]}\n' >"$OKP/adorno.yaml"
 expect_exit 0 "trusted_authors lists of ids are accepted" -- env ADORNO_LOCAL="$OKP" "${KIT[@]}" check
 

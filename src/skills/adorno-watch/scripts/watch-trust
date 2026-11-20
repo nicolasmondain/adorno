@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage: watch-trust notion-assigned [DOCS_FILE|-]
 # Who may drive an action from a Notion document. Input: a JSON array of normalised docs, each with
-#   {id, …, authors: [user ids], authors_complete: bool}   (created_by, last_edited_by and every comment author)
+#   {id, …, authors: [user ids], authors_complete: bool}   (creator, page history authors, every comment author)
 # Output: the same array, each doc + {trusted, action_level, untrusted: [ids]}. A doc is trusted only if the connector
 # read every writer (authors_complete), there is at least one, and each is in notion.assigned.trusted_authors; else
 # its action runs at L0. `untrusted` names the writers missing from that list.
@@ -21,6 +21,6 @@ jq -e 'type == "array" and all(.[]; (.authors | type) == "array" and all(.author
 
 jq --slurpfile cc "$tmp/conf.json" '
   $cc[0] as $c
-  | [ .[] | ([.authors[] | select(. as $a | $c.trusted_authors | index([$a]) | not)] | unique) as $out
+  | [ .[] | ((.authors - ($c.trusted_authors // [])) | unique) as $out
       | (.authors_complete and (.authors | length) > 0 and $out == []) as $ok
       | . + {trusted: $ok, action_level: (if $ok then $c.level else "L0" end), untrusted: $out} ]' "$tmp/docs.json"

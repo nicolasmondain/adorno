@@ -8,8 +8,8 @@ flowchart TD
   NC -->|"yes"| CN{"Connector available?"}
   CN -->|"no"| STOP["Stop, say which connector to connect"]
   CN -->|"yes"| RD["Read Slack or Notion through the connector (read only)"]
-  RD -->|"error, timeout, rate limit"| FAIL["Connector failure: one retry after a rate limit, no mark, no touch for the unread part"]
-  FAIL --> FR["Report at the top: connector, call, error, what was not read; run-end failed, or done if other sources went through; Slack failing: report.md only"]
+  RD -->|"any connector call: error, timeout, rate limit"| FAIL["Connector failure: one retry after a rate limit, no mark for the unread items, no touch this run"]
+  FAIL --> FR["Report at the top: connector, call, error, what was not read, replay with --since the last run without a failure; run-end failed, or done if other sources went through; Slack failing: report.md only"]
   RD --> NM["Normalise Slack messages to JSON: id, channel, ts, user, text, permalink, thread_ts"]
   NM --> WM["scripts/watch-match NAME: period, includes or regex, max_messages"]
   WM --> SF["scripts/watch-seen filter KEY: drop already processed"]
@@ -22,6 +22,6 @@ flowchart TD
   DM --> MK["scripts/watch-seen mark KEY ids, only after action and report"]
   DF --> MK
   KP --> MK
-  MK --> TC["scripts/watch-seen touch KEY"]
+  MK --> TC["scripts/watch-seen touch KEY, only if no connector call failed"]
   TC --> OUT["Output: report, state in ~/.adorno/state/KEY.json"]
 ```

@@ -35,13 +35,17 @@ never scrape, never ask for a token.
   connector calls to the hook): there the rule above is the only barrier.
 
 **Connector failure.** A connector call that errors, times out or is rate-limited is a failure; an empty success is
-"nothing new". A failure is never read as "nothing", or the window is lost behind a `touch`.
+"nothing new". A failure is never read as "nothing". The rule covers every connector call of the run, at any step
+(the first read, and the content, thread, comments or history read later).
 
-- Before or during reading: no `watch-seen mark` and no `touch` for that source; the next run re-reads the same window.
-- Mid-batch: the items already processed are `mark`ed, the others are not, and there is no `touch`.
+- The window is always `since` back from now: a later run only catches up what is still inside it. The report gives
+  the replay that covers the unread span: the workflow with `--since <the time watch-seen last KEY prints,
+  unquoted>` (the last run without a failure; never run → the configured `since`). What was already processed is skipped (`mark`).
+- Items whose action and report are done are `mark`ed, the others are not. No `touch` in a run that had a connector
+  failure: `last` stays the last run without one.
 - At most one retry, after a rate limit, with the indicated delay if any. Never scrape, never ask for a token.
-- Report, at the top: the connector, the call, the error, what was not read. The run ends `run-end <id> failed`, or
-  `done` if the other sources went through.
+- Report, at the top: the connector, the call, the error, what was not read, the replay command. The run ends
+  `run-end <id> failed`, or `done` if the other sources went through.
 - Slack is the failing connector: nothing is sent; the report stays in the run folder (`report.md`) and in the answer.
 
 ## Scripts
@@ -54,7 +58,7 @@ never scrape, never ask for a token.
 | `watch-conf notion-assigned` | the Notion watch (`properties`, `databases`, `exclude_status`, `agents`, `mode`, `trusted_authors` []) |
 | `watch-conf channel-repos CHANNEL` | the repos whose `team.slack` lists the channel: where the code behind a conversation lives |
 | `watch-match NAME [FILE\|-] [--all]` | filters normalised messages: period, `includes` OR `regex`, `max_messages`, not processed yet |
-| `watch-trust notion-assigned [FILE\|-]` | adds `trusted`, `action_level` (`level` if all `authors` are trusted, else L0), `untrusted` to each doc |
+| `watch-trust notion-assigned [FILE\|-]` | adds `trusted`, `action_level` (`level` if `authors_complete` and every one of `authors` is in `trusted_authors`, else L0), `untrusted` to each doc. `authors`: the creator, the authors of the page's history from its creation to now, every comment author; `authors_complete` false when one of them could not be read (history the plan no longer keeps, a discussion not read fully, inline databases): workflow:notion:assigned step 4 |
 | `watch-seen filter KEY [FILE\|-]` | drops items already processed (state `~/.adorno/state/KEY.json`) |
 | `watch-seen mark KEY ID…` | records items as processed — **only after** their action and report are done |
 | `watch-seen last KEY` / `touch KEY` | time of the last run / record this run |

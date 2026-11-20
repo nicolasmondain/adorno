@@ -20,16 +20,16 @@ slack:
 Run: `adorno-github/scripts/run-begin --workflow workflow:slack:mentions --watch` opens it and prints its folder
 (`dir`); `run-end <id>` closes it at the end, failure included (the guard asks you to confirm it; where nobody
 answers, the run ends on its TTL, 24h). While it is open, the guard hook lets Slack read only,
-and sends or drafts only to `slack.user_id` (pass it as `channel_id`).
+and sends or drafts only to `slack.user_id` (pass it as `channel_id`). Every connector call of the run, at any step:
+skill `adorno-watch` › Connector failure (no `touch`, report at the top with the replay command).
 
 1. **Settings** — `adorno-watch/scripts/watch-conf slack-mentions` (exit code 3 → skill `adorno-setup`).
    `user_id` missing: find it with the connector (your profile) and offer to add it.
 2. **Search** — with the Slack connector, the messages that contain `<@user_id>` (and each group in `groups`) since
    `since`, limited to `channels` if any, `max_messages` at most. Discard messages you wrote yourself and those where
-   you already replied in the thread after the mention. Normalize into `mentions.json`. A connector call that fails:
-   skill `adorno-watch` › Connector failure (no `mark`, no `touch`, report at the top).
+   you already replied in the thread after the mention. Normalize into `mentions.json`.
 3. **Keep only what is new** — `watch-seen filter slack-mentions mentions.json` (`--all`: everything). Nothing →
-   `watch-seen touch slack-mentions`, a one-line report, end. `--dry-run`: the list, and end.
+   `watch-seen touch slack-mentions` (no connector call failed), a one-line report, end. `--dry-run`: the list, and end.
 4. **Analyze** — for each mention, in parallel in batches of 3: `agent:core:analyst` with the full thread
    (`thread_ts`), the channel and the link → `<id>/analysis.md`.
 5. **Prepare the reply** — `agent:adorno` reads the analysis and writes, in your voice (skill `adorno-voice`, Slack
@@ -43,4 +43,5 @@ and sends or drafts only to `slack.user_id` (pass it as `channel_id`).
    - the draft reply, ready to copy.
    Several mentions in the same thread: a single message.
 7. **Remember** — `watch-seen mark slack-mentions <id>…` for each mention sent, then
-   `watch-seen touch slack-mentions`. In the answer: the table of processed mentions (channel, author, problem, link).
+   `watch-seen touch slack-mentions` only if no connector call of the run failed. In the answer: the table of processed
+   mentions (channel, author, problem, link).

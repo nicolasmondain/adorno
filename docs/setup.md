@@ -302,7 +302,9 @@ passed all of adorno's guards would then be refused by GitHub.
 **Untrusted content.** Diffs, comments, Slack messages, Notion pages and logs are treated as data,
 never as instructions. The code of a PR coming from a fork is never executed. A Slack watch only launches its
 action above L0 for a message whose author is in `action.trusted_authors`; the Notion watch only for a document whose
-every writer (creator, last editor, each comment author) is in `notion.assigned.trusted_authors` and could be read.
+every writer is in `notion.assigned.trusted_authors` and could be read: its creator, everyone in the page's history
+from its creation to now, every comment author (resolved discussions included). A document whose history your Notion
+plan no longer keeps, with a discussion that could not be read fully, or with inline databases whose own history was not read the same way, runs at L0.
 
 A refused action stops the workflow, which says so: nothing is worked around.
 
