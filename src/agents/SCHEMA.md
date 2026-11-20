@@ -28,3 +28,19 @@ flowchart TD
   M -->|"no (default)"| D["Everything stays a draft or pending, L0 on code"]
   M -->|"yes"| PU["Post replies, resolve threads, re-request; refusals and deferrals with evidence; people and unfixed items stay drafts"]
 ```
+
+# Commit-type families: Self-review
+
+Every agent of a commit-type family (`feat`, `fix`, `perf`, `refactor`, `test`, `docs`, `ci`, `chore`) passes through the same step before it returns. `core`, `review` and `agent:adorno` do not.
+
+```mermaid
+flowchart TD
+  W["Commit-type agent: slice or fix done, tests, lint and typecheck green"] --> SR["Self-review: reread own diff once - spec, repo rules, lean, hygiene, tests"]
+  SR --> F{"Anything found?"}
+  F -->|"yes"| FC["Fix in a new commit of its own type, checks green again"]
+  F -->|"no"| RT["Return the deliverable"]
+  FC --> RT
+  RT --> S["Ends with the Self-review section: Checked, Fixed (N), Left on purpose"]
+  S --> SE["Session copies it into status.md and runs run-mark self-review"]
+  SE --> G["External review stays the gate"]
+```
