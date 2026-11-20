@@ -501,6 +501,47 @@ check "review:ponytail's review mode names review:code's axes only in its out-of
 check "review:code and review:security leave the lean axis and dependency need to review:ponytail" \
   'grep -q "lean axis is .review:ponytail..s" "$ROOT/src/agents/review/code.md" && grep -q "is .review:ponytail..s" "$ROOT/src/agents/review/security.md"'
 
+# the self-review rule: written once in src/agents/_builder.md, merged into every committing agent that edits
+SR='^## Self-review, before you return'
+DA="$ROOT/dist/claude-plugin/agents"
+# commit-type families: every agent folder but core and review, so a new family is covered
+COMMIT_FAMILIES=""
+for d in "$ROOT"/src/agents/*/; do
+  case "$(basename "$d")" in core | review) ;; *) COMMIT_FAMILIES="$COMMIT_FAMILIES $(basename "$d")" ;; esac
+done
+self_review_carried() {  # every dist agent of a commit-type family with Edit in tools: has the rule; at least one
+  local fam a n=0
+  for fam in $COMMIT_FAMILIES; do
+    for a in "$DA"/adorno-agent-"$fam"-*.md; do
+      [ -f "$a" ] && grep -qE '^tools:(.*[ ,])?Edit(,|$)' "$a" || continue
+      grep -q "$SR" "$a" || return 1
+      n=$((n + 1))
+    done
+  done
+  [ "$n" -gt 0 ]
+}
+self_review_left_out() {  # the agents that do not commit or do not edit: each exists and lacks the rule
+  local a
+  for a in "$DA"/adorno-agent-fix-investigate.md "$DA"/adorno-agent-ci-debug.md "$DA"/adorno-agent-review-*.md \
+    "$DA"/adorno-agent-core-*.md "$DA"/adorno.md; do
+    [ -f "$a" ] && ! grep -q "$SR" "$a" || return 1
+  done
+}
+what_you_return_has_self_review() {  # one "## What you return" per commit-type family, its section names Self-review
+  local fam f
+  [ -n "$COMMIT_FAMILIES" ] || return 1
+  for fam in $COMMIT_FAMILIES; do
+    f="$ROOT/src/agents/$fam/_family.md"
+    [ "$(grep -c '^## What you return' "$f" 2>/dev/null)" = 1 ] || return 1
+    awk '/^## What you return/{s=1; next} s && /^## /{exit} s' "$f" | grep -q 'Self-review' || return 1
+  done
+}
+check "the self-review rule is written once, in src/agents/_builder.md" \
+  '[ "$(grep -rl "$SR" "$ROOT/src" | sed "s|^$ROOT/||")" = "src/agents/_builder.md" ]'
+check "the self-review rule is carried into every commit-type agent with Edit" 'self_review_carried'
+check "the self-review rule stays out of fix:investigate, ci:debug, review, core and adorno" 'self_review_left_out'
+check "every commit-type family's What you return names the Self-review section" 'what_you_return_has_self_review'
+
 check "an imported skill only agents and areas name is kept out of the model's list" \
   'grep -q "^disable-model-invocation: true" "$ROOT"/dist/claude-plugin/skills/test-driven-development/SKILL.md'
 check "typescript-pro is area-only: kept out of the model's list" \
