@@ -32,8 +32,10 @@ command.
      half done is a 🟠 anchored on its line there. `review-merge` → the verdict.
    - A 🔴 or a 🟠 → fixed in the flow: each by `by_area.<a>.fix` (or `.perf` for a performance point; null: `fallbacks.perf`, agent and its `skills`) of its file's
      area (`pr-areas --files <file>`; nit: `fallbacks.nit`, missing test: `fallbacks.test`), with that area's `skills`, tests and lint green, committed with `commit_skill`;
-     then the reviewers again on the new commits and on the points still open. Two fix rounds at most, each opened
-     with `run-mark round <n> 2 "<what is left>"` (the run's journal frames it).
+     each fix agent self-reviews its fix before it returns (the rule it carries); the session copies that
+     `Self-review` section into `status.md`, as is, and runs `run-mark self-review <agent> <N>` (`<N>` from its
+     `Fixed (N):`); then the reviewers again on the new commits and on the points still open. Two fix rounds at most,
+     each opened with `run-mark round <n> 2 "<what is left>"` (the run's journal frames it).
    - Before each review and each fix round: `run-budget <id>`. A non-zero exit → stop here, nothing pushed nor opened: the
      commits stay in the worktree on their branch (`Stopped: budget`, orchestration › Runs).
    - Clean (no 🔴 nor 🟠, the request met) → **ready for review**. The cap reached with a 🔴 or 🟠 still open:
