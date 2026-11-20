@@ -37,11 +37,11 @@ jobs:
           {
             echo "\`bin/kit import --check\` found imports that are behind their \`ref\` (run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID). Move them with \`bin/kit import --update\`, in its own PR."
             echo
-            echo '```'
-            cat "$RUNNER_TEMP/check.txt"
-            echo '```'
+            # an indented code block, not a fence: upstream names and paths cannot close it (CR is a line end too)
+            tr '\r' '\n' < "$RUNNER_TEMP/check.txt" | sed 's/^/    /'
           } > "$RUNNER_TEMP/body.md"
-          number=$(gh issue list --state open --json number,title \
+          # only the bot's own issue: anyone can open one with this title on a public repo
+          number=$(gh issue list --state open --app github-actions --search "\"$TITLE\" in:title" --json number,title \
             | jq -r --arg t "$TITLE" '[.[] | select(.title == $t)][0].number // empty')
           if [ -n "$number" ]; then
             gh issue edit "$number" --body-file "$RUNNER_TEMP/body.md"
