@@ -130,11 +130,13 @@ bench/report --label mongodb-balanced --against mongodb-deep
 ```
 
 `--only ID` (repeat it for several) keeps the cases that route to that reviewer, gives it the brief of a full run, and
-starts neither the other reviewers nor `agent:adorno`: a call instead of a case run (0.19 USD against about 1.30 USD
-for `agent:review:mongodb` on its tier, measured on 2026-11-16). The report says at the top that the run is partial.
+starts neither the other reviewers nor `agent:adorno`: a call instead of a case run. For `agent:review:mongodb` on its
+tier, the call alone cost 0.17 USD on 2026-11-20, where a case run cost 1.27 USD on average (43.25 USD for 34 case
+runs, [docs/models.md › Measuring](../docs/models.md#measuring)). The report says at the top that the run is partial.
 Its "Per reviewer" table is the measure; the merged review, the verdict and what `agent:adorno` keeps are not
-measured, and there is no control: repeat more instead, and compare two runs that differ by one thing (the model, or
-the commit of the prompts).
+measured, and there is no control: repeat more instead, and compare two partial runs that differ by one thing (the
+model, or the commit of the prompts). Against a full run, `--against` still prints the overall and per case
+differences: only its "Per reviewer" column means something there.
 
 ## Findings to grade
 
