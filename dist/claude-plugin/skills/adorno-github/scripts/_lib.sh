@@ -27,7 +27,7 @@ if [ "$REGISTRY" = "$(kit_home)/registry.json" ]; then
 fi
 
 # Exit codes shared by every script (documented in SKILL.md).
-E_USAGE=2 E_UNREGISTERED=3 E_POLICY=4 E_LEVEL=5
+E_USAGE=2 E_UNREGISTERED=3 E_POLICY=4 E_LEVEL=5 E_BUDGET=7
 
 # A Conventional Commit header: the title of a PR, which a squash merge turns into the commit on the base branch.
 CC_TITLE_RE='^(feat|fix|perf|refactor|test|docs|style|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: .+'
