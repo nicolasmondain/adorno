@@ -121,6 +121,13 @@ A conflict is settled at the highest level and reported.
 - Every loop has a cap (3 build rounds, 2 fix rounds after review); beyond it, stop and report in `status.md`. Within
   the cap, a round that fails again climbs: the middle rounds at `effort: high`, the last one tier up (`deep` →
   `frontier`), through the delegation's `model` and `effort` (`adorno-run-plan` › Loops).
+- A run's cost cap (`max_usd`, set once at `run-begin`): before each delegation, each loop round and each batch of
+  parallel agents, `adorno-github/scripts/run-budget <id>`. Exit 7 → launch nothing more; `status.md` opens with
+  `Stopped: budget` (spent, cap, step reached, what is done, what is left, and how to resume: `run-begin … --max-usd
+  <N>` with the same `--dir`, then the workflow), then `run-end <id> stopped`. No ship after it: the work stays in the
+  worktree, on its branch. Under `--unattended` too, the whole run stops, its reason at the top of the report. A
+  workflow called by another reuses the open run, so its cap. The check runs between steps: a batch already launched
+  finishes, so a run overshoots by one batch at most.
 - GitHub only through the `adorno-github` skill (scripts); a repo that your local config does not declare (`repos`,
   `workspaces`) is never handled.
 

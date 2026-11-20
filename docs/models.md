@@ -97,7 +97,8 @@ Every run measures itself: `run-end` writes `usage.json` in the run folder (dura
 really ran on, its tokens by kind and its cost from `repos.yaml` › `prices`) and a line to
 `~/.adorno/runs/usage.jsonl`. For a past session: `adorno-github/scripts/run-usage collect --session <id> --since
 <ISO> --until <ISO>`. The source is the Claude Code transcripts; Codex and Gemini expose no session id to the shell,
-so their runs record the duration only (`source: unavailable`).
+so their runs record the duration only (`source: unavailable`). The same measure, taken during a run, enforces its
+cap: `run-budget` against `max_usd` ([setup › Permissions](setup.md#4-permissions)).
 
 Before changing a tier for good, take a real task with a check (a test that passes, a review that holds), run it on
 both models, and compare their `usage.json`. Keep a mix of models only if it beats the best single model on cost per

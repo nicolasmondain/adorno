@@ -242,6 +242,14 @@ Two runs of the same session on the same repo: the strictest wins, and the scrip
 runs are read there, and only there. The real cap remains the repo's `max_level`: the agent declares the
 mode and level of its run, `max_level` and `permissions.deny` bound them.
 
+**A cost cap.** `max_usd` maps a workflow id to USD, in any scope (`repos.yaml` › `defaults` sets the workflows that
+launch many agents; `local/adorno.yaml` overrides it). `run-begin` fixes it once, like the level: the smallest cap of
+the workflow over the run's repos, replaced by `--max-usd N` (the resume command) or removed by `--max-usd off` (for
+a tool whose cost cannot be measured: Codex, Gemini). A `--watch` run has none. Before each delegation, loop round and
+batch of parallel agents, the session runs `run-budget <id>`; code 7 (cap reached, a model with no price, cost not
+measurable) stops the run: `status.md` opens with `Stopped: budget` and how to resume, nothing is shipped. The check
+runs between steps: a batch already launched finishes, so a run can overshoot its cap by one batch.
+
 **The default rules.** `repos.yaml` installs Claude Code rules that forbid direct write commands:
 `gh pr comment|review|merge|close`, `gh issue comment|create`, `gh release`, and modification of the registry and
 the runs. `git push`, `gh pr create|edit` and `gh api` have no native rule: a native rule would win over the guard,
