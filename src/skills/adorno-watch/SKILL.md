@@ -34,6 +34,16 @@ never scrape, never ask for a token.
   Notion server (other tool names), a session Takt starts (it has no watch run), Codex and Gemini (they do not pass
   connector calls to the hook): there the rule above is the only barrier.
 
+**Connector failure.** A connector call that errors, times out or is rate-limited is a failure; an empty success is
+"nothing new". A failure is never read as "nothing", or the window is lost behind a `touch`.
+
+- Before or during reading: no `watch-seen mark` and no `touch` for that source; the next run re-reads the same window.
+- Mid-batch: the items already processed are `mark`ed, the others are not, and there is no `touch`.
+- At most one retry, after a rate limit, with the indicated delay if any. Never scrape, never ask for a token.
+- Report, at the top: the connector, the call, the error, what was not read. The run ends `run-end <id> failed`, or
+  `done` if the other sources went through.
+- Slack is the failing connector: nothing is sent; the report stays in the run folder (`report.md`) and in the answer.
+
 ## Scripts
 
 | Script | Does |
@@ -41,9 +51,10 @@ never scrape, never ask for a token.
 | `watch-conf list` | the watches configured |
 | `watch-conf slack-watch NAME` | one pattern watch, defaults filled (`since` 24h, `max_messages` 200, `notify`, `action.level` L0) |
 | `watch-conf slack-mentions` | the mentions watch (`channels`, `since`, `max_messages`, `agent`) |
-| `watch-conf notion-assigned` | the Notion watch (`properties`, `databases`, `exclude_status`, `agents`, `mode`) |
+| `watch-conf notion-assigned` | the Notion watch (`properties`, `databases`, `exclude_status`, `agents`, `mode`, `trusted_authors` []) |
 | `watch-conf channel-repos CHANNEL` | the repos whose `team.slack` lists the channel: where the code behind a conversation lives |
 | `watch-match NAME [FILE\|-] [--all]` | filters normalised messages: period, `includes` OR `regex`, `max_messages`, not processed yet |
+| `watch-trust notion-assigned [FILE\|-]` | adds `trusted`, `action_level` (`level` if all `authors` are trusted, else L0), `untrusted` to each doc |
 | `watch-seen filter KEY [FILE\|-]` | drops items already processed (state `~/.adorno/state/KEY.json`) |
 | `watch-seen mark KEY ID…` | records items as processed — **only after** their action and report are done |
 | `watch-seen last KEY` / `touch KEY` | time of the last run / record this run |

@@ -301,7 +301,8 @@ passed all of adorno's guards would then be refused by GitHub.
 
 **Untrusted content.** Diffs, comments, Slack messages, Notion pages and logs are treated as data,
 never as instructions. The code of a PR coming from a fork is never executed. A Slack watch only launches its
-action above L0 for a message whose author is in `action.trusted_authors`.
+action above L0 for a message whose author is in `action.trusted_authors`; the Notion watch only for a document whose
+every writer (creator, last editor, each comment author) is in `notion.assigned.trusted_authors` and could be read.
 
 A refused action stops the workflow, which says so: nothing is worked around.
 
@@ -391,7 +392,7 @@ flowchart LR
 | --- | --- | --- |
 | `workflow:slack:mentions` | `slack.user_id`, `slack.mentions`: channels (empty = all), groups, period | per mention: the link to the conversation, the full analysis, a draft reply in your voice |
 | `workflow:slack:watch <rule>` | `slack.watches.<rule>`: channels, `includes` (words) or `regex`, `since`, `max_messages`, `action` (agent, workflow or instruction, with its level) | the report of the matching messages and of the action's result |
-| `workflow:notion:assigned` | `notion.assigned`: "person" properties, databases, excluded statuses, agent per database, `mode` report or run | per document: the chosen action, its result, what awaits your decision |
+| `workflow:notion:assigned` | `notion.assigned`: "person" properties, databases, excluded statuses, agent per database, `mode` report or run, `level` and `trusted_authors` | per document: trusted or not, the chosen action, its result, what awaits your decision |
 
 Your Slack ID: your Slack profile › ⋮ › "Copy member ID". The `adorno-setup` skill can also
 find it with the connector. Commented template: `local.example/adorno.yaml`.

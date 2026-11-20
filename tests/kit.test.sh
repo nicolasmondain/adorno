@@ -104,6 +104,12 @@ bad "user info in a route" $'  ghost/repo:\n    models: {routes: {r: {base_url: 
 bad "a key in a route" $'  ghost/repo:\n    models: {routes: {r: {base_url: "https://x.example/v1", model: m, api_key: k}}}' "never put a key here"
 bad "a non-model key variable" $'  ghost/repo:\n    models: {routes: {r: {base_url: "https://x.example/v1", model: m, api_key_env: GH_TOKEN}}}' "must name a model key variable"
 bad "a non-delegable agent on a route" $'  ghost/repo:\n    models: {routes: {r: {base_url: "https://x.example/v1", model: m}}, agents: {agent:adorno: {route: r}}}' "not .delegable."
+bad "slack trusted_authors that is not a list" $'  ghost/repo: {}\nslack:\n  user_id: U0\n  watches:\n    w: {channels: ["#x"], includes: [a], action: {trusted_authors: U1}}' "trusted_authors must be a list of non-empty strings"
+bad "slack trusted_authors with an empty id" $'  ghost/repo: {}\nslack:\n  user_id: U0\n  watches:\n    w: {channels: ["#x"], includes: [a], action: {agent: agent:adorno, trusted_authors: ["U1", ""]}}' "trusted_authors must be a list of non-empty strings"
+bad "notion trusted_authors that is not a list" $'  ghost/repo: {}\nnotion:\n  assigned: {trusted_authors: N1}' "trusted_authors must be a list of non-empty strings"
+bad "notion trusted_authors with an empty id" $'  ghost/repo: {}\nnotion:\n  assigned: {trusted_authors: ["N1", ""]}' "trusted_authors must be a list of non-empty strings"
+printf 'owner: {name: T, github: t, language: fr}\nrepos:\n  ghost/repo: {}\nslack:\n  watches:\n    w: {channels: ["#x"], includes: [a], action: {agent: agent:adorno, trusted_authors: [U1]}}\nnotion:\n  assigned: {trusted_authors: [N1, N2]}\n' >"$OKP/adorno.yaml"
+expect_exit 0 "trusted_authors lists of ids are accepted" -- env ADORNO_LOCAL="$OKP" "${KIT[@]}" check
 
 echo "install into a repo"
 A="$TMP/code/acme/app"
