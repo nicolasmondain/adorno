@@ -200,6 +200,9 @@ def render(score, comparison):
              + ", prompts "
              f"{sha}, {len(score['cases'])} cases, {run['repeat']} repeat(s), routing of `{run['repo']}`, "
              f"started {run['started_at']}.", ""]
+    if run.get("only"):  # .get: a baseline or a run scored before --only has no such key
+        lines += [f"> **Partial run** (`--only {' '.join(run['only'])}`): the other reviewers and agent:adorno did "
+                  "not run. Only \"Per reviewer\" measures something; the rest holds these reviews alone.", ""]
     if run["skipped"]:
         skipped = ", ".join(f"{s['case']} #{s['n']}" for s in run["skipped"])
         lines += [f"> **Incomplete run**: the budget of {money(run['budget_usd'])} stopped it before {skipped}.", ""]

@@ -59,7 +59,7 @@ bench/run --label tiers --budget-usd 30               # every case
 bench/report --label tiers                            # the report again, after grading extras for instance
 ```
 
-`bench/run [--case ID]… [--model X] [--agent-model ID=X]… [--repeat N] [--label NAME] [--budget-usd N] [--repo owner/repo] [--parallel N]`
+`bench/run [--case ID]… [--model X] [--agent-model ID=X]… [--only ID]… [--repeat N] [--label NAME] [--budget-usd N] [--repo owner/repo] [--parallel N]`
 builds a throwaway workspace per case (`base/` committed, then `change.diff`), starts every reviewer `pr-areas` picks
 (`--parallel` at a time), merges with `review-merge`, runs a missing or invalid review once more, then starts
 `agent:adorno` on the merged review. It ends with the report. Everything goes to `bench/results/<label>/`, ignored by
@@ -119,6 +119,22 @@ does not weigh on one side only. The reviewers that did not move are the control
 the others', the difference is noise, not the model. A reviewer holds on the cheaper model when it loses none of its
 own expected findings, its precision drops by 10 points at most, it raises at most one false alarm more on the clean
 cases, no more of its reviews are rejected, and one call costs at least 30 % less.
+
+To measure one reviewer without paying for the others, start it alone:
+
+```sh
+bench/run --label mongodb-deep --only agent:review:mongodb --repeat 3 --budget-usd 5
+bench/run --label mongodb-balanced --only agent:review:mongodb --repeat 3 --budget-usd 3 \
+  --agent-model agent:review:mongodb=sonnet
+bench/report --label mongodb-balanced --against mongodb-deep
+```
+
+`--only ID` (repeat it for several) keeps the cases that route to that reviewer, gives it the brief of a full run, and
+starts neither the other reviewers nor `agent:adorno`: a call instead of a case run (0.19 USD against about 1.30 USD
+for `agent:review:mongodb` on its tier, measured on 2026-11-16). The report says at the top that the run is partial.
+Its "Per reviewer" table is the measure; the merged review, the verdict and what `agent:adorno` keeps are not
+measured, and there is no control: repeat more instead, and compare two runs that differ by one thing (the model, or
+the commit of the prompts).
 
 ## Findings to grade
 

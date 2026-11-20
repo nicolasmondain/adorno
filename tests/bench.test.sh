@@ -244,6 +244,28 @@ if [ -f "$REAL" ]; then
   expect_exit 2 "--agent-model with no model" -- "$B/run" --case docs-only --agent-model agent:review:code --label x --results "$R"
   expect_exit 2 "--agent-model with an agent that does not play in the bench" -- "$B/run" --case docs-only --agent-model agent:fix:patch=m --label x --results "$R"
 
+  # --only: docs-only does not route to mongodb, and adorno-false-positives brings its reviews (no reviewer runs)
+  expect_exit 0 "--only" -- "$B/run" --case docs-only --case mongo-n-plus-one --case adorno-false-positives --only agent:review:mongodb --budget-usd 0.5 --label only --results "$R"
+  has_line "its report says the run is partial" '> **Partial run** (`--only agent:review:mongodb`)'
+  has_line "and scores that reviewer on its own review" '| `agent:review:mongodb` | 1 | 100% (1/1) | 100% |'
+  if grep -q "leaves out docs-only, adorno-false-positives" "$TMP/err"; then ok "the cases left out are named"; else ko "the cases left out are named" "$(cat "$TMP/err")"; fi
+  calls
+  expect_jq "starts that reviewer alone, with the brief of a full run and the whole budget" \
+    'length == 1 and (.[0] | .[index("--agent") + 1] == "adorno:adorno-agent-review-mongodb" and (.[index("--max-budget-usd") + 1] | tonumber) == 0.5 and (.[1] | test("Files of your area: server/services/orders.test.ts, server/services/orders.ts\n") and test("Skills of your areas: typescript-pro, test-driven-development\n")))'
+  out="$(cat "$R/only/run.json")"
+  expect_jq "the run records it, on the cases that route to it" '.only == ["agent:review:mongodb"] and .cases == ["mongo-n-plus-one"] and (.runs | map(.case)) == ["mongo-n-plus-one"]'
+  D="$R/only/mongo-n-plus-one/1"
+  out="$(cat "$D/run.json")"
+  expect_jq "a reviewer left out is not a missing review" '.missing == [] and .invalid == [] and .verdict == "fix" and .routing_ok'
+  if [ "$(ls "$D/meta")" = "mongodb.json" ] && [ "$(ls "$D/reviews")" = "mongodb.json" ] && [ ! -e "$D/review-final.json" ]; then
+    ok "nothing of the other reviewers or of agent:adorno is written"
+  else
+    ko "nothing of the other reviewers or of agent:adorno is written" "$(find "$D" -type f | head -20)"
+  fi
+  expect_exit 2 "--only with an unknown reviewer" -- "$B/run" --case mongo-n-plus-one --only agent:review:nope --label x --results "$R"
+  expect_exit 2 "--only with agent:adorno" -- "$B/run" --case mongo-n-plus-one --only agent:adorno --label x --results "$R"
+  expect_exit 2 "--only on cases that do not route to it" -- "$B/run" --case docs-only --only agent:review:mongodb --label x --results "$R"
+
   printf '{"nope":true}' >"$FK/back.first.json"
   expect_exit 0 "a malformed review" -- "$B/run" --case clean-refactor --label retry --results "$R"
   out="$(cat "$R/retry/clean-refactor/1/meta/back.json")"
