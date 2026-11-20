@@ -127,9 +127,9 @@ A conflict is settled at the highest level and reported.
   `--unattended` is passed on. Before each delegation, each loop round and each batch of parallel agents,
   `adorno-github/scripts/run-budget <id>`. Any non-zero exit → launch nothing more (7: the cap; 2: the run ended or
   expired; else the check itself failed, its stderr quoted in `status.md`); `status.md` opens with `Stopped: budget`
-  (spent, cap, step reached, what is done, what is left, and how to resume: rerun the workflow with `--max-usd <N>`,
-  the budget for the rest of the run counted from the resume, or `off`; the session writes this command and never
-  runs it itself), then `run-end <id> stopped`. No ship after it: the work stays in the worktree, on its branch. A
+  (7) or `Stopped: budget check` (any other code), then spent, cap, step reached, what is done, what is left, and how
+  to resume: rerun the workflow, with `--max-usd <N>` (the budget for the rest of the run, counted from the resume)
+  or `off` after a 7; the session writes this command and never runs it itself. Then `run-end <id> stopped`. No ship after it: the work stays in the worktree, on its branch. A
   workflow called by another reuses the open run, so its cap. The check runs between steps: a batch already launched
   finishes, so a run overshoots by one batch at most.
 - GitHub only through the `adorno-github` skill (scripts); a repo that your local config does not declare (`repos`,
