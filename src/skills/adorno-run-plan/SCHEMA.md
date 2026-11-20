@@ -4,7 +4,7 @@
 flowchart TD
   T["Trigger: workflow:feature:build unrolls a run-plan.yaml from agent:core:router"] --> RD["Read run-plan.yaml and spec.md; level = the run's, never widened"]
   RD --> ST["Next step"]
-  ST --> BG{"run-budget id: exit 7?"}
+  ST --> BG{"run-budget id: non-zero exit?"}
   BG -->|"no"| P{"parallel step?"}
   BG -->|"yes"| BS["Stop: status.md opens with Stopped: budget, run-end id stopped"]
   P -->|"yes"| PA["Start the agents in the same turn"]
@@ -15,12 +15,12 @@ flowchart TD
   RV -->|"no"| LP{"Loop evaluator: tests?"}
   MG --> VD{"Verdict"}
   VD -->|"block"| ESC["Stop the loop, escalate"]
-  VD -->|"fix"| BF{"run-budget before the round: exit 7?"}
+  VD -->|"fix"| BF{"run-budget before the round: non-zero exit?"}
   BF -->|"yes"| BS
   BF -->|"no"| FX["fix_with: same_agent fixes the findings, capped by max"]
   VD -->|"pass"| UP
   FX --> MG
-  LP -->|"failing"| BL{"run-budget before the round: exit 7?"}
+  LP -->|"failing"| BL{"run-budget before the round: non-zero exit?"}
   BL -->|"yes"| BS
   BL -->|"no"| RT["Send failing test/lint output back, up to max"]
   RT --> LP

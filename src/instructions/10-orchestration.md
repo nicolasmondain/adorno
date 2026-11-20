@@ -40,7 +40,8 @@ every workflow the run launches: nobody is there to answer, so the run never ask
   specialist of the area.
 - A real stop point (spec validation, a level beyond the run's, a refusal with code 4 or 5, L4, what the profile
   files under "to validate") is never decided on the owner's behalf: that item is skipped, the reason goes at the
-  top of the report, and the run goes on with the others.
+  top of the report, and the run goes on with the others; except a budget stop (orchestration › Runs), which ends the
+  whole run.
 - `--unattended` never widens a mode or a level: they are the ones the scheduler passed.
 
 **Runs.** A workflow that writes to GitHub starts with `adorno-github/scripts/run-begin --workflow <id>
@@ -121,11 +122,14 @@ A conflict is settled at the highest level and reported.
 - Every loop has a cap (3 build rounds, 2 fix rounds after review); beyond it, stop and report in `status.md`. Within
   the cap, a round that fails again climbs: the middle rounds at `effort: high`, the last one tier up (`deep` →
   `frontier`), through the delegation's `model` and `effort` (`adorno-run-plan` › Loops).
-- A run's cost cap (`max_usd`, set once at `run-begin`): before each delegation, each loop round and each batch of
-  parallel agents, `adorno-github/scripts/run-budget <id>`. Exit 7 → launch nothing more; `status.md` opens with
-  `Stopped: budget` (spent, cap, step reached, what is done, what is left, and how to resume: `run-begin … --max-usd
-  <N>` with the same `--dir`, then the workflow), then `run-end <id> stopped`. No ship after it: the work stays in the
-  worktree, on its branch. Under `--unattended` too, the whole run stops, its reason at the top of the report. A
+- A run's cost cap (`max_usd`, set once at `run-begin`): a `--max-usd N|off` in the workflow's input (the owner's
+  request or the scheduler's command line, never chosen by the session) goes to that workflow's `run-begin`, like
+  `--unattended` is passed on. Before each delegation, each loop round and each batch of parallel agents,
+  `adorno-github/scripts/run-budget <id>`. Any non-zero exit → launch nothing more (7: the cap; 2: the run ended or
+  expired; else the check itself failed, its stderr quoted in `status.md`); `status.md` opens with `Stopped: budget`
+  (spent, cap, step reached, what is done, what is left, and how to resume: rerun the workflow with `--max-usd <N>`,
+  the budget for the rest of the run counted from the resume, or `off`; the session writes this command and never
+  runs it itself), then `run-end <id> stopped`. No ship after it: the work stays in the worktree, on its branch. A
   workflow called by another reuses the open run, so its cap. The check runs between steps: a batch already launched
   finishes, so a run overshoots by one batch at most.
 - GitHub only through the `adorno-github` skill (scripts); a repo that your local config does not declare (`repos`,

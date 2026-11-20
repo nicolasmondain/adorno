@@ -5,10 +5,11 @@
 # since it started the way run-end does (run-usage collect over the run's session, from `started` to now) and writes
 # nothing: no usage.json, no status.md, no index line.
 # No cap: prints {capped: false, id, workflow, max_usd: null, reason}, exit 0. Else prints {capped: true, id, workflow,
-# max_usd, usd, remaining, unpriced, source, reason} and exits 7 (E_BUDGET) when the run must stop: usd >= max_usd; a
-# model with no price (unpriced non-empty: the cap cannot be guaranteed, price it in local/adorno.yaml › prices); or the
-# cost cannot be measured (source unavailable or error: no Claude Code session or transcript; `--max-usd off` at
-# run-begin is the explicit way to run uncapped). Unknown or expired ID: exit 2.
+# max_usd, usd, remaining, unpriced, source, stop, reason} and exits 7 (E_BUDGET) when the run must stop (stop: true):
+# usd >= max_usd; a model with no price (unpriced non-empty: the cap cannot be guaranteed, price it in
+# local/adorno.yaml › prices); or the cost cannot be measured (source unavailable or error: no Claude Code session or
+# transcript; `--max-usd off` at run-begin is the explicit way to run uncapped). Unknown or expired ID: exit 2.
+# Calls made through adorno-llm (an external endpoint, no transcript) are not counted.
 . "$(dirname "$0")/_lib.sh"
 
 id="${1:-}"
@@ -30,6 +31,7 @@ fi
 out="$(jq --argjson run "$run" '
   def money: "$\(. * 100 | round / 100)";
   (.totals.usd // null) as $usd | (.unpriced // []) as $unpriced | $run.max_usd as $max
+  | (.source != "claude-code" or ($unpriced | length) > 0 or $usd >= $max) as $stop
   | (if .source != "claude-code" then
        "cost cannot be measured (\(.reason // .source)): stop here;"
        + " `--max-usd off` at run-begin is the explicit way to run uncapped"
@@ -39,10 +41,11 @@ out="$(jq --argjson run "$run" '
      elif $usd >= $max then "over the cap: \($usd | money) spent of \($max | money)"
      else "under the cap: \($usd | money) spent of \($max | money)" end) as $reason
   | {capped: true, id: $run.id, workflow: $run.workflow, max_usd: $max, usd: $usd,
-     remaining: (if $usd == null then null else $max - $usd end), unpriced: $unpriced, source, reason: $reason}' \
+     remaining: (if $usd == null then null else $max - $usd end), unpriced: $unpriced, source, stop: $stop,
+     reason: $reason}' \
   <<<"$usage")"
 printf '%s\n' "$out"
-if jq -e '.source != "claude-code" or (.unpriced | length) > 0 or .usd >= .max_usd' <<<"$out" >/dev/null; then
+if jq -e .stop <<<"$out" >/dev/null; then
   log "run $id must stop: $(jq -r .reason <<<"$out")"
   exit "$E_BUDGET"
 fi

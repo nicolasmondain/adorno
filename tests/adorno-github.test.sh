@@ -177,6 +177,9 @@ expect_exit 0 "a run over two repos" -- B --repo acme/docs --repo acme/strict
 expect_jq "... keeps the smallest cap (acme/strict's 2 under the default 10), in the run file too" \
   ".max_usd == 2 and ($(jq .max_usd "$KH/runs/active/$(jq -r .id <<<"$out").json") == 2)"
 "$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "the same two repos in reverse order" -- B --repo acme/strict --repo acme/docs
+expect_jq "... the same smallest cap" '.max_usd == 2'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
 expect_exit 0 "a run over one repo" -- B --repo acme/docs
 expect_jq "... the default cap" '.max_usd == 10'
 "$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
@@ -211,25 +214,31 @@ expect_exit 0 "run-budget under the cap" -- "$S/run-budget" "$BID"
 # up to now: the 10:30 window's 111060 µUSD + claude-mystery-1 (2) + the haiku agent at 12:00 (47.8)
 expect_jq "... what was spent and what is left" \
   '.capped == true and .id != null and .workflow == "workflow:pr:review" and .max_usd == 99 and .source == "claude-code"
-   and (.usd * 1e6 | round) == 111110 and .remaining > 98 and .unpriced == []'
+   and (.usd * 1e6 | round) == 111110 and .remaining > 98 and .unpriced == [] and .stop == false'
 [ ! -e "$(jq -r .dir "$TMP/br.json")/usage.json" ] && [ -f "$KH/runs/active/$BID.json" ] \
   && ok "... writes nothing, the run stays open" || ko "... writes nothing, the run stays open"
 "$S/run-end" "$BID" >/dev/null
 BR --max-usd 0.1
 expect_exit 7 "run-budget over the cap" -- "$S/run-budget" "$BID"
-expect_jq "... says so" '.capped == true and .max_usd == 0.1 and .usd > 0.1 and .remaining < 0 and (.reason | test("over"))'
+expect_jq "... says so" '.capped == true and .max_usd == 0.1 and .usd > 0.1 and .remaining < 0 and (.reason | test("over")) and .stop == true'
 "$S/run-end" "$BID" >/dev/null
 reg "$ROOT/tests/fixtures/repos.json"
 BR --max-usd 99
 expect_exit 7 "run-budget with a model that has no price" -- "$S/run-budget" "$BID"
 expect_jq "... the cap cannot be guaranteed: the models listed, where to price them" \
-  '.unpriced == ["claude-mystery-1"] and .usd == null and .remaining == null and (.reason | test("prices"))'
+  '.unpriced == ["claude-mystery-1"] and .usd == null and .remaining == null and (.reason | test("prices")) and .stop == true'
 "$S/run-end" "$BID" >/dev/null
 expect_exit 0 "a capped run outside any session" -- "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs --max-usd 99
 BID="$(jq -r .id <<<"$out")"
 expect_exit 7 "run-budget cannot measure it" -- "$S/run-budget" "$BID"
 expect_jq "... unavailable, and --max-usd off named as the way to run uncapped" \
-  '.source == "unavailable" and .usd == null and (.reason | test("--max-usd off"))'
+  '.source == "unavailable" and .usd == null and (.reason | test("--max-usd off")) and .stop == true'
+"$S/run-end" "$BID" >/dev/null
+expect_exit 0 "a capped run whose usage cannot be read" -- env CLAUDE_CODE_SESSION_ID='bad id!' "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs --max-usd 99
+BID="$(jq -r .id <<<"$out")"
+expect_exit 7 "run-budget when run-usage fails" -- "$S/run-budget" "$BID"
+expect_jq "... an error, its message in the reason" \
+  '.source == "error" and .usd == null and (.reason | test("run-usage failed: .*session")) and .stop == true'
 "$S/run-end" "$BID" >/dev/null
 BR --max-usd off
 expect_exit 0 "run-budget on a run with no cap" -- "$S/run-budget" "$BID"

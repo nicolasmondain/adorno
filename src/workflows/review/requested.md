@@ -31,8 +31,9 @@ you), `auto` (submitted, never `APPROVE` if `allow_approve` is false).
    in the already open run (a subagent cannot launch others). PRs are independent: in batches
    of `max_parallel` (3 by default), launch in the same turn the specialists of all the PRs in the batch. Each PR has its
    own workspace and `reviews/` folder; from each PR, keep in context only its merged `review.json`
-   (`review-merge`) and Adorno's pass, never the raw reviews. Before each batch, `run-budget <id>`: exit 7 → no
-   further batch, the PRs not started are *skipped* (`Stopped: budget`, orchestration › Runs).
+   (`review-merge`) and Adorno's pass, never the raw reviews. Before each batch, `run-budget <id>`: a non-zero exit
+   → no further batch: the batch already launched goes to the end, Adorno's pass and its review included; the PRs not
+   started are *skipped* (`Stopped: budget`, orchestration › Runs).
 4. **Report** — a table sorted by urgency: PR (link), author, touched areas, reviewers called, verdict,
    number of points (🔴 / 🟠 / 🟡 / ❓), and the link to the pending review (or submitted in `auto`). In `report`, the command
    to create the pending review: `adorno-github/scripts/pr-review-submit owner/repo#N <review-final.json>`. Below the table, the deferred
