@@ -681,7 +681,7 @@ if [ -f "$REAL" ]; then
   expect_exit 0 "a repo replaces one role of an area" -- "$S/repo-conf" ovr/single
   expect_jq "the replaced role changes, its siblings keep the public value" \
     '.areas.back.build == "agent:feat:custom" and .areas.back.fix == "agent:fix:patch" and .areas.back.perf == null and (.areas.back.review | index("agent:review:back"))'
-  expect_jq "a -<skill> removes that skill from the list" '.areas.front.skills == ["impeccable"]'
+  expect_jq "a -<skill> removes that skill from the list" '.areas.front.skills | index("frontend-ui-engineering") | not'
   expect_exit 0 "a skill removed by the repo is not in pr-areas skills" -- "$S/pr-areas" ovr/single --files client/a.tsx
   expect_jq "... nor in the result" '(.skills | index("frontend-ui-engineering") | not) and .areas.front == ["client/a.tsx"]'
   expect_exit 0 "the workspace adds, the repo removes" -- "$S/repo-conf" ovr/layers
@@ -691,6 +691,7 @@ if [ -f "$REAL" ]; then
     '(.areas.back.review | index("agent:review:tests") | not) and (.areas.back.review | index("agent:review:back"))'
   expect_exit 0 "the workspace alone keeps its addition" -- "$S/repo-conf" ovr/plain
   expect_jq "no workspace match: public list unchanged" '(.areas.back.review | index("agent:review:extra") | not) and (.areas.back.review | index("agent:review:tests"))'
+  expect_jq "no front override: the default front skills include impeccable" '.areas.front.skills | index("impeccable")'
 
   expect_exit 0 "two auth files and one service file" -- "$S/pr-areas" ovr/plain --files x/auth/a.js x/auth/b.js server/services/c.js
   expect_jq "security has the most files but no build: build skips to back, fix stays security" \

@@ -507,6 +507,7 @@ git init -q -b main "$UP"; mkdir -p "$UP/skills/foo" "$UP/agents"
 printf -- '---\nname: foo\ndescription: Foo things.\n---\n\nDo foo.\n' >"$UP/skills/foo/SKILL.md"
 printf -- '---\nname: bar\ndescription: Bar reviewer.\n---\n\nReview bar.\n' >"$UP/agents/bar.md"
 printf 'readme\n' >"$UP/README.md"
+printf 'MIT\n' >"$UP/LICENSE"; printf 'notice\n' >"$UP/NOTICE.md"
 git -C "$UP" add -A; git -C "$UP" commit -q -m init
 upcommit() { git -C "$UP" add -A; git -C "$UP" commit -q -m "$1"; }
 mkdir -p "$IK/src/agents/review" "$IK/src/instructions"
@@ -523,6 +524,7 @@ expect_exit 1 "check before any import: exits 1" -- "${IKKIT[@]}" import --check
 check "it says not imported yet" 'grep -q "^up: not imported yet" <<<"$out"'
 expect_exit 0 "import from a file:// source" -- "${IKKIT[@]}" import
 check "it pins the upstream commit" 'grep -q "commit: $(git -C "$UP" rev-parse HEAD)" "$IK/kit.lock"'
+check "it carries the upstream LICENSE and NOTICE into vendor/<import>/" '[ -f "$IK/vendor/up/LICENSE" ] && [ -f "$IK/vendor/up/NOTICE.md" ]'
 expect_exit 0 "check right after the import: up to date" -- "${IKKIT[@]}" import --check
 check "it says up to date" 'grep -q "^up: up to date" <<<"$out"'
 printf 'more\n' >>"$UP/README.md"; upcommit readme
