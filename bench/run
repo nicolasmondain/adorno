@@ -86,7 +86,8 @@ def write_json(path, data):
 # ── tools: how to start one agent headless, and how to read what the tool reports ─────────────────────────────────
 # Claude Code. Verified on 2.1.325: --setting-sources project,local leaves the user's settings, instructions, agents
 # and hooks out; the sandbox confines Bash to the workspace and cuts the network, with no way out of it; dontAsk
-# refuses everything the allow list does not name, so Write and Edit only reach the run folder.
+# refuses everything the allow list does not name, so Write and Edit only reach the run folder. WebFetch and WebSearch
+# run outside the sandbox: they are closed by name, not left to dontAsk (agent:core:analyst declares them).
 CLAUDE_SETTINGS = {"autoMemoryEnabled": False,
                    "sandbox": {"enabled": True, "autoAllowBashIfSandboxed": True, "allowUnsandboxedCommands": False}}
 
@@ -104,7 +105,8 @@ def claude_command(agent, prompt, model, budget):
         cmd += ["--model", model]
     if budget is not None:
         cmd += ["--max-budget-usd", f"{budget:.4f}"]
-    return cmd + ["--allowedTools", "Bash", "Read", "Grep", "Glob", f"Edit({RUN_DIR}/**)"]
+    return cmd + ["--disallowedTools", "WebFetch", "WebSearch",
+                  "--allowedTools", "Bash", "Read", "Grep", "Glob", f"Edit({RUN_DIR}/**)"]
 
 
 def claude_parse(stdout):

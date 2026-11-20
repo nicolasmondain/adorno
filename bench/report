@@ -139,8 +139,9 @@ def compare_reviewers(new, old, shared):
 
 
 def compare(new, old):
+    # shortcut: analyst runs are not compared; add an analyst comparison once a baseline of kind analyst is saved
     shared = sorted(case_id for case_id in set(new["cases"]) & set(old["cases"])
-                    if new["cases"][case_id].get("kind") != "analyst")  # shortcut: analyst runs are not compared
+                    if new["cases"][case_id].get("kind") != "analyst")
     runs = case_runs(new) & case_runs(old)
     cases = []
     for case_id in shared:
