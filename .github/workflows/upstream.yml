@@ -1,0 +1,50 @@
+name: upstream
+
+# Once a week, `kit import --check` (writes nothing): an import that is behind its ref opens, or refreshes, one issue.
+# Imports stay manual: the owner moves them with `bin/kit import --update`, in its own PR.
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"  # Monday, 07:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e  # v6.8.0
+      - name: Open or refresh the issue when an import is behind
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: Imports are behind upstream
+        run: |
+          set +e
+          ./bin/kit import --check 2>&1 | tee "$RUNNER_TEMP/check.txt"
+          code=${PIPESTATUS[0]}
+          set -e
+          # 0: up to date. 3: a check failed (git, network, unreadable upstream): a red run, not an issue.
+          [ "$code" = 0 ] && exit 0
+          [ "$code" = 1 ] || exit "$code"
+          {
+            echo "\`bin/kit import --check\` found imports that are behind their \`ref\` (run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID). Move them with \`bin/kit import --update\`, in its own PR."
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/check.txt"
+            echo '```'
+          } > "$RUNNER_TEMP/body.md"
+          number=$(gh issue list --state open --json number,title \
+            | jq -r --arg t "$TITLE" '[.[] | select(.title == $t)][0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh issue create --title "$TITLE" --body-file "$RUNNER_TEMP/body.md"
+          fi
