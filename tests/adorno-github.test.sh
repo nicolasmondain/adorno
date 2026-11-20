@@ -1323,7 +1323,7 @@ echo "with_lock"
 cat >"$TMP/lock-test" <<EOF
 #!/usr/bin/env bash
 . "$S/_lib.sh"
-mkdir -p "\$(kit_home)/locks/dead.lock"; echo 999999 >"\$(kit_home)/locks/dead.lock/pid"
+mkdir -p "\$(kit_home)/locks"; echo 999999 >"\$(kit_home)/locks/dead.lock"
 with_lock dead true; echo "took over a dead holder's lock"
 steps() { false; echo "continued after a failing step"; }
 with_lock t steps
