@@ -13,7 +13,7 @@ f="$(state_dir)/$key.json"
 if [ ! -f "$f" ]; then
   # created whole then linked: `ln` fails if a parallel run got there first, so its marks are never truncated away
   printf '{"last_run": null, "seen": {}}\n' >"$f.$$.new"
-  ln "$f.$$.new" "$f" 2>/dev/null || true
+  ln "$f.$$.new" "$f" 2>/dev/null || [ -f "$f" ] || { rm -f "$f.$$.new"; die "cannot create $f"; }
   rm -f "$f.$$.new"
 fi
 shift 2
