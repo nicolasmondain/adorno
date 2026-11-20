@@ -18,7 +18,7 @@ flowchart LR
   LOC -->|install only| T
   T --> R["request"] --> W["workflow"]
   W --> PUB["publish in your name<br/>review:requested, slack:mentions"] --> PA["specialists<br/>area reviewers from pr-areas (PRs),<br/>core:analyst (Slack)"] --> AD(("agent:adorno<br/>verifies, decides, writes")) --> OUT["pending review, draft reply,<br/>report to you"]
-  W --> COD["change code<br/>feature:build, issue:fix, ci:red,<br/>review:received"] --> BU["builders<br/>by commit type"] --> SH["workflow:pr:ship<br/>commit, review gate, PR"]
+  W --> COD["change code<br/>feature:build, feature:refactor, issue:fix, ci:red,<br/>review:received"] --> BU["builders<br/>by commit type"] --> SH["workflow:pr:ship<br/>commit, review gate, PR"]
 ```
 
 `bin/kit` (`check`, `build`, `install`) turns the repo into the tool's files. `build` never reads `local/`, so `dist/` stays public;
