@@ -16,7 +16,7 @@ A run opened by `run-begin` gets a journal, one event per line:
 | each write that reached GitHub | the write scripts |
 | each review finding, as produced then as merged, and the merged verdict | `review-merge` |
 | each refusal or question of the guard | the guard hook |
-| the steps of a run plan and the fix rounds | the session, with `run-mark` |
+| the steps of a run plan, the fix rounds, and each builder's self-review (its agent, how many points it fixed) | the session, with `run-mark` |
 | your prompts and the session's replies, each tool call, each question asked to you, each subagent starting and returning | Claude Code hooks, installed by `bin/kit install` |
 | each model response: model, tokens, thinking time; the texts the models wrote | a reading of Claude Code's transcripts, started by `run-end` |
 

@@ -242,6 +242,17 @@ Two runs of the same session on the same repo: the strictest wins, and the scrip
 runs are read there, and only there. The real cap remains the repo's `max_level`: the agent declares the
 mode and level of its run, `max_level` and `permissions.deny` bound them.
 
+**A cost cap.** `max_usd` maps a workflow id to USD, in any scope (`repos.yaml` › `defaults` sets the workflows that
+launch many agents; `local/adorno.yaml` overrides it). `run-begin` fixes it once, like the level: the smallest cap of
+the workflow over the run's repos, replaced by `--max-usd N` or removed by `--max-usd off` (for a tool whose cost
+cannot be measured: Codex, Gemini), passed in the workflow's input by you or the scheduler, never by the session. A
+`--watch` run has none. Before each delegation, loop round and batch of parallel agents, the session runs `run-budget
+<id>`; any non-zero exit (7: cap reached, a model with no price, cost not measurable; 2: the run ended or expired; else
+the check failed) stops the run: `status.md` opens with `Stopped: budget` and how to resume (rerun the workflow with
+`--max-usd N`, the budget for the rest counted from the resume, or `off`), nothing is shipped. The check runs between
+steps: a batch already launched finishes, so a run can overshoot its cap by one batch; calls made through `adorno-llm`
+are not counted.
+
 **The default rules.** `repos.yaml` installs Claude Code rules that forbid direct write commands:
 `gh pr comment|review|merge|close`, `gh issue comment|create`, `gh release`, and modification of the registry and
 the runs. `git push`, `gh pr create|edit` and `gh api` have no native rule: a native rule would win over the guard,
@@ -536,5 +547,6 @@ Clone the repo, copy `local/` over (or point `ADORNO_LOCAL` to a synced folder),
 | "not declared in your local config" (code 3) | the repo is in no `repos` or `workspaces` | `adorno-setup` repo mode, then `bin/kit install` |
 | "allows up to L2" (code 5) | the repo's `max_level`, or the workflow's mode is too low | raise `max_level` or change mode |
 | "denies 'submit'" (code 4) | the repo's `permissions.deny` | remove the action from the list if intended |
+| "must stop" (code 7, `run-budget`) | the run reached its `max_usd`, a model has no price (`unpriced`), or the cost cannot be measured (no Claude Code session) | rerun the workflow with `--max-usd N` (the budget for the rest, counted from the resume), add the price in `local/adorno.yaml` › `prices` then `bin/kit install`, or run uncapped explicitly with `--max-usd off` |
 | "profile is not set up" | no `local/src/skills/adorno-profile/references/` | `adorno-setup` profile mode |
 | a repo of a folder-based workspace is not found | cloned after the install, or more than 2 levels below `paths` | rerun `bin/kit install`, or add it to `repos:` |

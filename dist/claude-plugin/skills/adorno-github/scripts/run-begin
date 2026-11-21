@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
 # Usage: run-begin --workflow ID --mode report|draft|pending|comment|auto --level L0..L3 --repo owner/repo [--repo …]
-#                  [--deny a,b] [--dry-run] [--dir PATH] [--ttl 2h]
+#                  [--deny a,b] [--dry-run] [--dir PATH] [--ttl 2h] [--max-usd N|off]
 #        run-begin --workflow ID --watch [--dir PATH] [--ttl 24h]
 # Starts a run: records what this workflow execution is granted, in ~/.adorno/runs/active/<id>.json, and creates its
 # run folder (PATH, e.g. <workspace>/.agent-run/review-<date>, else under ~/.adorno/runs/). Every write script reads
 # it (require_level): a run applies only to the repos it names (at least one); no run for a repo → L0, every write
 # there is refused; it counts only in the session that opened it (CLAUDE_CODE_SESSION_ID, set by Claude Code);
-# several runs of one session for a repo → the strictest wins. Prints {id, dir, level, deny, dry_run, repos, expires_at}.
+# several runs of one session for a repo → the strictest wins. Prints {id, dir, level, deny, dry_run, repos, max_usd,
+# expires_at}. max_usd: the run's cost cap, set once here (the smallest `max_usd` of this workflow over its repos; a repo
+# declared nowhere brings none), replaced by --max-usd N or removed by --max-usd off; null = no cap.
 # End with run-end. Also opens the run's journal (skill adorno-journal: `journal` in the output), private and always
 # under ~/.adorno/runs whatever PATH is, and prunes the old ones.
 # Modes have fixed floors: report → L0 and dry run; draft → the code goes out (commit, push, PR: workflow:pr:ship),
 # the conversation does not (reply, comment, resolve, rerequest, review, submit, ci_rerun denied).
 # --watch (workflow:slack:*, workflow:notion:assigned): a run that reads Slack and Notion and writes to GitHub nowhere
-# (report, L0, no repo). While it is open, the guard hook lets Slack and Notion tools read only, and send or draft to
-# your own DM only (slack.user_id).
+# (report, L0, no repo, no cost cap). While it is open, the guard hook lets Slack and Notion tools read only, and send
+# or draft to your own DM only (slack.user_id).
 . "$(dirname "$0")/_lib.sh"
 
-workflow="" mode="" level="" deny="" dry=false ttl="" dir="" watch=false; repos=()
+workflow="" mode="" level="" deny="" dry=false ttl="" dir="" watch=false max_usd=""; repos=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --workflow) workflow="${2:-}"; shift 2 ;;
@@ -28,12 +30,14 @@ while [ $# -gt 0 ]; do
     --repo) split_repo "${2:-}"; repos+=("$REPO"); shift 2 ;;
     --ttl) ttl="${2:-}"; shift 2 ;;
     --dir) dir="${2:-}"; shift 2 ;;
+    --max-usd) max_usd="${2:-}"; shift 2 ;;
     *) die "unknown option $1" "$E_USAGE" ;;
   esac
 done
 [[ "$workflow" =~ ^[a-z0-9:_-]+$ ]] || die "--workflow: a workflow id like workflow:pr:review" "$E_USAGE"
 if $watch; then
-  [ -z "$mode$level$deny" ] && [ "${#repos[@]}" -eq 0 ] || die "--watch: no --mode, --level, --deny or --repo" "$E_USAGE"
+  [ -z "$mode$level$deny$max_usd" ] && [ "${#repos[@]}" -eq 0 ] \
+    || die "--watch: no --mode, --level, --deny, --repo or --max-usd" "$E_USAGE"
   [ -n "$(session_id)" ] || die "--watch: only inside a Claude Code session (CLAUDE_CODE_SESSION_ID): the guard enforces it per session" "$E_USAGE"
   mode="report" level="L0"
 fi
@@ -48,6 +52,24 @@ $watch || [ "${#repos[@]}" -gt 0 ] || die "--repo owner/repo is required (once p
 # a watch run ends on its TTL where nobody can confirm run-end: long enough for its launched workflows (it grants nothing)
 if [ -z "$ttl" ]; then if $watch; then ttl="24h"; else ttl="2h"; fi; fi
 [[ "$ttl" =~ ^[0-9]+[mh]$ ]] || die "--ttl: like 90m or 6h" "$E_USAGE"
+case "$max_usd" in
+  off) cap="null" ;;
+  "")
+    # the smallest cap of this workflow over the run's repos; an undeclared repo (exit 3) brings none
+    cap="null"
+    for r in ${repos[@]+"${repos[@]}"}; do
+      rc=0; conf="$(repo_conf "$r" 2>"$(work_dir)/run-begin-err")" || rc=$?
+      [ "$rc" = 0 ] || [ "$rc" = "$E_UNREGISTERED" ] || die "cost cap of $r: $(head -c 300 "$(work_dir)/run-begin-err")"
+      [ "$rc" = 0 ] || continue
+      cap="$(jq --argjson cap "$cap" --arg w "$workflow" \
+        '.max_usd[$w] as $c | if ($c | type) != "number" then $cap else [$cap, $c] | map(select(. != null)) | min end' \
+        <<<"$conf")"
+    done ;;
+  *)
+    [[ "$max_usd" =~ ^[0-9]+(\.[0-9]+)?$ ]] && jq -en --argjson v "$max_usd" '$v > 0' >/dev/null \
+      || die "--max-usd: a number of USD > 0, or off" "$E_USAGE"
+    cap="$max_usd" ;;
+esac
 
 case "$mode" in
   report) level="L0"; dry=true ;;
@@ -65,9 +87,10 @@ mkdir -p "$dir" "$(runs_dir)"
 case "$ttl" in *m) secs=$(( ${ttl%m} * 60 )) ;; *h) secs=$(( ${ttl%h} * 3600 )) ;; esac
 jq -n --arg id "$id" --arg w "$workflow" --arg m "$mode" --arg l "$level" --arg d "$deny" --argjson dry "$dry" \
   --arg dir "$dir" --arg journal "$journal" --arg session "$(session_id)" --argjson exp "$(( $(date +%s) + secs ))" \
-  --argjson watch "$watch" --args '
+  --argjson watch "$watch" --argjson cap "$cap" --args '
   {id: $id, session: $session, workflow: $w, mode: $m, level: $l, deny: ($d | split(",") | map(select(. != "")) | unique),
-   dry_run: $dry, repos: $ARGS.positional, dir: $dir, journal: $journal, started: (now | todate), expires: $exp}
+   dry_run: $dry, repos: $ARGS.positional, max_usd: $cap, dir: $dir, journal: $journal, started: (now | todate),
+   expires: $exp}
   + (if $watch then {watch: true} else {} end)' \
   ${repos[@]+"${repos[@]}"} >"$(runs_dir)/.$id.tmp"
 mv "$(runs_dir)/.$id.tmp" "$(runs_dir)/$id.json"
