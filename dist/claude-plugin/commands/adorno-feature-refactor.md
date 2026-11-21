@@ -16,7 +16,9 @@ Input: $ARGUMENTS
    1. the repo's `lint`, `typecheck` and `test` (`commands` from `pr-workspace` or `repo-conf`), the tests in one run
       with their JUnit reporter → `<run>/baseline/tests.xml` (without JUnit, `baseline/tests.txt` from the runner's
       own list of passing tests, one id per line). Any of them red: stop, `status.md` says why; never refactor on a
-      red base;
+      red base. Then `git status --porcelain` in the worktree must be empty (the reports go to the run folder): a
+      file the runner leaves (coverage, a default `junit.xml`, caches) → stop, `status.md` names them; their ignore
+      line is a `chore:` PR to the repo, outside this run, never a commit here;
    2. the measures before: each of spec § Measures, its command and value → `<run>/measures.md`;
    3. the perimeter's code no test exercises: `pr-areas owner/repo --files <perimeter>` → `by_area.<a>.qa` for a
       visible journey, else `fallbacks.test` (`agent:test:unit`) writes characterization tests, green on the
@@ -44,10 +46,14 @@ Input: $ARGUMENTS
    2. `adorno-github/scripts/refactor-gate owner/repo --dir <worktree> --base <baseline sha> --baseline
       <run>/baseline/tests.<xml|txt> --after <run>/slices/<n>/tests.<xml|txt>`, on the round's commits (it refuses a
       dirty working tree, and a `--base` that is not an ancestor of HEAD): exit 0 passes; exit 1 lists its
-      `violations`;
-   3. a refusal goes back to the agent like a failing test; the fix loop's commits pass the same gate;
+      `violations`; exit 2 proves nothing (dirty tree, `--base` not an ancestor, no test area, bad report);
+   3. a refusal goes back to the agent like a failing test; the fix loop's commits pass the same gate. Exit 2 is
+      never sent back as a refusal: a file the round's agent wrote and did not commit goes back to it to commit;
+      anything else stops the slice, `status.md` quotes the gate's message;
    4. the cap reached, or a slice that cannot stay green without changing behavior or the public API: stop, back to
-      `agent:core:intake`; `status.md` proposes `/adorno-feature-build <run folder>`.
+      `agent:core:intake`; `status.md` proposes `/adorno-feature-build <run folder>`. A move stopped because a test
+      mocks the old path (`agent:refactor:structure`, planner § Refactor): stop, `status.md` names the test and the
+      `test:` PR to merge first, then resume from step 2 (new baseline) with `/adorno-feature-refactor <run folder>`.
 5. **Ship** — the gate on the whole branch (same `--dir`, `--base` and `--baseline`, `--after` from the last
    commit) → `<run>/qa/refactor-gate.json`; the measures after, in `measures.md`; then
    `workflow:pr:ship owner/repo <branch> <worktree> <run folder>`, as `workflow:feature:build` step 5.

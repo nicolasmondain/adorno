@@ -60,7 +60,8 @@ command.
      from another commit;
    - a run with `qa/refactor-gate.json` (`workflow:feature:refactor`): after the last fix round, the tests again in
      the baseline's format and `refactor-gate --dir <worktree>` with the `base` of that JSON and the run's `baseline/` report, its
-     answer rewritten there; a refusal is a proof missing (draft, `Proof missing: behavior preserved`).
+     answer rewritten there; a refusal or an exit 2 (nothing proven) is a proof missing (draft, `Proof missing:
+     behavior preserved`).
    The media go out with the PR, never by hand: `pr-open` / `pr-edit … --attach <file>[#alt]` (`adorno-github`), in
    the `## Proof` section described in `workflow:pr:open` step 3.
 6. **No PR yet** → `pr_skill`, told whether the PR goes out ready or draft:
