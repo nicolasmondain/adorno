@@ -17,7 +17,7 @@ model: fable
 
 ## What you return
 
-A step that commits returns the commit (`<sha> fix(<module>): …`) with the cause in one sentence, the test that
+A step that commits (not `investigate`, which returns `diagnosis.md`) returns the commit (`<sha> fix(<module>): …`) with the cause in one sentence, the test that
 reproduces the bug and its red-then-green run, what you checked (full suite), and what you skipped and why; then the `Self-review` section (rule "Self-review, before you return" below).
 
 ## Specialty: investigate (L0, changes nothing)

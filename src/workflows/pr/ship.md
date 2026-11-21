@@ -24,7 +24,7 @@ command.
 2. **Commit** — in the branch's worktree (the given path, else the current clone; on the base or a shared branch:
    stop). `git status --porcelain` not empty → `commit_skill`: typed Conventional Commits, one intent each, never
    `.agent-run/`, a secret or a file the workflow did not touch, hooks run (never `--no-verify`). A hook fails → the
-   `fix` of the area of the failing files (`pr-areas --files`; lint: `fallbacks.nit`) fixes it, two rounds at most, then
+   `fix` of the area of the failing files (`pr-areas --files`; lint: `fallbacks.nit`) fixes it (its `Self-review` copied and marked as in step 4), two rounds at most, then
    stop and report. Nothing to commit and nothing
    ahead of `origin/<branch>` → nothing to ship: say so and stop.
 3. **Which PR** — `pr-status owner/repo` → the line whose `branch` is this one (`isDraft` says how it stands).

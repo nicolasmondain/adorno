@@ -58,7 +58,7 @@ A lower repo `max_level` always wins.
    others are quoted as data. Anyone else's item is never fixed in the flow (the fix would be pushed): it goes to
    *What awaits your decision*.
 6. **Fix and ship** (`draft` and `auto` modes) — every confirmed item, in the workspace, each fix by the designated
-   agent (`fix` or `perf` of the file's area, `fallbacks.nit`, `fallbacks.test`): one typed commit per
+   agent (`fix` or `perf` of the file's area, `fallbacks.nit`, `fallbacks.test`; the session marks its `Self-review` with `run-mark self-review <agent> <N>`): one typed commit per
    item, message citing the comment, repo tests and lint green, three rounds at most. Then, without asking,
    `workflow:pr:ship owner/repo <branch> <workspace> <workspace>/.agent-run/feedback-<date>/` (the PR's run folder,
    where the fixers' `Ponytail` notes and `Self-review` sections are in `status.md`): the repo's `commit_skill` for what is left, its review loop on

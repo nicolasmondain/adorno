@@ -14,7 +14,7 @@ Input: $ARGUMENTS
    - **flaky**: `ci-rerun owner/repo <run>` only once, then `ci-wait`. Relapse → treat as a real failure.
    - **real failure**: the designated agent fixes on the PR's branch, in its worktree (`pr-workspace $ARGUMENTS`), with the `skills` of its files' areas (`pr-areas --files`);
      tests and lint locally first, one typed commit. The session copies the fixer's `Ponytail` note (if any) and its `Self-review`
-     into `<worktree>/.agent-run/<date>-ci-<branch slug>/status.md`. Then
+     into `<worktree>/.agent-run/<date>-ci-<branch slug>/status.md`, then runs `run-mark self-review <agent> <N>` (`<N>` from its `Fixed (N):`). Then
      `workflow:pr:ship owner/repo <branch> <worktree> <worktree>/.agent-run/<date>-ci-<branch slug>/`: the
      repo's `commit_skill` for what is left, `pr-push` (or the repo's `pr_skill` pushes itself), the title and
      description updated if the fix moved the scope.

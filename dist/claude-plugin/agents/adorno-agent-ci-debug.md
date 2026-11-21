@@ -14,7 +14,7 @@ model: opus
 
 ## What you return
 
-A step that commits returns the commit (`<sha> ci(<workflow>): …`), the cause and the failing check, how you verified
+A step that commits (not `debug`, which returns `ci.md`) returns the commit (`<sha> ci(<workflow>): …`), the cause and the failing check, how you verified
 it (locally, then the CI run on the branch), what you skipped and why; then the `Self-review` section (rule "Self-review, before you return" below).
 
 ## Specialty: debug

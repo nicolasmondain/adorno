@@ -31,7 +31,7 @@ flowchart TD
 
 # Commit-type families: Self-review
 
-Every agent of a commit-type family (`feat`, `fix`, `perf`, `refactor`, `test`, `docs`, `ci`, `chore`) passes through the same step before it returns. `core`, `review` and `agent:adorno` do not.
+Every agent of a commit-type family (`feat`, `fix`, `perf`, `refactor`, `test`, `docs`, `ci`, `chore`) that commits (tools with `edit`; not `investigate` nor `debug`) passes through the same step before it returns. `core`, `review` and `agent:adorno` do not.
 
 ```mermaid
 flowchart TD

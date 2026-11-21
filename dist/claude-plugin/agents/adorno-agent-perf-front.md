@@ -34,9 +34,9 @@ the commit body. Then the `Self-review` section (rule "Self-review, before you r
 
 ## Self-review, before you return
 
-Once your tests, lint and typecheck are green, reread your own diff once: the commits of this step,
-`git diff <first commit of this step>^..HEAD`. The step made no commit: there is nothing to review, say so in
-`Checked:` and return `Fixed (0): none`.
+Once your tests, lint and typecheck are green, reread your own diff once: the commits **and** the working
+tree of this step, `git diff <first commit of this step>^`. No commit and a clean tree: there is nothing to review, say
+so in `Checked:` and return `Fixed (0): none`.
 
 Five checks, in this order:
 
@@ -59,6 +59,7 @@ Five checks, in this order:
 ## Self-review
 
 Checked: spec … · repo rules … · lean … · hygiene … · tests … (one line each)
-Fixed (N): <sha> what (one line each), or none
+Fixed (N): <sha> what (one line each), or none; N = the fix commits this pass made (a point corrected before your
+first commit is not counted), and the session marks it with `run-mark self-review <agent> <N>`
 Left on purpose: what, why (or none)
 ```
