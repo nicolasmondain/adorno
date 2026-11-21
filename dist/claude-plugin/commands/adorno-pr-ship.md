@@ -1,5 +1,5 @@
 ---
-description: Ends every workflow that touched code — commit (the repo's commit_skill), review and fix until no 🔴 or 🟠 is left and the change meets the request, its proof attached (test output, screenshots and videos of what a user sees), then the PR (the repo's pr_skill) opened ready for review, or pushed and updated when it is already open. No confirmation and no permission prompt, within the run's level. Last step of feature:build, issue:fix, ci:red, review:received and repo:onboard.
+description: Ends every workflow that touched code — commit (the repo's commit_skill), review and fix until no 🔴 or 🟠 is left and the change meets the request, its proof attached (test output, screenshots and videos of what a user sees), then the PR (the repo's pr_skill) opened ready for review, or pushed and updated when it is already open. No confirmation and no permission prompt, within the run's level. Last step of feature:build, feature:refactor, issue:fix, ci:red, review:received and repo:onboard.
 argument-hint: <owner/repo> <branch> [worktree path] [.agent-run folder]
 model: sonnet
 ---
@@ -29,7 +29,8 @@ command.
    - `pr-areas owner/repo` on that diff → their `review` agents, in parallel, read-only, each into `reviews/<agent>.json` (with the `skills` of its areas);
      then `agent:adorno` (situation 1) rechecks them and judges as the owner: the repo's rules and `context`, the
      profile, and **the request** — the run's `spec.md`, the issue or the plan: an acceptance criterion missed or
-     half done is a 🟠 anchored on its line there. `review-merge` → the verdict.
+     half done is a 🟠 anchored on its line there; a spec with § Invariants: one of them broken is a 🟠 too.
+     `review-merge` → the verdict.
    - A 🔴 or a 🟠 → fixed in the flow: each by `by_area.<a>.fix` (or `.perf` for a performance point; null: `fallbacks.perf`, agent and its `skills`) of its file's
      area (`pr-areas --files <file>`; nit: `fallbacks.nit`, missing test: `fallbacks.test`), with that area's `skills`, tests and lint green, committed with `commit_skill`;
      then the reviewers again on the new commits and on the points still open. Two fix rounds at most, each opened
@@ -54,7 +55,10 @@ command.
      counts as missing too;
    - still missing (no `tests.log`, or a visible change without clean media) → the PR goes out or stays **draft**,
      `Proof missing: <what>` first in its description and in `status.md`. A proof is never invented, nor taken
-     from another commit.
+     from another commit;
+   - a run with `qa/refactor-gate.json` (`workflow:feature:refactor`): after the last fix round, the tests again in
+     the baseline's format and `refactor-gate --dir <worktree>` with the `base` of that JSON and the run's `baseline/` report, its
+     answer rewritten there; a refusal is a proof missing (draft, `Proof missing: behavior preserved`).
    The media go out with the PR, never by hand: `pr-open` / `pr-edit … --attach <file>[#alt]` (`adorno-github`), in
    the `## Proof` section described in `workflow:pr:open` step 3.
 6. **No PR yet** → `pr_skill`, told whether the PR goes out ready or draft:
@@ -62,9 +66,10 @@ command.
    - a repo skill: run it in the worktree, as it is written. It may push and run `gh pr create` itself: inside the
      run the guard lets `git push origin <branch>` and `gh pr create` through (never forced, never the base, at the
      run's level). Then `pr-status owner/repo` again: no PR for the branch → stop and report what the skill did;
-     its description has no `## Proof`, misses a source of the run's `refs.json` (`## Sources`), the ponytail notes
-     of `status.md` (under Impact / Risks) or a marker of `pr-shortcuts` (`## Shortcuts`, all in `workflow:pr:open`
-     step 3; `workflow:pr:open` step 1 does not run here, so write the whole branch's diff first:
+     its description has no `## Proof`, no `## Behavior preserved` (a run with `qa/refactor-gate.json`), misses a
+     source of the run's `refs.json` (`## Sources`), the ponytail notes of `status.md` (under Impact / Risks) or a
+     marker of `pr-shortcuts` (`## Shortcuts`, all in `workflow:pr:open` step 3; `workflow:pr:open` step 1 does not
+     run here, so write the whole branch's diff first:
      `git diff origin/<base>...HEAD > <run>/branch.diff`, then `pr-shortcuts <run>/branch.diff`) → `agent:adorno`
      appends what is missing and publishes it with `pr-edit owner/repo#N "<its title>" <file> [--refs
      <run>/refs.json [--withhold <url>]…] --attach …`; opened as draft while the verdict is clean and the proof
@@ -75,7 +80,8 @@ command.
      proof to `qa/`, and takes the new ponytail notes of `status.md` into account. The scope moved (a new What or
      How, a new risk, a verification that no longer matches, a marker of `pr-shortcuts` added or gone), new proof or
      a new ponytail note → new title and description in English, in the owner's voice (`adorno-voice`), keeping the
-     current `## Sources`, `## Shortcuts` redone from the whole branch (rewrite `<run>/branch.diff` with
+     current `## Sources` and `## Behavior preserved` (its gate proof refreshed from `qa/refactor-gate.json`),
+     `## Shortcuts` redone from the whole branch (rewrite `<run>/branch.diff` with
      `git diff origin/<base>...HEAD`, run `pr-shortcuts <run>/branch.diff`, never only the new commits), published
      by `pr-edit owner/repo#N "<title>" <file> [--refs <run>/refs.json [--withhold <url>]…] [--attach <new media>]…`
      (`--refs` whenever the run has one). Unchanged → nothing. A repo skill: run it in update mode (it receives
