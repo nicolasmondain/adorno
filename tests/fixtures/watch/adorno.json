@@ -14,5 +14,5 @@
     },
     "mentions": {"channels": ["#team-app"]}
   },
-  "notion": {"assigned": {"properties": ["Owner"], "mode": "run"}}
+  "notion": {"assigned": {"properties": ["Owner"], "mode": "run", "level": "L2", "trusted_authors": ["N1", "N2"]}}
 }

@@ -102,6 +102,7 @@ repos:                                 # a specific repo, or a glob (`acme/docs-
       external: false                  # nothing goes to an external model for this repo (routes ignored)
       agents: {agent:review:security: frontier}
     voice: {formality: formal}         # public documentation: more formal register
+    max_usd: {workflow:pr:review: 5}   # a run's cost cap (USD), over repos.yaml's; run-begin --max-usd N|off overrides
     context:
       - "Public documentation: examples use obvious placeholders only, never real data."
     areas:                             # roles per code area, added to repos.yaml › areas (`-x` removes x;
@@ -112,6 +113,8 @@ repos:                                 # a specific repo, or a glob (`acme/docs-
 
 prices:                                # $ per million tokens, merged over repos.yaml › prices (run-end's cost line)
   claude-sonnet-5: { input: 2, cache_write_5m: 2.5, cache_write_1h: 4, cache_read: 0.2, output: 10 }  # an older model you still run
+  # a routed model, by the id its transcripts carry (else unpriced, and a capped run stops); placeholder rates: use your provider's
+  # deepseek/deepseek-v4.1-flash-1017: { input: 0.1, cache_write_5m: 0.1, cache_write_1h: 0.1, cache_read: 0.01, output: 0.4 }
 
 slack:                                 # workflow:slack:watch and workflow:slack:mentions (Slack connector, read-only)
   user_id: U0123ABCD                   # your Slack ID: recipient of reports, target of mentions
@@ -146,7 +149,11 @@ notion:                                # workflow:notion:assigned (Notion connec
       "Roadmap": workflow:spec:new
       "Bugs": workflow:issue:fix
     mode: report                       # report: analysis and plan · run: launches the agent or the workflow
-    level: L0                          # permission level in run mode
+    level: L0                          # permission level in run mode, for trusted documents only
+    trusted_authors: [0a1b2c3d-…]      # Notion user IDs; a document with any other writer (creator, page history from
+                                       # creation to now, comment author) or not read fully (a history with any part
+                                       # missing, a truncated discussion, content shown from another page or
+                                       # database whose history was not read the same way): runs at L0
 
 journal:                               # the journal of every run (skill adorno-journal), private, under ~/.adorno/runs
   reasoning: false                     # true: also copy the models' reasoning when the tool's transcripts hold it

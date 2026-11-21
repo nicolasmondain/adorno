@@ -10,6 +10,7 @@ adorno is a portable, reusable agent setup. Agents, workflows and skills are wri
 | an instruction valid in all projects | `src/instructions/NN-topic.md` (concatenated in name order) |
 | an agent | `src/agents/<type>/<specialty>.md` → `agent:<type>:<specialty>`; `<type>` = a Conventional Commit type, or `core`, `review`; outside a family: `src/agents/adorno.md` → `agent:adorno` |
 | a rule shared by a family | `src/agents/<type>/_family.md` (merged before each specialty; `{{specialty}}` and `{{family}}` are replaced in it) |
+| a rule shared by every agent that commits | `src/agents/_builder.md` (body only; merged after the specialty into each agent of a commit-type family whose `tools` include `edit`) |
 | a workflow | `src/workflows/<domain>/<action>.md` → `workflow:<domain>:<action>`; `{{args}}` = the input |
 | an on-demand know-how | `src/skills/<name>/SKILL.md` (+ `scripts/`, `references/`) |
 | a diagram of an agent family, workflow domain or skill | `SCHEMA.md` in that folder (mermaid only; ignored by `bin/kit` as an item and not shipped to `dist/`) |

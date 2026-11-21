@@ -5,7 +5,7 @@
 # tests/bench.test.sh declares that repo with the public areas and presets only (repos.yaml › areas, `use: [node,
 # mongodb]`: the cases are a Node.js + MongoDB codebase), which is what CI checks;
 # on your machine, pass a repo your registry declares to see what your personal layer changes.
-# Prints a JSON array, one entry per case:
+# A case of kind analyst (no change.diff) is left out. Prints a JSON array, one entry per case:
 #   {case, ok, areas: {want, got}, review: {want, got}, skills_missing, routed}
 # `areas` and `review` must be the same sets; `routing.skills` must be included in the skills picked; `routed` is
 # the full pr-areas output. Exits 1 when a case diverges, 2 on wrong usage, 3 when the repo is not declared.
@@ -31,7 +31,9 @@ while [ $# -gt 0 ]; do
   shift 2
 done
 [ -d "$cases" ] || die "no such folder: $cases" 2
-[ -n "$only" ] || only="$(for d in "$cases"/*/; do [ ! -f "$d/case.json" ] || basename "$d"; done)"
+[ -n "$only" ] || only="$(for d in "$cases"/*/; do
+  [ ! -f "$d/case.json" ] || [ "$(jq -r '.kind // ""' "$d/case.json")" = analyst ] || basename "$d"
+done)"
 
 results=""
 while IFS= read -r id; do

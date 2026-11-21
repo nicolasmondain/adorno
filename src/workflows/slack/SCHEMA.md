@@ -9,13 +9,15 @@ flowchart TD
   SE["Slack connector (read-only): messages mentioning user_id or groups -> mentions.json"]
   FL["watch-seen filter slack-mentions"]
   EM{"Anything new?"}
-  TC["watch-seen touch, one-line report, end"]
+  TC["watch-seen touch (no connector failure), one-line report, end"]
   DRY{"--dry-run?"}
   AN["agent:core:analyst per mention, batches of 3 -> id/analysis.md"]
   RP["agent:adorno drafts reply in owner voice -> id/reply.md (never posted)"]
   SD["One message per mention to the owner only: link, analysis, draft"]
-  MK["watch-seen mark + touch"]
+  MK["watch-seen mark + touch, only if no connector call failed"]
+  FAIL["Connector failure: no mark for the unread items, no touch, report at the top with the --since replay, report.md only"]
   IN --> CF --> SE --> FL --> EM
+  SE -->|"any connector call: error, timeout, rate limit"| FAIL
   EM -->|"no"| TC
   EM -->|"yes"| DRY
   DRY -->|"yes: list only"| TC
@@ -31,7 +33,7 @@ flowchart TD
   RD["Slack connector (read-only): channel history -> messages.json"]
   MT["watch-match name messages.json -> matches.json"]
   EM{"Any match?"}
-  TC["Short report, watch-seen touch, end"]
+  TC["Short report, watch-seen touch (no connector failure), end"]
   BIG{"More than 20 matches?"}
   ASK["Ask before launching actions"]
   DRY{"--dry-run?"}
@@ -39,9 +41,11 @@ flowchart TD
   AG["agent: the agent, read-only unless level allows"]
   WF["workflow: runs at action_level (L0 if author not trusted)"]
   PM["prompt only: agent:core:analyst"]
-  MK["watch-seen mark successes + touch"]
+  MK["watch-seen mark successes + touch, only if no connector call failed"]
   RP["report.md, sent to the owner only per notify"]
+  FAIL["Connector failure: no mark for the unread items, no touch, report at the top with the --since replay, report.md only"]
   IN --> CF --> RD --> MT --> EM
+  RD -->|"any connector call: error, timeout, rate limit"| FAIL
   EM -->|"no"| TC
   EM -->|"yes"| BIG
   BIG -->|"yes"| ASK --> DRY

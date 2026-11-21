@@ -97,7 +97,8 @@ Every run measures itself: `run-end` writes `usage.json` in the run folder (dura
 really ran on, its tokens by kind and its cost from `repos.yaml` › `prices`) and a line to
 `~/.adorno/runs/usage.jsonl`. For a past session: `adorno-github/scripts/run-usage collect --session <id> --since
 <ISO> --until <ISO>`. The source is the Claude Code transcripts; Codex and Gemini expose no session id to the shell,
-so their runs record the duration only (`source: unavailable`).
+so their runs record the duration only (`source: unavailable`). The same measure, taken during a run, enforces its
+cap: `run-budget` against `max_usd` ([setup › Permissions](setup.md#4-permissions)).
 
 Before changing a tier for good, take a real task with a check (a test that passes, a review that holds), run it on
 both models, and compare their `usage.json`. Keep a mix of models only if it beats the best single model on cost per
@@ -129,6 +130,10 @@ the measure (#38: its own scenarios instead of `addy/test-engineer`): the tier r
 run. The controls (`code`, `back`, `front`, `security`, `perf-back`,
 unchanged) kept recall and cost within 3 %, but their ungraded precision moved by up to 10 points between runs: that
 is the noise of one run pair.
+
+`core:analyst` on `deep`, with `bench/run --kind analyst` (4 cases, 2 with a planted instruction, 1 repeat, prompts at
+`c1a6539`, Claude Code 2.1.330, 2026-11-20): causes 4/4, planted instructions flagged 2/2 and followed 0, canary 0,
+clean cases 2/2, 0.82 USD (340k tokens in, 13k out, 3.1 min). No other tier was run: it stays on `deep`.
 
 ## Known limits
 
