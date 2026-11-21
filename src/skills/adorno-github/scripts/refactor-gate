@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Usage: refactor-gate owner/repo --base SHA --baseline REPORT --after REPORT [--dir PATH]
 # Read-only proof that a refactor kept the behavior: compares the test reports taken at --base (baseline) and at HEAD
-# (after), and the commits of base..HEAD in the git repo at PATH (default: the current directory).
-# Test files come from the registry: a path of an area built by an `agent:test:*` agent (pr-areas), never a glob here.
+# (after), and the commits of base..HEAD in the git repo at PATH (default: the current directory). It proves commits:
+# --base must be an ancestor of HEAD, and the tracked files must hold no uncommitted change.
+# Test files come from the registry: a path of an area built by an `agent:test:*` agent (pr-areas), never a glob here;
+# a repo with no such area (sub-areas included) is refused, never gated without its file rules.
 # A report whose first non-blank character is `<` is JUnit XML (read with python3: id `classname::name`, passing = no
 # failure, error or skipped child); anything else is a plain list, one passing test id per line, blank lines ignored.
 # Refuses (violations[]):
@@ -12,7 +14,8 @@
 #   test-failing           a failure or error in a JUnit after
 # Prints JSON {ok, base, head, report: junit|list (the after's format), green (null for a plain list after: the test
 # command's exit code says it), tests: {baseline, after} (passing ids), violations: [{rule, file?, commit?, test?,
-# status?}]}. Exit 0 pass, 1 refused, 2 usage, 3 unregistered repo.
+# status?}]}. Exit 0 pass, 1 refused, 2 usage (bad arguments or report, a --base that is not an ancestor of HEAD,
+# uncommitted changes, no test area: nothing was proven), 3 unregistered repo.
 . "$(dirname "$0")/_lib.sh"
 
 usage="usage: refactor-gate owner/repo --base SHA --baseline REPORT --after REPORT [--dir PATH]"
@@ -30,11 +33,20 @@ done
 [ -n "$base" ] && [ -n "$baseline" ] && [ -n "$after" ] || die "$usage" "$E_USAGE"
 [ -f "$baseline" ] || die "baseline report not found: $baseline" "$E_USAGE"
 [ -f "$after" ] || die "after report not found: $after" "$E_USAGE"
-repo_conf "$REPO" >/dev/null
+conf="$(repo_conf "$REPO")"
+# the file rules need a test area (pr-areas units: top-level areas and their sub-areas, roles inherited)
+jq -e '[.areas // {} | to_entries[] | select(.key != "always") | .value, (.value.sub // {} | .[])]
+       | any((.build // "") | startswith("agent:test:"))' >/dev/null <<<"$conf" \
+  || die "$REPO has no area built by an agent:test:* agent (areas.<area>.build in your local config): no file can be told a test file" "$E_USAGE"
 git -C "$dir" rev-parse --git-dir >/dev/null 2>&1 || die "not a git repository: $dir" "$E_USAGE"
+# git refuses an option as --base too; this names the cause and keeps the value out of git's options
 case "$base" in -*) die "--base is not a commit: $base" "$E_USAGE" ;; esac
 base="$(git -C "$dir" rev-parse --verify -q "$base^{commit}")" || die "--base is not a commit of $dir: $base" "$E_USAGE"
 head="$(git -C "$dir" rev-parse HEAD)"
+git -C "$dir" merge-base --is-ancestor "$base" HEAD \
+  || die "--base $base is not an ancestor of HEAD in $dir: rebased? capture the baseline again" "$E_USAGE"
+[ -z "$(git -C "$dir" status --porcelain --untracked-files=no)" ] \
+  || die "uncommitted changes in $dir: commit the round before the gate (it proves commits, not the working tree)" "$E_USAGE"
 
 tmp="$(work_dir)/gate-$$"; mkdir -p "$tmp"; trap '_journal_exit $? "$tmp"' EXIT
 : >"$tmp/tests"

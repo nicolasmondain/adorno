@@ -937,6 +937,10 @@ if [ -f "$REAL" ]; then
   expect_exit 1 "a renamed test file is refused" -- gate mv "$TMP/gate-base.txt" "$TMP/gate-green.xml"
   expect_jq "... under its old path" '.violations == [{rule: "test-file-changed", file: "src/a.test.js", status: "renamed"}]'
 
+  gate_repo del; git -C "$G/del" rm -q src/a.test.js; git -C "$G/del" commit -qm "test: drop the test"
+  expect_exit 1 "a deleted test file is refused" -- gate del "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  expect_jq "... test-file-changed deleted" '.violations == [{rule: "test-file-changed", file: "src/a.test.js", status: "deleted"}]'
+
   gate_repo add; gate_commit add "test: cover b" src/b.test.js 'test(4)'
   expect_exit 0 "a test: commit that adds a new test file passes" -- gate add "$TMP/gate-base.txt" "$TMP/gate-green.xml"
 
@@ -957,6 +961,20 @@ if [ -f "$REAL" ]; then
     '.green == false and ([.violations[] | [.rule, .test, .status // null]] | sort) == [["test-failing", "src/a.test.js::subtracts", null], ["test-lost", "src/a.test.js::subtracts", "failed"]]'
   expect_exit 1 "an error on a test absent from the baseline is refused" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-error.xml"
   expect_jq "... test-failing only" '.green == false and .violations == [{rule: "test-failing", test: "src/b.test.js::new"}]'
+  # an id reported twice (a retry, two suites) keeps its worst status, whatever the order
+  sed 's|</testsuite>|<testcase classname="src/a.test.js" name="subtracts"><failure message="retry"/></testcase></testsuite>|' \
+    "$TMP/gate-green.xml" >"$TMP/gate-dup-failed.xml"
+  sed 's|</testsuite>|<testcase classname="src/a.test.js" name="subtracts"><skipped/></testcase></testsuite>|' \
+    "$TMP/gate-green.xml" >"$TMP/gate-dup-skipped.xml"
+  sed 's|</testsuite>|<testcase classname="src/a.test.js" name="subtracts"/></testsuite>|' "$TMP/gate-green.xml" >"$TMP/gate-dup-passed.xml"
+  expect_exit 1 "an id passed then failed is refused" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-dup-failed.xml"
+  expect_jq "... failed wins: test-lost failed and test-failing" \
+    '.green == false and ([.violations[] | [.rule, .test, .status // null]] | sort) == [["test-failing", "src/a.test.js::subtracts", null], ["test-lost", "src/a.test.js::subtracts", "failed"]]'
+  expect_exit 1 "an id passed then skipped is refused" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-dup-skipped.xml"
+  expect_jq "... skipped wins: test-lost skipped" \
+    '.green == true and .violations == [{rule: "test-lost", test: "src/a.test.js::subtracts", status: "skipped"}]'
+  expect_exit 0 "an id passed twice passes" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-dup-passed.xml"
+  expect_jq "... counted once" '.tests == {baseline: 2, after: 3}'
 
   printf '<testsuites><testcase' >"$TMP/gate-broken.xml"
   expect_exit 2 "a JUnit report that does not parse is a usage error" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-broken.xml"
@@ -966,7 +984,23 @@ if [ -f "$REAL" ]; then
   expect_exit 2 "a missing report file" -- gate ok "$TMP/gate-base.txt" "$TMP/none.xml"
   expect_exit 2 "a base that is not a commit" -- "$S/refactor-gate" acme/gate --base deadbeef --dir "$G/ok" --baseline "$TMP/gate-base.txt" --after "$TMP/gate-green.xml"
   expect_exit 2 "a base that looks like an option" -- "$S/refactor-gate" acme/gate --base --all --dir "$G/ok" --baseline "$TMP/gate-base.txt" --after "$TMP/gate-green.xml"
+  grep -qF -- "--base is not a commit: --all" "$TMP/err" && ok "... refused by the option guard, before git" || ko "... refused by the option guard, before git" "$(cat "$TMP/err")"
   expect_exit 3 "an unregistered repo" -- "$S/refactor-gate" acme/nope --base "$GB" --dir "$G/ok" --baseline "$TMP/gate-base.txt" --after "$TMP/gate-green.xml"
+
+  gate_repo dirty; printf 'test(9)\n' >"$G/dirty/src/a.test.js"
+  expect_exit 2 "uncommitted changes are a usage error (the gate proves commits)" -- gate dirty "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  grep -q "uncommitted changes" "$TMP/err" && ok "... and the refusal says so" || ko "... and the refusal says so" "$(cat "$TMP/err")"
+
+  gate_repo anc; gate_commit anc "refactor(a): first try" src/a.js 'module.exports = 3'; GB="$(git -C "$G/anc" rev-parse HEAD)"
+  git -C "$G/anc" reset -q --hard HEAD~1; gate_commit anc "refactor(a): second try" src/a.js 'module.exports = 4'
+  expect_exit 2 "a base that is not an ancestor of HEAD is a usage error" -- gate anc "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  grep -q "not an ancestor of HEAD" "$TMP/err" && ok "... and the refusal says so" || ko "... and the refusal says so" "$(cat "$TMP/err")"
+
+  # a local layer re-pointing every test area's build: no file can be recognized as a test, the gate must not pass
+  jq '.repos = {"acme/gate": {areas: {tests: {build: "agent:feat:back"}, e2e: {build: "agent:feat:back"}}}}' "$REAL" >"$TMP/gate-notest.json"
+  reg "$TMP/gate-notest.json"; GB="$OKB"
+  expect_exit 2 "a repo without an area built by agent:test:* is a usage error" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  grep -q "agent:test:" "$TMP/err" && ok "... naming the missing setting" || ko "... naming the missing setting" "$(cat "$TMP/err")"
   reg "$ROOT/tests/fixtures/repos.json"
 else
   ko "refactor-gate tests need dist/ — run bin/kit build first"
