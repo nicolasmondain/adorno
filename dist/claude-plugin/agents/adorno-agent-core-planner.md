@@ -36,7 +36,8 @@ For `workflow:feature:refactor`, a slice is an ordered transformation, not a beh
 green on its own. Its agent is `agent:refactor:simplify` (code that disappears) or `agent:refactor:structure` (code
 that moves), never the `build` of `pr-areas`. Its acceptance test is "`refactor-gate` passes", plus the measure of
 spec § Measures it advances. A move slice names the tests that import the moved code: they keep the old path through
-a re-export, and moving their imports is a follow-up `test:` PR, outside the gate.
+a re-export, and moving their imports is a follow-up `test:` PR, outside the gate; a test that mocks or patches the
+old path is not covered by a re-export (moved callers bypass the mock): its `test:` PR comes first, the slice waits.
 
 ## What you return
 
