@@ -120,8 +120,8 @@ results are local, not committed.
 | `review:tests` | 4/4 → 4/4 (own severity 4/4 → 3/4) | 50 % → 61 % | 0 → 0 | -61 % | balanced |
 | `review:mongodb` | 4/4 → 4/4 | 83 % → 68 % | n/a | -61 % | deep |
 
-`review:mongodb` fails the precision bound (-14 points: index questions outside the diff, plaintext tokens already in
-the base, a wrong Express 5 claim). On `test-asserts-nothing` (run 1), `review:tests` on sonnet raised its own
+`review:mongodb` failed the precision bound (-14 points: index questions outside the diff, plaintext tokens already in
+the base, a wrong Express 5 claim); it was measured again on a tightened prompt, below. On `test-asserts-nothing` (run 1), `review:tests` on sonnet raised its own
 expected finding as a blocker where the case accepts major (over-rating, 1 occurrence in 4; deep rated it major both
 runs). It did not change that run's merged verdict, already `block` from `review:ponytail`, and `agent:adorno` (deep)
 re-rates every finding before anything is posted. The remaining risk is that a 🔴 can start a fix loop. Not decided by the measure: `review:ponytail` stays on `deep` (decided with its prompt rescope),
@@ -130,6 +130,31 @@ the measure (#38: its own scenarios instead of `addy/test-engineer`): the tier r
 run. The controls (`code`, `back`, `front`, `security`, `perf-back`,
 unchanged) kept recall and cost within 3 %, but their ungraded precision moved by up to 10 points between runs: that
 is the noise of one run pair.
+
+**`review:mongodb` again, on a tightened prompt.** Every false positive of the measure above was a `question` or a
+`minor` on what the reviewer had not verified. Its prompt now says what is out of its review (code the diff does not
+change, what the workspace does not show, the fix it proposes, the other areas) and which severity a cost read from
+the code gets. Measured alone, with `bench/run --only agent:review:mongodb`, on the 6 cases that route to it, 3 repeats
+(18 reviews per run), Claude Code 2.1.330, 2026-11-20: the old prompt (as of `1bba2b0`), then the new one. The four
+runs cost 8.87 USD. The grades of the 10 unplanned findings were validated by the owner. Precision is the mean of the
+three repeats' precision (`bench/score`), not the ratio of the summed counts.
+
+| Prompt, model | Own recall | Own severity | Matched / false positives | Precision | Cost per call |
+| --- | --- | --- | --- | --- | --- |
+| old, opus | 6/6 | 3/6 | 22 / 3 | 89 % | 0.18 USD |
+| old, sonnet | 6/6 | 3/6 | 18 / 10 | 64 % | 0.07 USD |
+| new, opus | 6/6 | 6/6 | 20 / 0 | 100 % | 0.17 USD |
+| new, sonnet | 6/6 | 6/6 | 17 / 1 | 94 % | 0.07 USD |
+
+On the new prompt, sonnet holds: no own finding lost, precision -6 points (bound: -10), no review rejected, a call
+59 % cheaper. The tier stays `deep` until the owner moves it. What this measure does not say:
+
+- The same 6 cases served to write the rules and to measure them, so the numbers are optimistic. The prompt was fixed
+  before the new runs and not tuned after them.
+- With 18 reviews, one finding weighs about 5 points. Sonnet raised one test remark outside its area, graded valid:
+  graded invalid, the drop would have been -10.3 points, past the bound.
+- The merged review was not measured (`--only` starts no other reviewer). On `auth-missing-check`, sonnet stayed
+  silent once in three, where it used to repeat the finding of `review:back`.
 
 ## Known limits
 

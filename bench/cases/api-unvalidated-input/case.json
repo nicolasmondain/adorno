@@ -68,7 +68,8 @@
         "not deterministic",
         "unstable pages",
         "not stable",
-        "no (defined|stable|fixed|guaranteed)"
+        "no (defined|stable|fixed|guaranteed)",
+        "tie-?breaker"
       ],
       "valid": true,
       "note": "sort on createdAt alone has no tie-breaker: with skip, tied contacts can be repeated or missed across pages, defeating the stated goal of reading every contact"
@@ -80,7 +81,9 @@
         22
       ],
       "keywords": [
-        "in-memory sort"
+        "in-memory sort",
+        "in memory",
+        "no index definition"
       ],
       "valid": true,
       "note": "skip cost grows with an unbounded offset and no index on { accountId, createdAt } is declared: deep pages are a scale risk the PR opens"

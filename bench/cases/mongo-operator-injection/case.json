@@ -87,7 +87,8 @@
       "keywords": [
         "No index on",
         "collection scan",
-        "COLLSCAN"
+        "COLLSCAN",
+        "with no index"
       ],
       "valid": true,
       "note": "new query on accounts.apiToken with no index anywhere in the repo, on an unauthenticated route; a unique index also guarantees one account per token"
@@ -215,6 +216,18 @@
       ],
       "valid": false,
       "note": "the deepEqual on the full body already fails if apiToken is returned"
+    },
+    {
+      "file": "server/routes/account.ts",
+      "lines": [
+        22,
+        22
+      ],
+      "keywords": [
+        "Projection omits"
+      ],
+      "valid": false,
+      "note": "two claims already graded: the default _id of a projection is fine (restyle of working code), and express ^5 forwards a rejected async handler to the error handler"
     }
   ]
 }
