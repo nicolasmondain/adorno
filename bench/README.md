@@ -103,9 +103,10 @@ A baseline holds scores, tokens, costs, model names and the sha of the prompts, 
 never overwritten. The owner creates and commits it, or an agent does on their explicit request.
 
 The current reference is `2026-11-tiers`: prompts `1bba2b0`, each agent on its default tier, the 19 cases, 3
-repeats, Claude Code 2.1.329. Its precision counts the findings that were not graded yet when it was saved (123). A
-later run scored after more grading gains precision from the grades alone, so compare precision only on the same
-grades: after a round of grading, score the reference run again and save it under a new name.
+repeats, Claude Code 2.1.329. Its precision counts the findings that were not graded yet when it was saved (123 in
+the review cases, 2 in the `agent:adorno` cases). A later run scored after more grading gains precision from the
+grades alone, so compare precision only on the same grades: after a round of grading, score the reference run again
+and save it under a new name.
 
 ## Compare a tier per reviewer
 
@@ -149,12 +150,11 @@ Measured on 2026-11-20 with Claude Code 2.1.329, each agent on its default tier,
 reviewers and 19 `agent:adorno` passes per repeat), `--parallel 3`: **53.63 USD** and 1 h 56 for 3 repeats, so about
 18 USD and 40 minutes per repeat. `agent:adorno` is 40 % of it (21.57 USD over 57 passes).
 
-The first measure, on 2026-11-14 with Claude Code 2.1.325 on `mongo-n-plus-one` alone, as it routed then (6
-reviewers, and `agent:adorno`), gave **1.53 USD** and 4 minutes, and projected about 18 USD and 50 minutes for
-the 13 cases of then ([decision 2](../docs/decisions/bench.md)); #39 and #31 have changed the routing since. On
-your side, measure one case first. Always pass `--budget-usd`: no case starts once the spent amount plus the dearest
-case so far would exceed it, what is left is split over the calls (over the reviewers of a round, then all of it to
-`agent:adorno`), and the report says at the top what was skipped. The budget relies on the cost the tool reports.
+The first measure, on one case only, is in [decision 2](../docs/decisions/bench.md); #39 and #31 have changed the
+routing since. On your side, measure one case first. Always pass `--budget-usd`: no case starts once the spent amount
+plus the dearest case so far would exceed it, what is left is split over the calls (over the reviewers of a round, then
+all of it to `agent:adorno`), and the report says at the top what was skipped. The budget relies on the cost the tool
+reports.
 
 ## A case for agent:adorno alone
 
