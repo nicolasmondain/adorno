@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Usage: watch-trust notion-assigned [DOCS_FILE|-]
+# Who may drive an action from a Notion document. Input: a JSON array of normalised docs, each with
+#   {id, …, authors: [user ids], authors_complete: bool}   (creator, page history authors, every comment author)
+# Output: the same array, each doc + {trusted, action_level, untrusted: [ids]}. A doc is trusted only if the connector
+# read every writer (authors_complete), there is at least one, and each is in notion.assigned.trusted_authors; else
+# its action runs at L0. `untrusted` names the writers missing from that list.
+. "$(dirname "$0")/_lib.sh"
+
+[ "${1:-}" = "notion-assigned" ] || die "usage: watch-trust notion-assigned [DOCS_FILE|-]" "$E_USAGE"
+src="${2:--}"
+conf="$("$WATCH_DIR/watch-conf" notion-assigned)"
+
+tmp="${TMPDIR:-/tmp}/adorno-watch-$$"; mkdir -p "$tmp"; trap 'rm -rf "$tmp"' EXIT
+if [ "$src" = "-" ]; then cat >"$tmp/docs.json"; else cp "$src" "$tmp/docs.json"; fi
+printf '%s' "$conf" >"$tmp/conf.json"
+jq -e 'type == "array" and all(.[]; (.authors | type) == "array" and all(.authors[]; type == "string")
+                                    and (.authors_complete | type) == "boolean")' \
+  "$tmp/docs.json" >/dev/null 2>&1 \
+  || die "input must be a JSON array of {id, authors: [ids], authors_complete}" "$E_USAGE"
+
+jq --slurpfile cc "$tmp/conf.json" '
+  $cc[0] as $c
+  | [ .[] | ((.authors - ($c.trusted_authors // [])) | unique) as $out
+      | (.authors_complete and (.authors | length) > 0 and $out == []) as $ok
+      | . + {trusted: $ok, action_level: (if $ok then $c.level else "L0" end), untrusted: $out} ]' "$tmp/docs.json"

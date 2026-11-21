@@ -13,7 +13,7 @@
     "parent": {"type": ["string", "null"], "pattern": "^session$"},
     "type": {"enum": ["run.begin", "run.end", "step.begin", "step.end", "agent.spawn", "agent.return", "model.turn",
                       "tool.call", "script.call", "guard", "message", "checkpoint", "finding", "loop", "github",
-                      "session"]},
+                      "session", "self-review"]},
     "dur": {"type": "integer", "minimum": 0},
 
     "workflow": {"type": "string"},
@@ -29,6 +29,7 @@
     "name": {"type": "string"},
     "round": {"type": "integer", "minimum": 1},
     "cap": {"type": "integer", "minimum": 1},
+    "fixed": {"type": "integer", "minimum": 0},
 
     "agent": {"type": "object", "required": ["id"], "additionalProperties": false,
               "properties": {"id": {"type": "string"}, "type": {"type": "string"}}},
@@ -93,6 +94,7 @@
     {"if": {"properties": {"type": {"const": "checkpoint"}}}, "then": {"required": ["question"]}},
     {"if": {"properties": {"type": {"const": "finding"}}}, "then": {"required": ["severity", "title", "stage"]}},
     {"if": {"properties": {"type": {"const": "loop"}}}, "then": {"required": ["round", "cap"]}},
+    {"if": {"properties": {"type": {"const": "self-review"}}}, "then": {"required": ["name", "fixed"]}},
     {"if": {"properties": {"type": {"const": "github"}}}, "then": {"required": ["action", "target"]}},
     {"if": {"properties": {"type": {"const": "session"}}},
      "then": {"required": ["kind"], "properties": {"kind": {"enum": ["start", "end", "compact"]}}}}

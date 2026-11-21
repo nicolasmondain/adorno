@@ -42,6 +42,7 @@ goes to stderr, the exit code is 0, and the run goes on.
 | `checkpoint` | the owner decides | `question`, `answer`, `by` |
 | `finding` | a review finding | `severity`, `title`, `stage` (`produced`, `merged`), `reviewer`, `file`, `line` |
 | `loop` | a fix and review round starts | `round`, `cap`, `reason` |
+| `self-review` | an agent that committed returned its `Self-review` | `name` (the agent's logical id, e.g. `agent:feat:back`), `fixed` (the count of its `Fixed (N):`) |
 | `github` | a write to GitHub | `action`, `target`, `url` |
 | `session` | the session starts, ends or compacts | `kind` (`start`, `end`, `compact`), `source`, `model`, `transcript` |
 
@@ -54,7 +55,7 @@ goes to stderr, the exit code is 0, and the run goes on.
 | the write scripts, after a write that reached GitHub | `github` |
 | `review-merge` | `finding`, as produced by each reviewer then as merged; a `message` of kind `verdict`, from `scripts` to `session` |
 | the guard (`guard_bash.py`) | `guard`, for a refusal or a question; what it lets through is not an event |
-| `adorno-github/scripts/run-mark`, called by the session that runs a plan | `step.begin`, `step.end`, `loop` |
+| `adorno-github/scripts/run-mark`, called by the session that runs a plan | `step.begin`, `step.end`, `loop`, `self-review` |
 | the Claude Code hooks `bin/kit install` adds (`journal.py hook`) | `session`, `message` (the owner's prompt, the session's reply), `tool.call`, `checkpoint` (a question to the owner), `agent.spawn`, `agent.return` |
 
 `ADORNO_JOURNAL=0` in a script's environment records nothing for it.
