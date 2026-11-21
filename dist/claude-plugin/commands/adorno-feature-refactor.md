@@ -13,15 +13,15 @@ Input: $ARGUMENTS
    `refactor/<slug>`), then `adorno-notion-sync start`. A spec whose goal is new or changed behavior is not a
    refactor: stop here and point to `/adorno-feature-build`.
 2. **Baseline** — on `refactor/<slug>` from the base, before any change:
-   1. the repo's `test`, `lint` and `typecheck` (`commands` from `pr-workspace` or `repo-conf`). A red base: stop,
-      `status.md` says why; never refactor on a red base;
-   2. the test command with its JUnit reporter → `<run>/baseline/tests.xml`; without JUnit, `baseline/tests.txt`
-      from the runner's own list of passing tests, one id per line;
-   3. the measures before: each of spec § Measures, its command and value → `<run>/measures.md`;
-   4. the perimeter's code no test exercises: `pr-areas owner/repo --files <perimeter>` → `by_area.<a>.qa` for a
+   1. the repo's `lint`, `typecheck` and `test` (`commands` from `pr-workspace` or `repo-conf`), the tests in one run
+      with their JUnit reporter → `<run>/baseline/tests.xml` (without JUnit, `baseline/tests.txt` from the runner's
+      own list of passing tests, one id per line). Any of them red: stop, `status.md` says why; never refactor on a
+      red base;
+   2. the measures before: each of spec § Measures, its command and value → `<run>/measures.md`;
+   3. the perimeter's code no test exercises: `pr-areas owner/repo --files <perimeter>` → `by_area.<a>.qa` for a
       visible journey, else `fallbacks.test` (`agent:test:unit`) writes characterization tests, green on the
       unchanged code, in `test:` commits (test loop, three rounds);
-   5. sub-step 2 again on HEAD: that commit is the baseline, its SHA → `<run>/baseline/sha`.
+   4. sub-step 1 again on HEAD: that commit is the baseline, its SHA → `<run>/baseline/sha`.
 3. **Plan** — `agent:core:planner` (§ Refactor) writes `plan.md`; no router. You write `run-plan.yaml` yourself:
 
    ```yaml
@@ -40,14 +40,16 @@ Input: $ARGUMENTS
 
 4. **Refactor and verify** — as `workflow:feature:build` step 4, on `refactor/<slug>`, with this evaluator after each
    round:
-   1. the tests with JUnit → `<run>/slices/<n>/tests.xml` (or its plain list);
-   2. `adorno-github/scripts/refactor-gate owner/repo --base <baseline sha> --baseline <run>/baseline/tests.xml
-      --after <run>/slices/<n>/tests.xml`: exit 0 passes; exit 1 lists its `violations`;
+   1. the tests, in the baseline's format → `<run>/slices/<n>/tests.<xml|txt>`;
+   2. `adorno-github/scripts/refactor-gate owner/repo --dir <worktree> --base <baseline sha> --baseline
+      <run>/baseline/tests.<xml|txt> --after <run>/slices/<n>/tests.<xml|txt>`, on the round's commits (it refuses a
+      dirty working tree, and a `--base` that is not an ancestor of HEAD): exit 0 passes; exit 1 lists its
+      `violations`;
    3. a refusal goes back to the agent like a failing test; the fix loop's commits pass the same gate;
    4. the cap reached, or a slice that cannot stay green without changing behavior or the public API: stop, back to
       `agent:core:intake`; `status.md` proposes `/adorno-feature-build <run folder>`.
-5. **Ship** — the gate on the whole branch (same `--base` and `--baseline`, `--after` from the last commit) →
-   `<run>/qa/refactor-gate.json`; the measures after, in `measures.md`; then
+5. **Ship** — the gate on the whole branch (same `--dir`, `--base` and `--baseline`, `--after` from the last
+   commit) → `<run>/qa/refactor-gate.json`; the measures after, in `measures.md`; then
    `workflow:pr:ship owner/repo <branch> <worktree> <run folder>`, as `workflow:feature:build` step 5.
 6. **Follow** — `workflow:pr:watch` until the PR is ready (checkpoint 2: the merge, by the user).
 

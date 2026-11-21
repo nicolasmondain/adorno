@@ -30,7 +30,8 @@ entry: [workflow:feature:build, workflow:feature:refactor]
 For `workflow:feature:refactor`, a slice is an ordered transformation, not a behavior: each preserves behavior and is
 green on its own. Its agent is `agent:refactor:simplify` (code that disappears) or `agent:refactor:structure` (code
 that moves), never the `build` of `pr-areas`. Its acceptance test is "`refactor-gate` passes", plus the measure of
-spec § Measures it advances.
+spec § Measures it advances. A move slice names the tests that import the moved code: they keep the old path through
+a re-export, and moving their imports is a follow-up `test:` PR, outside the gate.
 
 ## What you return
 

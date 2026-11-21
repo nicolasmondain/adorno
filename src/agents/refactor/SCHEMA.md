@@ -28,7 +28,7 @@ flowchart TD
 flowchart TD
   IN["Slice of workflow:feature:refactor: code that moves"] --> TR["One transformation: move, then rename, then reshape"]
   TR --> MV{"A move?"}
-  MV -->|"yes"| CL["Migrate every caller in the same commit, no shim in the perimeter"]
+  MV -->|"yes"| CL["Migrate every caller in the same commit; a re-export kept while a test imports the old path"]
   MV -->|"no"| IV
   CL --> IV{"Spec Invariants kept?"}
   IV -->|"no"| SP["Stop: the deliverable names the invariant and why"]
