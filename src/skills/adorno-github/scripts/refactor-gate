@@ -2,7 +2,8 @@
 # Usage: refactor-gate owner/repo --base SHA --baseline REPORT --after REPORT [--dir PATH]
 # Read-only proof that a refactor kept the behavior: compares the test reports taken at --base (baseline) and at HEAD
 # (after), and the commits of base..HEAD in the git repo at PATH (default: the current directory). It proves commits:
-# --base must be an ancestor of HEAD, and the tracked files must hold no uncommitted change.
+# --base must be an ancestor of HEAD, and the working tree must hold no uncommitted change, untracked files included
+# (the ignored ones, .gitignore and info/exclude, do not count: the run folder stays invisible).
 # Test files come from the registry: a path of an area built by an `agent:test:*` agent (pr-areas), never a glob here;
 # a repo with no such area (sub-areas included) is refused, never gated without its file rules.
 # A report whose first non-blank character is `<` is JUnit XML (read with python3: id `classname::name`, passing = no
@@ -45,8 +46,9 @@ base="$(git -C "$dir" rev-parse --verify -q "$base^{commit}")" || die "--base is
 head="$(git -C "$dir" rev-parse HEAD)"
 git -C "$dir" merge-base --is-ancestor "$base" HEAD \
   || die "--base $base is not an ancestor of HEAD in $dir: rebased? capture the baseline again" "$E_USAGE"
-[ -z "$(git -C "$dir" status --porcelain --untracked-files=no)" ] \
-  || die "uncommitted changes in $dir: commit the round before the gate (it proves commits, not the working tree)" "$E_USAGE"
+# untracked files count (a moved module never committed: the commit cannot run without it); ignored ones do not
+[ -z "$(git -C "$dir" --no-optional-locks status --porcelain)" ] \
+  || die "uncommitted changes in $dir (untracked files included): commit the round before the gate (it proves commits, not the working tree)" "$E_USAGE"
 
 tmp="$(work_dir)/gate-$$"; mkdir -p "$tmp"; trap '_journal_exit $? "$tmp"' EXIT
 : >"$tmp/tests"

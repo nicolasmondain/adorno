@@ -990,6 +990,14 @@ if [ -f "$REAL" ]; then
   gate_repo dirty; printf 'test(9)\n' >"$G/dirty/src/a.test.js"
   expect_exit 2 "uncommitted changes are a usage error (the gate proves commits)" -- gate dirty "$TMP/gate-base.txt" "$TMP/gate-green.xml"
   grep -q "uncommitted changes" "$TMP/err" && ok "... and the refusal says so" || ko "... and the refusal says so" "$(cat "$TMP/err")"
+  # an untracked file the tests may load (a moved module never committed) is a change the commit does not hold
+  gate_repo untracked; gate_commit untracked "refactor(a): move" src/a.js 'module.exports = require("./b")'
+  printf 'module.exports = 2\n' >"$G/untracked/src/b.js"
+  expect_exit 2 "an untracked file is a usage error too (the commit cannot run without it)" -- gate untracked "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  grep -q "uncommitted changes" "$TMP/err" && ok "... and the refusal says so" || ko "... and the refusal says so" "$(cat "$TMP/err")"
+  gate_repo ignored; gate_commit ignored "chore: ignore the run folder" .gitignore '.agent-run/'
+  mkdir -p "$G/ignored/.agent-run/run"; printf 'ok\n' >"$G/ignored/.agent-run/run/status.md"
+  expect_exit 0 "an untracked file matched by .gitignore (the run folder) still passes" -- gate ignored "$TMP/gate-base.txt" "$TMP/gate-green.xml"
 
   gate_repo anc; gate_commit anc "refactor(a): first try" src/a.js 'module.exports = 3'; GB="$(git -C "$G/anc" rev-parse HEAD)"
   git -C "$G/anc" reset -q --hard HEAD~1; gate_commit anc "refactor(a): second try" src/a.js 'module.exports = 4'
