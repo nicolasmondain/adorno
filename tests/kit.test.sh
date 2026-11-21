@@ -509,23 +509,31 @@ COMMIT_FAMILIES=""
 for d in "$ROOT"/src/agents/*/; do
   case "$(basename "$d")" in core | review) ;; *) COMMIT_FAMILIES="$COMMIT_FAMILIES $(basename "$d")" ;; esac
 done
-self_review_carried() {  # every dist agent of a commit-type family with Edit in tools: has the rule; at least one
-  local fam a n=0
+# carries_self_review A — dist agent A should carry the rule: its family is a commit type and its tools have Edit
+carries_self_review() {
+  local fam
   for fam in $COMMIT_FAMILIES; do
-    for a in "$DA"/adorno-agent-"$fam"-*.md; do
-      [ -f "$a" ] && grep -qE '^tools:(.*[ ,])?Edit(,|$)' "$a" || continue
-      grep -q "$SR" "$a" || return 1
-      n=$((n + 1))
-    done
+    case "$(basename "$1")" in adorno-agent-"$fam"-*) grep -qE '^tools:(.*[ ,])?Edit(,|$)' "$1"; return ;; esac
+  done
+  return 1
+}
+self_review_carried() {  # each carrier holds the rule once, as its last section: its body ends with _builder.md's
+  local a n=0 b="$ROOT/src/agents/_builder.md"
+  for a in "$DA"/*.md; do
+    carries_self_review "$a" || continue
+    [ "$(grep -c "$SR" "$a")" = 1 ] && tail -n "$(wc -l <"$b")" "$a" | cmp -s - "$b" || return 1
+    n=$((n + 1))
   done
   [ "$n" -gt 0 ]
 }
-self_review_left_out() {  # the agents that do not commit or do not edit: each exists and lacks the rule
-  local a
-  for a in "$DA"/adorno-agent-fix-investigate.md "$DA"/adorno-agent-ci-debug.md "$DA"/adorno-agent-review-*.md \
-    "$DA"/adorno-agent-core-*.md "$DA"/adorno.md; do
-    [ -f "$a" ] && ! grep -q "$SR" "$a" || return 1
+self_review_left_out() {  # every other dist agent (no commit type, or no Edit, adorno.md included) lacks the rule
+  local a n=0
+  for a in "$DA"/*.md; do
+    carries_self_review "$a" && continue
+    ! grep -q "$SR" "$a" || return 1
+    n=$((n + 1))
   done
+  [ "$n" -gt 0 ] && [ -f "$DA/adorno.md" ]
 }
 what_you_return_has_self_review() {  # one "## What you return" per commit-type family, its section names Self-review
   local fam f
@@ -538,8 +546,8 @@ what_you_return_has_self_review() {  # one "## What you return" per commit-type 
 }
 check "the self-review rule is written once, in src/agents/_builder.md" \
   '[ "$(grep -rl "$SR" "$ROOT/src" | sed "s|^$ROOT/||")" = "src/agents/_builder.md" ]'
-check "the self-review rule is carried into every commit-type agent with Edit" 'self_review_carried'
-check "the self-review rule stays out of fix:investigate, ci:debug, review, core and adorno" 'self_review_left_out'
+check "the self-review rule ends every commit-type agent with Edit, once, as its last section" 'self_review_carried'
+check "the self-review rule stays out of every other agent (no Edit, review, core, adorno)" 'self_review_left_out'
 check "every commit-type family's What you return names the Self-review section" 'what_you_return_has_self_review'
 
 check "an imported skill only agents and areas name is kept out of the model's list" \

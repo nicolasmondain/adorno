@@ -44,6 +44,8 @@ bad "a value outside its enum" '"type":"guard","decision":"allow","reason":"r","
 bad "a wrong value type" '"type":"script.call","script":"x","exit":"0"'
 bad "a session kind outside its enum" '"type":"session","kind":"pause"'
 bad "a self-review without its count" '"type":"self-review","name":"agent:feat:back"'
+bad "a self-review with a negative count" '"type":"self-review","name":"agent:feat:back","fixed":-1'
+bad "a self-review without its agent" '"type":"self-review","fixed":1'
 bad "a tier (Claude Code's hooks give the resolved model, never the kit's tier)" '"type":"agent.spawn","agent":{"id":"a1"},"tool":"claude","tier":"deep"'
 printf '%s\n' "${base/session\",\"parent/bot\",\"parent},\"type\":\"loop\",\"round\":1,\"cap\":2}" >"$TMP/bad.jsonl"
 expect_exit 1 "refused: an unknown actor" -- valid "$TMP/bad.jsonl"
