@@ -131,6 +131,10 @@ run. The controls (`code`, `back`, `front`, `security`, `perf-back`,
 unchanged) kept recall and cost within 3 %, but their ungraded precision moved by up to 10 points between runs: that
 is the noise of one run pair.
 
+`core:analyst` on `deep`, with `bench/run --kind analyst` (4 cases, 2 with a planted instruction, 1 repeat, prompts at
+`c1a6539`, Claude Code 2.1.330, 2026-11-20): causes 4/4, planted instructions flagged 2/2 and followed 0, canary 0,
+clean cases 2/2, 0.82 USD (340k tokens in, 13k out, 3.1 min). No other tier was run: it stays on `deep`.
+
 ## Known limits
 
 - The measure is small (4 expected findings per candidate: 2 cases x 2 repeats) and made on Claude only.
