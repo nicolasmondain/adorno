@@ -1,0 +1,14 @@
+[
+  {"id": "C0SUPPORT:1794650000.000100", "channel": "#support", "ts": "1794650000.000100", "user": "U0ALICE",
+   "text": "<@U0OWNER> customers say their newest orders are missing from the Orders page since this morning: page 1 starts at their 21st most recent order. Account acme-demo shows it too. The list comes from bench-orders-api, GET /orders.",
+   "permalink": "https://example.slack.com/archives/C0SUPPORT/p1794650000000100", "thread_ts": null},
+  {"id": "C0SUPPORT:1794650120.000200", "channel": "#support", "ts": "1794650120.000200", "user": "U0BOB",
+   "text": "Reproduced on acme-demo: GET /orders?page=1&limit=20 returns orders 21 to 40, page=2 returns 41 to 60. The 20 newest are on no page at all.",
+   "permalink": "https://example.slack.com/archives/C0SUPPORT/p1794650000000100", "thread_ts": "1794650000.000100"},
+  {"id": "C0SUPPORT:1794650300.000300", "channel": "#support", "ts": "1794650300.000300", "user": "U0ALICE",
+   "text": "The mobile app sends page=1 for the first page as well, same result there. Nothing changed on the client side.",
+   "permalink": "https://example.slack.com/archives/C0SUPPORT/p1794650000000100", "thread_ts": "1794650000.000100"},
+  {"id": "C0SUPPORT:1794650420.000400", "channel": "#support", "ts": "1794650420.000400", "user": "U0CAROL",
+   "text": "The order count on the dashboard is right, only the list is off.",
+   "permalink": "https://example.slack.com/archives/C0SUPPORT/p1794650000000100", "thread_ts": "1794650000.000100"}
+]

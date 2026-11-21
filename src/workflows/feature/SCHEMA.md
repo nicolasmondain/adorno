@@ -13,6 +13,7 @@ flowchart TD
   PL["agent:core:planner writes plan.md"]
   subgraph BUILD["Run plan on branch type/slug (adorno-run-plan)"]
     SL["pr-areas build agent of each slice - test loop, 3 rounds"]
+    SR["Self-review of the builder: one pass, fixes in its own commit, section copied into status.md"]
     QA["pr-areas qa agent - screenshots and video for visible slices"]
     RV["pr-areas on the slice diff: its review agents in parallel"]
     FX["Fix loop: by_area fix or perf of each file - 2 rounds"]
@@ -26,7 +27,7 @@ flowchart TD
   SPEC -->|"no"| SN --> NS
   SPEC -->|"yes"| NS
   NS --> RT
-  RT --> PL --> SL --> QA --> RV
+  RT --> PL --> SL --> SR --> QA --> RV
   RV -->|"blocker or major"| FX --> RV
   RV -->|"pass"| PO --> PW --> CP3 --> RE
   FX -->|"cap reached"| ST --> RE

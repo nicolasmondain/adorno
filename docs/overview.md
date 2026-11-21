@@ -24,6 +24,11 @@ flowchart LR
 `bin/kit` (`check`, `build`, `install`) turns the repo into the tool's files. `build` never reads `local/`, so `dist/` stays public;
 `check` and `install` do. In `workflow:pr:ship` the review gate is itself `pr-areas`, the area reviewers, then `agent:adorno`.
 
+Before that gate, every agent that commits rereads its own diff once before it returns (spec, repo rules, lean, hygiene,
+tests), fixes what it finds in a commit of its type, and ends its deliverable with a `Self-review` section. The session
+copies that section into `status.md` and marks it in the journal (`run-mark self-review`). It is one pass and it never
+replaces the external review, which stays the gate.
+
 ## The four layers
 
 Written in a neutral format that `bin/kit` translates for each tool. `bin/kit list` gives the current inventory.

@@ -1891,6 +1891,18 @@ jl
 expect_jq "marks are events of their own, without a script.call" \
   '.[-2].type == "step.begin" and .[-2].index == 2 and .[-2].name == "build" and .[-1] .type == "loop" and .[-1].round == 1 and .[-1].cap == 2 and .[-1].reason == "1 major"
    and all(.[]; .script != "run-mark")'
+expect_exit 0 "run-mark: a self-review with nothing fixed" -- "$S/run-mark" self-review agent:fix:patch 0
+expect_exit 0 "run-mark: a self-review" -- "$S/run-mark" self-review agent:feat:back 2
+expect_jq "... and says what it marked" '. == {marked: "self-review"}'
+expect_exit 2 "run-mark: a self-review count must be an integer" -- "$S/run-mark" self-review agent:feat:back two
+expect_exit 2 "run-mark: a self-review needs its count" -- "$S/run-mark" self-review agent:feat:back
+expect_exit 2 "run-mark: a self-review count cannot be negative" -- "$S/run-mark" self-review agent:feat:back -1
+expect_exit 2 "run-mark: a self-review count has no leading zero" -- "$S/run-mark" self-review agent:feat:back 02
+expect_exit 2 "run-mark: a self-review needs its agent" -- "$S/run-mark" self-review '' 1
+jl
+expect_jq "a self-review is a mark: the agent and what it fixed" \
+  '.[-2].type == "self-review" and .[-2].fixed == 0 and .[-1].type == "self-review" and .[-1].name == "agent:feat:back" and .[-1].fixed == 2
+   and all(.[]; .script != "run-mark")'
 guard_at allow "$TMP" "" "$S/run-mark step-end 2 build"
 
 echo "journal: recording never breaks a script"
