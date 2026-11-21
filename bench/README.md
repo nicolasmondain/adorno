@@ -100,7 +100,13 @@ bench/report --label haiku --against 2026-11-opus
 ```
 
 A baseline holds scores, tokens, costs, model names and the sha of the prompts, and no text written by a model. It is
-never overwritten, and it is yours to create and commit.
+never overwritten. The owner creates and commits it, or an agent does on their explicit request.
+
+The current reference is `2026-11-tiers`: prompts `1bba2b0`, each agent on its default tier, the 19 cases, 3
+repeats, Claude Code 2.1.329. Its precision counts the findings that were not graded yet when it was saved (123 in
+the review cases, 2 in the `agent:adorno` cases). A later run scored after more grading gains precision from the
+grades alone, so compare precision only on the same grades: after a round of grading, score the reference run again
+and save it under a new name.
 
 ## Compare a tier per reviewer
 
@@ -140,16 +146,15 @@ than its fix.
 
 ## Cost to expect
 
-Measured on 2026-11-14 with Claude Code 2.1.325, each agent on its default tier, on `mongo-n-plus-one` as it routed
-then (6 reviewers, and `agent:adorno`): **1.53 USD** and 4 minutes. A reviewer cost 0.15 to 0.22 USD, `agent:adorno`
-0.44 USD; 653k tokens in (mostly read from cache) and 16k out. At that routing, the benchmark projected about 18 USD
-and 50 minutes for the 13 cases it had then ([decision 2](../docs/decisions/bench.md)). None of that has been measured
-again: it predates #39, which merged `review:perf` into `review:front` and `review:perf-back` into `review:back`, and
-#31, which changed the default areas. As of 2026-11-17, `mongo-n-plus-one` starts 5 reviewers, the 17 review cases
-start 75 reviewers, and the set runs 19 `agent:adorno` passes, the 2 cases of kind `adorno` one pass each. Measure it
-on your side with one case first. Always pass `--budget-usd`: no case starts once the spent amount plus the dearest
-case so far would exceed it, what is left is split over the calls (over the reviewers of a round, then all of it to
-`agent:adorno`), and the report says at the top what was skipped. The budget relies on the cost the tool reports.
+Measured on 2026-11-20 with Claude Code 2.1.329, each agent on its default tier, the whole set (19 cases, 75
+reviewers and 19 `agent:adorno` passes per repeat), `--parallel 3`: **53.63 USD** and 1 h 56 for 3 repeats, so about
+18 USD and 40 minutes per repeat. `agent:adorno` is 40 % of it (21.57 USD over 57 passes).
+
+The first measure, on one case only, is in [decision 2](../docs/decisions/bench.md); #39 and #31 have changed the
+routing since. On your side, measure one case first. Always pass `--budget-usd`: no case starts once the spent amount
+plus the dearest case so far would exceed it, what is left is split over the calls (over the reviewers of a round, then
+all of it to `agent:adorno`), and the report says at the top what was skipped. The budget relies on the cost the tool
+reports.
 
 ## A case for agent:adorno alone
 
