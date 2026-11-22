@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Usage: run-mark step-begin INDEX NAME | step-end INDEX NAME | round N CAP [REASON]
-# Marks, in the journal of the open run (adorno-journal), where a step of the run plan starts and ends, and where a
-# fix and review round starts (round N of CAP): what the journal's viewer frames. Writes nothing else; without an open
-# run, nothing happens.
+# Usage: run-mark step-begin INDEX NAME | step-end INDEX NAME | round N CAP [REASON] | self-review AGENT N
+# Marks, in the journal of the open run (adorno-journal), where a step of the run plan starts and ends, where a
+# fix and review round starts (round N of CAP): what the journal's viewer frames; and the self-review an agent
+# returned (AGENT its logical id, N the count of its `Fixed (N):`). Writes nothing else; without an open run,
+# nothing happens.
 . "$(dirname "$0")/_lib.sh"
 trap - EXIT  # the mark is the event: no script.call on top of it
 
-usage="usage: run-mark step-begin INDEX NAME | step-end INDEX NAME | round N CAP [REASON]"
+usage="usage: run-mark step-begin INDEX NAME | step-end INDEX NAME | round N CAP [REASON] | self-review AGENT N"
 case "${1:-}" in
   step-begin|step-end)
     [[ "${2:-}" =~ ^(0|[1-9][0-9]*)$ ]] && [ -n "${3:-}" ] || die "$usage" "$E_USAGE"
@@ -15,6 +16,9 @@ case "${1:-}" in
     [[ "${2:-}" =~ ^[1-9][0-9]*$ ]] && [[ "${3:-}" =~ ^[1-9][0-9]*$ ]] || die "$usage" "$E_USAGE"
     journal_event loop "$(jq -n --argjson r "$2" --argjson c "$3" --arg why "${4:-}" \
       '{round: $r, cap: $c} + (if $why == "" then {} else {reason: $why} end)')" ;;
+  self-review)
+    [ -n "${2:-}" ] && [[ "${3:-}" =~ ^(0|[1-9][0-9]*)$ ]] || die "$usage" "$E_USAGE"
+    journal_event self-review "$(jq -n --arg n "$2" --argjson f "$3" '{name: $n, fixed: $f}')" ;;
   *) die "$usage" "$E_USAGE" ;;
 esac
 jq -n --arg m "$1" '{marked: $m}'

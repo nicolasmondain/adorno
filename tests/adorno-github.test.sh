@@ -111,9 +111,12 @@ expect_exit 0 "a session with no transcript" -- \
 expect_jq "... unavailable too" '.source == "unavailable" and (.reason | test("no transcript for session nope"))'
 expect_exit 2 "a date that is not UTC ISO is a usage error" -- "$S/run-usage" collect --since yesterday --until 2026-11-10T10:00:00Z
 
+# The overlap tests compare dates: pin them, never read the wall clock.
+pin_started() { jq --arg t "$2" '.started = $t' "$KH/runs/active/$1.json" >"$TMP/pin.json" && mv "$TMP/pin.json" "$KH/runs/active/$1.json"; }  # pin_started ID ISO
+pin_ended() { jq -c --arg id "$1" --arg t "$2" 'if .id == $id then .ended = $t else . end' "$KH/runs/usage.jsonl" >"$TMP/pin.jsonl" && mv "$TMP/pin.jsonl" "$KH/runs/usage.jsonl"; }  # pin_ended ID ISO: in runs/usage.jsonl
 expect_exit 0 "a run in the fixture session" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
 UR="$(jq -r .id <<<"$out")"; UD="$(jq -r .dir <<<"$out")"
-jq '.started = "2026-11-10T10:00:00Z"' "$KH/runs/active/$UR.json" >"$TMP/ur.json" && mv "$TMP/ur.json" "$KH/runs/active/$UR.json"
+pin_started "$UR" 2026-11-10T10:00:00Z
 printf '# Status\n' >"$UD/status.md"
 expect_exit 0 "run-end records the usage" -- "$S/run-end" "$UR"
 expect_jq "... its cost line and the status.md it went to" \
@@ -128,13 +131,16 @@ jq -e '.overlap == false' "$UD/usage.json" >/dev/null \
   && jq -e --arg id "$UR" 'select(.id == $id) | .overlap == false and .session == "sess-usage" and .started == "2026-11-10T10:00:00Z"' "$KH/runs/usage.jsonl" >/dev/null \
   && ok "... alone in its session: no overlap" || ko "... alone in its session: no overlap"
 # Two runs of one session at once count the same messages: both say so. The first sees the second still active; the
-# second, ending alone, sees the first in runs/usage.jsonl (ended after it started).
+# second, ending alone, sees the first in runs/usage.jsonl (ended after it started). The test pins every date compared:
+# UR (same session, in the index) ended before OB started, so only OA can make OB overlap.
+pin_ended "$UR" 2026-11-10T09:30:00Z
 expect_exit 0 "two runs at once in one session" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
 OA="$(jq -r .id <<<"$out")"; OAD="$(jq -r .dir <<<"$out")"
 expect_exit 0 "... the second one" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:status --mode report --level L0 --repo acme/docs
 OB="$(jq -r .id <<<"$out")"; OBD="$(jq -r .dir <<<"$out")"
-jq '.started = "2026-11-10T10:00:00Z"' "$KH/runs/active/$OB.json" >"$TMP/ob.json" && mv "$TMP/ob.json" "$KH/runs/active/$OB.json"
+pin_started "$OA" 2026-11-10T09:59:00Z; pin_started "$OB" 2026-11-10T10:00:00Z
 expect_exit 0 "... the first ends" -- "$S/run-end" "$OA"
+pin_ended "$OA" 2026-11-10T10:00:05Z
 expect_exit 0 "... then the second" -- "$S/run-end" "$OB"
 for r in "$OA:$OAD" "$OB:$OBD"; do
   jq -e '.overlap == true' "${r#*:}/usage.json" >/dev/null \
@@ -142,12 +148,16 @@ for r in "$OA:$OAD" "$OB:$OBD"; do
     && ok "... run ${r%%:*} records the overlap" || ko "... run ${r%%:*} records the overlap" "$(jq -c .overlap "${r#*:}/usage.json")"
 done
 # Two runs of one session one after the other (the normal case) share no message: the earlier one, in
-# runs/usage.jsonl, ended no later than the second one started (same second counts as sequential).
+# runs/usage.jsonl, ended no later than the second one started (same second counts as sequential). The test pins the
+# dates: the first ends at the very second the second starts.
 expect_exit 0 "two runs back to back in one session" -- env CLAUDE_CODE_SESSION_ID=sess-seq "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
 QA="$(jq -r .id <<<"$out")"; QAD="$(jq -r .dir <<<"$out")"
+pin_started "$QA" 2026-11-10T10:00:00Z
 expect_exit 0 "... the first ends" -- "$S/run-end" "$QA"
+pin_ended "$QA" 2026-11-10T10:00:05Z
 expect_exit 0 "... then the second begins" -- env CLAUDE_CODE_SESSION_ID=sess-seq "$S/run-begin" --workflow workflow:pr:status --mode report --level L0 --repo acme/docs
 QB="$(jq -r .id <<<"$out")"; QBD="$(jq -r .dir <<<"$out")"
+pin_started "$QB" 2026-11-10T10:00:05Z
 expect_exit 0 "... and ends" -- "$S/run-end" "$QB"
 for r in "$QA:$QAD" "$QB:$QBD"; do
   jq -e '.overlap == false' "${r#*:}/usage.json" >/dev/null \
@@ -1323,7 +1333,7 @@ echo "with_lock"
 cat >"$TMP/lock-test" <<EOF
 #!/usr/bin/env bash
 . "$S/_lib.sh"
-mkdir -p "\$(kit_home)/locks/dead.lock"; echo 999999 >"\$(kit_home)/locks/dead.lock/pid"
+mkdir -p "\$(kit_home)/locks"; echo 999999 >"\$(kit_home)/locks/dead.lock"
 with_lock dead true; echo "took over a dead holder's lock"
 steps() { false; echo "continued after a failing step"; }
 with_lock t steps
@@ -1768,6 +1778,18 @@ expect_exit 2 "run-mark: usage" -- "$S/run-mark" round one 2
 jl
 expect_jq "marks are events of their own, without a script.call" \
   '.[-2].type == "step.begin" and .[-2].index == 2 and .[-2].name == "build" and .[-1] .type == "loop" and .[-1].round == 1 and .[-1].cap == 2 and .[-1].reason == "1 major"
+   and all(.[]; .script != "run-mark")'
+expect_exit 0 "run-mark: a self-review with nothing fixed" -- "$S/run-mark" self-review agent:fix:patch 0
+expect_exit 0 "run-mark: a self-review" -- "$S/run-mark" self-review agent:feat:back 2
+expect_jq "... and says what it marked" '. == {marked: "self-review"}'
+expect_exit 2 "run-mark: a self-review count must be an integer" -- "$S/run-mark" self-review agent:feat:back two
+expect_exit 2 "run-mark: a self-review needs its count" -- "$S/run-mark" self-review agent:feat:back
+expect_exit 2 "run-mark: a self-review count cannot be negative" -- "$S/run-mark" self-review agent:feat:back -1
+expect_exit 2 "run-mark: a self-review count has no leading zero" -- "$S/run-mark" self-review agent:feat:back 02
+expect_exit 2 "run-mark: a self-review needs its agent" -- "$S/run-mark" self-review '' 1
+jl
+expect_jq "a self-review is a mark: the agent and what it fixed" \
+  '.[-2].type == "self-review" and .[-2].fixed == 0 and .[-1].type == "self-review" and .[-1].name == "agent:feat:back" and .[-1].fixed == 2
    and all(.[]; .script != "run-mark")'
 guard_at allow "$TMP" "" "$S/run-mark step-end 2 build"
 

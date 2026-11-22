@@ -30,11 +30,12 @@ its input.
    (`run-budget`: a non-zero exit) → launch nothing more, `status.md` opens with `Stopped: budget`, `run-end <id> stopped`
    (orchestration › Runs).
 6. After each step, update `status.md` in the run folder: step, result, rounds used, next action, and the `Ponytail`
-   note of an agent's deliverable (lite: the smaller option, ultra: the pushback). At the end,
-   `run-end <id> --status <run folder>/status.md` adds the run's cost line there.
+   note of an agent's deliverable (lite: the smaller option, ultra: the pushback) and its `Self-review` section,
+   both copied as is. At the end, `run-end <id> --status <run folder>/status.md` adds the run's cost line there.
 7. Mark the run's journal as you go, so its replay shows the plan: `adorno-github/scripts/run-mark step-begin <index>
    <name>` before a step and `run-mark step-end <index> <name>` after it (index: the step's place in `steps:`, from
-   1), `run-mark round <n> <max> "<why>"` when a loop round starts.
+   1), `run-mark round <n> <max> "<why>"` when a loop round starts, `run-mark self-review <agent> <N>` after a step
+   whose agent returned a `Self-review` (`<agent>` its logical id, `<N>` the count of its `Fixed (N):`).
 
 Deliverable: `status.md` up to date and a five-line report — what is done, what was verified, where it stopped and
 why, what waits for the owner, and the cost line `run-end` printed.

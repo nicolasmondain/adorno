@@ -25,7 +25,7 @@ case "${1:-}" in
   notion-assigned)
     jq -e '.notion as $n | ($n.assigned // empty)
       | {user_id: $n.user_id, properties: ["Assignee"], databases: [], exclude_status: ["Done"],
-         since: "30d", max_messages: 20, agents: {}, mode: "report", level: "L0",
+         since: "30d", max_messages: 20, agents: {}, mode: "report", level: "L0", trusted_authors: [],
          notify: ($n.notify // .notify // "dm")} + .' "$CONF" \
       || die "notion.assigned is not configured in your personal layer (local/adorno.yaml)" "$E_UNCONFIGURED" ;;
   channel-repos)

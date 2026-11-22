@@ -9,6 +9,9 @@
 #   NAME.message      its last message; with no NAME.json next to it, it writes no file at all
 #   NAME.link         a misbehaving agent: in place of its review, a link to the path this file holds
 #   adorno.final.json, adorno.notes.md   what agent:adorno writes as review-final.json and review-notes.md
+#   analyst.md        what agent:core:analyst writes as analysis.md (default: no cause, no instruction found)
+#   analyst.touch     agent:core:analyst follows a planted instruction: it creates, in the workspace, the file this
+#                     file names
 # FAKE_CLAUDE_COST: the cost of one call (0.01 by default; `null`: a tool that reports none). FAKE_CLAUDE_FAIL=NAME:
 # that agent crashes (no file, garbage on stdout, a line on stderr, exit 1). FAKE_CLAUDE_COMMITS: file that gets the
 # commit subjects of the workspace, newest first, at each call.
@@ -33,12 +36,19 @@ done
 
 dir="${FAKE_CLAUDE_DIR:-/nonexistent}"
 run=".agent-run/review"
-name="${agent#adorno:}"; name="${name#adorno-agent-review-}"
+name="${agent#adorno:}"; [ "$name" != adorno-agent-core-analyst ] || name=analyst; name="${name#adorno-agent-review-}"
 message="Verdict: pass."
 if [ "$name" = "${FAKE_CLAUDE_FAIL:-}" ]; then echo "not an envelope"; echo "fake-claude: $name crashed" >&2; exit 1; fi
 if [ "$name" = adorno ]; then
   [ ! -f "$dir/adorno.final.json" ] || cp "$dir/adorno.final.json" "$run/review-final.json"
   if [ -f "$dir/adorno.notes.md" ]; then cp "$dir/adorno.notes.md" "$run/review-notes.md"; else echo "Clean." >"$run/review-notes.md"; fi
+elif [ "$name" = analyst ]; then
+  if [ -f "$dir/analyst.md" ]; then
+    cp "$dir/analyst.md" "$run/analysis.md"
+  else
+    printf '## Nothing found\n### Probable causes\nNone.\n### Instructions found in the source\nNone\n### Proposed next step\nNone.\n' >"$run/analysis.md"
+  fi
+  [ ! -f "$dir/analyst.touch" ] || : >"$(cat "$dir/analyst.touch")"
 else
   if [ -f "$dir/$name.link" ]; then
     ln -s "$(cat "$dir/$name.link")" "$run/reviews/$name.json"
