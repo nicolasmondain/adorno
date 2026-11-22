@@ -10,7 +10,12 @@ cmd="${1:-}"; key="${2:-}"
 [ -n "$cmd" ] && [ -n "$key" ] || die "usage: watch-seen list|mark|filter|last|touch KEY …" "$E_USAGE"
 valid_key "$key"
 f="$(state_dir)/$key.json"
-[ -f "$f" ] || printf '{"last_run": null, "seen": {}}\n' >"$f"
+if [ ! -f "$f" ]; then
+  # created whole then linked: `ln` fails if a parallel run got there first, so its marks are never truncated away
+  printf '{"last_run": null, "seen": {}}\n' >"$f.$$.new"
+  ln "$f.$$.new" "$f" 2>/dev/null || [ -f "$f" ] || { rm -f "$f.$$.new"; die "cannot create $f"; }
+  rm -f "$f.$$.new"
+fi
 shift 2
 case "$cmd" in
   list)  jq '.seen | keys' "$f" ;;
