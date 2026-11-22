@@ -20,7 +20,8 @@ valid_key() { [[ "$1" =~ ^[A-Za-z0-9_.-]+$ ]] || die "invalid name '$1' (letters
 locked_update() {
   local f="$1" lock tries=0; shift
   lock="$f.lock"
-  until mkdir "$lock" 2>/dev/null; do
+  # noclobber opens with O_EXCL: one holder, whatever coreutils ship (uutils' mkdir lets several in)
+  until ( set -C; : >"$lock" ) 2>/dev/null; do
     if [ -n "$(find "$lock" -maxdepth 0 -mmin +5 2>/dev/null)" ]; then rm -rf "$lock"; continue; fi
     tries=$((tries + 1)); [ "$tries" -lt 300 ] || die "timed out waiting for $lock"
     sleep 0.1
