@@ -73,7 +73,9 @@ that you set.
 
 New to adorno? Read the one-page [overview](docs/overview.md) first.
 
-Prerequisites: [uv](https://docs.astral.sh/uv/) (`brew install uv`), authenticated `gh`, `jq`.
+Prerequisites: [uv](https://docs.astral.sh/uv/) >= 0.4.19 (`brew install uv`; `bin/kit` runs on the Python 3.11 it
+provides), authenticated `gh` >= 2.99.0 (`--attach`), `jq` >= 1.7.1, `python3` >= 3.9 on PATH, `git`.
+`bin/kit doctor` checks the versions.
 
 ```sh
 git clone https://github.com/<owner>/adorno && cd adorno
@@ -206,6 +208,7 @@ tests/                  tests of the adorno-github scripts against a fake gh
 
 ```sh
 bin/kit check [--dist]       # validates (and checks that the committed dist/ is up to date)
+bin/kit doctor               # checks the minimum versions of jq, python3, gh and uv
 bin/kit build                # regenerates dist/ and the marketplace (never with local/)
 bin/kit list                 # everything available, with its provenance
 bin/kit conf [owner/repo]    # the settings a repo resolves
