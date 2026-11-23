@@ -238,6 +238,8 @@ def label_of(e, names):
         return f"GitHub {e.get('action')}: {e.get('target')}"
     if kind == "session":
         return f"session {e.get('kind')}"
+    if kind == "self-review":
+        return f"{e.get('name')} self-review: {e.get('fixed')} fixed"
     return kind
 
 

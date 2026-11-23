@@ -335,6 +335,10 @@ def validate_watches(reg: dict, where: str, agent_ids: set) -> list[str]:
         if lvl is not None and lvl not in LEVELS:
             errors.append(f"{where}: {scope} level must be one of {', '.join(LEVELS)}")
 
+    def trusted(scope: str, ids) -> None:
+        if ids is not None and not (isinstance(ids, list) and all(isinstance(i, str) and i for i in ids)):
+            errors.append(f"{where}: {scope}.trusted_authors must be a list of non-empty strings")
+
     slack = reg.get("slack") or {}
     if slack:
         common("slack", slack)
@@ -365,6 +369,7 @@ def validate_watches(reg: dict, where: str, agent_ids: set) -> list[str]:
                 errors.append(f"{where}: {scope}.action.agent {unknown_agent(action['agent'])}")
             if action and not (action.get("agent") or action.get("workflow") or action.get("prompt")):
                 errors.append(f"{where}: {scope}.action needs `agent`, `workflow` or `prompt`")
+            trusted(f"{scope}.action", action.get("trusted_authors"))
         if slack.get("mentions") is not None:
             common("slack.mentions", slack["mentions"] or {})
     notion = reg.get("notion") or {}
@@ -373,6 +378,7 @@ def validate_watches(reg: dict, where: str, agent_ids: set) -> list[str]:
         common("notion.assigned", a)
         if a.get("mode") is not None and a["mode"] not in ("report", "run"):
             errors.append(f"{where}: notion.assigned.mode must be report or run")
+        trusted("notion.assigned", a.get("trusted_authors"))
         for db, target in (a.get("agents") or {}).items():
             if isinstance(target, str) and target.startswith("agent:") and target not in agent_ids:
                 errors.append(f"{where}: notion.assigned.agents.{db} {unknown_agent(target)}")
@@ -542,6 +548,16 @@ def validate_registry(reg: dict, agent_ids: set, delegable: set, skill_names: se
                 errors.append(f"{where}: {scope}.{key} must be a skill or command name (like adorno-commit or /acme-pr)")
         errors += validate_notion_spec(conf.get("notion_spec"), f"{where}: {scope}.notion_spec")
         errors += validate_after_pr(conf.get("after_pr"), f"{where}: {scope}.after_pr", workflow_ids)
+        caps = conf.get("max_usd")
+        if caps is not None:
+            if not isinstance(caps, dict):
+                errors.append(f"{where}: {scope}.max_usd must be a mapping of workflow ids to USD")
+            else:
+                for w, usd in caps.items():
+                    if w not in workflow_ids:
+                        errors.append(f"{where}: {scope}.max_usd: unknown workflow '{w}'")
+                    elif isinstance(usd, bool) or not isinstance(usd, (int, float)) or not usd > 0:
+                        errors.append(f"{where}: {scope}.max_usd.{w} must be a number > 0")
         if conf.get("voice") is not None and not isinstance(conf["voice"], dict):
             errors.append(f"{where}: {scope}.voice must be a mapping")
         perms = conf.get("permissions")
