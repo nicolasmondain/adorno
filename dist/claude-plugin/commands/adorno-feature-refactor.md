@@ -1,5 +1,5 @@
 ---
-description: Restructure code end to end without changing its behavior — refactor spec, green baseline and characterization tests, sliced plan, refactor agents gated by refactor-gate (no existing test changed or lost), review, PR ready for review without asking (workflow:pr:ship), follow-up until ready to merge. Two human checkpoints, the spec and the merge.
+description: Restructure code end to end without changing its behavior — refactor spec, green baseline and characterization tests, before videos of its user paths, sliced plan, refactor agents gated by refactor-gate (no existing test changed or lost), review, PR ready for review with the after videos, without asking (workflow:pr:ship), follow-up until ready to merge. Two human checkpoints, the spec and the merge.
 argument-hint: <the request, Slack / Notion / GitHub links, a plan file, or the .agent-run folder of a validated spec> [--mode discuss|confirm]
 model: sonnet
 ---
@@ -23,7 +23,11 @@ Input: $ARGUMENTS
    3. the perimeter's code no test exercises: `pr-areas owner/repo --files <perimeter>` → `by_area.<a>.qa` for a
       visible journey, else `fallbacks.test` (`agent:test:unit`) writes characterization tests, green on the
       unchanged code, in `test:` commits (test loop, three rounds);
-   4. sub-step 1 again on HEAD: that commit is the baseline, its SHA → `<run>/baseline/sha`.
+   4. sub-step 1 again on HEAD: that commit is the baseline, its SHA → `<run>/baseline/sha`;
+   5. the videos before: each user path the perimeter serves (a screen, a route, a command, a job a user or a client
+      reaches) → `<run>/qa/journeys.md`, recorded on the baseline by the `qa` agent of its area (`by_area.<a>.qa`,
+      null: `agent:test:e2e`) → `<run>/qa/before-<journey>.<ext>`. A path that cannot be recorded: `status.md` says
+      why, and the PR will go out as draft (`workflow:pr:ship` step 5).
 3. **Plan** — `agent:core:planner` (§ Refactor) writes `plan.md`; no router. You write `run-plan.yaml` yourself:
 
    ```yaml
@@ -56,7 +60,9 @@ Input: $ARGUMENTS
       `test:` PR to merge first, then resume from step 2 (new baseline) with `/adorno-feature-refactor <run folder>`.
 5. **Ship** — the gate on the whole branch (same `--dir`, `--base` and `--baseline`, `--after` from the last
    commit) → `<run>/qa/refactor-gate.json`; the measures after, in `measures.md`; then
-   `workflow:pr:ship owner/repo <branch> <worktree> <run folder>`, as `workflow:feature:build` step 5.
+   `workflow:pr:ship owner/repo <branch> <worktree> <run folder>`, as `workflow:feature:build` step 5: its step 5
+   records each journey of `qa/journeys.md` again on the last commit (`qa/after-<journey>.<ext>`, the same result as
+   before) and puts each before/after pair in the PR.
 6. **Follow** — `workflow:pr:watch` until the PR is ready (checkpoint 2: the merge, by the user).
 
 At every stop (red base, cap, missing permission, escalation to the spec): `status.md` says where and why, and the

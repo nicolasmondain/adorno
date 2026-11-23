@@ -1,5 +1,5 @@
 ---
-description: Ends every workflow that touched code — commit (the repo's commit_skill), review and fix until no 🔴 or 🟠 is left and the change meets the request, its proof attached (test output, screenshots and videos of what a user sees), then the PR (the repo's pr_skill) opened ready for review, or pushed and updated when it is already open. No confirmation and no permission prompt, within the run's level. Last step of feature:build, feature:refactor, issue:fix, ci:red, review:received and repo:onboard.
+description: Ends every workflow that touched code — commit (the repo's commit_skill), review and fix until no 🔴 or 🟠 is left and the change meets the request, its proof attached (test output, screenshots and videos of what a user sees, and the before/after or final videos that justify a fix, a refactor or a feature), then the PR (the repo's pr_skill) opened ready for review, or pushed and updated when it is already open. No confirmation and no permission prompt, within the run's level. Last step of feature:build, feature:refactor, issue:fix, ci:red, review:received and repo:onboard.
 args: "<owner/repo> <branch> [worktree path] [.agent-run folder]"
 roles: [fix, perf, review]
 uses:
@@ -55,12 +55,30 @@ command.
    - a visible change (`pr-areas` gives an area with a `qa` agent, or the request changes what a user sees) without
      a screenshot or a video in `qa/` → that `qa` agent (`agent:test:e2e` by default) on the branch, with its area's
      `skills`, on local or seeded data only: a journey per acceptance criterion it can show, its media in `qa/`;
+   - **the visual justification**, on top of the proof, by the run's workflow (as given to `run-begin`). Each journey
+     is written once in `qa/journeys.md` (`agent:test:e2e` § Journeys: id, the user path step by step, its seeded
+     data, what is expected), so that every recording of it replays the same path; it is recorded by the `qa` agent
+     of its area (`agent:test:e2e` by default), a path with no interface in a terminal (`agent:test:e2e` § No
+     interface):
+     - `workflow:issue:fix`: `qa/before-<journey>.<ext>`, the bug on the base, recorded before the fix
+       (`workflow:issue:fix` step 4), then `qa/after-<journey>.<ext>`, the same journey on the last commit, without
+       the error;
+     - `workflow:feature:build`: `qa/feature-<journey>.<ext>`, the finished feature on the last commit, a journey per
+       acceptance criterion it can show;
+     - `workflow:feature:refactor`: `qa/before-<journey>.<ext>`, recorded on the baseline (`workflow:feature:refactor`
+       step 2), then `qa/after-<journey>.<ext>`, the same journey on the last commit, with the same result;
+     - an `after-` or `feature-` recording older than the last commit is recorded again; a `before-` that is missing
+       is recorded on the code before the change (`git worktree add <run>/before <sha>`: the merge base with
+       `origin/<base>` for a fix, `baseline/sha` for a refactor), never on the branch, and a bug that recording does
+       not show stays missing;
+     - other workflows: none required;
    - **before anything goes out**, `agent:adorno` looks at every screenshot, the key frames of every video and the
      lines of `tests.log` quoted in the description: a token, a key, a password, an email or a name of a real person,
      production data → that file is deleted from `qa/` and never attached (redo it on clean data, or count it
      missing). A video it cannot inspect (no frames extracted, e.g. `ffmpeg -i x.webm -vf fps=1 qa/frames/%03d.png`)
      counts as missing too;
-   - still missing (no `tests.log`, or a visible change without clean media) → the PR goes out or stays **draft**,
+   - still missing (no `tests.log`, a visible change without clean media, or a recording of the visual
+     justification: `Proof missing: video <before|after|feature> <journey>`) → the PR goes out or stays **draft**,
      `Proof missing: <what>` first in its description and in `status.md`. A proof is never invented, nor taken
      from another commit;
    - a run with `qa/refactor-gate.json` (`workflow:feature:refactor`): after the last fix round, the tests again in
