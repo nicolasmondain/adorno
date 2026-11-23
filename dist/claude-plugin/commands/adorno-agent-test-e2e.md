@@ -1,5 +1,5 @@
 ---
-description: agent:test:e2e — End-to-end tests and browser QA with evidence — Playwright journeys, screenshots, video and trace attached to the report or the PR. Use to verify a front feature end to end, reproduce a UI bug or provide visual proof of a fix.
+description: agent:test:e2e — End-to-end tests and browser QA with evidence — Playwright journeys, screenshots, video and trace attached to the report or the PR, terminal recordings for a path with no interface. Use to verify a front feature end to end, reproduce a UI bug, or record the before/after or final videos that justify a fix, a refactor or a feature.
 argument-hint: <request>
 disable-model-invocation: true
 ---
