@@ -76,6 +76,61 @@ for i in 1 2 3 4 5 6 7 8; do "$S/watch-seen" mark slack-watch-par "P$i" >/dev/nu
 out="$("$S/watch-seen" list slack-watch-par)"
 expect_jq "parallel marks are all kept (locked updates)" 'length == 8'
 
+echo "notion trust"
+expect_exit 0 "notion trust settings" -- "$S/watch-conf" notion-assigned
+expect_jq "trusted_authors and level from the layer" '.trusted_authors == ["N1", "N2"] and .level == "L2"'
+jq 'del(.notion.assigned.trusted_authors)' "$FIX" >"$TMP/notrust.json"
+conf "$TMP/notrust.json"
+expect_exit 0 "notion trust default" -- "$S/watch-conf" notion-assigned
+expect_jq "trusted_authors defaults to []" '.trusted_authors == []'
+conf "$FIX"
+doc() { jq -n --arg id "$1" --argjson a "$2" --argjson c "$3" '{id: $id, title: "t", authors: $a, authors_complete: $c}'; }
+{
+  doc D1 '["N1", "N2"]' true
+  doc D2 '["N1", "N2", "N9"]' true
+  doc D3 '["N1"]' false
+  doc D4 '[]' true
+} | jq -s . >"$TMP/docs.json"
+expect_exit 0 "trust" -- "$S/watch-trust" notion-assigned "$TMP/docs.json"
+expect_jq "every writer trusted keeps the level" '.[0].trusted and .[0].action_level == "L2" and .[0].untrusted == [] and .[0].title == "t"'
+expect_jq "one untrusted comment author drops to L0, named" '(.[1].trusted | not) and .[1].action_level == "L0" and .[1].untrusted == ["N9"]'
+expect_jq "authors_complete false drops to L0" '(.[2].trusted | not) and .[2].action_level == "L0" and .[2].untrusted == []'
+expect_jq "no authors drops to L0" '(.[3].trusted | not) and .[3].action_level == "L0"'
+conf "$TMP/notrust.json"
+expect_exit 0 "trust with the default list" -- "$S/watch-trust" notion-assigned "$TMP/docs.json"
+expect_jq "default [] trusts nobody" 'all(.[]; .action_level == "L0")'
+conf "$FIX"
+expect_exit 0 "trust from stdin" -- sh -c "\"$S/watch-trust\" notion-assigned < \"$TMP/docs.json\""
+expect_jq "stdin works" 'length == 4 and .[0].action_level == "L2"'
+printf '[{"id": "x"}]' >"$TMP/baddocs.json"
+expect_exit 2 "doc without authors refused" -- "$S/watch-trust" notion-assigned "$TMP/baddocs.json"
+printf '[{"id": "x", "authors": ["N1"]}]' >"$TMP/baddocs.json"
+expect_exit 2 "doc without authors_complete refused" -- "$S/watch-trust" notion-assigned "$TMP/baddocs.json"
+printf '[{"id": "x", "authors": ["N1"], "authors_complete": "true"}]' >"$TMP/baddocs.json"
+expect_exit 2 "non-boolean authors_complete refused" -- "$S/watch-trust" notion-assigned "$TMP/baddocs.json"
+printf '[{"id": "x", "authors": [1], "authors_complete": true}]' >"$TMP/baddocs.json"
+expect_exit 2 "non-string author id refused" -- "$S/watch-trust" notion-assigned "$TMP/baddocs.json"
+printf '{}' >"$TMP/baddocs.json"
+expect_exit 2 "input that is not an array refused" -- "$S/watch-trust" notion-assigned "$TMP/baddocs.json"
+printf '[]' >"$TMP/nodocs.json"
+expect_exit 0 "no documents" -- "$S/watch-trust" notion-assigned "$TMP/nodocs.json"
+expect_jq "no documents gives []" '. == []'
+doc D5 '["N1", "N9", "N9"]' true | jq -s . >"$TMP/dupdocs.json"
+expect_exit 0 "duplicate writer" -- "$S/watch-trust" notion-assigned "$TMP/dupdocs.json"
+expect_jq "an untrusted writer is listed once" '.[0].untrusted == ["N9"] and .[0].action_level == "L0"'
+jq '.notion.assigned.trusted_authors = null' "$FIX" >"$TMP/nulltrust.json"
+conf "$TMP/nulltrust.json"
+expect_exit 0 "trust with trusted_authors: null" -- "$S/watch-trust" notion-assigned "$TMP/docs.json"
+expect_jq "null trusted_authors trusts nobody" 'all(.[]; .action_level == "L0")'
+jq 'del(.notion.assigned.level)' "$FIX" >"$TMP/nolevel.json"
+conf "$TMP/nolevel.json"
+expect_exit 0 "trust without a level" -- "$S/watch-trust" notion-assigned "$TMP/docs.json"
+expect_jq "a trusted document without level runs at the default L0" '.[0].trusted and .[0].action_level == "L0"'
+conf "$FIX"
+expect_exit 2 "usage" -- "$S/watch-trust" bogus "$TMP/docs.json"
+jq 'del(.notion)' "$FIX" >"$TMP/nonotion.json"
+conf "$TMP/nonotion.json"; expect_exit 3 "no notion section" -- "$S/watch-trust" notion-assigned "$TMP/docs.json"; conf "$FIX"
+
 echo "watch-seen"
 expect_exit 0 "mark" -- "$S/watch-seen" mark slack-watch-timeouts C1:1
 expect_exit 0 "match skips what was processed" -- "$S/watch-match" timeouts "$TMP/msgs.json"

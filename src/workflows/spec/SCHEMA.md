@@ -17,6 +17,7 @@ flowchart TD
   FX["Corrections: agent updates spec"]
   OUT["Return run folder + next command"]
   FB["workflow:feature:build folder"]
+  FR["workflow:feature:refactor folder"]
   IF["workflow:issue:fix folder"]
   IN --> RP --> UN
   UN -->|"no"| ON
@@ -27,4 +28,5 @@ flowchart TD
   CP -->|"corrections"| FX --> CP
   CP -->|"yes"| OUT
   OUT --> FB
+  OUT --> FR
   OUT --> IF

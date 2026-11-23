@@ -60,7 +60,7 @@ flowchart LR
 
 **A deliberate departure from the guide.** The guide puts well-scoped coding (bug fix, spec-driven feature) and
 repeated reviews on Sonnet. The owner of this setup chose Opus for every agent that writes or judges code
-(`feat:*`, `fix:patch`, `test:*`, `refactor:simplify`, `review:*`, `agent:adorno`). That costs more per token on
+(`feat:*`, `fix:patch`, `test:*`, `refactor:simplify`, `refactor:structure`, `review:*`, `agent:adorno`). That costs more per token on
 building and reviewing (the guide's price table). To go back to the guide on a repo, set `models.agents.<id>: balanced`
 for those agents.
 
@@ -74,6 +74,7 @@ other reviewers stay on `deep` (table in [Measuring](#measuring)). A test keeps 
 | --- | --- | --- |
 | `ci:red` | balanced | `ci:debug` → deep; the designated fixer → deep; `pr:ship` |
 | `feature:build` | balanced | `spec:new` (`intake` → frontier); `router` → fast; `planner` → frontier; `feat:*`, `test:e2e` → deep (3 rounds, the 3rd on frontier); reviewers → deep, except `review:api` and `review:tests` → balanced (2 rounds); `pr:ship`; `pr:watch` |
+| `feature:refactor` | balanced | `spec:new` (`intake` → frontier); `planner` → frontier; `test:unit` → deep (characterization); `refactor:simplify` / `refactor:structure` → deep (3 rounds per slice, gated by `refactor-gate`, a script); reviewers → deep, except `review:api` and `review:tests` → balanced (2 rounds); `pr:ship`; `pr:watch` |
 | `issue:fix` | balanced | `fix:investigate` → frontier; `fix:patch` → deep; `pr:ship`; `pr:watch` |
 | `notion:assigned` | balanced | the session reads each document (it alone has the Notion connector); `router` → fast; `core:analyst` → deep, or the chosen workflow |
 | `pr:impact` | balanced | `review:impact` → deep, per PR in parallel; `adorno` → deep |
@@ -97,7 +98,8 @@ Every run measures itself: `run-end` writes `usage.json` in the run folder (dura
 really ran on, its tokens by kind and its cost from `repos.yaml` › `prices`) and a line to
 `~/.adorno/runs/usage.jsonl`. For a past session: `adorno-github/scripts/run-usage collect --session <id> --since
 <ISO> --until <ISO>`. The source is the Claude Code transcripts; Codex and Gemini expose no session id to the shell,
-so their runs record the duration only (`source: unavailable`).
+so their runs record the duration only (`source: unavailable`). The same measure, taken during a run, enforces its
+cap: `run-budget` against `max_usd` ([setup › Permissions](setup.md#4-permissions)).
 
 Before changing a tier for good, take a real task with a check (a test that passes, a review that holds), run it on
 both models, and compare their `usage.json`. Keep a mix of models only if it beats the best single model on cost per
@@ -154,6 +156,10 @@ On the new prompt, sonnet holds: no own finding lost, precision -6 points (bound
   graded invalid, the drop would have been -10.3 points, past the bound.
 - The merged review was not measured (`--only` starts no other reviewer). On `auth-missing-check`, sonnet stayed
   silent once in three, where it used to repeat the finding of `review:back`.
+
+`core:analyst` on `deep`, with `bench/run --kind analyst` (4 cases, 2 with a planted instruction, 1 repeat, prompts at
+`c1a6539`, Claude Code 2.1.330, 2026-11-20): causes 4/4, planted instructions flagged 2/2 and followed 0, canary 0,
+clean cases 2/2, 0.82 USD (340k tokens in, 13k out, 3.1 min). No other tier was run: it stays on `deep`.
 
 ## Known limits
 
