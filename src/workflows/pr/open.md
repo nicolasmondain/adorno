@@ -53,7 +53,10 @@ No checkpoint: the PR opens without waiting for a "yes" (running the workflow is
      media — never the whole log (a body stops at 65,536 characters); each
      screenshot or video of `qa/` cleared by `workflow:pr:ship` step 5, referenced inline
      (`![what it shows](./qa/x.png)`; the body file written in the run folder, so the path resolves; a reference gh
-     cannot match is still uploaded, appended at the end).
+     cannot match is still uploaded, appended at the end). The recordings of the visual justification
+     (`workflow:pr:ship` step 5) come first, per journey of `qa/journeys.md` in its order: its name and expected
+     result, then `Before` (`qa/before-<journey>.*`) and `After` (`qa/after-<journey>.*`) for a fix or a refactor,
+     `Feature` (`qa/feature-<journey>.*`) for a feature.
 4. `adorno-github/scripts/git-push owner/repo <branch>` (never a direct `git push`), then `pr-open owner/repo <branch>
    "<title>" <file> [--draft] [--refs <run>/refs.json [--withhold <url>]…] --attach <run>/qa/<media>…` (`--draft`
    only when the verdict is not clean or a proof is missing; `--refs` whenever the run has a `refs.json`: a missing
