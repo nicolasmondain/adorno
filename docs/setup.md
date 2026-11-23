@@ -113,7 +113,7 @@ same thing with `adorno-github/scripts/repo-conf`.
 One table, `repos.yaml` › `defaults.areas`, decides which agent builds, fixes, optimizes, reviews and checks each part
 of the code, and which skills it loads. Its areas are neutral: a pattern there means one thing whatever the stack.
 What depends on the stack comes from a [stack preset](#stack-presets) the repo calls with `use:`. Every dispatcher (planner, triage, `ci:debug`, `pr:ship`, `pr:review`,
-`review:received`, `issue:fix`) reads it through `adorno-github/scripts/pr-areas`, never a list of its own.
+`review:received`, `issue:fix`, `feature:refactor`) reads it through `adorno-github/scripts/pr-areas`, never a list of its own.
 
 | Area | Detected by (excerpt) | `build` | `fix` | `perf` | `review` | `qa` | `skills` |
 | --- | --- | --- | --- | --- | --- | --- | --- |

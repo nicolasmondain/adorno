@@ -60,7 +60,7 @@ flowchart LR
 
 **A deliberate departure from the guide.** The guide puts well-scoped coding (bug fix, spec-driven feature) and
 repeated reviews on Sonnet. The owner of this setup chose Opus for every agent that writes or judges code
-(`feat:*`, `fix:patch`, `test:*`, `refactor:simplify`, `review:*`, `agent:adorno`). That costs more per token on
+(`feat:*`, `fix:patch`, `test:*`, `refactor:simplify`, `refactor:structure`, `review:*`, `agent:adorno`). That costs more per token on
 building and reviewing (the guide's price table). To go back to the guide on a repo, set `models.agents.<id>: balanced`
 for those agents.
 
@@ -74,6 +74,7 @@ other reviewers stay on `deep` (table in [Measuring](#measuring)). A test keeps 
 | --- | --- | --- |
 | `ci:red` | balanced | `ci:debug` → deep; the designated fixer → deep; `pr:ship` |
 | `feature:build` | balanced | `spec:new` (`intake` → frontier); `router` → fast; `planner` → frontier; `feat:*`, `test:e2e` → deep (3 rounds, the 3rd on frontier); reviewers → deep, except `review:api` and `review:tests` → balanced (2 rounds); `pr:ship`; `pr:watch` |
+| `feature:refactor` | balanced | `spec:new` (`intake` → frontier); `planner` → frontier; `test:unit` → deep (characterization); `refactor:simplify` / `refactor:structure` → deep (3 rounds per slice, gated by `refactor-gate`, a script); reviewers → deep, except `review:api` and `review:tests` → balanced (2 rounds); `pr:ship`; `pr:watch` |
 | `issue:fix` | balanced | `fix:investigate` → frontier; `fix:patch` → deep; `pr:ship`; `pr:watch` |
 | `notion:assigned` | balanced | the session reads each document (it alone has the Notion connector); `router` → fast; `core:analyst` → deep, or the chosen workflow |
 | `pr:impact` | balanced | `review:impact` → deep, per PR in parallel; `adorno` → deep |

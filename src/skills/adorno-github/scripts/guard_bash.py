@@ -581,8 +581,8 @@ GH_VALUED = {"create": {"-t", "--title", "-F", "--body-file", "-b", "--body", "-
 # adorno's scripts that may run without a prompt: read-only, or checking require_level themselves. Never run-begin
 # (opening a run, and its level, is the owner's call), nor the scripts that send data out or write local/.
 ALLOWED_SCRIPTS = {"repo-conf", "run-check", "run-budget", "run-end", "run-mark", "run-usage", "pr-status", "pr-areas",
-                   "pr-shortcuts", "pr-diff", "pr-feedback-fetch", "issue-fetch", "ci-wait", "ci-failed",
-                   "pr-workspace", "git-push", "pr-push", "pr-open", "pr-edit", "pr-ready"}
+                   "pr-shortcuts", "refactor-gate", "pr-diff", "pr-feedback-fetch", "issue-fetch", "ci-wait",
+                   "ci-failed", "pr-workspace", "git-push", "pr-push", "pr-open", "pr-edit", "pr-ready"}
 
 
 def quoted_at(command, k):

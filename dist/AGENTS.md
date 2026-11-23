@@ -209,6 +209,7 @@ Each one is a command of the same name (without native commands: the skill of th
 
 - `workflow:ci:red` (`/adorno-ci-red`) — Handles a red CI on a PR
 - `workflow:feature:build` (`/adorno-feature-build`) — Take a feature end to end
+- `workflow:feature:refactor` (`/adorno-feature-refactor`) — Restructure code end to end without changing its behavior
 - `workflow:issue:fix` (`/adorno-issue-fix`) — Fix a bug from a GitHub issue, a Slack thread, a Notion page, a prompt or a validated spec
 - `workflow:notion:assigned` (`/adorno-notion-assigned`) — Find the Notion documents assigned to you ("person" properties of the watched databases, status still open) an
 - `workflow:pr:impact` (`/adorno-pr-impact`) — Analyzes the impact of the PRs you merged on a repo
