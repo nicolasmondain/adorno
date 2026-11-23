@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Usage: run [--case ID]… [--kind review|adorno|analyst] [--tool claude] [--model X] [--agent-model ID=X]…
-           [--repeat N] [--label NAME] [--budget-usd N] [--repo owner/repo] [--parallel N] [--cases DIR]
+           [--only ID]… [--repeat N] [--label NAME] [--budget-usd N] [--repo owner/repo] [--parallel N] [--cases DIR]
            [--results DIR]
 
 Runs the review stage of workflow:pr:review on the benchmark cases, headless and without GitHub. This calls models
@@ -24,6 +24,9 @@ global instructions and your hooks are not loaded. An agent runs sandboxed: it w
 has no network. --model replaces the model of every agent; without it each agent runs on its own tier.
 --agent-model ID=X replaces the model of one reviewer, agent:adorno or agent:core:analyst
 (agent:review:ponytail=sonnet), over --model: repeat it to compare a tier per reviewer while the others stay on theirs.
+--only ID starts that reviewer alone (repeat it for several): on the review cases that route to it, with the brief it
+gets in a full run, without the other reviewers and without agent:adorno. A partial run, to measure one reviewer for
+the price of its own calls: only the "Per reviewer" table of its report measures something.
 
 Results go to RESULTS/<label>/ (bench/results by default, ignored by git):
   run.json                     the run: tool, model, prompts (sha, dirty), cost, what the budget skipped, the case
@@ -256,6 +259,8 @@ def run_case(args, tool, case_id, entry, always, state, dest):
     case = json.loads((case_dir / "case.json").read_text())
     analyst = case.get("kind") == "analyst"  # no change, so no routing: entry is None
     routed, parallel = (None if analyst else entry["routed"]), args.parallel
+    # --only: the others do not run
+    playing = [] if analyst else [a for a in routed["review"] if not args.only or a in args.only]
     templates = {name: (ROOT / "bench" / "prompts" / f"{name}.md").read_text()
                  for name in ("reviewer", "adorno", "analyst")}
     tmp = Path(tempfile.mkdtemp(prefix="adorno-bench-"))
@@ -291,8 +296,8 @@ def run_case(args, tool, case_id, entry, always, state, dest):
             return agent, play(agent, prompt, budget)
 
         def reviewers():
-            """The routed reviewers, a missing or invalid review run once more -> the merged review."""
-            pending, merged = list(routed["review"]), {}
+            """The reviewers that play, a missing or invalid review run once more -> the merged review."""
+            pending, merged = list(playing), {}
             for attempt_number in (1, 2):
                 # what is left, split over every call of the round: their caps add up to it, whatever --parallel is
                 share = None if left() is None or not pending else left() / len(pending)
@@ -310,7 +315,7 @@ def run_case(args, tool, case_id, entry, always, state, dest):
                             write_json(target, found)
                             metas[agent]["delivered"] = "salvaged"
                 merged = json.loads(out([SCRIPTS / "review-merge", run_dir / "reviews"]))
-                pending = [a for a in routed["review"] if not (run_dir / "reviews" / f"{short(a)}.json").is_file()
+                pending = [a for a in playing if not (run_dir / "reviews" / f"{short(a)}.json").is_file()
                            or f"{short(a)}.json" in merged["invalid"]]
                 if not pending or attempt_number == 2 or exhausted():
                     break
@@ -346,9 +351,9 @@ def run_case(args, tool, case_id, entry, always, state, dest):
                 else:
                     merged = reviewers()
                 write_json(run_dir / "review.json", merged)
-                missing = [a for a in routed["review"] if not (run_dir / "reviews" / f"{short(a)}.json").is_file()]
+                missing = [a for a in playing if not (run_dir / "reviews" / f"{short(a)}.json").is_file()]
 
-                if not exhausted():
+                if not args.only and not exhausted():
                     attempt = play(ADORNO, fill(templates["adorno"], common), left())
                     if attempt["cost_usd"] is not None:
                         state["spent"] += attempt["cost_usd"]
@@ -392,6 +397,7 @@ def main():
     parser.add_argument("--tool", default="claude")
     parser.add_argument("--model")
     parser.add_argument("--agent-model", action="append", default=[], metavar="ID=X")
+    parser.add_argument("--only", action="append", default=[], metavar="ID")
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--label")
     parser.add_argument("--budget-usd", type=float)
@@ -424,6 +430,9 @@ def main():
             die(f"--agent-model {spec}: expected ID=MODEL with a reviewer of dist/claude-plugin, {ADORNO} or {ANALYST}",
                 2)
         args.agent_models[agent] = model
+    for agent in args.only:
+        if not agent.startswith("agent:review:") or not (PLUGIN / "agents" / f"{plugin_name(agent)}.md").is_file():
+            die(f"--only {agent}: expected a reviewer of dist/claude-plugin", 2)
     started = datetime.datetime.now(datetime.timezone.utc)
     label = args.label or (f"{started:%Y%m%d-%H%M%S}-{args.tool}-{args.model or 'tiers'}"
                            + ("-mixed" if args.agent_models else ""))
@@ -444,6 +453,15 @@ def main():
         entries = {entry["case"]: entry for entry in json.loads(routed.stdout)}
         # the `always` reviewers are those a file of no area gets: they read the whole change, not one area
         always = json.loads(out([SCRIPTS / "pr-areas", args.repo, "--files", "no-area.bench"]))["review"]
+    if args.only:  # the cases where one of them plays: a case of kind adorno or analyst starts no reviewer
+        everything = cases
+        cases = [c for c in everything
+                 if kinds[c] == "review" and set(entries[c]["routed"]["review"]) & set(args.only)]
+        if not cases:
+            die(f"--only {', '.join(args.only)}: no case routes to it", 2)
+        left_out = [c for c in everything if c not in cases]
+        if left_out:
+            print(f"run: --only leaves out {', '.join(left_out)}", file=sys.stderr)
 
     try:
         sha = out(["git", "rev-parse", "HEAD"], ROOT).strip()
@@ -475,7 +493,7 @@ def main():
     if args.budget_usd is not None and runs and not priced:
         print(f"run: {args.tool} reports no cost: --budget-usd did not apply", file=sys.stderr)
     report = {"label": label, "tool": args.tool, "tool_version": version, "model": args.model,
-              "agent_models": args.agent_models, "repo": args.repo,
+              "agent_models": args.agent_models, "only": sorted(args.only), "repo": args.repo,
               "repeat": args.repeat, "cases": cases, "prompts": {"sha": sha, "dirty": dirty},
               "started_at": started.isoformat(timespec="seconds"),
               "finished_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
