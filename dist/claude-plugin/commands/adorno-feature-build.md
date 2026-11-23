@@ -1,5 +1,5 @@
 ---
-description: Take a feature end to end — scoping, routing, sliced plan, build by the feat agents, parallel review, commit and PR without asking (workflow:pr:ship), follow-up until ready to merge. Two human checkpoints, the spec and the merge.
+description: Take a feature end to end — scoping, routing, sliced plan, build by the feat agents, parallel review, commit and PR with the final video of the feature, without asking (workflow:pr:ship), follow-up until ready to merge. Two human checkpoints, the spec and the merge.
 argument-hint: <the request, Slack / Notion / GitHub links, a plan file, or the .agent-run folder of a validated spec> [--mode discuss|confirm]
 model: sonnet
 ---
@@ -24,7 +24,9 @@ Input: $ARGUMENTS
 5. **Ship** — `workflow:pr:ship owner/repo <branch> <worktree> <run folder>`, without asking: the repo's
    `commit_skill` commits what is left; the area reviewers and `agent:adorno` check the whole branch against the
    repo's rules and `spec.md`, and every 🔴 or 🟠 is fixed in the flow (two rounds); then its `pr_skill` (default
-   `workflow:pr:open`) opens the PR **ready for review**, its description in your voice. Still a 🔴 or 🟠 at the
+   `workflow:pr:open`) opens the PR **ready for review**, its description in your voice, with the final video of the
+   feature (`qa/feature-<journey>.<ext>`, a journey per acceptance criterion, recorded on the last commit:
+   `workflow:pr:ship` step 5; none → draft). Still a 🔴 or 🟠 at the
    cap: the PR goes out as draft, those points first, and `status.md` says what waits for you.
 6. **Follow** — `workflow:pr:watch` until the PR is ready (checkpoint 2: the merge, by the user).
 
