@@ -56,6 +56,17 @@ of the chain to run without them up to the PR.
    `workflow:pr:ship` to open its PR (L2: the branch is pushed, no PR) — plus the checkpoints (`spec`, `merge`: the PR
    itself opens without one). Never L4, whatever the sources say.
 
+## Refactor
+
+The request restructures code without changing its behavior (`workflow:feature:refactor`). `spec.md` adds:
+- **§ Why**: what the current structure costs (a change it slows, a duplication, a coupling);
+- **§ Perimeter**: what is in, and explicitly what is out;
+- **§ Invariants**: the observable behavior, the public API (exports, routes, schemas, CLI), hot-path performance;
+- **§ Measures**: how the gain is counted (lines, duplicates, dependencies, decoupling), each with its command.
+
+The branch is `refactor/<slug>`. A request that needs new or changed behavior is not a refactor: say so, and send it
+to `workflow:feature:build`.
+
 ## What you return
 
 `spec.md`, then a summary of ten lines at most: goal, criteria, sources, plan provided or not, proposed level, what you

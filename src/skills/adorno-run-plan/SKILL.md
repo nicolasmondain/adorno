@@ -14,7 +14,9 @@ its input.
    the whole history. `parallel` steps: start them in the same turn. Before each step and each loop round,
    `adorno-github/scripts/run-budget <id>`: a non-zero exit → stop (step 5).
 3. **Loops**: `loop.evaluator: tests` = the repo's `test`/`lint` commands; send the failing output back to the agent,
-   up to `max`. `fix_with: same_agent` = the agent that wrote the slice fixes the review findings. A round that
+   up to `max`. `loop.evaluator: refactor-gate` = those tests, then `adorno-github/scripts/refactor-gate` (no
+   existing test changed or lost, `workflow:feature:refactor` step 4); its refusal goes back like a failing test.
+   `fix_with: same_agent` = the agent that wrote the slice fixes the review findings. A round that
    fails again climbs, within `max` (the same rule for every capped loop of a workflow):
    - first round: the agent on its own tier;
    - middle rounds (from `max: 3`): the same agent with `effort: high`;
@@ -30,11 +32,12 @@ its input.
    (`run-budget`: a non-zero exit) → launch nothing more, `status.md` opens with `Stopped: budget`, `run-end <id> stopped`
    (orchestration › Runs).
 6. After each step, update `status.md` in the run folder: step, result, rounds used, next action, and the `Ponytail`
-   note of an agent's deliverable (lite: the smaller option, ultra: the pushback). At the end,
-   `run-end <id> --status <run folder>/status.md` adds the run's cost line there.
+   note of an agent's deliverable (lite: the smaller option, ultra: the pushback) and its `Self-review` section,
+   both copied as is. At the end, `run-end <id> --status <run folder>/status.md` adds the run's cost line there.
 7. Mark the run's journal as you go, so its replay shows the plan: `adorno-github/scripts/run-mark step-begin <index>
    <name>` before a step and `run-mark step-end <index> <name>` after it (index: the step's place in `steps:`, from
-   1), `run-mark round <n> <max> "<why>"` when a loop round starts.
+   1), `run-mark round <n> <max> "<why>"` when a loop round starts, `run-mark self-review <agent> <N>` after a step
+   whose agent returned a `Self-review` (`<agent>` its logical id, `<N>` the count of its `Fixed (N):`).
 
 Deliverable: `status.md` up to date and a five-line report — what is done, what was verified, where it stopped and
 why, what waits for the owner, and the cost line `run-end` printed.

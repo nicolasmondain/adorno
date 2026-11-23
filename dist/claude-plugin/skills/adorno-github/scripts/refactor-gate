@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# Usage: refactor-gate owner/repo --base SHA --baseline REPORT --after REPORT [--dir PATH]
+# Read-only proof that a refactor kept the behavior: compares the test reports taken at --base (baseline) and at HEAD
+# (after), and the commits of base..HEAD in the git repo at PATH (default: the current directory). It proves commits:
+# --base must be an ancestor of HEAD, and the working tree must hold no uncommitted change, untracked files included
+# (the ignored ones, .gitignore and info/exclude, do not count: the run folder stays invisible).
+# Test files come from the registry: a path of an area built by an `agent:test:*` agent (pr-areas), never a glob here;
+# a repo with no such area (sub-areas included) is refused, never gated without its file rules.
+# A report whose first non-blank character is `<` is JUnit XML (read with python3: id `classname::name`, passing = no
+# failure, error or skipped child); anything else is a plain list, one passing test id per line, blank lines ignored.
+# Refuses (violations[]):
+#   test-file-changed      a test file of base modified, deleted, renamed (its old path) or retyped in base..HEAD
+#   refactor-touches-test  a refactor or style commit of base..HEAD touching a test file, a new one included
+#   test-lost              a test passing in the baseline and missing, failed or skipped after (status)
+#   test-failing           a failure or error in a JUnit after
+# Prints JSON {ok, base, head, report: junit|list (the after's format), green (null for a plain list after: the test
+# command's exit code says it), tests: {baseline, after} (passing ids), violations: [{rule, file?, commit?, test?,
+# status?}]}. Exit 0 pass, 1 refused, 2 usage (bad arguments or report, a --base that is not an ancestor of HEAD,
+# uncommitted changes, no test area: nothing was proven), 3 unregistered repo.
+. "$(dirname "$0")/_lib.sh"
+
+usage="usage: refactor-gate owner/repo --base SHA --baseline REPORT --after REPORT [--dir PATH]"
+split_repo "${1:-}"; shift
+base="" baseline="" after="" dir="."
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --base) base="${2:-}"; shift 2 || die "$usage" "$E_USAGE" ;;
+    --baseline) baseline="${2:-}"; shift 2 || die "$usage" "$E_USAGE" ;;
+    --after) after="${2:-}"; shift 2 || die "$usage" "$E_USAGE" ;;
+    --dir) dir="${2:-}"; shift 2 || die "$usage" "$E_USAGE" ;;
+    *) die "$usage" "$E_USAGE" ;;
+  esac
+done
+[ -n "$base" ] && [ -n "$baseline" ] && [ -n "$after" ] || die "$usage" "$E_USAGE"
+[ -f "$baseline" ] || die "baseline report not found: $baseline" "$E_USAGE"
+[ -f "$after" ] || die "after report not found: $after" "$E_USAGE"
+conf="$(repo_conf "$REPO")"
+# the file rules need a test area (pr-areas units: top-level areas and their sub-areas, roles inherited)
+jq -e '[.areas // {} | to_entries[] | select(.key != "always") | .value, (.value.sub // {} | .[])]
+       | any((.build // "") | startswith("agent:test:"))' >/dev/null <<<"$conf" \
+  || die "$REPO has no area built by an agent:test:* agent (areas.<area>.build in your local config): no file can be told a test file" "$E_USAGE"
+git -C "$dir" rev-parse --git-dir >/dev/null 2>&1 || die "not a git repository: $dir" "$E_USAGE"
+# git refuses an option as --base too; this names the cause and keeps the value out of git's options
+case "$base" in -*) die "--base is not a commit: $base" "$E_USAGE" ;; esac
+base="$(git -C "$dir" rev-parse --verify -q "$base^{commit}")" || die "--base is not a commit of $dir: $base" "$E_USAGE"
+head="$(git -C "$dir" rev-parse HEAD)"
+git -C "$dir" merge-base --is-ancestor "$base" HEAD \
+  || die "--base $base is not an ancestor of HEAD in $dir: rebased? capture the baseline again" "$E_USAGE"
+# untracked files count (a moved module never committed: the commit cannot run without it); ignored ones do not
+[ -z "$(git -C "$dir" --no-optional-locks status --porcelain)" ] \
+  || die "uncommitted changes in $dir (untracked files included): commit the round before the gate (it proves commits, not the working tree)" "$E_USAGE"
+
+tmp="$(work_dir)/gate-$$"; mkdir -p "$tmp"; trap '_journal_exit $? "$tmp"' EXIT
+: >"$tmp/tests"
+
+# report FILE OUT -> its format on stdout; OUT gets `status<TAB>id` per test (passed | failed | skipped)
+report() {
+  if [ "$(awk '{ sub(/^[[:space:]]+/, "") } length { print substr($0, 1, 1); exit }' "$1")" = "<" ]; then
+    command -v python3 >/dev/null 2>&1 \
+      || die "$1 is a JUnit report and python3 is missing: install it, or pass a plain list (one passing test id per line)" "$E_USAGE"
+    python3 -I - "$1" >"$2" <<'PY' || die "cannot read the JUnit report $1" "$E_USAGE"
+import sys
+import xml.etree.ElementTree as ET
+try:
+    with open(sys.argv[1], "rb") as f:
+        root = ET.fromstring(f.read().lstrip())  # leading blanks: an XML declaration must open the document
+except ET.ParseError as e:
+    sys.exit("refactor-gate: %s: %s" % (sys.argv[1], e))
+for case in root.iter("testcase"):
+    tags = {child.tag for child in case}
+    status = "failed" if tags & {"failure", "error"} else "skipped" if "skipped" in tags else "passed"
+    print("%s\t%s::%s" % (status, case.get("classname", ""), case.get("name", "")))
+PY
+    echo junit
+  else
+    awk '{ sub(/\r$/, ""); sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, "") } length { print "passed\t" $0 }' "$1" >"$2"
+    echo list
+  fi
+}
+report "$baseline" "$tmp/baseline" >/dev/null
+format="$(report "$after" "$tmp/after")"
+grep -q '^passed' "$tmp/baseline" || die "the baseline $baseline has no passing test: nothing to compare" "$E_USAGE"
+
+# shortcut: a path holding a newline breaks these line-based lists (pr-areas reads lines too); handle it if a repo has one
+# `status<TAB>path` for each file of base changed in base..HEAD (a rename keeps its old path, the one base had)
+git -C "$dir" diff --name-status -z -M "$base" HEAD | while IFS= read -r -d '' st; do
+  IFS= read -r -d '' p
+  case "$st" in R*|C*) IFS= read -r -d '' _new ;; esac
+  printf '%s\t%s\n' "${st:0:1}" "$p"
+done >"$tmp/ns"
+# `short sha<TAB>path` for each file a refactor or style commit of base..HEAD touches
+re='^(refactor|style)(\([^)]*\))?!?: '
+git -C "$dir" log --format='%H%x09%h%x09%s' "$base..HEAD" | while IFS=$'\t' read -r sha short subject; do
+  [[ "$subject" =~ $re ]] || continue
+  git -C "$dir" diff-tree --no-commit-id --name-only -r -z "$sha" | while IFS= read -r -d '' p; do
+    printf '%s\t%s\n' "$short" "$p"
+  done
+done >"$tmp/rc"
+
+# the test files among those paths: the ones pr-areas puts in an area built by agent:test:*
+{ cut -f2- "$tmp/ns"; cut -f2- "$tmp/rc"; } | sort -u >"$tmp/paths"
+if [ -s "$tmp/paths" ]; then
+  "$(dirname "$0")/pr-areas" "$REPO" --files - <"$tmp/paths" \
+    | jq -r '.areas as $a | .by_area | to_entries[] | select((.value.build // "") | startswith("agent:test:"))
+             | $a[.key][]' | sort -u >"$tmp/tests"
+fi
+
+out="$(jq -n --rawfile b "$tmp/baseline" --rawfile a "$tmp/after" --rawfile ns "$tmp/ns" --rawfile rc "$tmp/rc" \
+  --rawfile tf "$tmp/tests" --arg base "$base" --arg head "$head" --arg format "$format" '
+  def rows: split("\n") | map(select(length > 0) | capture("^(?<k>[^\t]*)\t(?<v>.*)$"));
+  # one status per id: an id reported twice (two suites, a retry) keeps its worst one
+  def statuses: rows | group_by(.v) | map({key: .[0].v, value: (map(.k)
+    | if any(.[]; . == "failed") then "failed" elif any(.[]; . == "skipped") then "skipped" else "passed" end)})
+    | from_entries;
+  ($b | statuses) as $before | ($a | statuses) as $now
+  | ($tf | split("\n") | map(select(length > 0) | {key: ., value: true}) | from_entries) as $test
+  | ($before | to_entries | map(select(.value == "passed") | .key)) as $passing
+  | [ ($ns | rows[] | select(.k != "A" and $test[.v])
+        | {rule: "test-file-changed", file: .v,
+           status: ({M: "modified", D: "deleted", R: "renamed", T: "type-changed"}[.k] // .k)}),
+      ($rc | rows[] | select($test[.v]) | {rule: "refactor-touches-test", commit: .k, file: .v}),
+      ($passing[] | select($now[.] != "passed") | {rule: "test-lost", test: ., status: ($now[.] // "missing")}),
+      ($now | to_entries[] | select(.value == "failed") | {rule: "test-failing", test: .key}) ] as $v
+  | {ok: ($v == []), base: $base, head: $head, report: $format,
+     green: (if $format == "junit" then ([$now[] | select(. == "failed")] == []) else null end),
+     tests: {baseline: ($passing | length), after: ([$now[] | select(. == "passed")] | length)},
+     violations: $v}')"
+printf '%s\n' "$out"
+[ "$(jq -r .ok <<<"$out")" = true ] || exit 1
