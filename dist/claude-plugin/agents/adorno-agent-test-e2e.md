@@ -44,7 +44,8 @@ behavior breaks), the bug suspected for `agent:fix:investigate` if one showed up
 - One file per journey and moment: `qa/before-<journey>.<ext>`, `qa/after-<journey>.<ext>`,
   `qa/feature-<journey>.<ext>`, with a line per recording in `qa.md` (commit SHA, what it shows, verdict). A bug's
   `before-` shows the error on screen (the message, the wrong value, the stack in the console pane): a recording
-  where it does not show is not kept.
+  where it does not show is not kept. An `after-` where the error still shows (a fix), or whose result differs from
+  its `before-` (a refactor), is not kept either: the recording is missing (`workflow:pr:ship` step 5).
 
 ### No interface
 

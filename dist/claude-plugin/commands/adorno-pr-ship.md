@@ -75,7 +75,7 @@ command.
    - still missing (no `tests.log`, a visible change without clean media, or a recording of the visual
      justification: `Proof missing: video <before|after|feature> <journey>`) → the PR goes out or stays **draft**,
      `Proof missing: <what>` first in its description and in `status.md`. A proof is never invented, nor taken
-     from another commit;
+     from another commit than the one it stands for (the last commit; a `before-`: the code before the change);
    - a run with `qa/refactor-gate.json` (`workflow:feature:refactor`): after the last fix round, the tests again in
      the baseline's format and `refactor-gate --dir <worktree>` with the `base` of that JSON and the run's `baseline/` report, its
      answer rewritten there; a refusal or an exit 2 (nothing proven) is a proof missing (draft, `Proof missing:
