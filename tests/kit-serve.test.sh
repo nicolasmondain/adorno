@@ -93,7 +93,7 @@ expect_jq "the runs that have a journal, newest first; not the grants, a run wit
 expect_jq "a run: what it was, how long, what it cost" \
   '.runs[2] | .run == "20260101T100000-1000-1" and .workflow == "workflow:feature:build" and .mode == "draft" and .level == "L2" and .repos == ["acme/app"]
    and .start == "2026-01-01T10:00:00.000Z" and .end == "2026-01-01T10:17:10.100Z" and .duration_ms == 1030100 and .outcome == "ended"
-   and .agents == 9 and .events == 85 and .bad_lines == 0 and .tokens == {"in": 32900, "out": 5930, "cache_read": 39300, "cache_write": 51800} and .size > 0'
+   and .agents == 9 and .events == 86 and .bad_lines == 0 and .tokens == {"in": 32900, "out": 5930, "cache_read": 39300, "cache_write": 51800} and .size > 0'
 expect_jq "a run still open, its transcripts' turns counted with the rest" \
   '.runs[1] | .outcome == "open" and .end == null and .agents == 3 and .events == 13 and .tokens.in == 2500'
 expect_jq "a damaged journal is listed, its unreadable lines counted" '.runs[0] | .bad_lines == 1 and .events == 2 and .workflow == null and .outcome == "open"'
@@ -103,7 +103,7 @@ get /api/runs; expect_jq "a journal that grew is read again" '.runs[0].events ==
 echo "read"
 status 200 "/api/runs/$F1"
 expect_jq "events in order, numbered, in milliseconds from the start" \
-  '.t0 == "2026-01-01T10:00:00.000Z" and .duration_ms == 1030100 and (.events | length) == 78 and ([.events[].i] == [range(0; 78)])
+  '.t0 == "2026-01-01T10:00:00.000Z" and .duration_ms == 1030100 and (.events | length) == 79 and ([.events[].i] == [range(0; 79)])
    and ([.events[].t] | . == sort) and ([.events[].u] | . == sort) and .open == false and .outcome == "ended"'
 expect_jq "lanes: you, the session, each agent in spawn order, scripts, the guard, GitHub" \
   '[.lanes[].id] == ["you", "session", "agent:a-plan", "agent:a-build", "agent:a-rev-code", "agent:a-rev-sec", "agent:a-rev-pony",
@@ -138,6 +138,9 @@ expect_jq "the fix rounds, with their cap and the agents started inside" \
   '[.rounds[] | [.round, .cap, .lanes]] == [[1, 2, ["agent:a-fix-1", "agent:a-rerev-1"]], [2, 2, ["agent:a-fix-2", "agent:a-rerev-2"]]]
    and .rounds[0].start == 879000 and .rounds[0].end == 949000 and .rounds[1].end == 1019000 and .rounds[0].reason == "1 major"'
 expect_jq "steps and rounds are not marks of their own" 'all(.events[]; .type != "loop" and (.type | startswith("step.") | not)) and .totals.counts.loop == 2'
+expect_jq "a self-review is a mark of the session, counted, read with its agent and its count" \
+  '.totals.counts["self-review"] == 1
+   and any(.events[]; .type == "self-review" and .from == "session" and .to == null and .label == "agent:feat:back self-review: 1 fixed")'
 expect_jq "tokens: per lane and per model, adding up to the total" \
   '.totals.tokens == {"in": 32900, "out": 5930, "cache_read": 39300, "cache_write": 51800}
    and ([.totals.by_lane[].in] | add) == 32900 and ([.totals.by_model[].out] | add) == 5930 and (.totals.by_model | keys | length) == 3

@@ -60,7 +60,7 @@ flowchart LR
 
 **A deliberate departure from the guide.** The guide puts well-scoped coding (bug fix, spec-driven feature) and
 repeated reviews on Sonnet. The owner of this setup chose Opus for every agent that writes or judges code
-(`feat:*`, `fix:patch`, `test:*`, `refactor:simplify`, `review:*`, `agent:adorno`). That costs more per token on
+(`feat:*`, `fix:patch`, `test:*`, `refactor:simplify`, `refactor:structure`, `review:*`, `agent:adorno`). That costs more per token on
 building and reviewing (the guide's price table). To go back to the guide on a repo, set `models.agents.<id>: balanced`
 for those agents.
 
@@ -74,6 +74,7 @@ other reviewers stay on `deep` (table in [Measuring](#measuring)). A test keeps 
 | --- | --- | --- |
 | `ci:red` | balanced | `ci:debug` → deep; the designated fixer → deep; `pr:ship` |
 | `feature:build` | balanced | `spec:new` (`intake` → frontier); `router` → fast; `planner` → frontier; `feat:*`, `test:e2e` → deep (3 rounds, the 3rd on frontier); reviewers → deep, except `review:api` and `review:tests` → balanced (2 rounds); `pr:ship`; `pr:watch` |
+| `feature:refactor` | balanced | `spec:new` (`intake` → frontier); `planner` → frontier; `test:unit` → deep (characterization); `refactor:simplify` / `refactor:structure` → deep (3 rounds per slice, gated by `refactor-gate`, a script); reviewers → deep, except `review:api` and `review:tests` → balanced (2 rounds); `pr:ship`; `pr:watch` |
 | `issue:fix` | balanced | `fix:investigate` → frontier; `fix:patch` → deep; `pr:ship`; `pr:watch` |
 | `notion:assigned` | balanced | the session reads each document (it alone has the Notion connector); `router` → fast; `core:analyst` → deep, or the chosen workflow |
 | `pr:impact` | balanced | `review:impact` → deep, per PR in parallel; `adorno` → deep |
@@ -130,6 +131,10 @@ the measure (#38: its own scenarios instead of `addy/test-engineer`): the tier r
 run. The controls (`code`, `back`, `front`, `security`, `perf-back`,
 unchanged) kept recall and cost within 3 %, but their ungraded precision moved by up to 10 points between runs: that
 is the noise of one run pair.
+
+`core:analyst` on `deep`, with `bench/run --kind analyst` (4 cases, 2 with a planted instruction, 1 repeat, prompts at
+`c1a6539`, Claude Code 2.1.330, 2026-11-20): causes 4/4, planted instructions flagged 2/2 and followed 0, canary 0,
+clean cases 2/2, 0.82 USD (340k tokens in, 13k out, 3.1 min). No other tier was run: it stays on `deep`.
 
 ## Known limits
 

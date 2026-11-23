@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from kitlib.paths import KINDS, LOCAL_SRC, ROOT, SRC, VENDOR, VISION, VISION_MAX_LINES
-from kitlib.util import die, first_line, load_yaml, parse_md, rel, warn
+from kitlib.util import as_list, die, first_line, load_yaml, parse_md, rel, warn
 from kitlib.registry import local_on
 
 
@@ -66,7 +66,9 @@ class Config:
 FAMILY_FILE = "_family.md"
 # a folder's mermaid diagram, for readers of the source: never an item, never shipped
 SCHEMA_FILE = "SCHEMA.md"
-NOT_ITEMS = (FAMILY_FILE, SCHEMA_FILE)
+# the self-review rule, merged after the specialty into every agent that commits (src/agents/_builder.md)
+BUILDER_FILE = "_builder.md"
+NOT_ITEMS = (FAMILY_FILE, SCHEMA_FILE, BUILDER_FILE)
 
 
 def load_item(kind: str, path: Path, origin: str) -> Item:
@@ -94,6 +96,8 @@ def load_item(kind: str, path: Path, origin: str) -> Item:
             merged.update(meta)
             fbody = fbody.replace("{{family}}", family).replace("{{specialty}}", specialty)
             meta, body = merged, fbody.strip() + "\n\n" + body.strip()
+        if kind == "agent" and family not in ("core", "review") and "edit" in (as_list(meta.get("tools")) or []):
+            body = body.strip() + "\n\n" + parse_md(SRC / KINDS[kind] / BUILDER_FILE)[1].strip()
         item = Item(kind, name, meta, body, path, origin, id=logical, expected=name)
         if given and given not in (logical, name):
             item.expected = f"{name} (or {logical})"

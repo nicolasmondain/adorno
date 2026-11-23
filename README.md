@@ -27,6 +27,7 @@ flowchart LR
 | `workflow:review:received` | all your PRs: each comment checked by the specialist of the subject, fixed if needed, then Adorno decides and replies | nothing in `draft` (default); everything in `auto` |
 | `workflow:pr:open` | the review gate on your branch (no unresolved 🔴 or 🟠), then the PR described in your voice | the PR |
 | `workflow:feature:build` | from the request to a ready PR: spec, plan in slices, agents per commit type, QA with screenshots, review, PR, follow-up | the PR, which you merge |
+| `workflow:feature:refactor` | from the request to a ready PR, behavior unchanged: refactor spec, green baseline and characterization tests, sliced plan, each slice gated by `refactor-gate` (no existing test changed or lost), review, PR, follow-up | the PR, which you merge |
 | `workflow:pr:impact <repo>` | the PRs you merged: since their deployment, usage, errors, response times and resources compared before / after across all available sources | an impact report as a comment on each PR |
 | `workflow:slack:mentions` | each time you are mentioned: the analysis of the problem and a draft reply in your voice | nothing: a message **to you alone**, with the link to the conversation |
 | `workflow:slack:watch <rule>` | messages in a channel that match a rule (words or regex, period, maximum) trigger the action you chose | nothing: a report to you alone |
@@ -137,7 +138,7 @@ The public repo contains no profile: only templates, in `local.example/`.
 | `feat` | `front`, `back`, `api` | `feat` |
 | `fix` | `investigate` (read-only), `patch`, `security` | `fix` |
 | `perf` | `front`, `mongodb`, `nodejs` | `perf`, before/after measurements |
-| `refactor` | `simplify` | `refactor` |
+| `refactor` | `simplify`, `structure` | `refactor` |
 | `test` | `unit`, `e2e` (Playwright: screenshots, video, traces) | `test` |
 | `ci` | `debug`, `fix` | `ci` |
 | `chore` | `repo`, `deps` | `chore` |
@@ -151,6 +152,7 @@ called per repo with `use:`, and overridable per repo ([setup](docs/setup.md#are
 | --- | --- |
 | `workflow:spec:new` | discussion, challenge, spec and permissions with `agent:core:intake` |
 | `workflow:feature:build` | from the request to a ready PR |
+| `workflow:feature:refactor` | restructure code without changing its behavior, to a ready PR |
 | `workflow:issue:fix` | from an issue to the "Fixes #n" PR |
 | `workflow:pr:open` | review gate, then the PR |
 | `workflow:pr:review` | a colleague's PR: workspace, specialists, Adorno's final pass; `report`, `pending`, `auto` |

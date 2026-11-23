@@ -119,6 +119,13 @@ bad "user info in a route" $'  ghost/repo:\n    models: {routes: {r: {base_url: 
 bad "a key in a route" $'  ghost/repo:\n    models: {routes: {r: {base_url: "https://x.example/v1", model: m, api_key: k}}}' "never put a key here"
 bad "a non-model key variable" $'  ghost/repo:\n    models: {routes: {r: {base_url: "https://x.example/v1", model: m, api_key_env: GH_TOKEN}}}' "must name a model key variable"
 bad "a non-delegable agent on a route" $'  ghost/repo:\n    models: {routes: {r: {base_url: "https://x.example/v1", model: m}}, agents: {agent:adorno: {route: r}}}' "not .delegable."
+bad "slack trusted_authors that is not a list" $'  ghost/repo: {}\nslack:\n  user_id: U0\n  watches:\n    w: {channels: ["#x"], includes: [a], action: {trusted_authors: U1}}' "trusted_authors must be a list of non-empty strings"
+bad "slack trusted_authors with an empty id" $'  ghost/repo: {}\nslack:\n  user_id: U0\n  watches:\n    w: {channels: ["#x"], includes: [a], action: {agent: agent:adorno, trusted_authors: ["U1", ""]}}' "trusted_authors must be a list of non-empty strings"
+bad "notion trusted_authors that is not a list" $'  ghost/repo: {}\nnotion:\n  assigned: {trusted_authors: N1}' "trusted_authors must be a list of non-empty strings"
+bad "notion trusted_authors with an empty id" $'  ghost/repo: {}\nnotion:\n  assigned: {trusted_authors: ["N1", ""]}' "trusted_authors must be a list of non-empty strings"
+bad "notion trusted_authors with a number" $'  ghost/repo: {}\nnotion:\n  assigned: {trusted_authors: [1]}' "trusted_authors must be a list of non-empty strings"
+printf 'owner: {name: T, github: t, language: fr}\nrepos:\n  ghost/repo: {}\nslack:\n  watches:\n    w: {channels: ["#x"], includes: [a], action: {agent: agent:adorno, trusted_authors: [U1]}}\nnotion:\n  assigned: {trusted_authors: [N1, N2]}\n' >"$OKP/adorno.yaml"
+expect_exit 0 "trusted_authors lists of ids are accepted" -- env ADORNO_LOCAL="$OKP" "${KIT[@]}" check
 
 echo "install into a repo"
 A="$TMP/code/acme/app"
@@ -410,6 +417,22 @@ mv "$TMP/agents.bak" "$SB/dist/AGENTS.md"
 expect_exit 0 "the real registry passes with every dispatcher's roles covered" -- env ADORNO_LOCAL="$TMP/none" "${KIT[@]}" check
 check "no area_reviewers reader is left in src/" '[ -d "$ROOT/src" ] && [ -f "$ROOT/bin/kit" ] && [ -f "$ROOT/bin/kitlib/validate.py" ] && [ -f "$ROOT/bin/kitlib/commands.py" ] && ! grep -rn --exclude-dir=__pycache__ "area_reviewers" "$ROOT/src" "$ROOT/bin/kit" "$ROOT/bin/kitlib" | grep -v -e "src/skills/adorno-setup/" -e "bin/kitlib/validate.py:.*area_reviewers\|bin/kitlib/commands.py:.*area_reviewers" -e SCHEMA.md | grep .'
 check "pr:ship leaves no family agent of its subject" '! grep -q "family agent of its subject" "$ROOT/src/workflows/pr/ship.md"'
+RF="$ROOT/src/workflows/feature/refactor.md"
+refactor_ends_ship_watch() {  # top-level numbered steps (indented and blank lines continue one); last two
+  awk '/^[0-9]+\. /{n++; b[n]=$0; on=1; next} /^$/{next} on && /^ /{b[n]=b[n] " " $0; next} {on=0}
+    END{exit !(n > 1 && index(b[n], "workflow:pr:watch") && index(b[n-1], "workflow:pr:ship"))}' "$RF"
+}
+refactor_agents_in_uses() {  # every agent named in the body is in the frontmatter's uses.agents
+  local uses names name
+  uses="$(grep -E '^  agents: \[' "$RF" | sed 's/^  agents: //' | tr -d '[] ' | tr ',' '\n')"
+  names="$(awk '/^---$/{f++; next} f >= 2' "$RF" | grep -oE 'agent:([a-z0-9-]+:[a-z0-9-]+|adorno)' | sort -u)"
+  [ -n "$uses" ] && [ -n "$names" ] || return 1
+  for name in $names; do grep -qxF "$name" <<<"$uses" || { echo "  not in uses.agents: $name"; return 1; }; done
+}
+check "feature:refactor exists" '[ -f "$RF" ]'
+check "feature:refactor uses workflow:pr:ship" 'grep -qE "^  workflows: \[.*workflow:pr:ship[],]" "$RF"'
+check "feature:refactor calls pr:ship, then ends on pr:watch" refactor_ends_ship_watch
+check "feature:refactor lists in uses.agents every agent its body names" refactor_agents_in_uses
 
 echo "migrate areas"
 MIG="$TMP/mig"; mkdir -p "$MIG"
@@ -502,6 +525,55 @@ check "review:ponytail's review mode names review:code's axes only in its out-of
   '[ "$(grep -c "^Out of scope (owned elsewhere)" "$P")" = 1 ] && ! awk "/^## Third mode: Audit/{exit} /^Out of scope/{s=1} s&&/^\$/{s=0} !s" "$P" | grep -qiwE "correctness|security|bugs?|flaw|blocker|risk|speed|performance|load|injection|missing test"'
 check "review:code and review:security leave the lean axis and dependency need to review:ponytail" \
   'grep -q "lean axis is .review:ponytail..s" "$ROOT/src/agents/review/code.md" && grep -q "is .review:ponytail..s" "$ROOT/src/agents/review/security.md"'
+
+# the self-review rule: written once in src/agents/_builder.md, merged into every committing agent that edits
+SR='^## Self-review, before you return'
+DA="$ROOT/dist/claude-plugin/agents"
+# commit-type families: every agent folder but core and review, so a new family is covered
+COMMIT_FAMILIES=""
+for d in "$ROOT"/src/agents/*/; do
+  case "$(basename "$d")" in core | review) ;; *) COMMIT_FAMILIES="$COMMIT_FAMILIES $(basename "$d")" ;; esac
+done
+# carries_self_review A — dist agent A should carry the rule: its family is a commit type and its tools have Edit
+carries_self_review() {
+  local fam
+  for fam in $COMMIT_FAMILIES; do
+    case "$(basename "$1")" in adorno-agent-"$fam"-*) grep -qE '^tools:(.*[ ,])?Edit(,|$)' "$1"; return ;; esac
+  done
+  return 1
+}
+self_review_carried() {  # each carrier holds the rule once, as its last section: its body ends with _builder.md's
+  local a n=0 b="$ROOT/src/agents/_builder.md"
+  for a in "$DA"/*.md; do
+    carries_self_review "$a" || continue
+    [ "$(grep -c "$SR" "$a")" = 1 ] && tail -n "$(wc -l <"$b")" "$a" | cmp -s - "$b" || return 1
+    n=$((n + 1))
+  done
+  [ "$n" -gt 0 ]
+}
+self_review_left_out() {  # every other dist agent (no commit type, or no Edit, adorno.md included) lacks the rule
+  local a n=0
+  for a in "$DA"/*.md; do
+    carries_self_review "$a" && continue
+    ! grep -q "$SR" "$a" || return 1
+    n=$((n + 1))
+  done
+  [ "$n" -gt 0 ] && [ -f "$DA/adorno.md" ]
+}
+what_you_return_has_self_review() {  # one "## What you return" per commit-type family, its section names Self-review
+  local fam f
+  [ -n "$COMMIT_FAMILIES" ] || return 1
+  for fam in $COMMIT_FAMILIES; do
+    f="$ROOT/src/agents/$fam/_family.md"
+    [ "$(grep -c '^## What you return' "$f" 2>/dev/null)" = 1 ] || return 1
+    awk '/^## What you return/{s=1; next} s && /^## /{exit} s' "$f" | grep -q 'Self-review' || return 1
+  done
+}
+check "the self-review rule is written once, in src/agents/_builder.md" \
+  '[ "$(grep -rl "$SR" "$ROOT/src" | sed "s|^$ROOT/||")" = "src/agents/_builder.md" ]'
+check "the self-review rule ends every commit-type agent with Edit, once, as its last section" 'self_review_carried'
+check "the self-review rule stays out of every other agent (no Edit, review, core, adorno)" 'self_review_left_out'
+check "every commit-type family's What you return names the Self-review section" 'what_you_return_has_self_review'
 
 check "an imported skill only agents and areas name is kept out of the model's list" \
   'grep -q "^disable-model-invocation: true" "$ROOT"/dist/claude-plugin/skills/test-driven-development/SKILL.md'
