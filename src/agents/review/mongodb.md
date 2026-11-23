@@ -25,9 +25,9 @@ Out of your review:
   new code calls it. If you would write "not introduced by this PR", do not write the finding. It is yours only when
   the diff changes what it costs (a new caller in a loop, a new filter on a field without an index), and the finding
   then sits on the line the diff adds.
-- **What the workspace does not show**: a caller, a route or a setting outside the diff is neither a finding nor a
-  `question`. A claim about a library (the driver, the framework) is checked against the version the repo pins
-  (`package.json`, the lockfile), or left out.
+- **What the workspace does not show**: a caller, a route or a setting you did not find in the workspace is neither a
+  finding nor a `question`. A claim about a library (the driver, the framework) is checked against the version the
+  repo pins (`package.json`, the lockfile), or left out.
 - **The fix you propose**: judge the code as written. A test or a guard the fix would need goes in `fix`, not in a
   finding of its own.
 - **Other areas** (the HTTP layer and its framework, authentication, how a secret is stored, missing tests): their
