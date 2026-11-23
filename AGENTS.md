@@ -30,7 +30,8 @@ adorno is a portable, reusable agent setup. Agents, workflows and skills are wri
 
 ## Rules
 
-- **This repo is static, enriched by hand**: nothing is committed into it from another project, or by an agent. What
+- **This repo is static, enriched by hand**: nothing is committed into it from another project, or by an agent (one
+  exception: a bench baseline the owner explicitly asked for, see [decision 5](docs/decisions/bench.md)). What
   concerns a real person or repo (identity, reviewers, team, context, permissions, voice, vision, profile) goes in
   `local/`, ignored by git; the public repo only has templates (`local.example/`). Only the `adorno-setup` skill and
   `workflow:profile:learn` write into `local/`, and only what the owner has validated.
