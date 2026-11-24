@@ -111,9 +111,12 @@ expect_exit 0 "a session with no transcript" -- \
 expect_jq "... unavailable too" '.source == "unavailable" and (.reason | test("no transcript for session nope"))'
 expect_exit 2 "a date that is not UTC ISO is a usage error" -- "$S/run-usage" collect --since yesterday --until 2026-11-10T10:00:00Z
 
+# The overlap tests compare dates: pin them, never read the wall clock.
+pin_started() { jq --arg t "$2" '.started = $t' "$KH/runs/active/$1.json" >"$TMP/pin.json" && mv "$TMP/pin.json" "$KH/runs/active/$1.json"; }  # pin_started ID ISO
+pin_ended() { jq -c --arg id "$1" --arg t "$2" 'if .id == $id then .ended = $t else . end' "$KH/runs/usage.jsonl" >"$TMP/pin.jsonl" && mv "$TMP/pin.jsonl" "$KH/runs/usage.jsonl"; }  # pin_ended ID ISO: in runs/usage.jsonl
 expect_exit 0 "a run in the fixture session" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
 UR="$(jq -r .id <<<"$out")"; UD="$(jq -r .dir <<<"$out")"
-jq '.started = "2026-11-10T10:00:00Z"' "$KH/runs/active/$UR.json" >"$TMP/ur.json" && mv "$TMP/ur.json" "$KH/runs/active/$UR.json"
+pin_started "$UR" 2026-11-10T10:00:00Z
 printf '# Status\n' >"$UD/status.md"
 expect_exit 0 "run-end records the usage" -- "$S/run-end" "$UR"
 expect_jq "... its cost line and the status.md it went to" \
@@ -128,13 +131,16 @@ jq -e '.overlap == false' "$UD/usage.json" >/dev/null \
   && jq -e --arg id "$UR" 'select(.id == $id) | .overlap == false and .session == "sess-usage" and .started == "2026-11-10T10:00:00Z"' "$KH/runs/usage.jsonl" >/dev/null \
   && ok "... alone in its session: no overlap" || ko "... alone in its session: no overlap"
 # Two runs of one session at once count the same messages: both say so. The first sees the second still active; the
-# second, ending alone, sees the first in runs/usage.jsonl (ended after it started).
+# second, ending alone, sees the first in runs/usage.jsonl (ended after it started). The test pins every date compared:
+# UR (same session, in the index) ended before OB started, so only OA can make OB overlap.
+pin_ended "$UR" 2026-11-10T09:30:00Z
 expect_exit 0 "two runs at once in one session" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
 OA="$(jq -r .id <<<"$out")"; OAD="$(jq -r .dir <<<"$out")"
 expect_exit 0 "... the second one" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:status --mode report --level L0 --repo acme/docs
 OB="$(jq -r .id <<<"$out")"; OBD="$(jq -r .dir <<<"$out")"
-jq '.started = "2026-11-10T10:00:00Z"' "$KH/runs/active/$OB.json" >"$TMP/ob.json" && mv "$TMP/ob.json" "$KH/runs/active/$OB.json"
+pin_started "$OA" 2026-11-10T09:59:00Z; pin_started "$OB" 2026-11-10T10:00:00Z
 expect_exit 0 "... the first ends" -- "$S/run-end" "$OA"
+pin_ended "$OA" 2026-11-10T10:00:05Z
 expect_exit 0 "... then the second" -- "$S/run-end" "$OB"
 for r in "$OA:$OAD" "$OB:$OBD"; do
   jq -e '.overlap == true' "${r#*:}/usage.json" >/dev/null \
@@ -142,12 +148,16 @@ for r in "$OA:$OAD" "$OB:$OBD"; do
     && ok "... run ${r%%:*} records the overlap" || ko "... run ${r%%:*} records the overlap" "$(jq -c .overlap "${r#*:}/usage.json")"
 done
 # Two runs of one session one after the other (the normal case) share no message: the earlier one, in
-# runs/usage.jsonl, ended no later than the second one started (same second counts as sequential).
+# runs/usage.jsonl, ended no later than the second one started (same second counts as sequential). The test pins the
+# dates: the first ends at the very second the second starts.
 expect_exit 0 "two runs back to back in one session" -- env CLAUDE_CODE_SESSION_ID=sess-seq "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
 QA="$(jq -r .id <<<"$out")"; QAD="$(jq -r .dir <<<"$out")"
+pin_started "$QA" 2026-11-10T10:00:00Z
 expect_exit 0 "... the first ends" -- "$S/run-end" "$QA"
+pin_ended "$QA" 2026-11-10T10:00:05Z
 expect_exit 0 "... then the second begins" -- env CLAUDE_CODE_SESSION_ID=sess-seq "$S/run-begin" --workflow workflow:pr:status --mode report --level L0 --repo acme/docs
 QB="$(jq -r .id <<<"$out")"; QBD="$(jq -r .dir <<<"$out")"
+pin_started "$QB" 2026-11-10T10:00:05Z
 expect_exit 0 "... and ends" -- "$S/run-end" "$QB"
 for r in "$QA:$QAD" "$QB:$QBD"; do
   jq -e '.overlap == false' "${r#*:}/usage.json" >/dev/null \
@@ -170,6 +180,82 @@ expect_jq "... no status.md in its folder: none reported" '.status == null'
 [ ! -f "$KH/runs/active/$UR.json" ] && ok "... grant withdrawn first" || ko "... grant withdrawn first"
 grep -q "usage of run $UR not recorded" "$TMP/err" && ok "... the failure said on stderr" || ko "... the failure said on stderr" "$(cat "$TMP/err")"
 jq -e '.source == "error" and (.error | length) > 0' "$UD/usage.json" >/dev/null && ok "... and recorded as an error" || ko "... and recorded as an error"
+
+echo "runs: budget"
+B() { env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 "$@"; }
+expect_exit 0 "a run over two repos" -- B --repo acme/docs --repo acme/strict
+expect_jq "... keeps the smallest cap (acme/strict's 2 under the default 10), in the run file too" \
+  ".max_usd == 2 and ($(jq .max_usd "$KH/runs/active/$(jq -r .id <<<"$out").json") == 2)"
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "the same two repos in reverse order" -- B --repo acme/strict --repo acme/docs
+expect_jq "... the same smallest cap" '.max_usd == 2'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "a run over one repo" -- B --repo acme/docs
+expect_jq "... the default cap" '.max_usd == 10'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "a run over a repo declared nowhere and a declared one" -- B --repo nobody/repo --repo acme/docs
+expect_jq "... the undeclared one brings no cap" '.max_usd == 10'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "a workflow with no cap" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:status --mode report --level L0 --repo acme/strict
+expect_jq "... no cap" '.max_usd == null'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "--max-usd replaces the cap" -- B --repo acme/docs --repo acme/strict --max-usd 99
+expect_jq "... even above the repos' caps (the resume command)" '.max_usd == 99'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 0 "--max-usd off removes it" -- B --repo acme/strict --max-usd off
+expect_jq "... no cap" '.max_usd == null'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+expect_exit 2 "--max-usd that is not a number" -- B --repo acme/docs --max-usd abc
+expect_exit 2 "--max-usd 0" -- B --repo acme/docs --max-usd 0
+expect_exit 2 "a watch run takes no cap" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:slack:watch --watch --max-usd 5
+expect_exit 0 "a watch run" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:slack:watch --watch
+expect_jq "... has none" '.max_usd == null'
+"$S/run-end" "$(jq -r .id <<<"$out")" >/dev/null
+# run-budget measures the run since it started: the fixture session from 10:00 (claude-mystery-1 at 10:50 included)
+BR() {  # BR [run-begin args…] — opens a run in the fixture session, started at 10:00; sets BID
+  B --repo acme/docs "$@" >"$TMP/br.json" || return
+  BID="$(jq -r .id "$TMP/br.json")"
+  jq '.started = "2026-11-10T10:00:00Z"' "$KH/runs/active/$BID.json" >"$TMP/br-run.json" && mv "$TMP/br-run.json" "$KH/runs/active/$BID.json"
+}
+jq '.prices["claude-mystery-1"] = {input: 1, cache_write_5m: 1, cache_write_1h: 1, cache_read: 1, output: 1}' \
+  "$ROOT/tests/fixtures/repos.json" >"$TMP/all-priced.json"; reg "$TMP/all-priced.json"
+BR --max-usd 99
+expect_exit 0 "run-budget under the cap" -- "$S/run-budget" "$BID"
+# up to now: the 10:30 window's 111060 µUSD + claude-mystery-1 (2) + the haiku agent at 12:00 (47.8)
+expect_jq "... what was spent and what is left" \
+  '.capped == true and .id != null and .workflow == "workflow:pr:review" and .max_usd == 99 and .source == "claude-code"
+   and (.usd * 1e6 | round) == 111110 and .remaining > 98 and .unpriced == [] and .stop == false'
+[ ! -e "$(jq -r .dir "$TMP/br.json")/usage.json" ] && [ -f "$KH/runs/active/$BID.json" ] \
+  && ok "... writes nothing, the run stays open" || ko "... writes nothing, the run stays open"
+"$S/run-end" "$BID" >/dev/null
+BR --max-usd 0.1
+expect_exit 7 "run-budget over the cap" -- "$S/run-budget" "$BID"
+expect_jq "... says so" '.capped == true and .max_usd == 0.1 and .usd > 0.1 and .remaining < 0 and (.reason | test("over")) and .stop == true'
+"$S/run-end" "$BID" >/dev/null
+reg "$ROOT/tests/fixtures/repos.json"
+BR --max-usd 99
+expect_exit 7 "run-budget with a model that has no price" -- "$S/run-budget" "$BID"
+expect_jq "... the cap cannot be guaranteed: the models listed, where to price them" \
+  '.unpriced == ["claude-mystery-1"] and .usd == null and .remaining == null and (.reason | test("prices")) and .stop == true'
+"$S/run-end" "$BID" >/dev/null
+expect_exit 0 "a capped run outside any session" -- "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs --max-usd 99
+BID="$(jq -r .id <<<"$out")"
+expect_exit 7 "run-budget cannot measure it" -- "$S/run-budget" "$BID"
+expect_jq "... unavailable, and --max-usd off named as the way to run uncapped" \
+  '.source == "unavailable" and .usd == null and (.reason | test("--max-usd off")) and .stop == true'
+"$S/run-end" "$BID" >/dev/null
+expect_exit 0 "a capped run whose usage cannot be read" -- env CLAUDE_CODE_SESSION_ID='bad id!' "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs --max-usd 99
+BID="$(jq -r .id <<<"$out")"
+expect_exit 7 "run-budget when run-usage fails" -- "$S/run-budget" "$BID"
+expect_jq "... an error, its message in the reason" \
+  '.source == "error" and .usd == null and (.reason | test("run-usage failed: .*session")) and .stop == true'
+"$S/run-end" "$BID" >/dev/null
+BR --max-usd off
+expect_exit 0 "run-budget on a run with no cap" -- "$S/run-budget" "$BID"
+expect_jq "... nothing to check" '.capped == false and .max_usd == null'
+"$S/run-end" "$BID" >/dev/null
+expect_exit 2 "run-budget on an unknown run" -- "$S/run-budget" 20261120T000000-1-1
+expect_exit 2 "run-budget without an id" -- "$S/run-budget"
 
 # the rest of the suite runs inside one auto run at L3
 "$S/run-begin" --workflow workflow:test:suite --mode auto --level L3 \
@@ -681,7 +767,7 @@ if [ -f "$REAL" ]; then
   expect_exit 0 "a repo replaces one role of an area" -- "$S/repo-conf" ovr/single
   expect_jq "the replaced role changes, its siblings keep the public value" \
     '.areas.back.build == "agent:feat:custom" and .areas.back.fix == "agent:fix:patch" and .areas.back.perf == null and (.areas.back.review | index("agent:review:back"))'
-  expect_jq "a -<skill> removes that skill from the list" '.areas.front.skills == []'
+  expect_jq "a -<skill> removes that skill from the list" '.areas.front.skills | index("frontend-ui-engineering") | not'
   expect_exit 0 "a skill removed by the repo is not in pr-areas skills" -- "$S/pr-areas" ovr/single --files client/a.tsx
   expect_jq "... nor in the result" '(.skills | index("frontend-ui-engineering") | not) and .areas.front == ["client/a.tsx"]'
   expect_exit 0 "the workspace adds, the repo removes" -- "$S/repo-conf" ovr/layers
@@ -691,6 +777,7 @@ if [ -f "$REAL" ]; then
     '(.areas.back.review | index("agent:review:tests") | not) and (.areas.back.review | index("agent:review:back"))'
   expect_exit 0 "the workspace alone keeps its addition" -- "$S/repo-conf" ovr/plain
   expect_jq "no workspace match: public list unchanged" '(.areas.back.review | index("agent:review:extra") | not) and (.areas.back.review | index("agent:review:tests"))'
+  expect_jq "no front override: the default front skills include impeccable" '.areas.front.skills | index("impeccable")'
 
   expect_exit 0 "two auth files and one service file" -- "$S/pr-areas" ovr/plain --files x/auth/a.js x/auth/b.js server/services/c.js
   expect_jq "security has the most files but no build: build skips to back, fix stays security" \
@@ -815,6 +902,127 @@ printf 'diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n+const a 
 expect_exit 0 "a diff without markers" -- "$S/pr-shortcuts" "$TMP/clean.diff"
 expect_jq "empty ledger" '. == {shortcuts: [], count: 0}'
 expect_exit 2 "a missing diff file is a usage error" -- "$S/pr-shortcuts" "$TMP/none.diff"
+
+echo "refactor-gate"
+if [ -f "$REAL" ]; then
+  # the public areas (tests: *.test.*, built by agent:test:unit): the gate reads its test files from them
+  jq '.repos = {"acme/gate": {}}' "$REAL" >"$TMP/gate-repos.json"; reg "$TMP/gate-repos.json"
+  G="$TMP/gate"
+  gate_repo() {  # gate_repo NAME — a fresh repo with src/a.js and src/a.test.js; sets GB to its base sha
+    mkdir -p "$G/$1/src"; git -C "$G/$1" init -q
+    printf 'module.exports = 1\n' >"$G/$1/src/a.js"; printf 'test(1)\n' >"$G/$1/src/a.test.js"
+    git -C "$G/$1" add -A; git -C "$G/$1" commit -qm "feat: a"; GB="$(git -C "$G/$1" rev-parse HEAD)"
+  }
+  gate_commit() {  # gate_commit NAME MESSAGE FILE CONTENT — writes FILE, then commits everything
+    printf '%s\n' "$4" >"$G/$1/$3"; git -C "$G/$1" add -A; git -C "$G/$1" commit -qm "$2"
+  }
+  gate() { "$S/refactor-gate" acme/gate --base "$GB" --dir "$G/$1" --baseline "$2" --after "$3"; }  # gate NAME BASELINE AFTER
+  printf 'src/a.test.js::adds\n\n  src/a.test.js::subtracts\n' >"$TMP/gate-base.txt"
+  printf '%s\n' '' '  <?xml version="1.0"?>' '<testsuites><testsuite name="a">' \
+    '<testcase classname="src/a.test.js" name="adds"/>' \
+    '<testcase classname="src/a.test.js" name="subtracts"><system-out>ok</system-out></testcase>' \
+    '<testcase classname="src/b.test.js" name="new"/></testsuite></testsuites>' >"$TMP/gate-green.xml"
+  sed 's|name="subtracts">|name="subtracts"><skipped/>|' "$TMP/gate-green.xml" >"$TMP/gate-skipped.xml"
+  sed 's|name="subtracts">|name="subtracts"><failure message="1 != 2"/>|' "$TMP/gate-green.xml" >"$TMP/gate-failed.xml"
+  sed 's|name="new"/>|name="new"><error message="boom"/></testcase>|' "$TMP/gate-green.xml" >"$TMP/gate-error.xml"
+  printf 'src/a.test.js::adds\n' >"$TMP/gate-lost.txt"
+
+  gate_repo ok; gate_commit ok "refactor(a): rename a variable" src/a.js 'module.exports = 2'; OKB="$GB"
+  expect_exit 0 "a refactor on src/a.js with an unchanged green suite passes" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  expect_jq "... ok, JUnit, green, full shas, passing counts" \
+    ".ok == true and .report == \"junit\" and .green == true and .violations == [] and .base == \"$GB\" and (.head | length) == 40 and .tests == {baseline: 2, after: 3}"
+
+  gate_repo rt; gate_commit rt "refactor: move the test along" src/a.test.js 'test(2)'
+  expect_exit 1 "a refactor commit that edits a test is refused" -- gate rt "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  expect_jq "... refactor-touches-test (short sha) and test-file-changed (modified)" \
+    '.ok == false and ([.violations[].rule] | sort) == ["refactor-touches-test", "test-file-changed"]
+     and (.violations[] | select(.rule == "refactor-touches-test") | .file == "src/a.test.js" and (.commit | length) >= 7 and (.commit | length) < 40)
+     and (.violations[] | select(.rule == "test-file-changed") | . == {rule: "test-file-changed", file: "src/a.test.js", status: "modified"})'
+
+  gate_repo te; gate_commit te "test: tighten the assertion" src/a.test.js 'test(3)'
+  expect_exit 1 "a test: commit that edits an existing test is refused" -- gate te "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  expect_jq "... test-file-changed only" '[.violations[].rule] == ["test-file-changed"]'
+
+  gate_repo mv; git -C "$G/mv" mv src/a.test.js src/a.spec.js; git -C "$G/mv" commit -qm "test: rename the test file"
+  expect_exit 1 "a renamed test file is refused" -- gate mv "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  expect_jq "... under its old path" '.violations == [{rule: "test-file-changed", file: "src/a.test.js", status: "renamed"}]'
+
+  gate_repo del; git -C "$G/del" rm -q src/a.test.js; git -C "$G/del" commit -qm "test: drop the test"
+  expect_exit 1 "a deleted test file is refused" -- gate del "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  expect_jq "... test-file-changed deleted" '.violations == [{rule: "test-file-changed", file: "src/a.test.js", status: "deleted"}]'
+
+  gate_repo add; gate_commit add "test: cover b" src/b.test.js 'test(4)'
+  expect_exit 0 "a test: commit that adds a new test file passes" -- gate add "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+
+  gate_repo radd; gate_commit radd "style(a)!: add a test file" src/b.test.js 'test(5)'
+  expect_exit 1 "a style commit that adds a new test file is refused" -- gate radd "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  expect_jq "... refactor-touches-test on the new file, no test-file-changed" \
+    '[.violations[] | [.rule, .file]] == [["refactor-touches-test", "src/b.test.js"]]'
+
+  GB="$OKB"  # the reports below are checked against the first repo
+  expect_exit 1 "a baseline test missing from a plain list after is refused" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-lost.txt"
+  expect_jq "... test-lost missing, list report, green unknown" \
+    '.report == "list" and .green == null and .tests == {baseline: 2, after: 1} and .violations == [{rule: "test-lost", test: "src/a.test.js::subtracts", status: "missing"}]'
+  expect_exit 1 "a baseline test skipped in a JUnit after is refused" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-skipped.xml"
+  expect_jq "... test-lost skipped, still green" \
+    '.green == true and .violations == [{rule: "test-lost", test: "src/a.test.js::subtracts", status: "skipped"}]'
+  expect_exit 1 "a failure in a JUnit after is refused" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-failed.xml"
+  expect_jq "... test-lost failed and test-failing, not green" \
+    '.green == false and ([.violations[] | [.rule, .test, .status // null]] | sort) == [["test-failing", "src/a.test.js::subtracts", null], ["test-lost", "src/a.test.js::subtracts", "failed"]]'
+  expect_exit 1 "an error on a test absent from the baseline is refused" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-error.xml"
+  expect_jq "... test-failing only" '.green == false and .violations == [{rule: "test-failing", test: "src/b.test.js::new"}]'
+  # an id reported twice (a retry, two suites) keeps its worst status, whatever the order
+  sed 's|</testsuite>|<testcase classname="src/a.test.js" name="subtracts"><failure message="retry"/></testcase></testsuite>|' \
+    "$TMP/gate-green.xml" >"$TMP/gate-dup-failed.xml"
+  sed 's|</testsuite>|<testcase classname="src/a.test.js" name="subtracts"><skipped/></testcase></testsuite>|' \
+    "$TMP/gate-green.xml" >"$TMP/gate-dup-skipped.xml"
+  sed 's|</testsuite>|<testcase classname="src/a.test.js" name="subtracts"/></testsuite>|' "$TMP/gate-green.xml" >"$TMP/gate-dup-passed.xml"
+  expect_exit 1 "an id passed then failed is refused" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-dup-failed.xml"
+  expect_jq "... failed wins: test-lost failed and test-failing" \
+    '.green == false and ([.violations[] | [.rule, .test, .status // null]] | sort) == [["test-failing", "src/a.test.js::subtracts", null], ["test-lost", "src/a.test.js::subtracts", "failed"]]'
+  expect_exit 1 "an id passed then skipped is refused" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-dup-skipped.xml"
+  expect_jq "... skipped wins: test-lost skipped" \
+    '.green == true and .violations == [{rule: "test-lost", test: "src/a.test.js::subtracts", status: "skipped"}]'
+  expect_exit 0 "an id passed twice passes" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-dup-passed.xml"
+  expect_jq "... counted once" '.tests == {baseline: 2, after: 3}'
+
+  printf '<testsuites><testcase' >"$TMP/gate-broken.xml"
+  expect_exit 2 "a JUnit report that does not parse is a usage error" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-broken.xml"
+  printf '\n\n' >"$TMP/gate-empty.txt"
+  expect_exit 2 "a baseline without a passing test is a usage error (nothing to compare)" -- gate ok "$TMP/gate-empty.txt" "$TMP/gate-green.xml"
+  expect_exit 2 "missing arguments" -- "$S/refactor-gate" acme/gate --base "$GB" --dir "$G/ok"
+  expect_exit 2 "a missing report file" -- gate ok "$TMP/gate-base.txt" "$TMP/none.xml"
+  expect_exit 2 "a base that is not a commit" -- "$S/refactor-gate" acme/gate --base deadbeef --dir "$G/ok" --baseline "$TMP/gate-base.txt" --after "$TMP/gate-green.xml"
+  expect_exit 2 "a base that looks like an option" -- "$S/refactor-gate" acme/gate --base --all --dir "$G/ok" --baseline "$TMP/gate-base.txt" --after "$TMP/gate-green.xml"
+  grep -qF -- "--base is not a commit: --all" "$TMP/err" && ok "... refused by the option guard, before git" || ko "... refused by the option guard, before git" "$(cat "$TMP/err")"
+  expect_exit 3 "an unregistered repo" -- "$S/refactor-gate" acme/nope --base "$GB" --dir "$G/ok" --baseline "$TMP/gate-base.txt" --after "$TMP/gate-green.xml"
+
+  gate_repo dirty; printf 'test(9)\n' >"$G/dirty/src/a.test.js"
+  expect_exit 2 "uncommitted changes are a usage error (the gate proves commits)" -- gate dirty "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  grep -q "uncommitted changes" "$TMP/err" && ok "... and the refusal says so" || ko "... and the refusal says so" "$(cat "$TMP/err")"
+  # an untracked file the tests may load (a moved module never committed) is a change the commit does not hold
+  gate_repo untracked; gate_commit untracked "refactor(a): move" src/a.js 'module.exports = require("./b")'
+  printf 'module.exports = 2\n' >"$G/untracked/src/b.js"
+  expect_exit 2 "an untracked file is a usage error too (the commit cannot run without it)" -- gate untracked "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  grep -q "uncommitted changes" "$TMP/err" && ok "... and the refusal says so" || ko "... and the refusal says so" "$(cat "$TMP/err")"
+  gate_repo ignored; gate_commit ignored "chore: ignore the run folder" .gitignore '.agent-run/'
+  mkdir -p "$G/ignored/.agent-run/run"; printf 'ok\n' >"$G/ignored/.agent-run/run/status.md"
+  expect_exit 0 "an untracked file matched by .gitignore (the run folder) still passes" -- gate ignored "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+
+  gate_repo anc; gate_commit anc "refactor(a): first try" src/a.js 'module.exports = 3'; GB="$(git -C "$G/anc" rev-parse HEAD)"
+  git -C "$G/anc" reset -q --hard HEAD~1; gate_commit anc "refactor(a): second try" src/a.js 'module.exports = 4'
+  expect_exit 2 "a base that is not an ancestor of HEAD is a usage error" -- gate anc "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  grep -q "not an ancestor of HEAD" "$TMP/err" && ok "... and the refusal says so" || ko "... and the refusal says so" "$(cat "$TMP/err")"
+
+  # a local layer re-pointing every test area's build: no file can be recognized as a test, the gate must not pass
+  jq '.repos = {"acme/gate": {areas: {tests: {build: "agent:feat:back"}, e2e: {build: "agent:feat:back"}}}}' "$REAL" >"$TMP/gate-notest.json"
+  reg "$TMP/gate-notest.json"; GB="$OKB"
+  expect_exit 2 "a repo without an area built by agent:test:* is a usage error" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  grep -q "agent:test:" "$TMP/err" && ok "... naming the missing setting" || ko "... naming the missing setting" "$(cat "$TMP/err")"
+  reg "$ROOT/tests/fixtures/repos.json"
+else
+  ko "refactor-gate tests need dist/ — run bin/kit build first"
+fi
 
 echo "pr-review-submit"
 printf '%s' '{"event":"COMMENT","body":"Looks good overall.","comments":[{"path":"a.ts","line":3,"body":"Null check?"}]}' >"$TMP/review.json"
@@ -1076,6 +1284,145 @@ expect_jq "a question in dontAsk: deny" '.hookSpecificOutput.permissionDecision 
 out="$(jq -n '{tool_name: "AskUserQuestion", permission_mode: "default", tool_input: {}}' | python3 "$S/guard_bash.py" deny)"
 [ -z "$out" ] && ok "a question in an interactive session passes untouched" || ko "a question in an interactive session passes untouched" "$out"
 
+echo "guard_bash: the Slack and Notion connectors"
+jq '. + {slack: {user_id: "U0SELF"}}' "$ROOT/tests/fixtures/repos.json" >"$TMP/reg-slack.json"
+reg "$TMP/reg-slack.json"
+hook() {  # hook EVENT_JSON — the hook's decision (pass = none, crash = the guard failed: the installed hook denies)
+  local raw
+  raw="$(printf '%s' "$1" | python3 "$S/guard_bash.py" deny)" || { echo crash; return; }
+  [ -n "$raw" ] || { echo pass; return; }
+  jq -r '.hookSpecificOutput.permissionDecision' <<<"$raw" 2>/dev/null || echo crash
+}
+mcp() {  # mcp WANT SESSION TOOL INPUT [MODE] — the decision for a connector call
+  local got
+  got="$(hook "$(jq -n --arg t "$3" --argjson i "$4" --arg s "$2" --arg m "${5:-default}" \
+    '{tool_name: $t, tool_input: $i, session_id: $s, permission_mode: $m}')")"
+  if [ "$got" = "$1" ]; then ok "mcp: $1 · $3 $4${5:+ ($5)}"; else ko "mcp: $1 · $3 $4" "got $got"; fi
+}
+endrun() {  # endrun WANT SESSION COMMAND [MODE] — the decision for a shell command that may end a watch run
+  local got
+  got="$(hook "$(jq -n --arg c "$3" --arg s "$2" --arg m "${4:-default}" \
+    '{tool_name: "Bash", tool_input: {command: $c}, session_id: $s, permission_mode: $m}')")"
+  if [ "$got" = "$1" ]; then ok "end: $1 · $3${4:+ ($4)}"; else ko "end: $1 · $3" "got $got"; fi
+}
+SEND=mcp__claude_ai_Slack__slack_send_message DRAFT=mcp__claude_ai_Slack__slack_send_message_draft
+expect_exit 2 "a watch run names no repo" -- "$S/run-begin" --workflow workflow:slack:watch --watch --repo acme/docs
+expect_exit 2 "a watch run has no level of its own" -- "$S/run-begin" --workflow workflow:slack:watch --watch --level L3
+expect_exit 2 "a watch run needs a session (the guard enforces it per session)" -- "$S/run-begin" --workflow workflow:slack:watch --watch
+expect_exit 0 "a watch run" -- env CLAUDE_CODE_SESSION_ID=sess-w "$S/run-begin" --workflow workflow:slack:mentions --watch
+expect_jq "report, L0, no repo, marked watch" '.watch == true and .mode == "report" and .level == "L0" and .dry_run and .repos == []'
+expect_jq "a watch run lasts 24h by default (unattended, it only ends on its TTL)" '(.expires - now) > 86000'
+WATCH="$(jq -r .id <<<"$out")"
+expect_exit 5 "a watch run grants no GitHub write" -- env CLAUDE_CODE_SESSION_ID=sess-w "$S/pr-reply" acme/docs#42 T1 "$TMP/norun.md"
+mcp pass sess-w "$SEND" '{"channel_id": "U0SELF", "message": "report"}'
+mcp pass sess-w "$DRAFT" '{"channel_id": "U0SELF", "message": "report"}'
+mcp pass sess-w mcp__plugin_slack_slack__slack_send_message '{"channel_id": "U0SELF", "message": "report"}'
+mcp deny sess-w "$SEND" '{"channel_id": "C0123", "message": "hi"}'
+mcp deny sess-w "$SEND" '{"channel_id": "C0123", "thread_ts": "1730800000.000100", "message": "hi"}'
+mcp deny sess-w "$DRAFT" '{"channel_id": "U0456", "message": "draft for alice"}'
+mcp deny sess-w "$SEND" '{"channel_id": "U0SELF", "message": "report", "draft_id": "Dr0123"}'
+mcp deny sess-w mcp__claude_ai_Slack__slack_get_file_upload_url '{"filename": "x"}'
+mcp deny sess-w mcp__claude_ai_Slack__slack_schedule_message '{"channel_id": "C0123", "message": "later"}'
+mcp deny sess-w mcp__claude_ai_Slack__slack_add_reaction '{"channel_id": "C0123", "timestamp": "1.2", "name": "eyes"}'
+mcp deny sess-w mcp__claude_ai_Slack__slack_create_canvas '{"title": "x"}'
+mcp deny sess-w mcp__notion__notion-update-page '{"page_id": "p1"}'
+mcp deny sess-w mcp__notion__notion-create-comment '{"page_id": "p1"}'
+mcp pass sess-w mcp__claude_ai_Slack__slack_read_thread '{"channel_id": "C0123", "message_ts": "1.2"}'
+mcp pass sess-w mcp__claude_ai_Slack__slack_search_public_and_private '{"query": "<@U0SELF>"}'
+mcp pass sess-w mcp__notion__notion-fetch '{"id": "p1"}'
+mcp pass sess-w mcp__notion__notion-query-data-sources '{}'
+mcp pass sess-w mcp__notion__notion-get-comments '{"page_id": "p1"}'
+mcp pass sess-w mcp__notion__notion-search '{"query": "assigned"}'
+mcp pass sess-w mcp__claude_ai_Slack__slack_get_reactions '{"channel_id": "C0123", "timestamp": "1.2"}'
+printf 'not json' >"$KH/runs/active/zz-unreadable.json"
+mcp pass sess-other mcp__notion__notion-update-page '{"page_id": "p1"}'
+mcp deny sess-w mcp__notion__notion-update-page '{"page_id": "p1"}'
+rm -f "$KH/runs/active/zz-unreadable.json"
+# ending a watch run asks, nobody to answer: deny; a deliberate shell evasion (a glob, deleting the file) is a
+# documented limit, not tested here
+endrun ask sess-w "$S/run-end $WATCH"
+endrun deny sess-w "$S/run-end $WATCH" bypassPermissions
+endrun ask sess-other "$S/run-end $WATCH"
+endrun ask sess-other "$S/run-end \"${WATCH:0:4}\"${WATCH:4}"
+endrun ask sess-w "$S/run-end \"\$ID\""
+endrun ask sess-w "$S/run-end \"\$ID\"  # 20260101T000000-1-1"
+endrun ask sess-w "$S/run-end 20260101T000000-1-1; $S/run-end \"\$ID\""
+endrun ask sess-w "$S/run-end \"${WATCH:0:4}\"${WATCH:4} 20260101T000000-1-1"
+endrun ask sess-w "$S/run-e\"\"nd 20260101T000000-1-1"
+endrun ask sess-w "$S/run-e\\nd 20260101T000000-1-1"
+endrun deny sess-w "cd ~/.adorno/runs && rm -f active/*"  # the state rule already refuses it
+endrun pass sess-w "printf x > ~/.adorno/runs/slack-mentions-1-2/report.md"
+endrun pass sess-w "rm -rf .agent-run/old"
+endrun pass sess-w "git rm -q old.txt"
+endrun pass sess-w "grep -n 'rm -rf' notes.md"
+endrun pass sess-other "$S/run-end \"\$ID\""
+# a launched workflow closes its own run: an ordinary run, alone, by its literal id, with its outcome and status file
+for c in "$S/run-end 20260101T000000-1-1" "$S/run-end 20260101T000000-1-1 done" \
+         "$S/run-end 20260101T000000-1-1 failed --status .agent-run/x/status.md"; do
+  for who in sess-w sess-other; do
+    got="$(hook "$(jq -n --arg c "$c" --arg s "$who" '{tool_name: "Bash", tool_input: {command: $c}, session_id: $s}')")"
+    case "$got" in ask|crash) ko "$who: ending an ordinary run: the usual decision · ${c#"$S/"}" "got $got" ;;
+      *) ok "$who: ending an ordinary run: the usual decision ($got) · ${c#"$S/"}" ;; esac
+  done
+done
+endrun ask sess-w "$S/run-end 20260101T000000-1-1 done; $S/run-end \"\$ID\""
+got="$(printf '%s' '{"tool_name": "Bash", "tool_input": {"command": "run-end $ID"}, "session_id": "sess-w"}' | python3 -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+import guard_bash as g
+def boom(*a):
+    raise RuntimeError("boom")
+g.watch_runs = boom
+sys.argv = sys.argv[:1]
+g.main()' "$S" | jq -r '.hookSpecificOutput.permissionDecision')"
+[ "$got" = ask ] && ok "the watch-end check fails: run-end asks" || ko "the watch-end check fails: run-end asks" "got $got"
+for t in "$SEND" mcp__notion__notion-update-page mcp__notion__notion-fetch; do
+  raw="$(printf '%s' "{\"tool_name\": \"$t\", \"tool_input\": {}, \"session_id\": \"sess-w\"}" | python3 -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+import guard_bash as g
+def boom(*a):
+    raise RuntimeError("boom")
+g.check_mcp = boom
+sys.argv = sys.argv[:1]
+g.main()' "$S")" || raw=CRASH
+  if [ "$raw" = CRASH ]; then got=crash; elif [ -z "$raw" ]; then got=pass
+  else got="$(jq -r '.hookSpecificOutput.permissionDecision' <<<"$raw")"; fi
+  want=deny; [ "$t" = mcp__notion__notion-fetch ] && want=pass
+  [ "$got" = "$want" ] && ok "the guard fails: $want · $t" || ko "the guard fails: $want · $t" "got $got"
+done
+PR="$(env CLAUDE_CODE_SESSION_ID=sess-p "$S/run-begin" --workflow workflow:pr:ship --mode auto --level L3 --repo acme/docs | jq -r .id)"
+mcp pass sess-p mcp__notion__notion-update-page '{"page_id": "p1"}'
+mcp pass sess-p "$DRAFT" '{"channel_id": "C0123", "message": "draft"}'
+"$S/run-end" "$PR" >/dev/null
+# the owner's call: a run a watch launches (same session) does not lift the watch
+PR="$(env CLAUDE_CODE_SESSION_ID=sess-w "$S/run-begin" --workflow workflow:issue:fix --mode auto --level L3 --repo acme/docs | jq -r .id)"
+mcp deny sess-w mcp__notion__notion-update-page '{"page_id": "p1"}'
+mcp deny sess-w "$DRAFT" '{"channel_id": "C0123", "message": "draft"}'
+"$S/run-end" "$PR" >/dev/null
+mcp pass sess-w mcp__figma__get_screenshot '{}'
+mcp ask sess-other "$SEND" '{"channel_id": "C0123", "message": "hi"}'
+mcp pass sess-other "$DRAFT" '{"channel_id": "C0123", "message": "draft"}'
+mcp pass sess-other mcp__notion__notion-update-page '{"page_id": "p1"}'
+mcp pass sess-other "$SEND" '{"channel_id": "U0SELF", "message": "note to self"}'
+mcp deny sess-other "$SEND" '{"channel_id": "C0123", "message": "hi"}' bypassPermissions
+mcp ask sess-other mcp__claude_ai_Slack__slack_schedule_message '{"channel_id": "C0123", "message": "later"}'
+expect_exit 0 "the watch run ends" -- "$S/run-end" "$WATCH"
+mcp ask sess-w "$SEND" '{"channel_id": "C0123", "message": "hi"}'
+mcp pass sess-w mcp__notion__notion-update-page '{"page_id": "p1"}'
+OLD="$(env CLAUDE_CODE_SESSION_ID=sess-e "$S/run-begin" --workflow workflow:slack:watch --watch | jq -r .id)"
+mcp deny sess-e mcp__notion__notion-update-page '{"page_id": "p1"}'
+jq '.expires = 1' "$KH/runs/active/$OLD.json" >"$TMP/expired.json" && cp "$TMP/expired.json" "$KH/runs/active/$OLD.json"
+mcp pass sess-e mcp__notion__notion-update-page '{"page_id": "p1"}'
+rm -f "$KH/runs/active/$OLD.json"
+out="$(jq -n --arg t "$SEND" '{tool_name: $t, tool_input: {channel_id: "U0SELF", message: "x"}}' | python3 "$S/guard_bash.py" ask --format=codex)"
+[ -z "$out" ] && ok "Codex and Gemini: connector calls are not read" || ko "Codex and Gemini: connector calls are not read" "$out"
+NOUSER="$(env CLAUDE_CODE_SESSION_ID=sess-n "$S/run-begin" --workflow workflow:slack:watch --watch | jq -r .id)"
+reg "$ROOT/tests/fixtures/repos.json"
+mcp deny sess-n "$SEND" '{"channel_id": "U0SELF", "message": "report"}'
+mcp ask sess-x "$SEND" '{"channel_id": "U0SELF", "message": "hi"}'
+"$S/run-end" "$NOUSER" >/dev/null
+
 echo "a registry older than the personal layer"
 printf 'repos: {}\n' >"$TMP/layer.yaml"
 jq --arg f "$TMP/layer.yaml" '. + {_layer: {file: $f}}' "$ROOT/tests/fixtures/repos.json" >"$TMP/reg-layer.json"
@@ -1107,7 +1454,7 @@ echo "with_lock"
 cat >"$TMP/lock-test" <<EOF
 #!/usr/bin/env bash
 . "$S/_lib.sh"
-mkdir -p "\$(kit_home)/locks/dead.lock"; echo 999999 >"\$(kit_home)/locks/dead.lock/pid"
+mkdir -p "\$(kit_home)/locks"; echo 999999 >"\$(kit_home)/locks/dead.lock"
 with_lock dead true; echo "took over a dead holder's lock"
 steps() { false; echo "continued after a failing step"; }
 with_lock t steps
@@ -1200,6 +1547,8 @@ guard_at deny "$C" "" "gh pr create -R acme/readonly --title t --body b"
 guard_at allow "$C" "" "$S/repo-conf acme/docs"
 guard_at allow "$C" "" "$S/run-usage collect --session s --since 2026-11-10T10:00:00Z --until 2026-11-10T11:00:00Z"
 guard_at allow "$C" "" "$S/pr-shortcuts .agent-run/x/branch.diff"
+guard_at allow "$C" "" "$S/run-budget 20261120T000000-1-1"
+guard_at allow "$C" "" "$S/refactor-gate acme/docs --base abc123 --baseline .agent-run/x/baseline.xml --after .agent-run/x/after.xml"
 guard_at pass "$C" "" "$TMP/fake/adorno-github/scripts/repo-conf"
 guard_at deny "$C" "" "git push" codex
 guard_at pass "$C" "" "git add ." codex
@@ -1551,6 +1900,18 @@ expect_exit 2 "run-mark: usage" -- "$S/run-mark" round one 2
 jl
 expect_jq "marks are events of their own, without a script.call" \
   '.[-2].type == "step.begin" and .[-2].index == 2 and .[-2].name == "build" and .[-1] .type == "loop" and .[-1].round == 1 and .[-1].cap == 2 and .[-1].reason == "1 major"
+   and all(.[]; .script != "run-mark")'
+expect_exit 0 "run-mark: a self-review with nothing fixed" -- "$S/run-mark" self-review agent:fix:patch 0
+expect_exit 0 "run-mark: a self-review" -- "$S/run-mark" self-review agent:feat:back 2
+expect_jq "... and says what it marked" '. == {marked: "self-review"}'
+expect_exit 2 "run-mark: a self-review count must be an integer" -- "$S/run-mark" self-review agent:feat:back two
+expect_exit 2 "run-mark: a self-review needs its count" -- "$S/run-mark" self-review agent:feat:back
+expect_exit 2 "run-mark: a self-review count cannot be negative" -- "$S/run-mark" self-review agent:feat:back -1
+expect_exit 2 "run-mark: a self-review count has no leading zero" -- "$S/run-mark" self-review agent:feat:back 02
+expect_exit 2 "run-mark: a self-review needs its agent" -- "$S/run-mark" self-review '' 1
+jl
+expect_jq "a self-review is a mark: the agent and what it fixed" \
+  '.[-2].type == "self-review" and .[-2].fixed == 0 and .[-1].type == "self-review" and .[-1].name == "agent:feat:back" and .[-1].fixed == 2
    and all(.[]; .script != "run-mark")'
 guard_at allow "$TMP" "" "$S/run-mark step-end 2 build"
 

@@ -115,7 +115,9 @@
         31
       ],
       "keywords": [
-        "bulkWrite"
+        "bulkWrite",
+        "write error",
+        "failing write"
       ],
       "valid": true,
       "note": "no test that a database write failure still fails the run, the side the scheduler's retry and paging rely on"
@@ -169,6 +171,19 @@
       ],
       "valid": true,
       "note": "the catch skips every error while the description only justifies a deleted billing id: a fair question on the catch's scope"
+    },
+    {
+      "file": "server/jobs/syncInvoices.ts",
+      "lines": [
+        21,
+        21
+      ],
+      "keywords": [
+        "which accounts were skipped",
+        "only counts successes"
+      ],
+      "valid": true,
+      "note": "the planned defect, anchored elsewhere: the skipped account is not counted in the report, seen from the SyncReport line instead of the catch"
     }
   ]
 }

@@ -37,6 +37,10 @@ No checkpoint: the PR opens without waiting for a "yes" (running the workflow is
      `` - `file:line` — <the limit> · upgrade: <the trigger> ``, taken from the comment; a marker that names no
      trigger is tagged `no-trigger` (skill `ponytail-debt`). The match is textual: a hit that is not a comment in the
      code (inside a string, a test fixture, prose) is not a marker and is dropped. No marker: no section;
+   - a `## Behavior preserved` section, before `## Sources`, only when the run has `qa/refactor-gate.json`
+     (`workflow:feature:refactor`): the characterization tests added (the `test:` commits), the gate's proof that no
+     existing test changed or was lost (its `ok`, `report` and `tests`), and the before/after table of
+     `measures.md`;
    - a `## Sources` section, before `## Proof`: one line per Notion page, doc (`url`) and Slack thread of the run's
      `refs.json`, in the request's order, its title from `source.md` § Sources
      (`- [Notion · Export CSV](https://www.notion.so/…)`), the URL copied verbatim from `refs.json`. A doc link is
@@ -49,7 +53,10 @@ No checkpoint: the PR opens without waiting for a "yes" (running the workflow is
      media — never the whole log (a body stops at 65,536 characters); each
      screenshot or video of `qa/` cleared by `workflow:pr:ship` step 5, referenced inline
      (`![what it shows](./qa/x.png)`; the body file written in the run folder, so the path resolves; a reference gh
-     cannot match is still uploaded, appended at the end).
+     cannot match is still uploaded, appended at the end). The recordings of the visual justification
+     (`workflow:pr:ship` step 5) come first, per journey of `qa/journeys.md` in its order: its name and expected
+     result, then `Before` (`qa/before-<journey>.*`) and `After` (`qa/after-<journey>.*`) for a fix or a refactor,
+     `Feature` (`qa/feature-<journey>.*`) for a feature.
 4. `adorno-github/scripts/git-push owner/repo <branch>` (never a direct `git push`), then `pr-open owner/repo <branch>
    "<title>" <file> [--draft] [--refs <run>/refs.json [--withhold <url>]…] --attach <run>/qa/<media>…` (`--draft`
    only when the verdict is not clean or a proof is missing; `--refs` whenever the run has a `refs.json`: a missing

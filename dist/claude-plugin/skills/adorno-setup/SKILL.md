@@ -135,6 +135,17 @@ Goal: the workflows know this repo — or a whole set of repos — and act withi
 8. **GitHub's own guard** — run `adorno-github/scripts/repo-audit owner/repo` (read only) and show its advice: a
    classic token with broad scopes, a default branch without a ruleset, an admin token. Offer the settings to change
    (a fine-grained token limited to these repos, a ruleset requiring a pull request); never change them yourself.
+9. **Design (front repos)** — only after `kit install` on the repo, and when `git -C <repo path> ls-files |
+   adorno-github/scripts/pr-areas owner/repo --files - | jq -e '.by_area.front.skills // [] | index("impeccable")'`
+   succeeds. The front agents already use the skill and its detector; offer its hook, default yes, saying that it runs
+   impeccable's engine (unsandboxed) after each UI edit, plus a deep pass of up to 30 s when the session stops: `<repo
+   path>/.claude/skills/impeccable/scripts/impeccable hooks on`, run from the repo. It writes `.impeccable/config.json`
+   and the local hook files; under Codex, approve the hook once in `/hooks`. No → nothing, agents run `impeccable
+   detect` themselves; the agents should not use it here → `areas.front.skills: ["-impeccable"]` (the main session still
+   lists it). `PRODUCT.md`, `DESIGN.md` and `.impeccable/config.json` are team files that `workflow:repo:onboard`
+   commits in its PR: the first two never here; outside onboarding, say `.impeccable/config.json` stays uncommitted and
+   point to `/adorno-repo-onboard`. A later `kit uninstall` leaves the hook, harmless without the skill; `impeccable
+   hooks reset` removes it.
 
 ## Afterwards
 

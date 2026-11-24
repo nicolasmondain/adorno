@@ -34,5 +34,5 @@ that are off; "let's discuss" switches back to `discuss`.
    Sources and, if there is one, the Provided plan).
 5. **Checkpoint 1** — present the spec summary and wait for an explicit "yes", or corrections (the agent updates the
    spec and asks again). Nothing else starts before.
-6. Return the path of the run folder and the next command: `workflow:feature:build <folder>`, or
-   `workflow:issue:fix <folder>` for a fix.
+6. Return the path of the run folder and the next command: `workflow:feature:build <folder>`,
+   `workflow:feature:refactor <folder>` for a refactor, or `workflow:issue:fix <folder>` for a fix.

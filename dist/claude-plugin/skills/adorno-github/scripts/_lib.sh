@@ -27,7 +27,7 @@ if [ "$REGISTRY" = "$(kit_home)/registry.json" ]; then
 fi
 
 # Exit codes shared by every script (documented in SKILL.md).
-E_USAGE=2 E_UNREGISTERED=3 E_POLICY=4 E_LEVEL=5
+E_USAGE=2 E_UNREGISTERED=3 E_POLICY=4 E_LEVEL=5 E_BUDGET=7
 
 # A Conventional Commit header: the title of a PR, which a squash merge turns into the commit on the base branch.
 CC_TITLE_RE='^(feat|fix|perf|refactor|test|docs|style|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: .+'
@@ -269,14 +269,15 @@ require_level() {
 }
 
 # with_lock NAME CMD… — runs CMD (in a subshell, with set -e: any failing step fails the whole command) while
-# holding a lock shared by every adorno process on this machine (mkdir is atomic). The lock records its holder's
-# pid: a lock whose holder is gone is taken over at once; one older than 10 minutes is stale. Waits up to 12 minutes.
+# holding a lock shared by every adorno process on this machine (a file created with noclobber, O_EXCL: mkdir is not
+# exclusive with uutils coreutils). The lock holds its holder's pid: a lock whose holder is gone is taken over at
+# once; one older than 10 minutes is stale. Waits up to 12 minutes.
 with_lock() {
   local lock tries=0 name="$1" pid rc=0; shift
   lock="$(kit_home)/locks/$name.lock"
   mkdir -p "$(kit_home)/locks"
-  until mkdir "$lock" 2>/dev/null; do
-    pid="$(cat "$lock/pid" 2>/dev/null || true)"
+  until ( set -C; echo "$$" >"$lock" ) 2>/dev/null; do
+    pid="$(cat "$lock" 2>/dev/null || cat "$lock/pid" 2>/dev/null || true)"  # or a directory lock of a previous version
     if { [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; } || [ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ]; then
       rm -rf "$lock"; continue
     fi
@@ -284,7 +285,6 @@ with_lock() {
     [ "$tries" -lt 3600 ] || die "timed out waiting for lock $name" 6
     sleep 0.2
   done
-  echo "$$" >"$lock/pid"
   trap 'rm -rf "$lock"' INT TERM
   trap '_journal_exit $? "$lock"' EXIT
   # not `( … ) || rc=$?`: set -e is ignored in the left side of || (and in callers' conditions, so the commands

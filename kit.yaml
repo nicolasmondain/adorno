@@ -27,6 +27,7 @@ skill_data:
 # our items extend or cite it); `kit import --check` shows the same without writing: exit 1 if an item changed, the
 # pinned commit left `ref`, or an import is not imported yet or its source changed; 3 if a check failed (git error,
 # unreadable upstream content or an unknown NAME; the other imports are still checked); 0 otherwise.
+# CI runs `--check` every week (.github/workflows/upstream.yml) and opens an issue on exit 1.
 #
 #   source   github:owner/repo | git URL | local path
 #   ref      branch, tag or commit (default: HEAD)
@@ -81,3 +82,15 @@ imports:
     source: github:Jeffallan/claude-skills
     ref: main
     include: [skills/typescript-pro]
+
+  # Frontend design: PRODUCT.md / DESIGN.md context, craft floor, and a deterministic detector (`impeccable detect`,
+  # no LLM) the front agents run on UI files. Its launcher runs an engine already installed (sibling, ~/.impeccable/bin,
+  # PATH: probed, not hashed), else downloads a pinned one into ~/.impeccable/bin, checked against
+  # scripts/engine-checksums.txt. Apache-2.0. Claude build, shipped to every target (paths resolve from the skill
+  # folder).
+  # shortcut: whole skill folder (~1.7 MB of live/Windows assets in vendor/ and dist/); add an exclude key to imports
+  # when a second heavy import lands or the plugin size matters.
+  - name: impeccable
+    source: github:pbakaus/impeccable
+    ref: main
+    include: [.claude/skills/impeccable]

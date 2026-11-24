@@ -1,0 +1,16 @@
+{
+  "id": "00000000-0000-4000-8000-000000000101",
+  "title": "Trial accounts locked one day before their trial ends",
+  "url": "https://notion.example/bench/trial-accounts-locked-000000000101",
+  "database": "Bugs",
+  "status": "To investigate",
+  "assigned_by": "N0ALICE",
+  "last_edited": "2026-11-19T09:12:00.000Z",
+  "authors": ["N0ALICE", "N0BOB"],
+  "authors_complete": true,
+  "body": "Three trial accounts of bench-trials-api were locked out this week on the last day of their 14-day trial: they got the \"Your trial has ended\" page while the trial still had hours to run. Example: account acme-trial-3, trial ending on 2026-11-20 at 18:00 UTC, locked from 2026-11-19 at 18:00 UTC. The banner still said \"1 day left\" that morning. Support expects access until the end date shown in the account settings.",
+  "comments": [
+    {"author": "N0BOB", "text": "Same on the demo account on Monday: locked at 18:00 UTC the day before its end date.", "ts": "2026-11-18T16:40:00.000Z"},
+    {"author": "N0ALICE", "text": "High priority: most trials convert on their last day.", "ts": "2026-11-19T09:12:00.000Z"}
+  ]
+}
