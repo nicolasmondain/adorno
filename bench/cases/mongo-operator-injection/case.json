@@ -45,7 +45,8 @@
         "\\$where",
         "operator",
         "no-?sql",
-        "(not|un|never|without) ?(validat|sanitiz|check)",
+        "(not|un|never|without) ?(validat|sanitiz)",
+        "unchecked",
         "typeof",
         "(is|be|to) a string"
       ],
@@ -87,7 +88,8 @@
       "keywords": [
         "No index on",
         "collection scan",
-        "COLLSCAN"
+        "COLLSCAN",
+        "with no index"
       ],
       "valid": true,
       "note": "new query on accounts.apiToken with no index anywhere in the repo, on an unauthenticated route; a unique index also guarantees one account per token"
@@ -137,7 +139,8 @@
       ],
       "keywords": [
         "async handler without",
-        "unhandled rejection"
+        "unhandled rejection",
+        "Async handler has no"
       ],
       "valid": false,
       "note": "express ^5 forwards a rejected async handler to the error handler (500): no hang, no wrapper needed"
@@ -215,6 +218,18 @@
       ],
       "valid": false,
       "note": "the deepEqual on the full body already fails if apiToken is returned"
+    },
+    {
+      "file": "server/routes/account.ts",
+      "lines": [
+        22,
+        22
+      ],
+      "keywords": [
+        "Projection omits"
+      ],
+      "valid": false,
+      "note": "two claims already graded: the default _id of a projection is fine (restyle of working code), and express ^5 forwards a rejected async handler to the error handler"
     }
   ]
 }

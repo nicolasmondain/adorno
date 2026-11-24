@@ -151,6 +151,19 @@
       ],
       "valid": true,
       "note": "the planned defect, anchored elsewhere: the planned missing index seen from the test (withDb never builds indexes, nothing checks the plan); the defect itself is at events.ts:29-30"
+    },
+    {
+      "file": "server/services/events.ts",
+      "lines": [
+        29,
+        29
+      ],
+      "keywords": [
+        "No projection",
+        "project the needed fields"
+      ],
+      "valid": false,
+      "note": "hedged by the finding itself (\"fine if the dashboard needs every field\"): the function returns TrackedEvent, six scalar fields, as listContactEvents does; no field named to drop"
     }
   ]
 }
