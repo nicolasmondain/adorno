@@ -83,7 +83,8 @@
       "keywords": [
         "in-memory sort",
         "in memory",
-        "no index definition"
+        "no index definition",
+        "No index is declared"
       ],
       "valid": true,
       "note": "skip cost grows with an unbounded offset and no index on { accountId, createdAt } is declared: deep pages are a scale risk the PR opens"

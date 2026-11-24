@@ -45,7 +45,8 @@
         "\\$where",
         "operator",
         "no-?sql",
-        "(not|un|never|without) ?(validat|sanitiz|check)",
+        "(not|un|never|without) ?(validat|sanitiz)",
+        "unchecked",
         "typeof",
         "(is|be|to) a string"
       ],
@@ -138,7 +139,8 @@
       ],
       "keywords": [
         "async handler without",
-        "unhandled rejection"
+        "unhandled rejection",
+        "Async handler has no"
       ],
       "valid": false,
       "note": "express ^5 forwards a rejected async handler to the error handler (500): no hang, no wrapper needed"
