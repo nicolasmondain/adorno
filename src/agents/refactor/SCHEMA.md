@@ -21,3 +21,22 @@ flowchart TD
   J --> OUT
   SK["skills code-simplification, ponytail ultra"] -.-> S1
 ```
+
+## `agent:refactor:structure`
+
+```mermaid
+flowchart TD
+  IN["Slice of workflow:feature:refactor: code that moves"] --> TR["One transformation: move, then rename, then reshape"]
+  TR --> MV{"A move?"}
+  MV -->|"yes"| CL["Migrate every caller in the same commit; a re-export kept while a test imports the old path"]
+  MV -->|"no"| IV
+  CL --> IV{"Spec Invariants kept?"}
+  IV -->|"no"| SP["Stop: the deliverable names the invariant and why"]
+  IV -->|"yes"| G{"refactor-gate passes?"}
+  G -->|"no"| TR
+  G -->|"yes"| CM["Commit refactor(module), every commit green"]
+  CM --> NX{"Next transformation?"}
+  NX -->|"yes"| TR
+  NX -->|"no"| OUT["Done, public API untouched"]
+  SK["skills code-simplification, deprecation-and-migration, ponytail at the repo's level"] -.-> TR
+```

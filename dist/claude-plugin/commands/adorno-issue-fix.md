@@ -1,5 +1,5 @@
 ---
-description: Fix a bug from a GitHub issue, a Slack thread, a Notion page, a prompt or a validated spec — investigation, red test, minimal fix, review and fix until clean, PR ready for review ("Fixes
+description: Fix a bug from a GitHub issue, a Slack thread, a Notion page, a prompt or a validated spec — investigation, a video of the bug, red test, minimal fix, the same user path on video without the error, review and fix until clean, PR ready for review ("Fixes
 argument-hint: <owner/repo#N | Slack / Notion links | bug description with owner/repo | .agent-run folder>
 model: sonnet
 ---
@@ -20,9 +20,15 @@ Input: $ARGUMENTS
 3. **Checkpoint 1**: diagnosis and level (L3 by default) validated by the user. Then
    `adorno-notion-sync start <.agent-run folder> owner/repo` (the Notion page of the report gets the repo's
    `notion_spec.start` properties; nothing to do without a Notion page or without that setting).
-4. Branch `fix/<n>-<slug>` (no issue: `fix/<slug>`) from the base; the agent of the diagnosis's area (`pr-areas`
-   `by_area.<a>.fix` for a `bug`, `.perf` for a `perf`, null: `fallbacks.perf` with its `skills`), with the `skills` of that area: red test, fix, green suite.
+4. Branch `fix/<n>-<slug>` (no issue: `fix/<slug>`) from the base. **Before any change**, the bug on video: the
+   `qa` agent of the diagnosis's area (`pr-areas` `by_area.<a>.qa`, null: `agent:test:e2e`) writes the user path of
+   the repro of `diagnosis.md` in `<.agent-run folder>/qa/journeys.md` and records it on the branch as it is →
+   `qa/before-<journey>.<ext>`, the error visible in it. A bug that recording does not show: `status.md` says why, and
+   the PR will go out as draft (`workflow:pr:ship` step 5). Then the agent of the diagnosis's area (`pr-areas`
+   `by_area.<a>.fix` for a `bug`, `.perf` for a `perf`, null: `fallbacks.perf` with its `skills`), with the `skills` of that area: red test, fix, green suite; the session copies its `Self-review` into `status.md` and runs `run-mark self-review <agent> <N>` (`<N>` from its `Fixed (N):`).
 5. `workflow:pr:ship owner/repo <branch> <worktree> <.agent-run folder>`, without asking: `commit_skill`, the review
    loop (area reviewers and `agent:adorno` against the diagnosis and the report: every 🔴 or 🟠 back to the `fix` or `perf`
    of its file's area, two rounds), then `pr_skill`, ready for review once clean, with `Fixes #N` in the description if there is an issue
-   (otherwise the links of the sources, if the team can access them), then `workflow:pr:watch`.
+   (otherwise the links of the sources, if the team can access them), then `workflow:pr:watch`. Its step 5 records
+   the same journey on the last commit, without the error (`qa/after-<journey>.<ext>`), and puts both videos in the
+   PR.

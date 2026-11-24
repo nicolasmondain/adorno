@@ -27,6 +27,7 @@ flowchart LR
 | `workflow:review:received` | all your PRs: each comment checked by the specialist of the subject, fixed if needed, then Adorno decides and replies | nothing in `draft` (default); everything in `auto` |
 | `workflow:pr:open` | the review gate on your branch (no unresolved 🔴 or 🟠), then the PR described in your voice | the PR |
 | `workflow:feature:build` | from the request to a ready PR: spec, plan in slices, agents per commit type, QA with screenshots, review, PR, follow-up | the PR, which you merge |
+| `workflow:feature:refactor` | from the request to a ready PR, behavior unchanged: refactor spec, green baseline and characterization tests, sliced plan, each slice gated by `refactor-gate` (no existing test changed or lost), review, PR, follow-up | the PR, which you merge |
 | `workflow:pr:impact <repo>` | the PRs you merged: since their deployment, usage, errors, response times and resources compared before / after across all available sources | an impact report as a comment on each PR |
 | `workflow:slack:mentions` | each time you are mentioned: the analysis of the problem and a draft reply in your voice | nothing: a message **to you alone**, with the link to the conversation |
 | `workflow:slack:watch <rule>` | messages in a channel that match a rule (words or regex, period, maximum) trigger the action you chose | nothing: a report to you alone |
@@ -72,7 +73,9 @@ that you set.
 
 New to adorno? Read the one-page [overview](docs/overview.md) first.
 
-Prerequisites: [uv](https://docs.astral.sh/uv/) (`brew install uv`), authenticated `gh`, `jq`.
+Prerequisites: [uv](https://docs.astral.sh/uv/) >= 0.4.19 (`brew install uv`; `bin/kit` runs on the Python 3.11 it
+provides), authenticated `gh` >= 2.99.0 (`--attach`), `jq` >= 1.7.1, `python3` >= 3.9 on PATH, `git`.
+`bin/kit doctor` checks the versions.
 
 ```sh
 git clone https://github.com/<owner>/adorno && cd adorno
@@ -135,7 +138,7 @@ The public repo contains no profile: only templates, in `local.example/`.
 | `feat` | `front`, `back`, `api` | `feat` |
 | `fix` | `investigate` (read-only), `patch`, `security` | `fix` |
 | `perf` | `front`, `mongodb`, `nodejs` | `perf`, before/after measurements |
-| `refactor` | `simplify` | `refactor` |
+| `refactor` | `simplify`, `structure` | `refactor` |
 | `test` | `unit`, `e2e` (Playwright: screenshots, video, traces) | `test` |
 | `ci` | `debug`, `fix` | `ci` |
 | `chore` | `repo`, `deps` | `chore` |
@@ -149,6 +152,7 @@ called per repo with `use:`, and overridable per repo ([setup](docs/setup.md#are
 | --- | --- |
 | `workflow:spec:new` | discussion, challenge, spec and permissions with `agent:core:intake` |
 | `workflow:feature:build` | from the request to a ready PR |
+| `workflow:feature:refactor` | restructure code without changing its behavior, to a ready PR |
 | `workflow:issue:fix` | from an issue to the "Fixes #n" PR |
 | `workflow:pr:open` | review gate, then the PR |
 | `workflow:pr:review` | a colleague's PR: workspace, specialists, Adorno's final pass; `report`, `pending`, `auto` |
@@ -204,12 +208,13 @@ tests/                  tests of the adorno-github scripts against a fake gh
 
 ```sh
 bin/kit check [--dist]       # validates (and checks that the committed dist/ is up to date)
+bin/kit doctor               # checks the minimum versions of jq, python3, gh and uv
 bin/kit build                # regenerates dist/ and the marketplace (never with local/)
 bin/kit list                 # everything available, with its provenance
 bin/kit conf [owner/repo]    # the settings a repo resolves
 bin/kit new agent fix:flaky  # or: new workflow ci:flaky, new skill <name>
 bin/kit import [--update]    # imported skills and agents (commits pinned in kit.lock)
-bin/kit import --check       # how far each import is behind upstream and which items changed (writes nothing)
+bin/kit import --check       # how far each import is behind upstream and which items changed (writes nothing; CI runs it weekly and opens an issue)
 bin/kit install PATH|--global|--workspace NAME [--targets claude,codex] [--public-only] [--dry-run]
 bin/kit uninstall PATH|--global|--workspace NAME
 bin/kit serve [--port 8765]  # replay your runs in a browser, on 127.0.0.1 only (docs/journal.md)

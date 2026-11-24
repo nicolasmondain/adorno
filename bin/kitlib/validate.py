@@ -335,6 +335,10 @@ def validate_watches(reg: dict, where: str, agent_ids: set) -> list[str]:
         if lvl is not None and lvl not in LEVELS:
             errors.append(f"{where}: {scope} level must be one of {', '.join(LEVELS)}")
 
+    def trusted(scope: str, ids) -> None:
+        if ids is not None and not (isinstance(ids, list) and all(isinstance(i, str) and i for i in ids)):
+            errors.append(f"{where}: {scope}.trusted_authors must be a list of non-empty strings")
+
     slack = reg.get("slack") or {}
     if slack:
         common("slack", slack)
@@ -365,6 +369,7 @@ def validate_watches(reg: dict, where: str, agent_ids: set) -> list[str]:
                 errors.append(f"{where}: {scope}.action.agent {unknown_agent(action['agent'])}")
             if action and not (action.get("agent") or action.get("workflow") or action.get("prompt")):
                 errors.append(f"{where}: {scope}.action needs `agent`, `workflow` or `prompt`")
+            trusted(f"{scope}.action", action.get("trusted_authors"))
         if slack.get("mentions") is not None:
             common("slack.mentions", slack["mentions"] or {})
     notion = reg.get("notion") or {}
@@ -373,6 +378,7 @@ def validate_watches(reg: dict, where: str, agent_ids: set) -> list[str]:
         common("notion.assigned", a)
         if a.get("mode") is not None and a["mode"] not in ("report", "run"):
             errors.append(f"{where}: notion.assigned.mode must be report or run")
+        trusted("notion.assigned", a.get("trusted_authors"))
         for db, target in (a.get("agents") or {}).items():
             if isinstance(target, str) and target.startswith("agent:") and target not in agent_ids:
                 errors.append(f"{where}: notion.assigned.agents.{db} {unknown_agent(target)}")

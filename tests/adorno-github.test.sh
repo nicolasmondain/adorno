@@ -111,9 +111,12 @@ expect_exit 0 "a session with no transcript" -- \
 expect_jq "... unavailable too" '.source == "unavailable" and (.reason | test("no transcript for session nope"))'
 expect_exit 2 "a date that is not UTC ISO is a usage error" -- "$S/run-usage" collect --since yesterday --until 2026-11-10T10:00:00Z
 
+# The overlap tests compare dates: pin them, never read the wall clock.
+pin_started() { jq --arg t "$2" '.started = $t' "$KH/runs/active/$1.json" >"$TMP/pin.json" && mv "$TMP/pin.json" "$KH/runs/active/$1.json"; }  # pin_started ID ISO
+pin_ended() { jq -c --arg id "$1" --arg t "$2" 'if .id == $id then .ended = $t else . end' "$KH/runs/usage.jsonl" >"$TMP/pin.jsonl" && mv "$TMP/pin.jsonl" "$KH/runs/usage.jsonl"; }  # pin_ended ID ISO: in runs/usage.jsonl
 expect_exit 0 "a run in the fixture session" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
 UR="$(jq -r .id <<<"$out")"; UD="$(jq -r .dir <<<"$out")"
-jq '.started = "2026-11-10T10:00:00Z"' "$KH/runs/active/$UR.json" >"$TMP/ur.json" && mv "$TMP/ur.json" "$KH/runs/active/$UR.json"
+pin_started "$UR" 2026-11-10T10:00:00Z
 printf '# Status\n' >"$UD/status.md"
 expect_exit 0 "run-end records the usage" -- "$S/run-end" "$UR"
 expect_jq "... its cost line and the status.md it went to" \
@@ -128,13 +131,16 @@ jq -e '.overlap == false' "$UD/usage.json" >/dev/null \
   && jq -e --arg id "$UR" 'select(.id == $id) | .overlap == false and .session == "sess-usage" and .started == "2026-11-10T10:00:00Z"' "$KH/runs/usage.jsonl" >/dev/null \
   && ok "... alone in its session: no overlap" || ko "... alone in its session: no overlap"
 # Two runs of one session at once count the same messages: both say so. The first sees the second still active; the
-# second, ending alone, sees the first in runs/usage.jsonl (ended after it started).
+# second, ending alone, sees the first in runs/usage.jsonl (ended after it started). The test pins every date compared:
+# UR (same session, in the index) ended before OB started, so only OA can make OB overlap.
+pin_ended "$UR" 2026-11-10T09:30:00Z
 expect_exit 0 "two runs at once in one session" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
 OA="$(jq -r .id <<<"$out")"; OAD="$(jq -r .dir <<<"$out")"
 expect_exit 0 "... the second one" -- env CLAUDE_CODE_SESSION_ID=sess-usage "$S/run-begin" --workflow workflow:pr:status --mode report --level L0 --repo acme/docs
 OB="$(jq -r .id <<<"$out")"; OBD="$(jq -r .dir <<<"$out")"
-jq '.started = "2026-11-10T10:00:00Z"' "$KH/runs/active/$OB.json" >"$TMP/ob.json" && mv "$TMP/ob.json" "$KH/runs/active/$OB.json"
+pin_started "$OA" 2026-11-10T09:59:00Z; pin_started "$OB" 2026-11-10T10:00:00Z
 expect_exit 0 "... the first ends" -- "$S/run-end" "$OA"
+pin_ended "$OA" 2026-11-10T10:00:05Z
 expect_exit 0 "... then the second" -- "$S/run-end" "$OB"
 for r in "$OA:$OAD" "$OB:$OBD"; do
   jq -e '.overlap == true' "${r#*:}/usage.json" >/dev/null \
@@ -142,12 +148,16 @@ for r in "$OA:$OAD" "$OB:$OBD"; do
     && ok "... run ${r%%:*} records the overlap" || ko "... run ${r%%:*} records the overlap" "$(jq -c .overlap "${r#*:}/usage.json")"
 done
 # Two runs of one session one after the other (the normal case) share no message: the earlier one, in
-# runs/usage.jsonl, ended no later than the second one started (same second counts as sequential).
+# runs/usage.jsonl, ended no later than the second one started (same second counts as sequential). The test pins the
+# dates: the first ends at the very second the second starts.
 expect_exit 0 "two runs back to back in one session" -- env CLAUDE_CODE_SESSION_ID=sess-seq "$S/run-begin" --workflow workflow:pr:review --mode report --level L0 --repo acme/docs
 QA="$(jq -r .id <<<"$out")"; QAD="$(jq -r .dir <<<"$out")"
+pin_started "$QA" 2026-11-10T10:00:00Z
 expect_exit 0 "... the first ends" -- "$S/run-end" "$QA"
+pin_ended "$QA" 2026-11-10T10:00:05Z
 expect_exit 0 "... then the second begins" -- env CLAUDE_CODE_SESSION_ID=sess-seq "$S/run-begin" --workflow workflow:pr:status --mode report --level L0 --repo acme/docs
 QB="$(jq -r .id <<<"$out")"; QBD="$(jq -r .dir <<<"$out")"
+pin_started "$QB" 2026-11-10T10:00:05Z
 expect_exit 0 "... and ends" -- "$S/run-end" "$QB"
 for r in "$QA:$QAD" "$QB:$QBD"; do
   jq -e '.overlap == false' "${r#*:}/usage.json" >/dev/null \
@@ -893,6 +903,127 @@ expect_exit 0 "a diff without markers" -- "$S/pr-shortcuts" "$TMP/clean.diff"
 expect_jq "empty ledger" '. == {shortcuts: [], count: 0}'
 expect_exit 2 "a missing diff file is a usage error" -- "$S/pr-shortcuts" "$TMP/none.diff"
 
+echo "refactor-gate"
+if [ -f "$REAL" ]; then
+  # the public areas (tests: *.test.*, built by agent:test:unit): the gate reads its test files from them
+  jq '.repos = {"acme/gate": {}}' "$REAL" >"$TMP/gate-repos.json"; reg "$TMP/gate-repos.json"
+  G="$TMP/gate"
+  gate_repo() {  # gate_repo NAME — a fresh repo with src/a.js and src/a.test.js; sets GB to its base sha
+    mkdir -p "$G/$1/src"; git -C "$G/$1" init -q
+    printf 'module.exports = 1\n' >"$G/$1/src/a.js"; printf 'test(1)\n' >"$G/$1/src/a.test.js"
+    git -C "$G/$1" add -A; git -C "$G/$1" commit -qm "feat: a"; GB="$(git -C "$G/$1" rev-parse HEAD)"
+  }
+  gate_commit() {  # gate_commit NAME MESSAGE FILE CONTENT — writes FILE, then commits everything
+    printf '%s\n' "$4" >"$G/$1/$3"; git -C "$G/$1" add -A; git -C "$G/$1" commit -qm "$2"
+  }
+  gate() { "$S/refactor-gate" acme/gate --base "$GB" --dir "$G/$1" --baseline "$2" --after "$3"; }  # gate NAME BASELINE AFTER
+  printf 'src/a.test.js::adds\n\n  src/a.test.js::subtracts\n' >"$TMP/gate-base.txt"
+  printf '%s\n' '' '  <?xml version="1.0"?>' '<testsuites><testsuite name="a">' \
+    '<testcase classname="src/a.test.js" name="adds"/>' \
+    '<testcase classname="src/a.test.js" name="subtracts"><system-out>ok</system-out></testcase>' \
+    '<testcase classname="src/b.test.js" name="new"/></testsuite></testsuites>' >"$TMP/gate-green.xml"
+  sed 's|name="subtracts">|name="subtracts"><skipped/>|' "$TMP/gate-green.xml" >"$TMP/gate-skipped.xml"
+  sed 's|name="subtracts">|name="subtracts"><failure message="1 != 2"/>|' "$TMP/gate-green.xml" >"$TMP/gate-failed.xml"
+  sed 's|name="new"/>|name="new"><error message="boom"/></testcase>|' "$TMP/gate-green.xml" >"$TMP/gate-error.xml"
+  printf 'src/a.test.js::adds\n' >"$TMP/gate-lost.txt"
+
+  gate_repo ok; gate_commit ok "refactor(a): rename a variable" src/a.js 'module.exports = 2'; OKB="$GB"
+  expect_exit 0 "a refactor on src/a.js with an unchanged green suite passes" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  expect_jq "... ok, JUnit, green, full shas, passing counts" \
+    ".ok == true and .report == \"junit\" and .green == true and .violations == [] and .base == \"$GB\" and (.head | length) == 40 and .tests == {baseline: 2, after: 3}"
+
+  gate_repo rt; gate_commit rt "refactor: move the test along" src/a.test.js 'test(2)'
+  expect_exit 1 "a refactor commit that edits a test is refused" -- gate rt "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  expect_jq "... refactor-touches-test (short sha) and test-file-changed (modified)" \
+    '.ok == false and ([.violations[].rule] | sort) == ["refactor-touches-test", "test-file-changed"]
+     and (.violations[] | select(.rule == "refactor-touches-test") | .file == "src/a.test.js" and (.commit | length) >= 7 and (.commit | length) < 40)
+     and (.violations[] | select(.rule == "test-file-changed") | . == {rule: "test-file-changed", file: "src/a.test.js", status: "modified"})'
+
+  gate_repo te; gate_commit te "test: tighten the assertion" src/a.test.js 'test(3)'
+  expect_exit 1 "a test: commit that edits an existing test is refused" -- gate te "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  expect_jq "... test-file-changed only" '[.violations[].rule] == ["test-file-changed"]'
+
+  gate_repo mv; git -C "$G/mv" mv src/a.test.js src/a.spec.js; git -C "$G/mv" commit -qm "test: rename the test file"
+  expect_exit 1 "a renamed test file is refused" -- gate mv "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  expect_jq "... under its old path" '.violations == [{rule: "test-file-changed", file: "src/a.test.js", status: "renamed"}]'
+
+  gate_repo del; git -C "$G/del" rm -q src/a.test.js; git -C "$G/del" commit -qm "test: drop the test"
+  expect_exit 1 "a deleted test file is refused" -- gate del "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  expect_jq "... test-file-changed deleted" '.violations == [{rule: "test-file-changed", file: "src/a.test.js", status: "deleted"}]'
+
+  gate_repo add; gate_commit add "test: cover b" src/b.test.js 'test(4)'
+  expect_exit 0 "a test: commit that adds a new test file passes" -- gate add "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+
+  gate_repo radd; gate_commit radd "style(a)!: add a test file" src/b.test.js 'test(5)'
+  expect_exit 1 "a style commit that adds a new test file is refused" -- gate radd "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  expect_jq "... refactor-touches-test on the new file, no test-file-changed" \
+    '[.violations[] | [.rule, .file]] == [["refactor-touches-test", "src/b.test.js"]]'
+
+  GB="$OKB"  # the reports below are checked against the first repo
+  expect_exit 1 "a baseline test missing from a plain list after is refused" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-lost.txt"
+  expect_jq "... test-lost missing, list report, green unknown" \
+    '.report == "list" and .green == null and .tests == {baseline: 2, after: 1} and .violations == [{rule: "test-lost", test: "src/a.test.js::subtracts", status: "missing"}]'
+  expect_exit 1 "a baseline test skipped in a JUnit after is refused" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-skipped.xml"
+  expect_jq "... test-lost skipped, still green" \
+    '.green == true and .violations == [{rule: "test-lost", test: "src/a.test.js::subtracts", status: "skipped"}]'
+  expect_exit 1 "a failure in a JUnit after is refused" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-failed.xml"
+  expect_jq "... test-lost failed and test-failing, not green" \
+    '.green == false and ([.violations[] | [.rule, .test, .status // null]] | sort) == [["test-failing", "src/a.test.js::subtracts", null], ["test-lost", "src/a.test.js::subtracts", "failed"]]'
+  expect_exit 1 "an error on a test absent from the baseline is refused" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-error.xml"
+  expect_jq "... test-failing only" '.green == false and .violations == [{rule: "test-failing", test: "src/b.test.js::new"}]'
+  # an id reported twice (a retry, two suites) keeps its worst status, whatever the order
+  sed 's|</testsuite>|<testcase classname="src/a.test.js" name="subtracts"><failure message="retry"/></testcase></testsuite>|' \
+    "$TMP/gate-green.xml" >"$TMP/gate-dup-failed.xml"
+  sed 's|</testsuite>|<testcase classname="src/a.test.js" name="subtracts"><skipped/></testcase></testsuite>|' \
+    "$TMP/gate-green.xml" >"$TMP/gate-dup-skipped.xml"
+  sed 's|</testsuite>|<testcase classname="src/a.test.js" name="subtracts"/></testsuite>|' "$TMP/gate-green.xml" >"$TMP/gate-dup-passed.xml"
+  expect_exit 1 "an id passed then failed is refused" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-dup-failed.xml"
+  expect_jq "... failed wins: test-lost failed and test-failing" \
+    '.green == false and ([.violations[] | [.rule, .test, .status // null]] | sort) == [["test-failing", "src/a.test.js::subtracts", null], ["test-lost", "src/a.test.js::subtracts", "failed"]]'
+  expect_exit 1 "an id passed then skipped is refused" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-dup-skipped.xml"
+  expect_jq "... skipped wins: test-lost skipped" \
+    '.green == true and .violations == [{rule: "test-lost", test: "src/a.test.js::subtracts", status: "skipped"}]'
+  expect_exit 0 "an id passed twice passes" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-dup-passed.xml"
+  expect_jq "... counted once" '.tests == {baseline: 2, after: 3}'
+
+  printf '<testsuites><testcase' >"$TMP/gate-broken.xml"
+  expect_exit 2 "a JUnit report that does not parse is a usage error" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-broken.xml"
+  printf '\n\n' >"$TMP/gate-empty.txt"
+  expect_exit 2 "a baseline without a passing test is a usage error (nothing to compare)" -- gate ok "$TMP/gate-empty.txt" "$TMP/gate-green.xml"
+  expect_exit 2 "missing arguments" -- "$S/refactor-gate" acme/gate --base "$GB" --dir "$G/ok"
+  expect_exit 2 "a missing report file" -- gate ok "$TMP/gate-base.txt" "$TMP/none.xml"
+  expect_exit 2 "a base that is not a commit" -- "$S/refactor-gate" acme/gate --base deadbeef --dir "$G/ok" --baseline "$TMP/gate-base.txt" --after "$TMP/gate-green.xml"
+  expect_exit 2 "a base that looks like an option" -- "$S/refactor-gate" acme/gate --base --all --dir "$G/ok" --baseline "$TMP/gate-base.txt" --after "$TMP/gate-green.xml"
+  grep -qF -- "--base is not a commit: --all" "$TMP/err" && ok "... refused by the option guard, before git" || ko "... refused by the option guard, before git" "$(cat "$TMP/err")"
+  expect_exit 3 "an unregistered repo" -- "$S/refactor-gate" acme/nope --base "$GB" --dir "$G/ok" --baseline "$TMP/gate-base.txt" --after "$TMP/gate-green.xml"
+
+  gate_repo dirty; printf 'test(9)\n' >"$G/dirty/src/a.test.js"
+  expect_exit 2 "uncommitted changes are a usage error (the gate proves commits)" -- gate dirty "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  grep -q "uncommitted changes" "$TMP/err" && ok "... and the refusal says so" || ko "... and the refusal says so" "$(cat "$TMP/err")"
+  # an untracked file the tests may load (a moved module never committed) is a change the commit does not hold
+  gate_repo untracked; gate_commit untracked "refactor(a): move" src/a.js 'module.exports = require("./b")'
+  printf 'module.exports = 2\n' >"$G/untracked/src/b.js"
+  expect_exit 2 "an untracked file is a usage error too (the commit cannot run without it)" -- gate untracked "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  grep -q "uncommitted changes" "$TMP/err" && ok "... and the refusal says so" || ko "... and the refusal says so" "$(cat "$TMP/err")"
+  gate_repo ignored; gate_commit ignored "chore: ignore the run folder" .gitignore '.agent-run/'
+  mkdir -p "$G/ignored/.agent-run/run"; printf 'ok\n' >"$G/ignored/.agent-run/run/status.md"
+  expect_exit 0 "an untracked file matched by .gitignore (the run folder) still passes" -- gate ignored "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+
+  gate_repo anc; gate_commit anc "refactor(a): first try" src/a.js 'module.exports = 3'; GB="$(git -C "$G/anc" rev-parse HEAD)"
+  git -C "$G/anc" reset -q --hard HEAD~1; gate_commit anc "refactor(a): second try" src/a.js 'module.exports = 4'
+  expect_exit 2 "a base that is not an ancestor of HEAD is a usage error" -- gate anc "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  grep -q "not an ancestor of HEAD" "$TMP/err" && ok "... and the refusal says so" || ko "... and the refusal says so" "$(cat "$TMP/err")"
+
+  # a local layer re-pointing every test area's build: no file can be recognized as a test, the gate must not pass
+  jq '.repos = {"acme/gate": {areas: {tests: {build: "agent:feat:back"}, e2e: {build: "agent:feat:back"}}}}' "$REAL" >"$TMP/gate-notest.json"
+  reg "$TMP/gate-notest.json"; GB="$OKB"
+  expect_exit 2 "a repo without an area built by agent:test:* is a usage error" -- gate ok "$TMP/gate-base.txt" "$TMP/gate-green.xml"
+  grep -q "agent:test:" "$TMP/err" && ok "... naming the missing setting" || ko "... naming the missing setting" "$(cat "$TMP/err")"
+  reg "$ROOT/tests/fixtures/repos.json"
+else
+  ko "refactor-gate tests need dist/ — run bin/kit build first"
+fi
+
 echo "pr-review-submit"
 printf '%s' '{"event":"COMMENT","body":"Looks good overall.","comments":[{"path":"a.ts","line":3,"body":"Null check?"}]}' >"$TMP/review.json"
 FAKE_PR_AUTHOR=alice ADORNO_DRY_RUN=1 expect_exit 0 "dry-run review" -- "$S/pr-review-submit" acme/docs#10 "$TMP/review.json"
@@ -1323,7 +1454,7 @@ echo "with_lock"
 cat >"$TMP/lock-test" <<EOF
 #!/usr/bin/env bash
 . "$S/_lib.sh"
-mkdir -p "\$(kit_home)/locks/dead.lock"; echo 999999 >"\$(kit_home)/locks/dead.lock/pid"
+mkdir -p "\$(kit_home)/locks"; echo 999999 >"\$(kit_home)/locks/dead.lock"
 with_lock dead true; echo "took over a dead holder's lock"
 steps() { false; echo "continued after a failing step"; }
 with_lock t steps
@@ -1417,6 +1548,7 @@ guard_at allow "$C" "" "$S/repo-conf acme/docs"
 guard_at allow "$C" "" "$S/run-usage collect --session s --since 2026-11-10T10:00:00Z --until 2026-11-10T11:00:00Z"
 guard_at allow "$C" "" "$S/pr-shortcuts .agent-run/x/branch.diff"
 guard_at allow "$C" "" "$S/run-budget 20261120T000000-1-1"
+guard_at allow "$C" "" "$S/refactor-gate acme/docs --base abc123 --baseline .agent-run/x/baseline.xml --after .agent-run/x/after.xml"
 guard_at pass "$C" "" "$TMP/fake/adorno-github/scripts/repo-conf"
 guard_at deny "$C" "" "git push" codex
 guard_at pass "$C" "" "git add ." codex
@@ -1768,6 +1900,18 @@ expect_exit 2 "run-mark: usage" -- "$S/run-mark" round one 2
 jl
 expect_jq "marks are events of their own, without a script.call" \
   '.[-2].type == "step.begin" and .[-2].index == 2 and .[-2].name == "build" and .[-1] .type == "loop" and .[-1].round == 1 and .[-1].cap == 2 and .[-1].reason == "1 major"
+   and all(.[]; .script != "run-mark")'
+expect_exit 0 "run-mark: a self-review with nothing fixed" -- "$S/run-mark" self-review agent:fix:patch 0
+expect_exit 0 "run-mark: a self-review" -- "$S/run-mark" self-review agent:feat:back 2
+expect_jq "... and says what it marked" '. == {marked: "self-review"}'
+expect_exit 2 "run-mark: a self-review count must be an integer" -- "$S/run-mark" self-review agent:feat:back two
+expect_exit 2 "run-mark: a self-review needs its count" -- "$S/run-mark" self-review agent:feat:back
+expect_exit 2 "run-mark: a self-review count cannot be negative" -- "$S/run-mark" self-review agent:feat:back -1
+expect_exit 2 "run-mark: a self-review count has no leading zero" -- "$S/run-mark" self-review agent:feat:back 02
+expect_exit 2 "run-mark: a self-review needs its agent" -- "$S/run-mark" self-review '' 1
+jl
+expect_jq "a self-review is a mark: the agent and what it fixed" \
+  '.[-2].type == "self-review" and .[-2].fixed == 0 and .[-1].type == "self-review" and .[-1].name == "agent:feat:back" and .[-1].fixed == 2
    and all(.[]; .script != "run-mark")'
 guard_at allow "$TMP" "" "$S/run-mark step-end 2 build"
 

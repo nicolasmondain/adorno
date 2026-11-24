@@ -54,8 +54,9 @@ flowchart TD
   G --> R["Agents of pr-areas `review` in parallel, agent:adorno checks code rules and the request (spec, issue)"]
   R --> V{"Red or orange left?"}
   V -->|"yes, under 2 rounds"| FX["pr-areas --files: by_area fix or perf of the file (nit, test: fallbacks), commit_skill commits"]
-  FX --> R
-  V -->|"no"| PF["Proof in qa/: tests.log always, screenshots and video if visible (qa agent), checked by agent:adorno for secrets"]
+  FX --> SR["Self-review of the fixer: one pass, section copied into status.md"]
+  SR --> R
+  V -->|"no"| PF["Proof in qa/: tests.log always, screenshots and video if visible (qa agent); videos by workflow: fix and refactor before/after, feature final; checked by agent:adorno for secrets"]
   V -->|"cap reached"| DR["No PR yet: draft, open points first; PR open: not pushed; status.md"]
   PF -->|"complete"| OK["Clean: ready for review"]
   PF -->|"missing"| DR

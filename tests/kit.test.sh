@@ -5,10 +5,12 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"; trap 'chmod -R u+w "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
-# python3 with PyYAML runs bin/kit directly; else uv, keeping its real cache (the throwaway HOME would hide it)
-if python3 -c 'import yaml' 2>/dev/null; then KIT=(python3 "$ROOT/bin/kit")
+# python3 with PyYAML runs bin/kit directly; else uv, keeping its real cache (the throwaway HOME would hide it).
+# Both by absolute path: the doctor section puts fake python3 and uv first in PATH.
+if python3 -c 'import yaml' 2>/dev/null; then KIT=("$(python3 -c 'import sys; print(sys.executable)')" "$ROOT/bin/kit")
 elif command -v uv >/dev/null 2>&1; then
-  UV_CACHE_DIR="${UV_CACHE_DIR:-$(uv cache dir 2>/dev/null)}"; export UV_CACHE_DIR; KIT=("$ROOT/bin/kit")
+  UV_CACHE_DIR="${UV_CACHE_DIR:-$(uv cache dir 2>/dev/null)}"; export UV_CACHE_DIR
+  KIT=("$(command -v uv)" run --quiet --script "$ROOT/bin/kit")
 else echo "needs python3 with PyYAML, or uv" >&2; exit 1; fi
 export HOME="$TMP/home" ADORNO_HOME="$TMP/home/.adorno" ADORNO_LOCAL="$TMP/local"
 mkdir -p "$HOME"
@@ -117,6 +119,13 @@ bad "user info in a route" $'  ghost/repo:\n    models: {routes: {r: {base_url: 
 bad "a key in a route" $'  ghost/repo:\n    models: {routes: {r: {base_url: "https://x.example/v1", model: m, api_key: k}}}' "never put a key here"
 bad "a non-model key variable" $'  ghost/repo:\n    models: {routes: {r: {base_url: "https://x.example/v1", model: m, api_key_env: GH_TOKEN}}}' "must name a model key variable"
 bad "a non-delegable agent on a route" $'  ghost/repo:\n    models: {routes: {r: {base_url: "https://x.example/v1", model: m}}, agents: {agent:adorno: {route: r}}}' "not .delegable."
+bad "slack trusted_authors that is not a list" $'  ghost/repo: {}\nslack:\n  user_id: U0\n  watches:\n    w: {channels: ["#x"], includes: [a], action: {trusted_authors: U1}}' "trusted_authors must be a list of non-empty strings"
+bad "slack trusted_authors with an empty id" $'  ghost/repo: {}\nslack:\n  user_id: U0\n  watches:\n    w: {channels: ["#x"], includes: [a], action: {agent: agent:adorno, trusted_authors: ["U1", ""]}}' "trusted_authors must be a list of non-empty strings"
+bad "notion trusted_authors that is not a list" $'  ghost/repo: {}\nnotion:\n  assigned: {trusted_authors: N1}' "trusted_authors must be a list of non-empty strings"
+bad "notion trusted_authors with an empty id" $'  ghost/repo: {}\nnotion:\n  assigned: {trusted_authors: ["N1", ""]}' "trusted_authors must be a list of non-empty strings"
+bad "notion trusted_authors with a number" $'  ghost/repo: {}\nnotion:\n  assigned: {trusted_authors: [1]}' "trusted_authors must be a list of non-empty strings"
+printf 'owner: {name: T, github: t, language: fr}\nrepos:\n  ghost/repo: {}\nslack:\n  watches:\n    w: {channels: ["#x"], includes: [a], action: {agent: agent:adorno, trusted_authors: [U1]}}\nnotion:\n  assigned: {trusted_authors: [N1, N2]}\n' >"$OKP/adorno.yaml"
+expect_exit 0 "trusted_authors lists of ids are accepted" -- env ADORNO_LOCAL="$OKP" "${KIT[@]}" check
 
 echo "install into a repo"
 A="$TMP/code/acme/app"
@@ -408,6 +417,22 @@ mv "$TMP/agents.bak" "$SB/dist/AGENTS.md"
 expect_exit 0 "the real registry passes with every dispatcher's roles covered" -- env ADORNO_LOCAL="$TMP/none" "${KIT[@]}" check
 check "no area_reviewers reader is left in src/" '[ -d "$ROOT/src" ] && [ -f "$ROOT/bin/kit" ] && [ -f "$ROOT/bin/kitlib/validate.py" ] && [ -f "$ROOT/bin/kitlib/commands.py" ] && ! grep -rn --exclude-dir=__pycache__ "area_reviewers" "$ROOT/src" "$ROOT/bin/kit" "$ROOT/bin/kitlib" | grep -v -e "src/skills/adorno-setup/" -e "bin/kitlib/validate.py:.*area_reviewers\|bin/kitlib/commands.py:.*area_reviewers" -e SCHEMA.md | grep .'
 check "pr:ship leaves no family agent of its subject" '! grep -q "family agent of its subject" "$ROOT/src/workflows/pr/ship.md"'
+RF="$ROOT/src/workflows/feature/refactor.md"
+refactor_ends_ship_watch() {  # top-level numbered steps (indented and blank lines continue one); last two
+  awk '/^[0-9]+\. /{n++; b[n]=$0; on=1; next} /^$/{next} on && /^ /{b[n]=b[n] " " $0; next} {on=0}
+    END{exit !(n > 1 && index(b[n], "workflow:pr:watch") && index(b[n-1], "workflow:pr:ship"))}' "$RF"
+}
+refactor_agents_in_uses() {  # every agent named in the body is in the frontmatter's uses.agents
+  local uses names name
+  uses="$(grep -E '^  agents: \[' "$RF" | sed 's/^  agents: //' | tr -d '[] ' | tr ',' '\n')"
+  names="$(awk '/^---$/{f++; next} f >= 2' "$RF" | grep -oE 'agent:([a-z0-9-]+:[a-z0-9-]+|adorno)' | sort -u)"
+  [ -n "$uses" ] && [ -n "$names" ] || return 1
+  for name in $names; do grep -qxF "$name" <<<"$uses" || { echo "  not in uses.agents: $name"; return 1; }; done
+}
+check "feature:refactor exists" '[ -f "$RF" ]'
+check "feature:refactor uses workflow:pr:ship" 'grep -qE "^  workflows: \[.*workflow:pr:ship[],]" "$RF"'
+check "feature:refactor calls pr:ship, then ends on pr:watch" refactor_ends_ship_watch
+check "feature:refactor lists in uses.agents every agent its body names" refactor_agents_in_uses
 
 echo "migrate areas"
 MIG="$TMP/mig"; mkdir -p "$MIG"
@@ -500,6 +525,55 @@ check "review:ponytail's review mode names review:code's axes only in its out-of
   '[ "$(grep -c "^Out of scope (owned elsewhere)" "$P")" = 1 ] && ! awk "/^## Third mode: Audit/{exit} /^Out of scope/{s=1} s&&/^\$/{s=0} !s" "$P" | grep -qiwE "correctness|security|bugs?|flaw|blocker|risk|speed|performance|load|injection|missing test"'
 check "review:code and review:security leave the lean axis and dependency need to review:ponytail" \
   'grep -q "lean axis is .review:ponytail..s" "$ROOT/src/agents/review/code.md" && grep -q "is .review:ponytail..s" "$ROOT/src/agents/review/security.md"'
+
+# the self-review rule: written once in src/agents/_builder.md, merged into every committing agent that edits
+SR='^## Self-review, before you return'
+DA="$ROOT/dist/claude-plugin/agents"
+# commit-type families: every agent folder but core and review, so a new family is covered
+COMMIT_FAMILIES=""
+for d in "$ROOT"/src/agents/*/; do
+  case "$(basename "$d")" in core | review) ;; *) COMMIT_FAMILIES="$COMMIT_FAMILIES $(basename "$d")" ;; esac
+done
+# carries_self_review A — dist agent A should carry the rule: its family is a commit type and its tools have Edit
+carries_self_review() {
+  local fam
+  for fam in $COMMIT_FAMILIES; do
+    case "$(basename "$1")" in adorno-agent-"$fam"-*) grep -qE '^tools:(.*[ ,])?Edit(,|$)' "$1"; return ;; esac
+  done
+  return 1
+}
+self_review_carried() {  # each carrier holds the rule once, as its last section: its body ends with _builder.md's
+  local a n=0 b="$ROOT/src/agents/_builder.md"
+  for a in "$DA"/*.md; do
+    carries_self_review "$a" || continue
+    [ "$(grep -c "$SR" "$a")" = 1 ] && tail -n "$(wc -l <"$b")" "$a" | cmp -s - "$b" || return 1
+    n=$((n + 1))
+  done
+  [ "$n" -gt 0 ]
+}
+self_review_left_out() {  # every other dist agent (no commit type, or no Edit, adorno.md included) lacks the rule
+  local a n=0
+  for a in "$DA"/*.md; do
+    carries_self_review "$a" && continue
+    ! grep -q "$SR" "$a" || return 1
+    n=$((n + 1))
+  done
+  [ "$n" -gt 0 ] && [ -f "$DA/adorno.md" ]
+}
+what_you_return_has_self_review() {  # one "## What you return" per commit-type family, its section names Self-review
+  local fam f
+  [ -n "$COMMIT_FAMILIES" ] || return 1
+  for fam in $COMMIT_FAMILIES; do
+    f="$ROOT/src/agents/$fam/_family.md"
+    [ "$(grep -c '^## What you return' "$f" 2>/dev/null)" = 1 ] || return 1
+    awk '/^## What you return/{s=1; next} s && /^## /{exit} s' "$f" | grep -q 'Self-review' || return 1
+  done
+}
+check "the self-review rule is written once, in src/agents/_builder.md" \
+  '[ "$(grep -rl "$SR" "$ROOT/src" | sed "s|^$ROOT/||")" = "src/agents/_builder.md" ]'
+check "the self-review rule ends every commit-type agent with Edit, once, as its last section" 'self_review_carried'
+check "the self-review rule stays out of every other agent (no Edit, review, core, adorno)" 'self_review_left_out'
+check "every commit-type family's What you return names the Self-review section" 'what_you_return_has_self_review'
 
 check "an imported skill only agents and areas name is kept out of the model's list" \
   'grep -q "^disable-model-invocation: true" "$ROOT"/dist/claude-plugin/skills/test-driven-development/SKILL.md'
@@ -728,6 +802,61 @@ check "... each one by name" \
   'grep -q "^scopes (weakest first" <<<"$out" && grep -q "^  workspaces.acme: " <<<"$out" && grep -qx "  repos.acme/app" <<<"$out" && grep -qx "  presets.platform-team (used with \`use:\`)" <<<"$out"'
 expect_exit 0 "conf with no argument inside a declared repo" -- in_dir "$TMP/code/acme/app" "${KIT[@]}" conf
 expect_jq "... resolves that repo" '(.scopes | index("repos:acme/app")) != null'
+
+echo "doctor"
+FAKE="$TMP/fake-tools"; mkdir -p "$FAKE"
+fake() { printf '#!/bin/sh\necho "%s"\n' "$2" >"$FAKE/$1"; chmod +x "$FAKE/$1"; }  # fake TOOL "VERSION LINE"
+fakes() { fake jq "$1"; fake python3 "$2"; fake gh "$3"; fake uv "$4"; }
+doctor() { expect_exit "$1" "$2" -- env PATH="$FAKE" "${KIT[@]}" doctor; }  # only the fakes on PATH
+fakes jq-1.7.1 "Python 3.9" "gh version 2.99.0" "uv 0.4.19"
+doctor 0 "doctor: every tool exactly at its minimum"
+check "... four ok: lines" '[ "$(grep -c "^ok: " <<<"$out")" = 4 ]'
+for f in README.md docs/setup.md; do
+  check "every tool and minimum doctor prints is in the Prerequisites paragraph of $f, as \`tool >= minimum\`" \
+    '(mins="$(sed -n "s/^ok: \([^ ]*\) .* (>= \(.*\))$/\1 \2/p" <<<"$out")"; [ "$(wc -l <<<"$mins")" -eq 4 ] || exit 1
+      para="$(sed -n "/^Prerequisites:/,/^$/p" "$ROOT/$f" | tr "\n" " ")"
+      while read -r t v; do grep -qE "$t[^ ]* >= $v[ ,]" <<<"$para" || exit 1; done <<<"$mins")'
+done
+# kit's own environment (a venv, or uv's) comes first in PATH: doctor must look past its python3, at the fake one
+VENV="$TMP/venv"
+if [ "${KIT[0]##*/}" != uv ] && "${KIT[0]}" -m venv --without-pip --system-site-packages "$VENV" 2>/dev/null &&
+  "$VENV/bin/python3" -c 'import yaml' 2>/dev/null; then
+  expect_exit 0 "doctor: run from a venv first in PATH" -- env PATH="$VENV/bin:$FAKE" "$VENV/bin/python3" "$ROOT/bin/kit" doctor
+  check "... reports the PATH python3, not the venv's" 'grep -qx "ok: python3 3.9 (>= 3.9)" <<<"$out"'
+elif [ "${KIT[0]##*/}" = uv ]; then
+  doctor 0 "doctor: run by uv, its environment first in PATH"
+  check "... reports the PATH python3, not uv's" 'grep -qx "ok: python3 3.9 (>= 3.9)" <<<"$out"'
+else
+  echo "  skip doctor: kit's own environment left out of PATH (no venv with PyYAML from ${KIT[0]})"
+fi
+fakes jq-1.7.1-apple "Python 3.9.6" "gh version 2.103.3 (2026-10-26)" "uv 0.8.18 (Homebrew 2025-09-17)"
+doctor 0 "doctor: real version strings"
+check "... read as their versions" \
+  'grep -qx "ok: jq 1.7.1 (>= 1.7.1)" <<<"$out" && grep -qx "ok: python3 3.9.6 (>= 3.9)" <<<"$out" && grep -qx "ok: gh 2.103.3 (>= 2.99.0)" <<<"$out" && grep -qx "ok: uv 0.8.18 (>= 0.4.19)" <<<"$out"'
+echo 'echo jq-1.7.1' >"$FAKE/jq"  # no shebang: exec fails with ENOEXEC
+doctor 1 "doctor: a tool that cannot be run"
+check "... an error names it, the three others still ok" \
+  'grep -q "^error: jq" "$TMP/err" && ! grep -q Traceback "$TMP/err" && [ "$(grep -c "^ok: " <<<"$out")" = 3 ]'
+fake jq jq-1.6
+doctor 1 "doctor: jq 1.6 refused"
+check "... the error names jq, 1.6 and 1.7.1" 'grep -q "^error: jq 1\.6 .*1\.7\.1" "$TMP/err"'
+check "... the three others still reported ok" '[ "$(grep -c "^ok: " <<<"$out")" = 3 ] && ! grep -q "^ok: jq" <<<"$out"'
+fake jq jq-1.7
+doctor 1 "doctor: jq 1.7 (two components) refused"
+check "... as too old, against 1.7.1" 'grep -q "^error: jq 1\.7 is too old.*1\.7\.1" "$TMP/err"'
+fake jq jq-1.7.1; fake python3 "Python 3.8.18"
+doctor 1 "doctor: python3 3.8.18 refused"
+check "... the error names python3, 3.8.18 and 3.9" 'grep -q "^error: python3 3\.8\.18 .*3\.9" "$TMP/err"'
+fake python3 "Python 3.9"; fake gh "gh version 2.98.0"
+doctor 1 "doctor: gh 2.98.0 refused"
+check "... the error names gh and 2.99.0" 'grep -q "^error: gh 2\.98\.0 .*2\.99\.0" "$TMP/err"'
+fake gh "gh version 2.99.0"; fake uv "uv (dev build)"
+doctor 1 "doctor: an unreadable version refused"
+check "... named" 'grep -q "^error: uv" "$TMP/err"'
+rm "$FAKE/uv"
+doctor 1 "doctor: a tool missing from PATH"
+check "... named" 'grep -q "^error: uv .*not found" "$TMP/err" && [ "$(grep -c "^ok: " <<<"$out")" = 3 ]'
+check "... and counted in the summary" 'grep -q "^kit: 1 prerequisite" "$TMP/err"'
 
 echo
 echo "$pass passed, $fail failed"

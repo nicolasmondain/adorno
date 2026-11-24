@@ -9,6 +9,7 @@ One neutral source (src/ + vendor/) -> native layouts for Claude Code, Codex,
 Gemini CLI, Copilot, Cursor and any tool that reads Agent Skills (SKILL.md).
 
   kit check [--dist]            validate sources (public, then with local/)
+  kit doctor                    check the minimum versions of jq, python3, gh and uv
   kit list                      show every skill, agent and workflow
   kit conf [OWNER/REPO]         the settings a repo resolves to (no argument: the current repo, or the scopes)
   kit new skill|agent|workflow NAME

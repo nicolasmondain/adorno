@@ -18,11 +18,16 @@ flowchart LR
   LOC -->|install only| T
   T --> R["request"] --> W["workflow"]
   W --> PUB["publish in your name<br/>review:requested, slack:mentions"] --> PA["specialists<br/>area reviewers from pr-areas (PRs),<br/>core:analyst (Slack)"] --> AD(("agent:adorno<br/>verifies, decides, writes")) --> OUT["pending review, draft reply,<br/>report to you"]
-  W --> COD["change code<br/>feature:build, issue:fix, ci:red,<br/>review:received"] --> BU["builders<br/>by commit type"] --> SH["workflow:pr:ship<br/>commit, review gate, PR"]
+  W --> COD["change code<br/>feature:build, feature:refactor, issue:fix, ci:red,<br/>review:received"] --> BU["builders<br/>by commit type"] --> SH["workflow:pr:ship<br/>commit, review gate, PR"]
 ```
 
 `bin/kit` (`check`, `build`, `install`) turns the repo into the tool's files. `build` never reads `local/`, so `dist/` stays public;
 `check` and `install` do. In `workflow:pr:ship` the review gate is itself `pr-areas`, the area reviewers, then `agent:adorno`.
+
+Before that gate, every agent that commits rereads its own diff once before it returns (spec, repo rules, lean, hygiene,
+tests), fixes what it finds in a commit of its type, and ends its deliverable with a `Self-review` section. The session
+copies that section into `status.md` and marks it in the journal (`run-mark self-review`). It is one pass and it never
+replaces the external review, which stays the gate.
 
 ## The four layers
 

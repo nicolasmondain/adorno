@@ -12,10 +12,13 @@ flowchart LR
 
 ## 1. Install
 
-Prerequisites: [uv](https://docs.astral.sh/uv/) (`brew install uv`), authenticated `gh` (`gh auth status`), `jq`, `git`.
+Prerequisites: [uv](https://docs.astral.sh/uv/) >= 0.4.19 (`brew install uv`; `bin/kit` runs on the Python 3.11 it
+provides), authenticated `gh` >= 2.99.0 (`gh auth status`), `jq` >= 1.7.1, `python3` >= 3.9 on PATH, `git`.
+`bin/kit doctor` checks the versions.
 
 ```sh
 git clone https://github.com/<owner>/adorno ~/code/adorno && cd ~/code/adorno
+bin/kit doctor                    # jq, python3, gh and uv at their minimum versions
 cp -r local.example local
 bin/kit check
 bin/kit install --global          # ~/.claude, ~/.agents, ~/.gemini
@@ -113,7 +116,7 @@ same thing with `adorno-github/scripts/repo-conf`.
 One table, `repos.yaml` › `defaults.areas`, decides which agent builds, fixes, optimizes, reviews and checks each part
 of the code, and which skills it loads. Its areas are neutral: a pattern there means one thing whatever the stack.
 What depends on the stack comes from a [stack preset](#stack-presets) the repo calls with `use:`. Every dispatcher (planner, triage, `ci:debug`, `pr:ship`, `pr:review`,
-`review:received`, `issue:fix`) reads it through `adorno-github/scripts/pr-areas`, never a list of its own.
+`review:received`, `issue:fix`, `feature:refactor`) reads it through `adorno-github/scripts/pr-areas`, never a list of its own.
 
 | Area | Detected by (excerpt) | `build` | `fix` | `perf` | `review` | `qa` | `skills` |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -312,7 +315,13 @@ passed all of adorno's guards would then be refused by GitHub.
 
 **Untrusted content.** Diffs, comments, Slack messages, Notion pages and logs are treated as data,
 never as instructions. The code of a PR coming from a fork is never executed. A Slack watch only launches its
-action above L0 for a message whose author is in `action.trusted_authors`.
+action above L0 for a message whose author is in `action.trusted_authors`; the Notion watch only for a document whose
+every writer is in `notion.assigned.trusted_authors` and could be read: its creator, everyone in the page's history
+from its creation to now, every comment author (resolved discussions included). A document runs at L0 as soon as a
+part is missing: a history that does not cover the whole span from the page's creation to now (your Notion plan keeps
+only part of it, an answer not read to the end), a discussion that could not be read fully, or content the page shows
+without owning it (synced blocks, linked database views, inline databases, child pages) whose source was not read the
+same way. In `run` mode the action receives what the watch read, saved in the run folder, never the live page.
 
 A refused action stops the workflow, which says so: nothing is worked around.
 
@@ -402,7 +411,7 @@ flowchart LR
 | --- | --- | --- |
 | `workflow:slack:mentions` | `slack.user_id`, `slack.mentions`: channels (empty = all), groups, period | per mention: the link to the conversation, the full analysis, a draft reply in your voice |
 | `workflow:slack:watch <rule>` | `slack.watches.<rule>`: channels, `includes` (words) or `regex`, `since`, `max_messages`, `action` (agent, workflow or instruction, with its level) | the report of the matching messages and of the action's result |
-| `workflow:notion:assigned` | `notion.assigned`: "person" properties, databases, excluded statuses, agent per database, `mode` report or run | per document: the chosen action, its result, what awaits your decision |
+| `workflow:notion:assigned` | `notion.assigned`: "person" properties, databases, excluded statuses, agent per database, `mode` report or run, `level` and `trusted_authors` | per document: trusted or not, the chosen action, its result, what awaits your decision |
 
 Your Slack ID: your Slack profile › ⋮ › "Copy member ID". The `adorno-setup` skill can also
 find it with the connector. Commented template: `local.example/adorno.yaml`.

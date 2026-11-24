@@ -60,7 +60,7 @@ flowchart LR
 
 **A deliberate departure from the guide.** The guide puts well-scoped coding (bug fix, spec-driven feature) and
 repeated reviews on Sonnet. The owner of this setup chose Opus for every agent that writes or judges code
-(`feat:*`, `fix:patch`, `test:*`, `refactor:simplify`, `review:*`, `agent:adorno`). That costs more per token on
+(`feat:*`, `fix:patch`, `test:*`, `refactor:simplify`, `refactor:structure`, `review:*`, `agent:adorno`). That costs more per token on
 building and reviewing (the guide's price table). To go back to the guide on a repo, set `models.agents.<id>: balanced`
 for those agents.
 
@@ -74,6 +74,7 @@ other reviewers stay on `deep` (table in [Measuring](#measuring)). A test keeps 
 | --- | --- | --- |
 | `ci:red` | balanced | `ci:debug` → deep; the designated fixer → deep; `pr:ship` |
 | `feature:build` | balanced | `spec:new` (`intake` → frontier); `router` → fast; `planner` → frontier; `feat:*`, `test:e2e` → deep (3 rounds, the 3rd on frontier); reviewers → deep, except `review:api` and `review:tests` → balanced (2 rounds); `pr:ship`; `pr:watch` |
+| `feature:refactor` | balanced | `spec:new` (`intake` → frontier); `planner` → frontier; `test:unit` → deep (characterization); `refactor:simplify` / `refactor:structure` → deep (3 rounds per slice, gated by `refactor-gate`, a script); reviewers → deep, except `review:api` and `review:tests` → balanced (2 rounds); `pr:ship`; `pr:watch` |
 | `issue:fix` | balanced | `fix:investigate` → frontier; `fix:patch` → deep; `pr:ship`; `pr:watch` |
 | `notion:assigned` | balanced | the session reads each document (it alone has the Notion connector); `router` → fast; `core:analyst` → deep, or the chosen workflow |
 | `pr:impact` | balanced | `review:impact` → deep, per PR in parallel; `adorno` → deep |
@@ -120,8 +121,8 @@ results are local, not committed.
 | `review:tests` | 4/4 → 4/4 (own severity 4/4 → 3/4) | 50 % → 61 % | 0 → 0 | -61 % | balanced |
 | `review:mongodb` | 4/4 → 4/4 | 83 % → 68 % | n/a | -61 % | deep |
 
-`review:mongodb` fails the precision bound (-14 points: index questions outside the diff, plaintext tokens already in
-the base, a wrong Express 5 claim). On `test-asserts-nothing` (run 1), `review:tests` on sonnet raised its own
+`review:mongodb` failed the precision bound (-14 points: index questions outside the diff, plaintext tokens already in
+the base, a wrong Express 5 claim); it was measured again on a tightened prompt, below. On `test-asserts-nothing` (run 1), `review:tests` on sonnet raised its own
 expected finding as a blocker where the case accepts major (over-rating, 1 occurrence in 4; deep rated it major both
 runs). It did not change that run's merged verdict, already `block` from `review:ponytail`, and `agent:adorno` (deep)
 re-rates every finding before anything is posted. The remaining risk is that a 🔴 can start a fix loop. Not decided by the measure: `review:ponytail` stays on `deep` (decided with its prompt rescope),
@@ -130,6 +131,46 @@ the measure (#38: its own scenarios instead of `addy/test-engineer`): the tier r
 run. The controls (`code`, `back`, `front`, `security`, `perf-back`,
 unchanged) kept recall and cost within 3 %, but their ungraded precision moved by up to 10 points between runs: that
 is the noise of one run pair.
+
+**`review:mongodb` again, on a tightened prompt.** Every false positive of the measure above was a `question` or a
+`minor` on what the reviewer had not verified. Its prompt now says what is out of its review (code the diff does not
+change, what the workspace does not show, the fix it proposes, the other areas) and which severity a cost read from
+the code gets. Measured alone, with `bench/run --only agent:review:mongodb`, on the 6 cases that route to it, 3 repeats
+(18 reviews per run): the old prompt (as of `1bba2b0`) and the new one on 2026-11-20 (Claude Code 2.1.330), then the
+new one again on 2026-11-23 (2.1.331), after the review corrected one sentence of it (a caller "outside the diff"
+became a caller "you did not find in the workspace"). The six runs cost 13.49 USD. The grades of the 13 unplanned
+findings were validated by the owner. Precision is the mean of the three repeats' precision (`bench/score`), not the
+ratio of the summed counts.
+
+| Prompt, model | Own recall | Own severity | Matched / false positives | Precision | Cost per call |
+| --- | --- | --- | --- | --- | --- |
+| old, opus | 6/6 | 3/6 | 22 / 3 | 89 % | 0.18 USD |
+| old, sonnet | 6/6 | 3/6 | 18 / 10 | 64 % | 0.07 USD |
+| new, opus | 6/6 | 6/6 | 20 / 0 | 100 % | 0.17 USD |
+| new, sonnet | 6/6 | 6/6 | 17 / 1 | 94 % | 0.07 USD |
+| corrected, opus | 6/6 | 6/6 | 20 / 0 | 100 % | 0.18 USD |
+| corrected, sonnet | 6/6 | 6/6 | 18 / 3 | 86 % | 0.07 USD |
+
+The prompt does what it was written for on both models: opus goes from 89 % to 100 %, sonnet from 64 % to 86-94 %,
+own severity from 3/6 to 6/6, and no own finding is lost. Sonnet against opus is another matter: -6 points on the
+first measure, -14 on the second (bound: -10), about -10 over both. Its false positives are all on
+`mongo-operator-injection`, one per repeat on the second measure, each a `minor` or a `question` outside its area (an
+Express 4 claim on a repo that pins Express 5, how the token is stored): the "other areas" rule holds on opus, not
+reliably on sonnet. The bound is not met, so `review:mongodb` stays on `deep` (the owner's call, 2026-11-24). What
+these measures do not say:
+
+- The same 6 cases served to write the rules and to measure them, so the numbers are optimistic. The prompt was fixed
+  before the runs; the one sentence corrected between the two measures came from the review, not from the results.
+- With 18 reviews, one finding weighs about 5 points. The two sonnet measures differ by 8 points, while the corrected
+  sentence does not bear on what its false positives are about: that is the noise of 18 reviews.
+- One false positive of the second sonnet run matched the planned finding of its case through a keyword ("I did not
+  check" the Express version). The keyword was narrowed; the five other runs score the same with it.
+- The merged review was not measured (`--only` starts no other reviewer). On `auth-missing-check`, sonnet stayed
+  silent once in three on the first measure, where it used to repeat the finding of `review:back`.
+
+`core:analyst` on `deep`, with `bench/run --kind analyst` (4 cases, 2 with a planted instruction, 1 repeat, prompts at
+`c1a6539`, Claude Code 2.1.330, 2026-11-20): causes 4/4, planted instructions flagged 2/2 and followed 0, canary 0,
+clean cases 2/2, 0.82 USD (340k tokens in, 13k out, 3.1 min). No other tier was run: it stays on `deep`.
 
 ## Known limits
 

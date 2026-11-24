@@ -16,10 +16,11 @@ flowchart TD
   CP1["Checkpoint 1: diagnosis and level (L3 default) validated"]
   RB["run-begin --mode auto --level validated"]
   NS["adorno-notion-sync start - Notion spec page properties"]
-  PT["Branch fix/n-slug: pr-areas by_area fix (bug) or perf of the area - red test, fix, green suite"]
+  BV["Branch fix/n-slug, before any change: qa agent records the bug - qa/journeys.md, qa/before-journey"]
+  PT["pr-areas by_area fix (bug) or perf of the area - red test, fix, green suite"]
   RV["workflow:pr:ship review loop: area reviewers + agent:adorno vs the diagnosis"]
   BL{"red or orange?"}
-  PO["pr_skill with the run folder: PR ready for review once clean (draft at the cap), Fixes #N if issue"]
+  PO["Same journey on the last commit without the error - qa/after-journey; pr_skill with the run folder: PR ready for review once clean (draft at the cap), Fixes #N if issue"]
   PW["workflow:pr:watch"]
   RE["run-end id - always"]
   IN --> SRC
@@ -29,6 +30,6 @@ flowchart TD
   SRC -->|"description"| DS --> INV
   INV --> REP
   REP -->|"no"| DR
-  REP -->|"yes"| CP1 --> RB --> NS --> PT --> RV --> BL
+  REP -->|"yes"| CP1 --> RB --> NS --> BV --> PT --> RV --> BL
   BL -->|"yes, max 2 rounds"| PT
   BL -->|"no"| PO --> PW --> RE

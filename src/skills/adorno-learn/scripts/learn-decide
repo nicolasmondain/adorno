@@ -10,7 +10,7 @@ die() { printf 'learn-decide: %s\n' "$1" >&2; exit "${2:-1}"; }
 [ -f "$f" ] && jq -e --arg k "$key" '.[$k] != null' "$f" >/dev/null || die "no candidate '$key'" 3
 # serialise read-modify-write: parallel runs must not lose each other's notes
 lock="$f.lock"; tries=0
-until mkdir "$lock" 2>/dev/null; do
+until ( set -C; : >"$lock" ) 2>/dev/null; do  # O_EXCL, not mkdir: uutils' mkdir lets several in
   if [ -n "$(find "$lock" -maxdepth 0 -mmin +5 2>/dev/null)" ]; then rm -rf "$lock"; continue; fi
   tries=$((tries + 1)); [ "$tries" -lt 300 ] || die "timed out waiting for $lock"
   sleep 0.1
