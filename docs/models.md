@@ -136,9 +136,11 @@ is the noise of one run pair.
 `minor` on what the reviewer had not verified. Its prompt now says what is out of its review (code the diff does not
 change, what the workspace does not show, the fix it proposes, the other areas) and which severity a cost read from
 the code gets. Measured alone, with `bench/run --only agent:review:mongodb`, on the 6 cases that route to it, 3 repeats
-(18 reviews per run), Claude Code 2.1.330, 2026-11-20: the old prompt (as of `1bba2b0`), then the new one. The four
-runs cost 8.87 USD. The grades of the 10 unplanned findings were validated by the owner. Precision is the mean of the
-three repeats' precision (`bench/score`), not the ratio of the summed counts.
+(18 reviews per run): the old prompt (as of `1bba2b0`) and the new one on 2026-11-20 (Claude Code 2.1.330), then the
+new one again on 2026-11-23 (2.1.331), after the review corrected one sentence of it (a caller "outside the diff"
+became a caller "you did not find in the workspace"). The six runs cost 13.49 USD. The grades of the 13 unplanned
+findings were validated by the owner. Precision is the mean of the three repeats' precision (`bench/score`), not the
+ratio of the summed counts.
 
 | Prompt, model | Own recall | Own severity | Matched / false positives | Precision | Cost per call |
 | --- | --- | --- | --- | --- | --- |
@@ -146,16 +148,25 @@ three repeats' precision (`bench/score`), not the ratio of the summed counts.
 | old, sonnet | 6/6 | 3/6 | 18 / 10 | 64 % | 0.07 USD |
 | new, opus | 6/6 | 6/6 | 20 / 0 | 100 % | 0.17 USD |
 | new, sonnet | 6/6 | 6/6 | 17 / 1 | 94 % | 0.07 USD |
+| corrected, opus | 6/6 | 6/6 | 20 / 0 | 100 % | 0.18 USD |
+| corrected, sonnet | 6/6 | 6/6 | 18 / 3 | 86 % | 0.07 USD |
 
-On the new prompt, sonnet holds: no own finding lost, precision -6 points (bound: -10), no review rejected, a call
-59 % cheaper. The tier stays `deep` until the owner moves it. What this measure does not say:
+The prompt does what it was written for on both models: opus goes from 89 % to 100 %, sonnet from 64 % to 86-94 %,
+own severity from 3/6 to 6/6, and no own finding is lost. Sonnet against opus is another matter: -6 points on the
+first measure, -14 on the second (bound: -10), about -10 over both. Its false positives are all on
+`mongo-operator-injection`, one per repeat on the second measure, each a `minor` or a `question` outside its area (an
+Express 4 claim on a repo that pins Express 5, how the token is stored): the "other areas" rule holds on opus, not
+reliably on sonnet. The bound is not met, so `review:mongodb` stays on `deep` (the owner's call, 2026-11-24). What
+these measures do not say:
 
 - The same 6 cases served to write the rules and to measure them, so the numbers are optimistic. The prompt was fixed
-  before the new runs and not tuned after them.
-- With 18 reviews, one finding weighs about 5 points. Sonnet raised one test remark outside its area, graded valid:
-  graded invalid, the drop would have been -10.3 points, past the bound.
+  before the runs; the one sentence corrected between the two measures came from the review, not from the results.
+- With 18 reviews, one finding weighs about 5 points. The two sonnet measures differ by 8 points, while the corrected
+  sentence does not bear on what its false positives are about: that is the noise of 18 reviews.
+- One false positive of the second sonnet run matched the planned finding of its case through a keyword ("I did not
+  check" the Express version). The keyword was narrowed; the five other runs score the same with it.
 - The merged review was not measured (`--only` starts no other reviewer). On `auth-missing-check`, sonnet stayed
-  silent once in three, where it used to repeat the finding of `review:back`.
+  silent once in three on the first measure, where it used to repeat the finding of `review:back`.
 
 `core:analyst` on `deep`, with `bench/run --kind analyst` (4 cases, 2 with a planted instruction, 1 repeat, prompts at
 `c1a6539`, Claude Code 2.1.330, 2026-11-20): causes 4/4, planted instructions flagged 2/2 and followed 0, canary 0,
