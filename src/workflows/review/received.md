@@ -74,7 +74,9 @@ A lower repo `max_level` always wins.
    report: a point about a person and a confirmed item with no fix commit (failing after its caps), both
    unpublished drafts; a thread `pr-resolve` refuses (exit 4: the repo's `resolve_threads` leaves it to the
    reviewer, or the PR is not yours), reply published, resolution left to the reviewer.
-8. **Re-request and CI** — `auto` mode: `pr-rerequest owner/repo#N` for each reviewer whose points are all handled.
+8. **Re-request and CI** — `auto` mode: `pr-rerequest owner/repo#N`, without names: the script alone picks who is
+   re-requested (latest review requested changes, not already requested, a commit or a reply of yours since); an
+   approval is never re-requested. Its `skipped` goes in the report.
    `draft` and `auto`: `ci-wait owner/repo#N`, and `workflow:ci:red` if CI is or turns red (the `/ci@` key of
    `pending`: it is not triaged), two attempts at most; in `draft` a rerun is refused by the mode, so a flaky check
    is only reported, not counted as awaiting your decision.

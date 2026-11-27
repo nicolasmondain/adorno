@@ -515,10 +515,24 @@ FAKE_PR_AUTHOR=alice expect_exit 4 "resolve refused on someone else's PR" -- "$S
 expect_exit 0 "resolve as author" -- "$S/pr-resolve" acme/docs#42 T1
 expect_jq "thread resolved" '.resolved == true'
 
-ADORNO_DRY_RUN=1 expect_exit 0 "rerequest defaults to past human reviewers" -- "$S/pr-rerequest" acme/docs#42
-expect_jq "bots and myself excluded, deduplicated" '.reviewers == ["alice","bob"]'
-expect_exit 0 "rerequest named reviewer" -- "$S/pr-rerequest" acme/docs#42 carol
-expect_jq "requested carol" '.requested == ["carol"]'
+ADORNO_DRY_RUN=1 expect_exit 0 "rerequest checks every past human reviewer" -- "$S/pr-rerequest" acme/docs#42
+expect_jq "only changes requested then a commit or a reply: alice (head moved), frank (replied)" '.requested == ["alice","frank"]'
+expect_jq "bots and myself are not candidates" '[.skipped[].login, .requested[]] | index("copilot-bot") == null and index("octocat") == null'
+expect_jq "an approval is never re-requested, even after changes requested" \
+  '[.skipped[] | select(.reason == "approved") | .login] == ["bob","dave"]'
+expect_jq "changes requested on the head commit, no reply of mine to them since (a reply to a bot thread does not count): skipped" \
+  '.skipped | any(.login == "erin" and .reason == "nothing new since the review")'
+expect_jq "already requested: no second ping" '.skipped | any(.login == "gina" and .reason == "already requested")'
+expect_jq "comments only: no changes requested" '.skipped | any(.login == "hank" and .reason == "no changes requested")'
+ADORNO_DRY_RUN=1 expect_exit 0 "named reviewers follow the same rule" -- "$S/pr-rerequest" acme/docs#42 carol erin acme/core
+expect_jq "nobody named is eligible" '.requested == [] and ([.skipped[].reason] | sort) == ["no changes requested","nothing new since the review","team"]'
+: >"$FAKE_LOG"
+expect_exit 0 "nobody eligible: nothing sent, still exit 0" -- "$S/pr-rerequest" acme/docs#42 bob
+expect_jq "... and says why" '.requested == [] and .skipped == [{"login":"bob","reason":"approved"}]'
+grep -q "requested_reviewers" "$FAKE_LOG" && ko "no POST when nobody is eligible" || ok "no POST when nobody is eligible"
+expect_exit 0 "rerequest an eligible reviewer" -- "$S/pr-rerequest" acme/docs#42 alice
+expect_jq "requested alice" '.requested == ["alice"]'
+grep -q "requested_reviewers -f reviewers\[\]=alice" "$FAKE_LOG" && ok "... through the API" || ko "... through the API" "$(cat "$FAKE_LOG")"
 
 FAKE_THREAD_REPO=acme/strict expect_exit 4 "a thread of another repo is refused" -- "$S/pr-reply" acme/docs#42 T1 "$TMP/body.md"
 FAKE_THREAD_NUM=7 expect_exit 4 "a thread of another PR is refused" -- "$S/pr-resolve" acme/docs#42 T1

@@ -71,6 +71,7 @@ case "$all" in
     [ "${FAKE_REPLY_FAIL:-0}" = 0 ] || { echo '{"errors":[{"message":"Thread is outdated"}]}'; exit 1; }
     echo '{"data":{"addPullRequestReviewThreadReply":{"comment":{"url":"https://github.com/x/y/pull/1#r1"}}}}' | respond ;;
   api\ graphql*review-requested*) respond <"$FIX/review-requested.json" ;;
+  api\ graphql*PrRerequest*) respond <"${FAKE_RERQ:-$FIX/rerequest.json}" ;;
   api\ graphql*search\(*) respond <"$FIX/status.json" ;;
   api\ graphql*) respond <"$FIX/feedback.json" ;;
   api\ repos/*/reviews\ *|api\ repos/*/reviews) respond <"${FAKE_REVIEWS:-$FIX/reviews.json}" ;;

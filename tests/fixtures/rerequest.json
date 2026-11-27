@@ -1,0 +1,207 @@
+{
+ "data": {
+  "viewer": {
+   "login": "octocat"
+  },
+  "repository": {
+   "pullRequest": {
+    "headRefOid": "h2",
+    "reviewRequests": {
+     "nodes": [
+      {
+       "requestedReviewer": {
+        "login": "gina"
+       }
+      },
+      {
+       "requestedReviewer": {
+        "slug": "core"
+       }
+      }
+     ]
+    },
+    "reviews": {
+     "nodes": [
+      {
+       "author": {
+        "login": "octocat",
+        "__typename": "User"
+       },
+       "state": "COMMENTED",
+       "submittedAt": "2026-01-01T09:00:00Z",
+       "commit": {
+        "oid": "h1"
+       }
+      },
+      {
+       "author": {
+        "login": "alice",
+        "__typename": "User"
+       },
+       "state": "CHANGES_REQUESTED",
+       "submittedAt": "2026-01-01T10:00:00Z",
+       "commit": {
+        "oid": "h1"
+       }
+      },
+      {
+       "author": {
+        "login": "dave",
+        "__typename": "User"
+       },
+       "state": "CHANGES_REQUESTED",
+       "submittedAt": "2026-01-01T10:00:00Z",
+       "commit": {
+        "oid": "h1"
+       }
+      },
+      {
+       "author": {
+        "login": "gina",
+        "__typename": "User"
+       },
+       "state": "CHANGES_REQUESTED",
+       "submittedAt": "2026-01-01T10:00:00Z",
+       "commit": {
+        "oid": "h1"
+       }
+      },
+      {
+       "author": {
+        "login": "alice",
+        "__typename": "User"
+       },
+       "state": "COMMENTED",
+       "submittedAt": "2026-01-01T11:00:00Z",
+       "commit": {
+        "oid": "h2"
+       }
+      },
+      {
+       "author": {
+        "login": "copilot-bot",
+        "__typename": "Bot"
+       },
+       "state": "CHANGES_REQUESTED",
+       "submittedAt": "2026-01-01T11:00:00Z",
+       "commit": {
+        "oid": "h1"
+       }
+      },
+      {
+       "author": {
+        "login": "bob",
+        "__typename": "User"
+       },
+       "state": "APPROVED",
+       "submittedAt": "2026-01-01T12:00:00Z",
+       "commit": {
+        "oid": "h2"
+       }
+      },
+      {
+       "author": {
+        "login": "hank",
+        "__typename": "User"
+       },
+       "state": "COMMENTED",
+       "submittedAt": "2026-01-01T12:00:00Z",
+       "commit": {
+        "oid": "h2"
+       }
+      },
+      {
+       "author": {
+        "login": "dave",
+        "__typename": "User"
+       },
+       "state": "APPROVED",
+       "submittedAt": "2026-01-01T13:00:00Z",
+       "commit": {
+        "oid": "h2"
+       }
+      },
+      {
+       "author": {
+        "login": "frank",
+        "__typename": "User"
+       },
+       "state": "CHANGES_REQUESTED",
+       "submittedAt": "2026-01-01T14:00:00Z",
+       "commit": {
+        "oid": "h2"
+       }
+      },
+      {
+       "author": {
+        "login": "erin",
+        "__typename": "User"
+       },
+       "state": "CHANGES_REQUESTED",
+       "submittedAt": "2026-01-01T20:00:00Z",
+       "commit": {
+        "oid": "h2"
+       }
+      }
+     ]
+    },
+    "comments": {
+     "nodes": [
+      {
+       "author": {
+        "login": "octocat"
+       },
+       "createdAt": "2026-01-01T08:00:00Z"
+      },
+      {
+       "author": {
+        "login": "erin"
+       },
+       "createdAt": "2026-01-01T21:00:00Z"
+      }
+     ]
+    },
+    "reviewThreads": {
+     "nodes": [
+      {
+       "comments": {
+        "nodes": [
+         {
+          "author": {
+           "login": "frank"
+          },
+          "createdAt": "2026-01-01T14:00:00Z"
+         },
+         {
+          "author": {
+           "login": "octocat"
+          },
+          "createdAt": "2026-01-01T15:00:00Z"
+         }
+        ]
+       }
+      },
+      {
+       "comments": {
+        "nodes": [
+         {
+          "author": {
+           "login": "copilot-bot"
+          },
+          "createdAt": "2026-01-01T20:30:00Z"
+         },
+         {
+          "author": {
+           "login": "octocat"
+          },
+          "createdAt": "2026-01-01T21:30:00Z"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   }
+  }
+ }
+}

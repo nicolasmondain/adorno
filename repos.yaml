@@ -5,7 +5,7 @@
 #   base             default branch (empty = read from GitHub)
 #   install/test/lint/typecheck  commands; empty = detected by workflow:repo:onboard
 #   required_checks  CI checks to wait for (empty = all)
-#   reviewers        reviewers to re-request by default (empty = those who already reviewed)
+#   reviewers        reviewers requested when a PR is opened (pr-open)
 #   resolve_threads  author | reviewer: who resolves a review thread
 #   reply_language   language of replies published on GitHub
 #   max_level        maximum permission level (L0 read … L3 PR; L4 merge is never automatic)

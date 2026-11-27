@@ -46,7 +46,7 @@ JSON on stdout; messages go to stderr. Prerequisites: authenticated `gh` and `jq
 | `pr-resolve owner/repo#N THREAD_ID` | resolves a thread if `resolve_threads: author` and you are the author | L3 |
 | `pr-comment owner/repo#N FILE [--attach F]…` | comment in the PR conversation (`-` = stdin), screenshots or videos attached | L3 |
 | `pr-review-submit owner/repo#N JSON_FILE` | publishes a review with inline comments; `APPROVE` only if `allow_approve` | L3 |
-| `pr-rerequest owner/repo#N [login…]` | re-requests a review (default: those who already reviewed) | L3 |
+| `pr-rerequest owner/repo#N [login…]` | re-requests those whose latest review requested changes, once a commit or a reply followed and if not already requested (named: same rule) | L3 |
 | `pr-open owner/repo BRANCH "type(scope): title" FILE [--draft] [--refs R [--withhold U]…] [--attach F]…` | opens the PR, requests the registry's reviewers; `--attach`: the proof (screenshots, videos); `--refs <run>/refs.json`: refuses (2) a body that misses a Notion, doc or Slack link of the request; `--withhold`: a doc link of R not to publish (never Notion or Slack), listed in `withheld` | L3 |
 | `pr-edit owner/repo#N "type(scope): title" FILE [--refs R [--withhold U]…] [--attach F]…` | updates the title and description of your open PR, new proof attached; `--refs` and `--withhold` as for `pr-open` | L3 |
 | `pr-ready owner/repo#N` | marks your draft PR ready for review (once nothing 🔴 or 🟠 is left open) | L3 |
