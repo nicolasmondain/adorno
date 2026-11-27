@@ -3,8 +3,9 @@
 # Asks reviewers to look again, and only those who are waited for: a reviewer is re-requested when
 #   - their latest decisive review (APPROVED, CHANGES_REQUESTED, DISMISSED; COMMENTED does not count) requested changes,
 #   - they are not already requested,
-#   - and since that review the head moved (a commit was pushed) or you replied: a PR comment, a review, or a reply
-#     in a thread they took part in.
+#   - and since their latest review (of any state) the head moved (a commit was pushed) or you replied: a PR comment,
+#     a review with a message, or a reply in a thread they took part in (a thread reply is also an empty review of
+#     yours: it counts only in its thread).
 # Without names: every human who reviewed is checked; with names: only those. A team is never re-requested (a team
 # never requests changes itself). Nobody eligible: nothing is sent, exit 0.
 # Prints {requested: [login], skipped: [{login, reason}]}. Needs L3. ADORNO_DRY_RUN=1 only prints.
@@ -20,12 +21,14 @@ done
 names=null
 [ $# -eq 0 ] || names="$(printf '%s\n' "$@" | jq -R . | jq -sc .)"
 
+# shortcut: last 100 reviews/comments/threads (50 comments per thread), no pagination; upgrade: paginate (or report
+# truncated like pr-feedback-fetch) if a PR goes past them
 query='query PrRerequest($owner:String!,$name:String!,$num:Int!){
   viewer{ login }
   repository(owner:$owner, name:$name){ pullRequest(number:$num){
     headRefOid
-    reviewRequests(first:50){ nodes{ requestedReviewer{ ... on User{login} ... on Team{slug} } } }
-    reviews(last:100){ nodes{ author{ login __typename } state submittedAt commit{ oid } } }
+    reviewRequests(first:50){ nodes{ requestedReviewer{ ... on User{login} } } }
+    reviews(last:100){ nodes{ author{ login __typename } state body submittedAt commit{ oid } } }
     comments(last:100){ nodes{ author{ login } createdAt } }
     reviewThreads(last:100){ nodes{ comments(last:50){ nodes{ author{ login } createdAt } } } } } } }'
 
@@ -35,7 +38,7 @@ plan="$(gh api graphql -f query="$query" -F owner="$OWNER" -F name="$NAME" -F nu
   | .data.repository.pullRequest as $p
   | [$p.reviewRequests.nodes[].requestedReviewer.login // empty] as $waiting
   | ([$p.comments.nodes[] | select(.author.login == $me) | .createdAt]
-     + [$p.reviews.nodes[] | select(.author.login == $me) | .submittedAt]) as $mineOnPr
+     + [$p.reviews.nodes[] | select(.author.login == $me and (.body // "") != "") | .submittedAt]) as $mineOnPr
   | def mine($l): $mineOnPr + [$p.reviewThreads.nodes[].comments.nodes
         | select(any(.[]; .author.login == $l)) | .[] | select(.author.login == $me) | .createdAt];
     ($names // [$p.reviews.nodes[] | select(.author.__typename == "User" and .author.login != $me) | .author.login]
@@ -47,8 +50,10 @@ plan="$(gh api graphql -f query="$query" -F owner="$OWNER" -F name="$NAME" -F nu
         | if $r == null or $r.state == "DISMISSED" then {login: $l, reason: "no changes requested"}
           elif $r.state == "APPROVED" then {login: $l, reason: "approved"}
           elif ($waiting | index($l)) != null then {login: $l, reason: "already requested"}
-          elif ($r.commit.oid // "") != $p.headRefOid or any(mine($l)[]; . > $r.submittedAt) then {login: $l}
-          else {login: $l, reason: "nothing new since the review"} end
+          else ([$p.reviews.nodes[] | select(.author.login == $l and .submittedAt != null)]
+                | sort_by(.submittedAt) | last) as $last
+          | if ($last.commit.oid // "") != $p.headRefOid or any(mine($l)[]; . > $last.submittedAt) then {login: $l}
+            else {login: $l, reason: "nothing new since the review"} end end
         end ]
   | {requested: [.[] | select(.reason == null) | .login], skipped: [.[] | select(.reason != null)]}')"
 
